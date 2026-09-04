@@ -9,29 +9,73 @@ import superintendent.subsequence_adapter
 ROWS = ["kick", "snare"]
 
 
-class FakeComposition:
-	"""A composition with the two things the link uses and nothing else.
+class FakeSequencer:
+	"""The little of a sequencer a transport reads."""
 
-	That the link needs so little of one is the point: no part of the
-	Subsequence package is changed to make this work.
+	def __init__ (self) -> None:
+		"""Start stopped, at no tempo."""
+
+		self.current_bpm = 0.0
+
+
+class FakePattern:
+	"""A running pattern, which is only ever asked whether it is muted."""
+
+	def __init__ (self) -> None:
+		"""Start unmuted."""
+
+		self._muted = False
+
+
+class FakeComposition:
+	"""A composition with the few things a link uses and nothing else.
+
+	That a link needs so little of one is the point: no part of the Subsequence
+	package is changed to make this work.
 	"""
 
 	def __init__ (self) -> None:
-		"""Start with an empty grid and no listeners."""
+		"""Start with an empty grid, two patterns and no listeners."""
 
 		self.data: dict[str, typing.Any] = {}
 		self.listeners: dict[str, typing.Any] = {}
+		self.sequencer = FakeSequencer()
+		self.running_patterns: dict[str, FakePattern] = {"drums": FakePattern(), "bass": FakePattern()}
+		self.bpm_set_to: list[float] = []
 
 	def on_event (self, name: str, callback: typing.Any) -> None:
 		"""Register a callback the way the real composition does."""
 
 		self.listeners[name] = callback
 
+	def mute (self, name: str) -> None:
+		"""Mute one pattern by name."""
 
-def _link () -> tuple[superintendent.subsequence_adapter.GridLink, list[superintendent.protocol.Frame]]:
+		self.running_patterns[name]._muted = True
+
+	def unmute (self, name: str) -> None:
+		"""Bring one pattern back."""
+
+		self.running_patterns[name]._muted = False
+
+	def set_bpm (self, bpm: float) -> None:
+		"""Take a tempo the way the real composition does."""
+
+		self.bpm_set_to.append(bpm)
+		self.sequencer.current_bpm = bpm
+
+
+def _link () -> tuple[superintendent.subsequence_adapter.AppLink, list[superintendent.protocol.Frame]]:
 	"""A link over a fake composition, with everything it would send recorded."""
 
-	link = superintendent.subsequence_adapter.GridLink(FakeComposition(), rows=ROWS, steps=16)
+	composition = FakeComposition()
+	link = superintendent.subsequence_adapter.AppLink(
+		composition,
+		controls=[
+			superintendent.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16),
+			superintendent.subsequence_adapter.Transport(composition),
+		],
+	)
 	sent: list[superintendent.protocol.Frame] = []
 
 	link._emit = sent.append  # type: ignore[method-assign]
@@ -105,8 +149,6 @@ async def test_the_first_beat_is_where_the_clock_loop_is_found () -> None:
 	"""Public events reach the loop, so no private name has to be read."""
 
 	link, sent = _link()
-	link.start = lambda: None  # type: ignore[method-assign]
-
 	link._on_beat(0)
 
 	assert link._clock_loop is not None
@@ -134,4 +176,77 @@ def test_the_grid_is_offered_whole_with_every_row_named () -> None:
 
 	link._apply("grid/kick/4", True, "panel-1", 1)
 
-	assert link._snapshot() == {"kick": [4], "snare": []}
+	assert link.controls["grid"].snapshot() == {"kick": [4], "snare": []}
+
+
+def _transport () -> tuple[superintendent.subsequence_adapter.Transport, FakeComposition]:
+	"""A transport over a composition with two patterns playing."""
+
+	composition = FakeComposition()
+
+	return superintendent.subsequence_adapter.Transport(composition), composition
+
+
+def test_silencing_mutes_every_pattern_that_is_playing () -> None:
+	"""Which is what silence means while there is no pause in the engine."""
+
+	transport, composition = _transport()
+
+	assert transport.apply(["silenced"], True) is True
+	assert all(pattern._muted for pattern in composition.running_patterns.values())
+
+
+def test_lifting_the_silence_leaves_a_hand_mute_alone () -> None:
+	"""A pattern the musician muted is theirs; only what this muted comes back."""
+
+	transport, composition = _transport()
+	composition.running_patterns["bass"]._muted = True
+
+	transport.apply(["silenced"], True)
+	transport.apply(["silenced"], False)
+
+	assert composition.running_patterns["drums"]._muted is False
+	assert composition.running_patterns["bass"]._muted is True
+
+
+def test_silencing_twice_changes_nothing_the_second_time () -> None:
+	"""So a re-send after a reconnect does not re-mute what was unmuted by hand."""
+
+	transport, _ = _transport()
+
+	assert transport.apply(["silenced"], True) is True
+	assert transport.apply(["silenced"], True) is False
+
+
+def test_a_tempo_is_passed_through_and_one_outside_the_range_is_refused () -> None:
+	"""The range is declared, so the panel knows it before it asks."""
+
+	transport, composition = _transport()
+
+	assert transport.apply(["bpm"], 137.5) is True
+	assert transport.apply(["bpm"], 5000) is False
+	assert transport.apply(["bpm"], "quickly") is False
+	assert composition.bpm_set_to == [137.5]
+
+
+def test_a_tempo_the_composition_changed_itself_is_reported () -> None:
+	"""So the panel shows the tempo the sequencer holds, not the last one tapped."""
+
+	transport, composition = _transport()
+
+	composition.sequencer.current_bpm = 128.0
+
+	assert transport.poll() == [("transport/bpm", 128.0)]
+	assert transport.poll() == []
+
+
+def test_the_transport_declares_what_a_panel_needs_to_draw_it () -> None:
+	"""Its fields and the tempo range, so nothing about it is hard-coded on the glass."""
+
+	transport, _ = _transport()
+
+	declaration = transport.declaration()
+
+	assert declaration["type"] == "transport"
+	assert declaration["fields"] == ["silenced", "bpm"]
+	assert declaration["tempo_range"] == [40.0, 240.0]

@@ -174,6 +174,39 @@ function Playhead ({ anchor, steps, beats }) {
 	return html`<div class="playhead" ref=${bar}></div>`;
 }
 
+/* Silence and tempo.
+ *
+ * Both faces show what the sequencer holds, never what was last tapped — the
+ * same rule the cells follow. Silence is not a pause: the clock runs on
+ * underneath it, so lifting it drops you where the music has got to. */
+function Transport ({ control, name, fields, up, onSet }) {
+	const silenced = fields.silenced === true;
+	const bpm = fields.bpm;
+	const [low, high] = control.tempo_range || [40, 240];
+
+	const nudge = (by) => {
+		if (typeof bpm !== "number") return;
+		onSet(`${name}/bpm`, Math.min(high, Math.max(low, Math.round((bpm + by) * 10) / 10)));
+	};
+
+	return html`
+		<div class="transport">
+			<button
+				class=${`silence ${silenced ? "engaged" : ""}`}
+				disabled=${!up}
+				onPointerDown=${(event) => { event.preventDefault(); onSet(`${name}/silenced`, !silenced); }}
+			>${silenced ? "SILENCED" : "SILENCE"}</button>
+
+			<div class="tempo">
+				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(-5); }}>−5</button>
+				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(-1); }}>−1</button>
+				<span class="reading">${typeof bpm === "number" ? bpm.toFixed(bpm % 1 ? 1 : 0) : "—"}<i>BPM</i></span>
+				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(1); }}>+1</button>
+				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(5); }}>+5</button>
+			</div>
+		</div>`;
+}
+
 /* ------------------------------------------------------------------ */
 /* The page                                                            */
 /* ------------------------------------------------------------------ */
@@ -281,7 +314,7 @@ function Panel () {
 		link.current = new Link(onFrame, setStatus);
 	}, [drop, flashFailure]);
 
-	const onTap = useCallback((path, value) => {
+	const request = useCallback((path, value) => {
 		const app = Object.keys(apps)[0];
 		if (!app || !link.current) return;
 
@@ -316,10 +349,14 @@ function Panel () {
 	const control = controls[controlName];
 	const cells = (state[appName] || {})[controlName] || {};
 
+	const transportName = Object.keys(controls).find((name) => controls[name].type === "transport");
+	const transportFields = transportName ? (state[appName] || {})[transportName] || {} : {};
+
 	return html`
 		<div class="bar">
-			<span class="title">${appName}</span>
-			<span>${control.rows.length} rows × ${control.steps} steps</span>
+			${transportName && html`
+				<${Transport} control=${controls[transportName]} name=${transportName}
+					fields=${transportFields} up=${up} onSet=${request} />`}
 			<span class="spacer"></span>
 			${!up && html`<span class="warn">not running — taps will be refused</span>`}
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
@@ -328,7 +365,7 @@ function Panel () {
 		</div>
 		<div class=${`grid-wrap ${up ? "" : "absent"}`}>
 			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
-				cells=${cells} pending=${pending} failed=${failed} onTap=${onTap} />
+				cells=${cells} pending=${pending} failed=${failed} onTap=${request} />
 			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4} />`}
 		</div>`;
 }

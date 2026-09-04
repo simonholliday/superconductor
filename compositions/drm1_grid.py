@@ -107,8 +107,14 @@ def drums (p: object) -> None:
 			p.hit_steps(row, list(steps), velocity=VELOCITY)  # type: ignore[attr-defined]
 
 
-link = superintendent.subsequence_adapter.GridLink(
-	composition, rows=ROWS, steps=STEPS, beats=BEATS, url=SERVICE_URL)
+link = superintendent.subsequence_adapter.AppLink(
+	composition,
+	controls=[
+		superintendent.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=STEPS, beats=BEATS),
+		superintendent.subsequence_adapter.Transport(composition),
+	],
+	url=SERVICE_URL,
+)
 
 
 if __name__ == "__main__":

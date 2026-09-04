@@ -139,3 +139,52 @@ html, body {
 .grid-wrap.absent .grid { opacity: 0.45; }
 
 .bar .warn { color: #ffa94d; }
+
+/* The transport. Sized for a finger with no keyboard: nothing here is smaller
+   than the grid's own cells, and the silence button is deliberately the
+   largest thing on the page, because it is the one control wanted in a hurry. */
+.transport { display: flex; align-items: center; gap: 0.9rem; }
+
+.transport button {
+	min-height: 44px;
+	padding: 0 0.9rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink);
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	touch-action: none;
+}
+
+.transport button:disabled { opacity: 0.35; }
+
+.transport .silence {
+	min-width: 8.5rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+/* Engaged is a state, not an action, so it is filled rather than outlined. */
+.transport .silence.engaged {
+	background: #d64545;
+	border-color: #ff8787;
+	color: #fff;
+}
+
+.tempo { display: flex; align-items: center; gap: 0.35rem; }
+
+.tempo .reading {
+	min-width: 5.5rem;
+	text-align: center;
+	font-size: 1.35rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.tempo .reading i {
+	font-style: normal;
+	font-size: 0.7rem;
+	color: var(--ink-quiet);
+	margin-left: 0.3rem;
+}
