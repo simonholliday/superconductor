@@ -7,7 +7,8 @@ name = "superintendent"
 description = "Touchscreen control surface for Subsequence, Subsample and Substation"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "AGPL-3.0-or-later"
+license = "LicenseRef-FSL-1.1-ALv2"
+license-files = ["LICENSE"]
 dynamic = ["version"]
 dependencies = [
 	"starlette>=0.37",
@@ -30,6 +31,11 @@ superintendent = "superintendent.cli:main"
 
 [tool.setuptools]
 packages = ["superintendent"]
+
+# The page, its stylesheet and the vendored libraries are not Python, so they
+# are carried as data.  Without this a built copy has nothing to serve.
+[tool.setuptools.package-data]
+superintendent = ["client/*", "client/vendor/*"]
 
 [tool.setuptools_scm]
 # Used when there is no git repository to read a version from — "git init" is

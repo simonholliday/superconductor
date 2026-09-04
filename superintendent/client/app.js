@@ -68,8 +68,11 @@ class Link {
 
 		this.timers.forEach(clearInterval);
 		this.timers = [
-			setInterval(() => this.send({ t: "ping", ts: performance.now() }), PING_EVERY),
 			setInterval(() => {
+				if (!document.hidden) this.send({ t: "ping", ts: performance.now() });
+			}, PING_EVERY),
+			setInterval(() => {
+				if (document.hidden) return;
 				if (performance.now() - this.lastInbound > STALE_AFTER && this.socket) this.socket.close();
 			}, 1000),
 		];
@@ -85,6 +88,19 @@ class Link {
 		const wait = this.delay * (0.7 + Math.random() * 0.6);
 		this.delay = Math.min(this.delay * 2, RECONNECT_CEILING);
 		setTimeout(() => this.dial(), wait);
+	}
+
+	/* Say hello again on a socket that is already open, or dial at once if it
+	 * is not. A hidden tab's timers are throttled to once a minute, so a panel
+	 * waking up cannot be left to its own stale timer to notice. */
+	resync () {
+		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+			this.send({ t: "hello", contract: "1.0.0", client: clientId, page: "grid", ver: {}, token: null });
+			return;
+		}
+
+		this.delay = RECONNECT_FLOOR;
+		if (!this.socket) this.dial();
 	}
 
 	send (frame) {
@@ -284,6 +300,19 @@ function Panel () {
 
 				case "snapshot":
 					setState((was) => ({ ...was, [frame.app]: frame.state || {} }));
+
+					/* Anything still outstanding is asked for again, after the
+					 * snapshot rather than before it, so the re-send lands on
+					 * top of the state it was meant to change. Sets are
+					 * absolute, so asking twice reaches the same place as
+					 * asking once — which is what makes this safe. */
+					for (const [path, request] of wanted.current) {
+						if (request.app !== frame.app || !link.current) continue;
+
+						const seq = link.current.set(request.app, path, request.value);
+						if (seq !== null) setPending((was) => new Map(was).set(path, seq));
+					}
+
 					break;
 
 				case "changed": {
@@ -317,7 +346,7 @@ function Panel () {
 					 * confirmation arrives as the app's own doing, so waiting
 					 * for our name on it would leave the request pending until
 					 * it timed out and flashed as a failure. */
-					if (frame.client === clientId || wanted.current.get(frame.path) === frame.v) {
+					if (frame.client === clientId || wanted.current.get(frame.path)?.value === frame.v) {
 						drop(frame.path);
 					}
 
@@ -346,6 +375,16 @@ function Panel () {
 		};
 
 		link.current = new Link(onFrame, setStatus);
+
+		const rejoin = () => { if (!document.hidden && link.current) link.current.resync(); };
+
+		document.addEventListener("visibilitychange", rejoin);
+		window.addEventListener("pageshow", rejoin);
+
+		return () => {
+			document.removeEventListener("visibilitychange", rejoin);
+			window.removeEventListener("pageshow", rejoin);
+		};
 	}, [drop, flashFailure]);
 
 	const request = useCallback((path, value) => {
@@ -355,7 +394,7 @@ function Panel () {
 		const seq = link.current.set(app, path, value);
 		if (seq === null) return;
 
-		wanted.current.set(path, value);
+		wanted.current.set(path, { app, value });
 		setPending((was) => new Map(was).set(path, seq));
 
 		/* A ring that is never confirmed must not sit there for ever: after

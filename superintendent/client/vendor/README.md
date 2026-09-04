@@ -9,6 +9,6 @@ connection and nothing on the glass depends on a CDN being up.
 
 Fetched from `https://cdn.jsdelivr.net/npm/htm@3.1.1/preact/standalone.module.js`
 on 2026-09-04. Both licences are permissive and impose no condition on this
-project's AGPL-3.0 beyond keeping their notices, which is what this file is.
+project's own licence beyond keeping their notices, which is what this file is.
 
 To update, fetch the same path at a new version and change the table.

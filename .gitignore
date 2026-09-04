@@ -8,3 +8,7 @@ dist/
 .pytest_cache/
 config.yaml
 pages/
+
+# The agent brief. Kept out of the repository on purpose and held on backed-up
+# storage instead, as Subsequence does with its own (#1463).
+CLAUDE.md

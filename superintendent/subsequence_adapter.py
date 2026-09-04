@@ -123,7 +123,13 @@ class StepGrid (Control):
 		return {"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats}
 
 	def snapshot (self) -> dict[str, list[int]]:
-		"""The grid as it stands, one row at a time, empty rows included."""
+		"""The grid as it stands, one row at a time, empty rows included.
+
+		Read from the link thread rather than the clock loop, deliberately: the
+		only hazard is a row being sorted at this instant, and copying a list is
+		a single step under the interpreter's lock.  Crossing onto the loop for
+		a read would put socket work on the path that generates MIDI timing.
+		"""
 
 		grid = self.composition.data.get(self.data_key) or {}
 
@@ -137,12 +143,15 @@ class StepGrid (Control):
 		"""
 
 		if len(rest) != 2 or not rest[1].isdigit():
-			return False
+			raise Refused(f"{'/'.join(rest)!r} does not name a cell of this grid")
 
 		row, step = rest[0], int(rest[1])
 
-		if row not in self.rows or not 0 <= step < self.steps:
-			return False
+		if row not in self.rows:
+			raise Refused(f"this grid has no {row!r} row")
+
+		if not 0 <= step < self.steps:
+			raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
 
 		steps = self.composition.data.setdefault(self.data_key, {}).setdefault(row, [])
 

@@ -151,17 +151,33 @@ def test_the_version_moves_with_every_change () -> None:
 	assert [frame["ver"] for frame in sent] == [1, 2]
 
 
-def test_a_cell_outside_the_grid_is_ignored_and_reported_to_nobody () -> None:
-	"""The declaration is the boundary, and a bad address never reaches the dict."""
+def test_a_cell_outside_the_grid_is_refused_with_a_reason () -> None:
+	"""The declaration is the boundary, and the person who tapped is told why.
+
+	A panel holding a declaration older than the app's is exactly what a
+	reconnect produces, so this is reachable rather than theoretical — and a
+	request that vanished silently would sit pending until it timed out.
+	"""
 
 	link, sent = _link()
 
 	link._apply("grid/cowbell/4", True, "panel-1", 1)
 	link._apply("grid/kick/99", True, "panel-1", 2)
-	link._apply("mixer/kick/4", True, "panel-1", 3)
-	link._apply("nonsense", True, "panel-1", 4)
 
 	assert link.composition.data.get("grid", {}) == {}
+	assert [frame["t"] for frame in sent] == ["nack", "nack"]
+	assert "cowbell" in sent[0]["reason"]
+	assert "16 steps wide" in sent[1]["reason"]
+
+
+def test_an_address_naming_no_control_here_is_dropped_rather_than_refused () -> None:
+	"""It is not a refusal by this app: nothing here was ever asked."""
+
+	link, sent = _link()
+
+	link._apply("mixer/kick/4", True, "panel-1", 1)
+	link._apply("nonsense", True, "panel-1", 2)
+
 	assert sent == []
 
 

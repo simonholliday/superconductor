@@ -14,6 +14,8 @@ each holding the steps that sound.  The pattern builder reads it and the panel
 writes it.  Nothing in the Subsequence package is changed to make this work.
 """
 
+import typing
+
 import subsequence
 import subsequence.constants.durations
 import subsequence.constants.instruments.vermona_drm1_drums as drm1
@@ -95,7 +97,7 @@ composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in
 	drum_note_map=drm1.VERMONA_DRM1_DRUM_MAP,
 	reschedule_lookahead=1 / 24,
 )
-def drums (p: object) -> None:
+def drums (p: typing.Any) -> None:
 	"""Play whatever the grid holds when this bar is built.
 
 	Rebuilt one pulse before each cycle rather than a beat before it, so the
@@ -110,7 +112,7 @@ def drums (p: object) -> None:
 		steps = grid.get(row)
 
 		if steps:
-			p.hit_steps(row, list(steps), velocity=VELOCITY)  # type: ignore[attr-defined]
+			p.hit_steps(row, list(steps), velocity=VELOCITY)
 
 
 link = superintendent.subsequence_adapter.AppLink(

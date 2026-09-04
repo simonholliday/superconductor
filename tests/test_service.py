@@ -1,9 +1,11 @@
 """The whole loop over real sockets: a tap leaves the glass and comes back."""
 
+import pathlib
 import typing
 
 import starlette.testclient
 
+import superintendent
 import superintendent.config
 import superintendent.protocol
 import superintendent.service
@@ -112,3 +114,55 @@ def test_the_page_is_served () -> None:
 
 	assert client.get("/").status_code == 200
 	assert client.get("/client/app.js").status_code == 200
+
+
+def test_the_page_ships_inside_the_package () -> None:
+	"""A built copy carries what is inside the package and nothing else.
+
+	The page once sat beside the package, which worked only because the install
+	was editable: a wheel held the Python and no page at all, so an installed
+	service answered every request with an error. This keeps it where a build
+	can find it.
+	"""
+
+	assert superintendent.service.CLIENT_DIR.parent == pathlib.Path(superintendent.__file__).resolve().parent
+	assert (superintendent.service.CLIENT_DIR / "index.html").exists()
+	assert (superintendent.service.CLIENT_DIR / "app.js").exists()
+	assert (superintendent.service.CLIENT_DIR / "vendor").is_dir()
+
+
+def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
+	"""A control that will not move must say why, or the person is left guessing."""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			_read_until(panel, "manifest")
+
+			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/cowbell/0", "v": True, "seq": 9})
+			asked = _read_until(app, "set")
+
+			app.send_json(superintendent.protocol.nack(
+				"subsequence", asked["path"], asked["client"], asked["seq"], "this grid has no 'cowbell' row"))
+
+			refusal = _read_until(panel, "nack")
+
+			assert refusal["seq"] == 9
+			assert refusal["path"] == "grid/cowbell/0"
+			assert "cowbell" in refusal["reason"]
+
+
+def test_a_refusal_for_a_panel_that_has_gone_troubles_nobody () -> None:
+	"""An app may answer after the panel that asked has closed its socket."""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superintendent.protocol.nack("subsequence", "grid/kick/0", "nobody", 1, "gone"))
+
+		app.send_json(superintendent.protocol.event("subsequence", "beat", beat=0))

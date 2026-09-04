@@ -28,8 +28,13 @@ import superintendent.protocol
 
 LOG = logging.getLogger(__name__)
 
-CLIENT_DIR = pathlib.Path(__file__).resolve().parent.parent / "client"
-"""The page and its scripts, which sit beside the package rather than inside it."""
+CLIENT_DIR = pathlib.Path(__file__).resolve().parent / "client"
+"""The page and its scripts, which ship inside the package.
+
+They live here rather than beside it so that an installed copy has a page to
+serve: a wheel carries what is inside the package and nothing else, and a
+service with no page is not a service.
+"""
 
 
 def build (config: superintendent.config.Config) -> starlette.applications.Starlette:
