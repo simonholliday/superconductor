@@ -57,6 +57,30 @@ port: 8090       # anything you like; this one is clear of the ports the
 The page shows nothing until an application dials in and declares something,
 which is the expected state on a fresh start rather than a fault.
 
+## Sizing the grid to your hands
+
+The **size** button on the page sets how big a grid cell is. It starts on *fit
+the glass*, which measures your own screen and makes the grid as large as will
+fit on it — so a panel nothing here was written against still uses all of
+itself. The named sizes override that:
+
+| | |
+| --- | --- |
+| Compact, 22 px | Half the tested size. Fits twice the music across the same glass, and frees room for whatever else you want beside it. |
+| Snug, 32 px | |
+| Tested, 44 px | The size the proof of concept was played at, with taps landing where intended. It is the only one with evidence behind it. |
+| Large, 60 px | |
+| Huge, 96 px | |
+
+None of these is recommended over the others, because the right one depends on
+your hands, your panel and how far away it is. Someone who wants the most music
+on the glass and someone who needs a larger target are both served by the same
+control, and the choice is remembered by the browser that made it — so two
+people with their own panels do not have to agree.
+
+The chooser itself never shrinks. Whatever size you pick, the way back is the
+same size it always was.
+
 ## Connecting an application
 
 `superintendent/subsequence_adapter.py` is the worked example. A composition

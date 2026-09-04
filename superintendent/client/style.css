@@ -13,6 +13,20 @@
 	--ring: #4dabf7;
 	--playhead: rgba(255, 255, 255, 0.09);
 	--accent-beat: #21252d;
+
+	/* The edge of one grid cell, and the only size the grid's layout depends
+	   on. It is a per-user setting (#2055) rather than a number chosen here:
+	   a named step, or worked out from the viewport so a panel this was never
+	   developed on fills its own glass rather than a 1920-by-1080 one (#2050).
+	   The value below is only what is drawn before a choice is read back. */
+	--cell: 44px;
+	--gap: 4px;
+
+	/* The row labels take a share of the viewport rather than a share of the
+	   grid. That is what keeps the fitted size solvable: if the column grew
+	   with its text and the text grew with the cell, the cell would depend on
+	   itself and the layout would never settle. */
+	--label: clamp(3.5rem, 6vw, 7.5rem);
 }
 
 * { box-sizing: border-box; }
@@ -61,7 +75,9 @@ html, body {
 
 .grid {
 	display: grid;
-	gap: 4px;
+	gap: var(--gap);
+	grid-auto-rows: var(--cell);
+	justify-content: start;
 	position: relative;
 	min-width: min-content;
 }
@@ -71,15 +87,15 @@ html, body {
 	align-items: center;
 	padding-right: 0.6rem;
 	color: var(--ink-quiet);
-	font-size: 0.8rem;
+	font-size: min(0.8rem, calc(var(--cell) * 0.42));
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .cell {
 	position: relative;
-	min-width: 44px;
-	min-height: 44px;
-	border-radius: 7px;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
 	background: var(--panel);
 	border: 1px solid var(--edge);
 }
@@ -97,9 +113,9 @@ html, body {
 .cell.pending::after {
 	content: "";
 	position: absolute;
-	inset: 5px;
-	border-radius: 4px;
-	border: 3px solid var(--ring);
+	inset: max(2px, calc(var(--cell) * 0.11));
+	border-radius: max(2px, calc(var(--cell) * 0.09));
+	border: max(2px, calc(var(--cell) * 0.07)) solid var(--ring);
 }
 
 .playhead {
@@ -124,7 +140,7 @@ html, body {
 	content: "";
 	position: absolute;
 	inset: 0;
-	border-radius: 7px;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
 	background: #d64545;
 	animation: fade-out 0.9s ease-out forwards;
 }
@@ -189,3 +205,69 @@ html, body {
 	color: var(--ink-quiet);
 	margin-left: 0.3rem;
 }
+
+/* Choosing the size.
+ *
+ * Deliberately fixed at a comfortable target and never scaled by --cell: the
+ * one control a person needs after picking a size too small to work is this
+ * one, so it must not shrink along with everything else. */
+.sizes { position: relative; display: flex; align-items: center; }
+
+.sizes > button {
+	min-height: 44px;
+	min-width: 44px;
+	padding: 0 0.8rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
+	font-size: 0.85rem;
+	touch-action: none;
+}
+
+.sizes > button.open { color: var(--ink); border-color: var(--ring); }
+
+.sizes .choices {
+	position: absolute;
+	top: calc(100% + 0.5rem);
+	right: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	padding: 0.4rem;
+	border-radius: 10px;
+	border: 1px solid var(--edge);
+	background: var(--ground);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.sizes .choices button {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	min-height: 44px;
+	padding: 0 0.8rem;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	text-align: left;
+	white-space: nowrap;
+	touch-action: none;
+}
+
+.sizes .choices button.chosen { border-color: var(--on-edge); color: var(--on); }
+
+/* Each choice carries a swatch at the size it would draw, so the setting is
+ * read on the glass rather than from a number. */
+.sizes .choices i {
+	flex: none;
+	border-radius: 3px;
+	background: var(--edge);
+}
+
+.sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: 0.75rem; }

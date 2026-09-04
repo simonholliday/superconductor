@@ -21,6 +21,34 @@ const PENDING_EXPIRES = 5000;
 
 const clientId = `panel-${Math.random().toString(36).slice(2, 10)}`;
 
+/* The sizes a cell can be, and where the choice is kept.
+ *
+ * None of these is the right one. A target that suits one pair of hands is
+ * wrong for another, and a step grid at half the width fits twice the music on
+ * the same glass — which is what Simon asked for after using the panel. So the
+ * size is a setting with a recommended default, not a number chosen here
+ * (#2055). "Fit" is not a size but a rule: measure the glass in front of you,
+ * rather than the 1920-by-1080 one this was developed on (#2050).
+ *
+ * 44 px is the size the proof-of-concept was tested at, with taps landing where
+ * intended and palm rejection working (#1998), so it is the one named "tested".
+ * The others are offered without evidence and the label says so. */
+const SIZE_KEY = "superintendent.cell-size";
+
+const SIZES = [
+	{ key: "fit", label: "Fit the glass", px: null },
+	{ key: "compact", label: "Compact", px: 22 },
+	{ key: "snug", label: "Snug", px: 32 },
+	{ key: "tested", label: "Tested", px: 44 },
+	{ key: "large", label: "Large", px: 60 },
+	{ key: "huge", label: "Huge", px: 96 },
+];
+
+const FIT_FLOOR = 22;
+const FIT_CEILING = 96;
+const FIT_SLACK = 2;
+const DEFAULT_SIZE = "fit";
+
 /* ------------------------------------------------------------------ */
 /* The link                                                            */
 /* ------------------------------------------------------------------ */
@@ -124,9 +152,12 @@ class Link {
 /* ------------------------------------------------------------------ */
 
 function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
-	/* A fixed label column, then one equal column per step. */
+	/* A label column bounded by the viewport, then one column per step at
+	   whatever size is set. The columns are that size exactly rather than at
+	   least it: a person who asks for compact cells wants the space back for
+	   something else, not the same grid stretched to fill the glass again. */
 	const style = {
-		gridTemplateColumns: `minmax(6.5rem, max-content) repeat(${steps}, minmax(44px, 1fr))`,
+		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 	};
 
 	return html`
@@ -167,18 +198,29 @@ function Playhead ({ anchor, steps, beats }) {
 		const grid = bar.current.parentElement.querySelector(".grid");
 
 		const move = () => {
-			const cells = grid && grid.children[1];
+			const first = grid && grid.children[1];
+			const second = grid && grid.children[2];
 
-			if (cells && anchor.interval) {
+			if (first && anchor.interval) {
 				const elapsed = (performance.now() - anchor.at) / 1000;
 				const beatNow = anchor.beat + Math.min(elapsed / anchor.interval, 1);
 				const step = (beatNow * (steps / beats)) % steps;
 
-				const width = cells.getBoundingClientRect().width + 4;
-				const left = cells.offsetLeft;
+				/* Both numbers are read off the grid rather than assumed. The
+				   pitch is the distance between two cells, which is a cell and
+				   a gap however either is currently sized. */
+				const width = first.getBoundingClientRect().width;
+				const pitch = second ? second.offsetLeft - first.offsetLeft : width;
+
+				/* Two offsets, because there are two boxes between the cell and
+				   this bar: the cell sits inside the grid, and the grid sits
+				   inside the wrap's padding. Counting only the first left the
+				   highlight a padding's width to the left of the step it was
+				   marking. */
+				const left = grid.offsetLeft + first.offsetLeft;
 
 				bar.current.style.width = `${width}px`;
-				bar.current.style.transform = `translateX(${left + step * width}px)`;
+				bar.current.style.transform = `translateX(${left + step * pitch}px)`;
 			}
 
 			frame = requestAnimationFrame(move);
@@ -228,6 +270,139 @@ function Transport ({ control, name, fields, up, onSet }) {
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(1); }}>+1</button>
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(5); }}>+5</button>
 			</div>
+		</div>`;
+}
+
+/* ------------------------------------------------------------------ */
+/* How big a cell is                                                   */
+/* ------------------------------------------------------------------ */
+
+/* The cell size, as a person chose it or as their own viewport implies.
+ *
+ * Returns the element to measure, the size in pixels, the choice behind it and
+ * a way to change that choice. The choice is remembered on the panel, which is
+ * the closest thing to per-person storage that exists while page files are
+ * still unsettled (#1948) — one browser profile is one panel is, in practice,
+ * one pair of hands. */
+function useCellSize (rows, steps) {
+	const [choice, setChoice] = useState(() => {
+		try {
+			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
+		} catch (error) {
+			/* Storage can be refused outright rather than merely empty. A panel
+			   in that state works; it just forgets between reloads. */
+			return DEFAULT_SIZE;
+		}
+	});
+
+	const [cell, setCell] = useState(SIZES.find((size) => size.key === "tested").px);
+	const wrap = useRef(null);
+
+	const choose = useCallback((key) => {
+		setChoice(key);
+
+		try {
+			localStorage.setItem(SIZE_KEY, key);
+		} catch (error) {
+			/* As above: forgetting is the only consequence. */
+		}
+	}, []);
+
+	useEffect(() => {
+		const named = SIZES.find((size) => size.key === choice);
+
+		if (!named) { setChoice(DEFAULT_SIZE); return; }
+		if (named.px) { setCell(named.px); return; }
+
+		/* Fitting. The grid is one label column and `steps` cells across, and
+		   `rows` deep, so the largest cell that fits is whichever of the two
+		   directions runs out first. A couple of pixels are left over on each
+		   axis: an exact fit that rounds the wrong way raises a scrollbar,
+		   which narrows the box, which would start the sum again. */
+		const fit = () => {
+			const box = wrap.current;
+
+			if (!box || !rows || !steps) return;
+
+			const label = box.querySelector(".row-label");
+			const shape = getComputedStyle(box);
+			const gap = parseFloat(getComputedStyle(document.documentElement)
+				.getPropertyValue("--gap")) || 0;
+
+			if (!label) return;
+
+			const padX = parseFloat(shape.paddingLeft) + parseFloat(shape.paddingRight);
+			const padY = parseFloat(shape.paddingTop) + parseFloat(shape.paddingBottom);
+
+			/* The border box, not the content box. A scrollbar takes its width
+			   out of the content box, so measuring that would make the sum's
+			   answer depend on the answer: fit smaller, scrollbar goes, fit
+			   larger, scrollbar returns. The border box does not move. */
+			const outer = box.getBoundingClientRect();
+
+			const across = outer.width - padX - FIT_SLACK
+				- label.getBoundingClientRect().width - gap * steps;
+			const down = outer.height - padY - FIT_SLACK - gap * (rows - 1);
+
+			const size = Math.floor(Math.min(across / steps, down / rows));
+
+			setCell(Math.max(FIT_FLOOR, Math.min(FIT_CEILING, size)));
+		};
+
+		fit();
+
+		/* The viewport is the input, so anything that changes it — a rotation,
+		   a window resize, a browser leaving kiosk mode — has to be an input
+		   too, rather than something only a reload would pick up. */
+		const watcher = new ResizeObserver(fit);
+
+		if (wrap.current) watcher.observe(wrap.current);
+
+		return () => watcher.disconnect();
+	}, [choice, rows, steps]);
+
+	useEffect(() => {
+		document.documentElement.style.setProperty("--cell", `${cell}px`);
+	}, [cell]);
+
+	return { wrap, cell, choice, choose };
+}
+
+/* The size chooser.
+ *
+ * Every button here is a fixed comfortable size and none of them scales with
+ * the setting: the first thing a person needs after picking cells too small to
+ * hit is this control, so it must not have shrunk along with them. */
+function Sizes ({ cell, choice, onChoose }) {
+	const [open, setOpen] = useState(false);
+
+	return html`
+		<div class="sizes">
+			<button
+				class=${open ? "open" : ""}
+				onPointerDown=${(event) => { event.preventDefault(); setOpen(!open); }}
+			>size · ${cell}px</button>
+
+			${open && html`
+				<div class="choices">
+					${SIZES.map((size) => html`
+						<button
+							key=${size.key}
+							class=${size.key === choice ? "chosen" : ""}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onChoose(size.key);
+								setOpen(false);
+							}}
+						>
+							<i style=${{
+								width: `${size.px || cell}px`,
+								height: `${Math.min(size.px || cell, 24)}px`,
+							}}></i>
+							<span>${size.label}</span>
+							<span class="measure">${size.px ? `${size.px}px` : `${cell}px`}</span>
+						</button>`)}
+				</div>`}
 		</div>`;
 }
 
@@ -409,6 +584,12 @@ function Panel () {
 	const controlName = Object.keys(controls).find((name) => controls[name].type === "step_grid");
 	const up = appName ? present[appName] !== false : false;
 
+	/* Asked for before the page can return early, because a hook must be. The
+	   grid it measures may not exist yet, and it copes: nothing is fitted until
+	   there is something on the glass to fit. */
+	const declared = controlName ? controls[controlName] : null;
+	const size = useCellSize(declared ? declared.rows.length : 0, declared ? declared.steps : 0);
+
 	if (!controlName) {
 		return html`
 			<div class="bar"><span class="spacer"></span>
@@ -435,11 +616,12 @@ function Panel () {
 			<span class="spacer"></span>
 			${notice && html`<span class="warn">${notice}</span>`}
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
+			<${Sizes} cell=${size.cell} choice=${size.choice} onChoose=${size.choose} />
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"}`}>
+		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
 			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
 				cells=${cells} pending=${pending} failed=${failed} onTap=${request} />
 			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4} />`}

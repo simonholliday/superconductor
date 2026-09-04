@@ -109,3 +109,57 @@ def test_a_refused_request_says_why_and_gives_the_cell_back (
 
 	playwright_api.expect(panel.locator(".bar .warn")).to_contain_text("no room", timeout=5_000)
 	assert "on" not in (panel.locator(conftest.cell("grid/kick/1")).get_attribute("class") or "")
+
+
+def test_the_cell_size_is_a_setting_and_not_a_constant (panel: typing.Any) -> None:
+	"""The point of #2055: no single target size is right for everybody.
+
+	A person with steady hands on a large panel wants more music on the glass;
+	a person without wants a bigger target. Both must be reachable with one
+	finger, which is why the chooser is worked here rather than assumed.
+	"""
+
+	before = panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"]
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+
+	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
+
+	after = panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"]
+
+	assert after == 22
+	assert after < before
+
+
+def test_the_chosen_size_is_remembered_by_the_panel (panel: typing.Any) -> None:
+	"""A setting a person has to make again after every reload is not a setting."""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Snug").click()
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"] == 32
+
+
+def test_by_default_the_grid_is_measured_against_this_viewport (panel: typing.Any) -> None:
+	"""#2050: the size comes from the glass in front of you, not from 1920 by 1080.
+
+	The browser here is 1280 by 720, which is neither the development panel nor
+	anything the code was written against, so a grid that fits it without
+	scrolling could only have been worked out rather than assumed.
+	"""
+
+	fitted = panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"]
+
+	assert fitted > 44, "a fitted grid should use the space it has"
+
+	overflow = panel.evaluate(
+		"""() => {
+			const wrap = document.querySelector(".grid-wrap");
+			return [wrap.scrollWidth - wrap.clientWidth, wrap.scrollHeight - wrap.clientHeight];
+		}""")
+
+	assert overflow == [0, 0], "a fitted grid should not need scrolling"
