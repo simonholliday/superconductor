@@ -43,6 +43,27 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
 const PAGE_KEY = "superintendent.page";
 const PAGE_BUTTONS = 6;
 
+/* Where an arrangement is kept until it can be sent to the composition that
+   owns the page (#2077). This is the interim: a layout belongs in a file
+   beside the piece, not in one browser, and this key goes when that lands. */
+const LAYOUT_KEY = "superintendent.layout";
+
+function readLayouts () {
+	try {
+		return JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+	} catch (error) {
+		return {};
+	}
+}
+
+function writeLayouts (layouts) {
+	try {
+		localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts));
+	} catch (error) {
+		/* A panel that cannot remember still arranges; it just starts over. */
+	}
+}
+
 function askedForPage () {
 	return new URL(location.href).searchParams.get("page");
 }
@@ -234,19 +255,84 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, at, cell, depth, children }) {
+function Part ({ title, name, at, cell, depth, arranging, onMove, onRaise, children }) {
 	const pitch = cell + GAP;
+	const held = useRef(null);
+
 	const place = {
 		left: `${(at ? at.x : 0) * pitch}px`,
 		top: `${(at ? at.y : 0) * pitch}px`,
 		zIndex: depth,
 	};
 
+	/* Taking hold. The pointer is captured so the block keeps following the
+	   finger even when the finger leaves it, which it will: a block dragged
+	   quickly is always behind the hand for a frame. */
+	const grab = (event) => {
+		if (!arranging) return;
+
+		event.preventDefault();
+		event.currentTarget.setPointerCapture(event.pointerId);
+
+		held.current = {
+			pointer: event.pointerId,
+			fromX: event.clientX, fromY: event.clientY,
+			x: at ? at.x : 0, y: at ? at.y : 0,
+		};
+
+		onRaise(name);
+	};
+
+	/* A cell at a time, measured from where the finger started rather than
+	   from where it was last frame, so a slow drag cannot accumulate rounding
+	   into a drift. Nothing is refused and nothing is displaced: every square
+	   is a legal square, and a block may sit on top of another (#2078). */
+	const move = (event) => {
+		const from = held.current;
+
+		if (!from || from.pointer !== event.pointerId) return;
+
+		const x = Math.max(0, from.x + Math.round((event.clientX - from.fromX) / pitch));
+		const y = Math.max(0, from.y + Math.round((event.clientY - from.fromY) / pitch));
+
+		if (!at || x !== at.x || y !== at.y) onMove(name, x, y);
+	};
+
+	const release = (event) => {
+		if (held.current && held.current.pointer === event.pointerId) held.current = null;
+	};
+
 	return html`
 		<section class="part" data-part=${name} style=${place}>
-			<header class="part-title">${title || name.replace(/_/g, " ")}</header>
+			<header
+				class="part-title"
+				onPointerDown=${grab}
+				onPointerMove=${move}
+				onPointerUp=${release}
+				onPointerCancel=${release}
+			>${title || name.replace(/_/g, " ")}</header>
 			<div class="part-body">${children}</div>
 		</section>`;
+}
+
+/* The parts on this page, by name, while it is being arranged.
+ *
+ * Overlap is what makes this necessary rather than convenient. A block can be
+ * covered completely, and the only way to take hold of one is its title bar,
+ * so without a list there would be no way back to it. Choosing a name raises
+ * that block to the top, which is the same gesture that a drag performs and
+ * therefore needs no explaining. */
+function Inventory ({ names, titles, onRaise }) {
+	if (names.length < 2) return null;
+
+	return html`
+		<div class="inventory">
+			${names.map((name) => html`
+				<button
+					key=${name}
+					onPointerDown=${(event) => { event.preventDefault(); onRaise(name); }}
+				>${titles[name] || name.replace(/_/g, " ")}</button>`)}
+		</div>`;
 }
 
 /* The highlight tracking what is sounding.
@@ -676,6 +762,8 @@ function Panel () {
 	const [service, setService] = useState(null);
 	const [pages, setPages] = useState([]);
 	const [chosen, setChosen] = useState(rememberedPage);
+	const [arranging, setArranging] = useState(false);
+	const [layouts, setLayouts] = useState(readLayouts);
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -879,6 +967,29 @@ function Panel () {
 	const blocks = gridNames.map((name) => ({
 		name, rows: controls[name].rows.length, steps: controls[name].steps }));
 
+	const pageId = page ? page.id : "";
+	const arranged = layouts[pageId] || {};
+
+	/* Move and raise are the same write with one difference, so they are one
+	   function: a drag says where, a tap from the inventory says only that this
+	   block should be on top. Either way the block goes to the end of the
+	   order, which is what "the last one moved is on top" means. */
+	const rearrange = useCallback((name, at) => {
+		setLayouts((was) => {
+			const forPage = was[pageId] || {};
+			const order = [...(forPage.order || []).filter((one) => one !== name), name];
+			const placed = at
+				? { ...(forPage.placed || {}), [name]: at }
+				: forPage.placed || {};
+
+			const next = { ...was, [pageId]: { placed, order } };
+
+			writeLayouts(next);
+
+			return next;
+		});
+	}, [pageId]);
+
 	/* Where the parts sit, until somebody moves them.
 	 *
 	 * Worked out once per page rather than on every resize: a starting
@@ -886,9 +997,18 @@ function Panel () {
 	 * nobody chose and nobody could rely on. It wraps at whatever a panel this
 	 * wide would hold at the tested cell size, which is a fixed number for a
 	 * given panel and so cannot chase its own answer. */
-	const layout = useMemo(
+	const defaults = useMemo(
 		() => autoPlace(blocks, acrossAtTestedSize()),
-		[page && page.id, blocks.map((block) => block.name).join(",")]);
+		[pageId, blocks.map((block) => block.name).join(",")]);
+
+	const layout = { ...defaults, ...(arranged.placed || {}) };
+
+	/* Drawn back to front. A name that has been moved sits after every name
+	   that has not, and later moves sit after earlier ones. */
+	const stacked = [
+		...gridNames.filter((name) => !(arranged.order || []).includes(name)),
+		...(arranged.order || []).filter((name) => gridNames.includes(name)),
+	];
 
 	/* Asked for before the page can return early, because a hook must be. It is
 	   given every block's shape and where each one sits, because an arrangement
@@ -923,6 +1043,14 @@ function Panel () {
 				<${Transport} control=${controls[transportName]} name=${transportName}
 					fields=${transportFields} up=${up} onSet=${request} />`}
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
+			<button
+				class=${`arrange ${arranging ? "latched" : ""}`}
+				onPointerDown=${(event) => { event.preventDefault(); setArranging(!arranging); }}
+			>${arranging ? "DONE" : "ARRANGE"}</button>
+			${arranging && html`
+				<${Inventory} names=${stacked} titles=${Object.fromEntries(
+					gridNames.map((name) => [name, controls[name].title]))}
+					onRaise=${(who) => rearrange(who, null)} />`}
 			<span class="spacer"></span>
 			${notice && html`<span class="warn">${notice}</span>`}
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
@@ -932,10 +1060,13 @@ function Panel () {
 			</span>
 			<${Build} service=${service} stale=${stale} />
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
-			${gridNames.map((name, index) => html`
+		<div class=${`grid-wrap ${up ? "" : "absent"} ${arranging ? "arranging" : ""}`} ref=${size.wrap}>
+			${stacked.map((name, index) => html`
 				<${Part} key=${name} name=${name} title=${controls[name].title}
-					at=${layout[name]} cell=${size.cell} depth=${index}>
+					at=${layout[name]} cell=${size.cell} depth=${index}
+					arranging=${arranging}
+					onMove=${(who, x, y) => rearrange(who, { x, y })}
+					onRaise=${(who) => rearrange(who, null)}>
 					<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
 						cells=${(state[appName] || {})[name] || {}}
 						pending=${pending} failed=${failed} onTap=${request} />

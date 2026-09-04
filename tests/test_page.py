@@ -304,3 +304,110 @@ def test_parts_are_placed_on_the_lattice_and_their_steps_line_up (
 
 	assert abs(cells[0] - (cells[1] - (boxes[1]["x"] - boxes[0]["x"]))) < 1, (
 		"the same step of each pattern sits at the same offset within its block")
+
+
+def test_arranging_is_latched_and_a_tap_outside_it_still_plays (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The latch is the only thing between a stray finger and somebody's layout,
+	so it has to be entered deliberately and leave the music alone until it is."""
+
+	assert panel.locator(".grid-wrap.arranging").count() == 0
+
+	panel.locator(conftest.cell("grid/snare/1")).click()
+	fake_app.await_set("grid/snare/1")
+
+	panel.locator(".bar .arrange").click()
+
+	playwright_api.expect(panel.locator(".grid-wrap.arranging")).to_have_count(1, timeout=5_000)
+	assert panel.eval_on_selector(".grid-wrap.arranging .grid", "el => getComputedStyle(el).pointerEvents") == "none"
+
+
+def test_a_block_is_dragged_by_its_title_a_cell_at_a_time (panel: typing.Any) -> None:
+	"""#2078: the title bar is the only surface of a block that is not a control,
+	and a drag snaps to the lattice rather than to the pixel."""
+
+	panel.locator(".bar .arrange").click()
+	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+
+	block = panel.locator('.part[data-part="grid"]')
+	before = block.bounding_box()
+	cell = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))")
+	gap = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'))")
+
+	title = panel.locator('.part[data-part="grid"] .part-title')
+	grip = title.bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 20 + (cell + gap) * 2, grip["y"] + 5 + (cell + gap), steps=8)
+	panel.mouse.up()
+
+	after = block.bounding_box()
+
+	assert round(after["x"] - before["x"]) == round((cell + gap) * 2)
+	assert round(after["y"] - before["y"]) == round(cell + gap)
+
+
+def test_a_block_may_be_dragged_over_another_and_the_last_moved_is_on_top (
+	panel: typing.Any) -> None:
+	"""Overlap is legal, which is what deletes collision resolution — and what
+	makes an inventory necessary, since a covered block cannot be grabbed."""
+
+	panel.locator(".bar .arrange").click()
+	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+
+	def depth (part: str) -> int:
+		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
+
+	assert depth("second") > depth("grid"), "nothing moved yet, so declaration order stands"
+
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 60, title["y"] + 5, steps=4)
+	panel.mouse.up()
+
+	assert depth("grid") > depth("second"), "the block just moved is on top"
+
+
+def test_the_inventory_brings_a_buried_block_back (panel: typing.Any) -> None:
+	"""The one hazard overlap introduces: a block covered completely cannot be
+	taken hold of, because a title bar is the only handle it has."""
+
+	panel.locator(".bar .arrange").click()
+	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+
+	def depth (part: str) -> int:
+		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
+
+	panel.locator(".inventory button", has_text="Drums").click()
+
+	assert depth("grid") > depth("second")
+
+
+def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
+	"""Until it can be sent to the composition that owns the page (#2077), a
+	layout that vanished on reload would not be a layout."""
+
+	panel.locator(".bar .arrange").click()
+	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+
+	block = panel.locator('.part[data-part="grid"]')
+	before = block.bounding_box()
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 20, title["y"] + 200, steps=8)
+	panel.mouse.up()
+
+	moved = block.bounding_box()
+	assert moved["y"] > before["y"]
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert abs(panel.locator('.part[data-part="grid"]').bounding_box()["y"] - moved["y"]) < 2

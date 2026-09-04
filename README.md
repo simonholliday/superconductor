@@ -95,6 +95,24 @@ people with their own panels do not have to agree.
 The chooser itself never shrinks. Whatever size you pick, the way back is the
 same size it always was.
 
+## Arranging a page
+
+Tap **ARRANGE** in the bar. While it is latched the grids stop responding and
+each block's title bar becomes its handle: drag one and it moves a cell at a
+time, on the same lattice the steps themselves sit on — so two patterns on a
+page line up step for step rather than nearly.
+
+Any position is allowed, including on top of another block. The last block you
+moved is the one on top, which is what makes a busy page workable. Nothing is
+ever pushed aside to make room: a block you did not touch does not move.
+
+Because a block can be covered completely, and a title bar is the only handle
+it has, the bar lists every block on the page while you are arranging. Tapping
+a name brings that block back to the top.
+
+Tap **DONE** to leave. Outside the latch every touch is a control again, which
+is what stops a stray finger rearranging a page mid-performance.
+
 ## Connecting an application
 
 `superintendent/subsequence_adapter.py` is the worked example. A composition
