@@ -186,6 +186,159 @@ class StepGrid (Control):
 		return False
 
 
+class NoteGrid (Control):
+	"""A pitched pattern: one row per note, and a cell that is a note.
+
+	The same plain dict on ``composition.data`` that a step grid uses, one level
+	deeper — row, then step, then the note's length in steps and its velocity.
+	The pattern builder reads it and this writes to it, and nothing here knows
+	that a row called ``C2`` is a pitch: the composition maps row names to notes
+	exactly as it maps drum voices to them.
+
+	``mono`` is the composition's statement that the instrument sounds one note
+	at a time.  It is enforced here rather than left to the instrument, because
+	an instrument choosing between simultaneous notes by its own key-priority
+	setting would leave the glass showing notes that never sound.
+	"""
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		rows: collections.abc.Sequence[str],
+		steps: int = 16,
+		beats: int = 4,
+		data_key: str = "notes",
+		name: str = "notes",
+		title: str | None = None,
+		mono: bool = False,
+		default_length: int = 1,
+		default_velocity: int = 100,
+	) -> None:
+		"""Describe the pattern to offer over a dict the composition keeps."""
+
+		self.composition = composition
+		self.rows = list(rows)
+		self.steps = steps
+		self.beats = beats
+		self.data_key = data_key
+		self.name = name
+		self.title = title
+		self.mono = mono
+		self.default_length = default_length
+		self.default_velocity = default_velocity
+		self.link: "AppLink | None" = None
+
+	def attach (self, link: "AppLink") -> None:
+		"""Keep the link, so clearing a note the panel did not name can be said."""
+
+		self.link = link
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""Rows, width, and what a note may be."""
+
+		declared: dict[str, typing.Any] = {
+			"type": "note_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
+			"mono": self.mono,
+			"default_length": self.default_length, "default_velocity": self.default_velocity,
+			"max_length": self.steps, "velocity_range": [1, 127]}
+
+		if self.title is not None:
+			declared["title"] = self.title
+
+		return declared
+
+	def snapshot (self) -> dict[str, dict[str, dict[str, int]]]:
+		"""Every note as it stands, copied so nothing shares a dict with the loop."""
+
+		grid = self.composition.data.get(self.data_key) or {}
+
+		return {row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
+		        for row in self.rows if grid.get(row)}
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Place, remove or reshape one note, absolutely rather than by toggling."""
+
+		if len(rest) not in (2, 3) or not rest[1].isdigit():
+			raise Refused("that does not name a note")
+
+		row, step = rest[0], rest[1]
+
+		if row not in self.rows:
+			raise Refused(f"this pattern has no row called {row}")
+
+		if not 0 <= int(step) < self.steps:
+			raise Refused(f"step {step} is outside a pattern {self.steps} steps long")
+
+		grid = self.composition.data.setdefault(self.data_key, {})
+		notes = grid.setdefault(row, {})
+
+		if len(rest) == 3:
+			return self._shape(notes, step, rest[2], value)
+
+		if value:
+			if step in notes:
+				return False
+
+			notes[step] = {"length": self.default_length, "velocity": self.default_velocity}
+
+			if self.mono:
+				self._clear_others(grid, row, step)
+
+			return True
+
+		if step not in notes:
+			return False
+
+		del notes[step]
+
+		return True
+
+	def _shape (self, notes: dict[str, typing.Any], step: str, field: str, value: typing.Any) -> bool:
+		"""Change a note's length or velocity, refusing what would not sound."""
+
+		if step not in notes:
+			raise Refused("there is no note there to shape")
+
+		if field == "length":
+			length = int(value)
+
+			if not 1 <= length <= self.steps:
+				raise Refused(f"a note is between 1 and {self.steps} steps long")
+
+		elif field == "velocity":
+			length = int(value)
+
+			if not 1 <= length <= 127:
+				raise Refused("velocity is between 1 and 127")
+
+		else:
+			raise Refused(f"a note has no {field}")
+
+		if notes[step][field] == length:
+			return False
+
+		notes[step][field] = length
+
+		return True
+
+	def _clear_others (self, grid: dict[str, typing.Any], keep: str, step: str) -> None:
+		"""Take away any other note in this step, and say so.
+
+		The panel asked for one thing and two changed, so the second is reported
+		in its own right — otherwise a cell would go dark on the glass with
+		nothing on the wire to explain it.
+		"""
+
+		for row in self.rows:
+			if row == keep:
+				continue
+
+			notes = grid.get(row) or {}
+
+			if notes.pop(step, None) is not None and self.link is not None:
+				self.link.report(f"{self.name}/{row}/{step}", False)
+
+
 class Transport (Control):
 	"""Whether the composition is playing, and at what tempo.
 

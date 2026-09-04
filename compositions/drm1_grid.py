@@ -20,6 +20,7 @@ import typing
 import subsequence
 import subsequence.constants.durations
 import subsequence.constants.instruments.vermona_drm1_drums as drm1
+import subsequence.constants.midi_notes as midi_notes
 
 import superintendent.subsequence_adapter
 
@@ -70,6 +71,41 @@ BEATS = int(STEPS * STEP_DURATION)
 """Sixteen sixteenth-notes, which is one bar of four beats."""
 
 
+# --- The Minitaur -----------------------------------------------------------
+
+BASS_CHANNEL = 6
+"""The channel the Moog Minitaur is set to receive on."""
+
+BASS_ROWS = [midi_notes.note_to_name(note)
+             for note in range(midi_notes.name_to_note("C2"), midi_notes.name_to_note("C4") + 1)]
+"""Two chromatic octaves, C2 to C4, one row per semitone.
+
+Chromatic rather than a scale because no key is being imposed on the instrument
+by this file, and one row per pitch rather than twelve pitch classes because
+position is then pitch: the line is read as a shape, and an octave leap looks
+like one.  Well inside the Minitaur's range, which stops at note 72 (#2081).
+
+This list is the whole of the decision.  A different range, or only the notes of
+a scale, is an edit here and nothing else anywhere.
+"""
+
+BASS_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in BASS_ROWS}
+"""Row names to MIDI notes, which is the same mechanism the drum map is.
+
+Subsequence resolves a string pitch through whatever map the pattern was given,
+and nothing about that map has to be about drums.
+"""
+
+BASS_VELOCITY = 100
+BASS_LENGTH = 1
+"""What a note is when it is first placed: one step long, at a middling weight.
+
+Velocity reaches the Minitaur only through its two sensitivity parameters, which
+default to half — CC 89 for the filter and CC 90 for the amplifier (#2081).  A
+velocity lane that appears to do nothing is that, not this.
+"""
+
+
 # --- The pattern the composition starts with ------------------------------
 
 OPENING_PATTERN = {
@@ -90,6 +126,7 @@ composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
 composition.data["layer"] = {row: [] for row in ROWS}
+composition.data["bass"] = {}
 """A second pattern over the same drum machine, empty until somebody fills it.
 
 Two patterns driving one instrument belong on one page as stacked blocks rather
@@ -131,6 +168,29 @@ def layer (p: typing.Any) -> None:
 	_play(p, composition.data["layer"])
 
 
+@composition.pattern(
+	channel=BASS_CHANNEL,
+	steps=STEPS,
+	step_duration=STEP_DURATION,
+	drum_note_map=BASS_NOTE_MAP,
+	reschedule_lookahead=1 / 24,
+)
+def bass (p: typing.Any) -> None:
+	"""Play the pitched pattern the panel holds.
+
+	Unlike the drums, every note carries its own length and velocity, so each is
+	placed on its own rather than a row at a time.  A length is in steps and
+	``duration`` is in beats, which is what ``STEP_DURATION`` converts between.
+	"""
+
+	for row, notes in composition.data["bass"].items():
+		for step, note in notes.items():
+			p.hit_steps(
+				row, [int(step)],
+				velocity=note.get("velocity", BASS_VELOCITY),
+				duration=note.get("length", BASS_LENGTH) * STEP_DURATION)
+
+
 def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 	"""Put whatever a grid holds onto the pattern being built."""
 
@@ -150,6 +210,10 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="layer", name="layer", title="DRM1 — pattern 2"),
+		superintendent.subsequence_adapter.NoteGrid(
+			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
+			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
+			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY),
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -159,6 +223,10 @@ link = superintendent.subsequence_adapter.AppLink(
 			"pattern_1", parts=["grid"], title="Pattern 1"),
 		superintendent.subsequence_adapter.Page(
 			"pattern_2", parts=["layer"], title="Pattern 2"),
+		superintendent.subsequence_adapter.Page(
+			"bass", parts=["bass"], title="Bass"),
+		superintendent.subsequence_adapter.Page(
+			"kit", parts=["grid", "bass"], title="Drums + bass"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),

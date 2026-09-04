@@ -476,3 +476,63 @@ html, body {
 	white-space: nowrap;
 	touch-action: none;
 }
+
+/* A pitched pattern.
+ *
+ * A note is a bar reaching rightwards from the cell it starts in, drawn over
+ * the cells it covers rather than inside one — which is why it escapes its own
+ * box and sits above the cells to its right. */
+.grid.notes .cell.on { background: var(--panel); border-color: var(--edge); }
+
+.grid.notes .note {
+	position: absolute;
+	inset: 0 auto 0 -1px;
+	z-index: 1;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
+	background: var(--on);
+	border: 1px solid var(--on-edge);
+	pointer-events: none;
+}
+
+/* The label is a note name and wants reading, so it keeps its own size longer
+   than a drum voice does and is set in figures that line up. */
+.grid.notes .row-label {
+	font-variant-numeric: tabular-nums;
+	justify-content: flex-end;
+}
+
+/* How hard each note is struck. One bar to a step, aligned with the grid above
+   so a column is a moment in both. */
+.lane {
+	display: grid;
+	gap: var(--gap);
+	margin-top: var(--gap);
+	position: relative;
+}
+
+.lane .row-label {
+	position: static;
+	background: none;
+	justify-content: flex-end;
+	font-size: min(0.7rem, calc(var(--cell) * 0.38));
+}
+
+.lane .bar {
+	position: relative;
+	display: flex;
+	align-items: flex-end;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
+	background: var(--panel);
+	border: 1px solid var(--edge);
+	touch-action: none;
+	overflow: hidden;
+}
+
+.lane .bar.downbeat { background: var(--accent-beat); }
+
+.lane .bar i {
+	display: block;
+	width: 100%;
+	background: var(--on);
+	border-top: 1px solid var(--on-edge);
+}

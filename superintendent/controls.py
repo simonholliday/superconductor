@@ -21,6 +21,15 @@ STEP_GRID = "step_grid"
 TRANSPORT = "transport"
 """Named fields that say how the app is playing: silenced, tempo."""
 
+NOTE_GRID = "note_grid"
+"""A grid whose cells are notes rather than presence alone.
+
+A cell that is on carries a length in steps and a velocity, so a row is a pitch
+and a note is a bar drawn from where it starts.  The service knows that much and
+no more: which pitch a row names, and whether the instrument can sound two at
+once, are the app's business as they are for every other kind.
+"""
+
 
 class ControlError (Exception):
 	"""A path or a value that does not name part of a declared control."""
@@ -62,6 +71,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	if kind == STEP_GRID:
 		_apply_cell(state.setdefault(control, {}), declaration, rest, value, path)
 
+	elif kind == NOTE_GRID:
+		_apply_note(state.setdefault(control, {}), declaration, rest, value, path)
+
 	elif kind == TRANSPORT:
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
@@ -92,6 +104,66 @@ def _apply_cell (
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
 	_set_cell(grid, row, step, bool(value))
+
+
+NOTE_FIELDS = ("length", "velocity")
+"""What a note carries besides being there at all."""
+
+
+def _apply_note (
+	grid: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Place, remove, or reshape one note of a note grid.
+
+	Two shapes of address, and the length of the path says which: ``row/step``
+	puts a note there or takes it away, and ``row/step/field`` changes one that
+	is already there.  A field written to a cell holding no note is refused
+	rather than quietly creating one, because a length without a note is not a
+	state the app could have reported.
+	"""
+
+	if len(rest) not in (2, 3) or not rest[1].isdigit():
+		raise ControlError(f"{path!r} does not name a note as control/row/step or control/row/step/field")
+
+	row, step = rest[0], rest[1]
+
+	if row not in declaration.get("rows", []):
+		raise ControlError(f"this grid has no row named {row!r}")
+
+	steps = declaration.get("steps", 0)
+
+	if not 0 <= int(step) < steps:
+		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
+
+	notes = grid.setdefault(row, {})
+
+	if len(rest) == 2:
+		if value:
+			notes.setdefault(step, {
+				"length": declaration.get("default_length", 1),
+				"velocity": declaration.get("default_velocity", 100)})
+
+		else:
+			notes.pop(step, None)
+
+			if not notes:
+				grid.pop(row, None)
+
+		return
+
+	field = rest[2]
+
+	if field not in NOTE_FIELDS:
+		raise ControlError(f"a note has no field named {field!r}")
+
+	if step not in notes:
+		raise ControlError(f"{path!r} shapes a note that is not there")
+
+	notes[step][field] = value
 
 
 def _apply_field (

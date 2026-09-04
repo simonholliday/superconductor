@@ -24,6 +24,9 @@ import superintendent.service
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums"},
 	"second": {"type": "step_grid", "rows": ["kick"], "steps": 8, "beats": 2},
+	"bass": {"type": "note_grid", "rows": ["C2", "C#2", "D2"], "steps": 8, "beats": 2,
+	         "mono": True, "default_length": 1, "default_velocity": 100,
+	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.
@@ -37,6 +40,7 @@ a title and one does not, so both halves of that are drawn every run.
 PAGES: list[dict[str, typing.Any]] = [
 	{"id": "all", "title": "All", "parts": ["grid", "second"]},
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
+	{"id": "bass", "title": "Bass", "parts": ["bass"]},
 ]
 """Two views over the same two grids, one of which carries both.
 
@@ -122,6 +126,7 @@ class FakeApp:
 		return superintendent.protocol.declare(
 			"subsequence", CONTROLS,
 			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
+			 "bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
 			 "transport": {"paused": False, "bpm": 120.0}},
 			self.version, pages)
 

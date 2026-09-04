@@ -86,6 +86,7 @@ const FIT_SLACK = 2;
 const GAP = 4;
 const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
+const LANE_CELLS = 3;
 /* The gap between cells, how many of them the row labels span, and the height
    a title bar will not go below. GAP is written in the stylesheet too and the
    two must agree; there is a test that says so. */
@@ -229,6 +230,152 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 						></div>`;
 				})}
 			`)}
+		</div>`;
+}
+
+/* A pitched pattern: one row per note, and a cell that is a note.
+ *
+ * A note is drawn as a bar reaching rightwards from where it starts, which is
+ * how every piano roll draws one and needs no explaining. Position is pitch, so
+ * the line is read as a shape before any label is read.
+ *
+ * Two gestures, both acting on the finger landing (#2046). Pressing an empty
+ * cell places a note and begins sizing it: drag right and the note grows a step
+ * at a time, each length sent as its own absolute set, so the bar on the glass
+ * is never longer than the sequencer has agreed to. Pressing a note takes it
+ * away. Resizing a note that is already there means drawing it again, which is
+ * the first thing to revisit once this has been played.
+ */
+function NoteGrid ({ control, name, rows, steps, notes, cell, pending, failed, onSet }) {
+	const style = {
+		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
+	};
+
+	const drawing = useRef(null);
+
+	const pitch = cell + GAP;
+
+	const begin = (event, row, step, existing) => {
+		event.preventDefault();
+
+		if (existing) { onSet(`${name}/${row}/${step}`, false); return; }
+
+		onSet(`${name}/${row}/${step}`, true);
+
+		event.currentTarget.setPointerCapture(event.pointerId);
+		drawing.current = { pointer: event.pointerId, row, step, from: event.clientX, length: 1 };
+	};
+
+	const stretch = (event) => {
+		const drawn = drawing.current;
+
+		if (!drawn || drawn.pointer !== event.pointerId) return;
+
+		const wanted = Math.max(1, Math.min(
+			steps - drawn.step, 1 + Math.round((event.clientX - drawn.from) / pitch)));
+
+		if (wanted === drawn.length) return;
+
+		drawn.length = wanted;
+		onSet(`${name}/${drawn.row}/${drawn.step}/length`, wanted);
+	};
+
+	const finish = (event) => {
+		if (drawing.current && drawing.current.pointer === event.pointerId) drawing.current = null;
+	};
+
+	return html`
+		<div class="grid notes" style=${style}>
+			${rows.map((row) => html`
+				<div class="row-label" key=${`label-${row}`}>${row}</div>
+				${Array.from({ length: steps }, (_, step) => {
+					const path = `${name}/${row}/${step}`;
+					const note = (notes[row] || {})[String(step)];
+
+					return html`
+						<div
+							key=${path}
+							data-path=${path}
+							class=${["cell", note ? "on" : "", pending.has(path) ? "pending" : "",
+								failed.has(path) ? "failed" : "",
+								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+							onPointerDown=${(event) => begin(event, row, step, Boolean(note))}
+							onPointerMove=${stretch}
+							onPointerUp=${finish}
+							onPointerCancel=${finish}
+						>${note && html`
+							<div class="note" style=${{
+								width: `${(note.length || 1) * pitch - GAP}px`,
+							}}></div>`}</div>`;
+				})}
+			`)}
+		</div>`;
+}
+
+/* How hard each note is struck.
+ *
+ * A lane rather than a dial on every step: a dial small enough to fit a step is
+ * too small to hit, and one shared dial would need a step selected first. A
+ * lane shows the whole dynamic shape at once, which is the thing worth seeing.
+ *
+ * It edits the note in that column and does nothing where there is none —
+ * a velocity with no note is not a state the sequencer could report. */
+function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
+	const style = {
+		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
+		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
+	};
+
+	const [low, high] = range || [1, 127];
+	const holding = useRef(null);
+
+	const at = (step) => {
+		for (const row of rows) {
+			const note = (notes[row] || {})[String(step)];
+
+			if (note) return { row, note };
+		}
+
+		return null;
+	};
+
+	const set = (event, step) => {
+		const found = at(step);
+
+		if (!found) return;
+
+		const box = event.currentTarget.getBoundingClientRect();
+		const part = 1 - Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
+		const wanted = Math.round(low + part * (high - low));
+
+		if (wanted === found.note.velocity) return;
+
+		onSet(`${name}/${found.row}/${step}/velocity`, wanted);
+	};
+
+	return html`
+		<div class="lane" style=${style}>
+			<div class="row-label">velocity</div>
+			${Array.from({ length: steps }, (_, step) => {
+				const found = at(step);
+				const height = found ? Math.max(4, ((found.note.velocity - low) / (high - low)) * 100) : 0;
+
+				return html`
+					<div
+						key=${`vel-${step}`}
+						data-velocity=${step}
+						class=${`bar ${step % 4 === 0 ? "downbeat" : ""}`}
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							event.currentTarget.setPointerCapture(event.pointerId);
+							holding.current = event.pointerId;
+							set(event, step);
+						}}
+						onPointerMove=${(event) => { if (holding.current === event.pointerId) set(event, step); }}
+						onPointerUp=${() => { holding.current = null; }}
+						onPointerCancel=${() => { holding.current = null; }}
+					>${found && html`<i style=${{ height: `${height}%` }}></i>`}</div>`;
+			})}
 		</div>`;
 }
 
@@ -757,6 +904,12 @@ function Panel () {
 	const expiries = useRef(new Map());
 	const wanted = useRef(new Map());
 
+	/* What kind each declared control is, kept in a ref rather than read from
+	   render state. The frame handler is built once, so anything it closed over
+	   at mount would be the empty declarations it had then — the same trap the
+	   'changed' case below was already written around. */
+	const kinds = useRef(new Map());
+
 	const drop = useCallback((path) => {
 		setPending((was) => {
 			if (!was.has(path)) return was;
@@ -792,6 +945,13 @@ function Panel () {
 					 * has gone should leave its grid on the glass, greyed, rather
 					 * than take the page down with it. */
 					const listed = frame.apps || {};
+
+					for (const [app, offered] of Object.entries(listed)) {
+						for (const [control, declared] of Object.entries(offered)) {
+							kinds.current.set(`${app}/${control}`, declared);
+						}
+					}
+
 					setApps((was) => ({ ...was, ...listed }));
 					setPages(frame.pages || []);
 					setPresent((was) => {
@@ -834,12 +994,41 @@ function Panel () {
 					 * the kind up keeps this free of the declarations, which a
 					 * handler built once at mount would only ever see empty. */
 					const [control, ...rest] = frame.path.split("/");
+					const declared = kinds.current.get(`${frame.app}/${control}`);
 
 					setState((was) => {
 						const app = { ...(was[frame.app] || {}) };
 
-						if (rest.length === 1) {
+						if (rest.length === 3) {
+							/* A note's own length or velocity: control, row,
+							   step, field. Only ever sent for a note that is
+							   there, so an absent one is left absent. */
+							const grid = { ...(app[control] || {}) };
+							const row = { ...(grid[rest[0]] || {}) };
+
+							if (row[rest[1]]) {
+								row[rest[1]] = { ...row[rest[1]], [rest[2]]: frame.v };
+								grid[rest[0]] = row;
+								app[control] = grid;
+							}
+						} else if (rest.length === 1) {
 							app[control] = { ...(app[control] || {}), [rest[0]]: frame.v };
+						} else if (rest.length === 2 && declared && declared.type === "note_grid") {
+							/* Placing or taking away a note, which carries its
+							   own shape rather than being present or absent. */
+							const grid = { ...(app[control] || {}) };
+							const row = { ...(grid[rest[0]] || {}) };
+
+							if (frame.v) {
+								row[rest[1]] = row[rest[1]] || {
+									length: declared.default_length || 1,
+									velocity: declared.default_velocity || 100 };
+							} else {
+								delete row[rest[1]];
+							}
+
+							grid[rest[0]] = row;
+							app[control] = grid;
 						} else if (rest.length === 2) {
 							const grid = { ...(app[control] || {}) };
 							const list = new Set(grid[rest[0]] || []);
@@ -936,7 +1125,8 @@ function Panel () {
 	   driving one instrument belong on one page as stacked blocks, which is
 	   what Simon settled in #1944 — and a page that showed only the first of
 	   them would be quietly wrong rather than obviously incomplete. */
-	const declaredGrids = Object.keys(controls).filter((name) => controls[name].type === "step_grid");
+	const declaredGrids = Object.keys(controls).filter(
+		(name) => controls[name].type === "step_grid" || controls[name].type === "note_grid");
 
 	/* Which page is showing. A remembered choice for a page that is no longer
 	   offered falls back to the first without being forgotten: a composition
@@ -952,8 +1142,14 @@ function Panel () {
 		? declaredGrids.filter((name) => (page.parts || []).includes(name))
 		: declaredGrids;
 
+	const kindOf = (name) => controls[name].type;
+
+	/* A pitched pattern is as tall as its rows plus the velocity lane beneath
+	   them, which is what the fit has to solve for rather than the rows alone. */
 	const blocks = gridNames.map((name) => ({
-		name, rows: controls[name].rows.length, steps: controls[name].steps }));
+		name,
+		rows: controls[name].rows.length + (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
+		steps: controls[name].steps }));
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -1074,9 +1270,20 @@ function Panel () {
 					arranging=${arranging}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}>
-					<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
-						cells=${(state[appName] || {})[name] || {}}
-						pending=${pending} failed=${failed} onTap=${request} />
+					${kindOf(name) === "note_grid"
+						? html`
+							<${NoteGrid} name=${name} control=${controls[name]}
+								rows=${controls[name].rows} steps=${controls[name].steps}
+								notes=${(state[appName] || {})[name] || {}} cell=${size.cell}
+								pending=${pending} failed=${failed} onSet=${request} />
+							<${VelocityLane} name=${name} rows=${controls[name].rows}
+								steps=${controls[name].steps} cell=${size.cell}
+								notes=${(state[appName] || {})[name] || {}}
+								range=${controls[name].velocity_range} onSet=${request} />`
+						: html`
+							<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
+								cells=${(state[appName] || {})[name] || {}}
+								pending=${pending} failed=${failed} onTap=${request} />`}
 					${up && html`<${Playhead} anchor=${anchor} steps=${controls[name].steps}
 						beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
 				<//>`)}

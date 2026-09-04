@@ -95,6 +95,28 @@ people with their own panels do not have to agree.
 The chooser itself never shrinks. Whatever size you pick, the way back is the
 same size it always was.
 
+## Pitched patterns
+
+A step grid's cells are on or off. A **note grid**'s cells are notes: one row
+per pitch, and a cell that carries its own length and velocity.
+
+Press an empty cell to place a note, and keep dragging right to make it longer —
+it grows a step at a time, and each length is sent as it changes, so the bar you
+see is never longer than the instrument has agreed to. Press a note to take it
+away. Beneath the grid is a velocity lane, one bar to a step, aligned with the
+grid above so a column is the same moment in both; drag a bar up or down to set
+how hard that note is struck.
+
+A part declared `mono` holds one note to a step, and placing a second takes the
+first away. That is enforced by the application rather than left to the
+instrument: a monophonic synth handed two notes at once chooses between them by
+its own note-priority setting, which the panel cannot see — so the glass would
+show two notes while one sounded.
+
+Rows are names, as they are everywhere here. `compositions/drm1_grid.py` builds
+them from note names and hands the same list to Subsequence as a note map, so
+what the panel calls `C2` and what the synthesiser plays cannot drift apart.
+
 ## Arranging a page
 
 Tap **ARRANGE** in the bar. While it is latched the grids stop responding and

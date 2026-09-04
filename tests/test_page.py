@@ -411,3 +411,77 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	panel.wait_for_selector(".cell", timeout=10_000)
 
 	assert abs(panel.locator('.part[data-part="grid"]').bounding_box()["y"] - moved["y"]) < 2
+
+
+def _open_the_bass (panel: typing.Any) -> None:
+	"""Go to the page carrying the pitched pattern."""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector(".grid.notes", timeout=5_000)
+
+
+def test_a_note_is_drawn_as_a_bar_reaching_across_the_steps_it_lasts (
+	panel: typing.Any) -> None:
+	"""Which is how every piano roll draws one, and needs no explaining."""
+
+	_open_the_bass(panel)
+
+	cell = panel.locator(conftest.cell("bass/C2/0")).bounding_box()
+	note = panel.locator('.cell[data-path="bass/C2/0"] .note').bounding_box()
+
+	assert note["width"] > cell["width"], "a two-step note reaches past its own cell"
+	assert round(note["width"]) == round(cell["width"] * 2 + 4), "exactly two steps and the gap between"
+
+
+def test_pressing_an_empty_cell_places_a_note (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""On the finger landing, as every other control here acts (#2046)."""
+
+	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/D2/3")).click()
+
+	assert fake_app.await_set("bass/D2/3")["v"] is True
+
+
+def test_pressing_a_note_takes_it_away (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The other half of the same gesture, and the reason it is unambiguous."""
+
+	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
+
+	assert fake_app.await_set("bass/C2/0")["v"] is False
+
+
+def test_the_velocity_lane_shapes_the_note_in_its_column (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A lane rather than a dial: the whole dynamic shape is visible at once."""
+
+	_open_the_bass(panel)
+
+	bar = panel.locator('.lane .bar[data-velocity="0"]').bounding_box()
+
+	panel.mouse.move(bar["x"] + bar["width"] / 2, bar["y"] + 2)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	asked = fake_app.await_set("bass/C2/0/velocity")
+
+	assert asked["v"] > 100, "pressing near the top of the lane asks for a hard hit"
+
+
+def test_the_lane_does_nothing_where_there_is_no_note (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A velocity with no note is not a state the sequencer could report."""
+
+	_open_the_bass(panel)
+
+	bar = panel.locator('.lane .bar[data-velocity="5"]').bounding_box()
+
+	panel.mouse.move(bar["x"] + bar["width"] / 2, bar["y"] + 2)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	assert not any(frame.get("path", "").startswith("bass/") for frame in fake_app.sets)
