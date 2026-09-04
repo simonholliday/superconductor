@@ -219,18 +219,45 @@ function Window ({ rows, visible, cell, children }) {
 	const seen = useRef(null);
 	const windowed = Boolean(visible && visible < rows);
 
+	/* Where the window sits on what it is looking at, as two fractions. */
+	const [view, setView] = useState({ from: 0, span: 1 });
+
+	const measure = useCallback(() => {
+		const box = seen.current;
+
+		if (!box || !box.scrollHeight) return;
+
+		setView({
+			from: box.scrollTop / box.scrollHeight,
+			span: box.clientHeight / box.scrollHeight,
+		});
+	}, []);
+
 	useEffect(() => {
 		/* Opened at the bottom, which on a grid drawn high to low is the lowest
 		   notes — where a bass line lives. */
 		if (windowed && seen.current) seen.current.scrollTop = seen.current.scrollHeight;
-	}, [windowed, rows]);
+
+		measure();
+	}, [windowed, rows, cell, measure]);
 
 	return html`
-		<div
-			class=${`scroller ${windowed ? "windowed" : ""}`}
-			ref=${seen}
-			style=${windowed ? { maxHeight: `${visible * (cell + GAP)}px`, overflowY: "auto" } : null}
-		>${children}</div>`;
+		<div class=${`window ${windowed ? "windowed" : ""}`}>
+			<div
+				class="scroller"
+				ref=${seen}
+				onScroll=${measure}
+				style=${windowed ? { maxHeight: `${visible * (cell + GAP)}px`, overflowY: "auto" } : null}
+			>${children}</div>
+
+			${windowed && html`
+				<div class="track">
+					<i style=${{
+						top: `${view.from * 100}%`,
+						height: `${Math.max(8, view.span * 100)}%`,
+					}}></i>
+				</div>`}
+		</div>`;
 }
 
 function Grid ({ control, rows, steps, cells, visible, cell, pending, failed, onTap }) {

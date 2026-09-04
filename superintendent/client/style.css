@@ -144,15 +144,39 @@ html, body {
    experiment and that is one way too few: a scrollbar that is always there, a
    shadow at the edges saying there is more behind them, and the rail down the
    labels drawn in a colour you notice. */
-.scroller.windowed {
-	scrollbar-width: thin;
-	scrollbar-color: var(--edge) transparent;
-	box-shadow:
-		inset 0 10px 10px -10px rgba(0, 0, 0, 0.9),
-		inset 0 -10px 10px -10px rgba(0, 0, 0, 0.9);
+/* The window and the mark that says how much of it you are seeing.
+ *
+ * Drawn here rather than left to the browser. A scrollbar on a touch panel is
+ * an overlay that fades away when nothing is moving, so it says nothing at the
+ * moment somebody is deciding whether there is anything to scroll — and an
+ * inset shadow, which was the first attempt, is invisible against a panel this
+ * dark. This is a mark we draw and therefore one that is always there. */
+.window { position: relative; }
+
+.window .track {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 1px;
+	width: 5px;
+	border-radius: 3px;
+	background: rgba(255, 255, 255, 0.05);
+	pointer-events: none;
 }
 
-.scroller.windowed .row-label {
+/* The thumb runs down the same line the rail's dots do, so one motif carries
+   both halves of the idea: the dots say the view can be pushed from here, and
+   the bar says how much of it there is and where you are in it. */
+.window .track i {
+	position: absolute;
+	left: 0;
+	right: 0;
+	display: block;
+	border-radius: 3px;
+	background: var(--ink-quiet);
+}
+
+.window.windowed .row-label {
 	background-image: radial-gradient(circle at 3px 50%,
 		var(--ink-quiet) 0 1.5px, transparent 1.6px);
 }

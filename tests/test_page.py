@@ -562,6 +562,36 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	assert drums["rail"] and pitched["rail"], "both carry the mark that says push the view from here"
 
 
+def test_a_window_shows_how_much_of_itself_you_are_seeing (panel: typing.Any) -> None:
+	"""Drawn rather than left to the browser.
+
+	A touch panel's scrollbar is an overlay that fades when nothing is moving,
+	so it says nothing at the moment somebody is deciding whether there is more;
+	and the inset shadow that was tried first is invisible against a panel this
+	dark. Simon saw neither, which is why this asserts the mark is there and is
+	shorter than the track it runs in.
+	"""
+
+	_open_the_bass(panel)
+
+	thumb = panel.locator('.part[data-part="bass"] .window .track i')
+	track = panel.locator('.part[data-part="bass"] .window .track')
+
+	playwright_api.expect(thumb).to_be_visible(timeout=5_000)
+
+	assert thumb.bounding_box()["height"] < track.bounding_box()["height"], (
+		"the mark is shorter than its track, which is what says there is more")
+
+
+def test_a_part_that_fits_draws_no_scroll_mark (panel: typing.Any) -> None:
+	"""A mark on a block with nowhere to go would be furniture, and worse, a lie."""
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector(".grid .cell", timeout=5_000)
+
+	assert panel.locator('.part[data-part="grid"] .track').count() == 0
+
+
 def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any) -> None:
 	"""A person learns a cell once. Two designs of it would be two to learn."""
 
