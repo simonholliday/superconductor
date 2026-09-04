@@ -244,3 +244,30 @@ def test_an_arrangement_for_an_app_that_is_gone_is_refused_with_a_reason () -> N
 		refusal = _read_until(panel, "nack")
 
 	assert "not connected" in refusal["reason"]
+
+
+def test_a_control_this_service_is_too_old_for_is_declared_as_such () -> None:
+	"""Rather than passed on as though it were fine.
+
+	This cost an evening. The service was running code from before a control
+	kind existed, so it dropped every change to that control while forwarding
+	the frames — the panel was told once and never again, and the button
+	appeared simply not to work. The reason was in a log nobody was reading.
+	"""
+
+	controls = {"mystery": {"type": "hologram", "shimmer": 3}, **CONTROLS}
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", controls, {}, 1))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", None))
+
+			manifest = _read_until(panel, "manifest")
+
+	offered = manifest["apps"]["subsequence"]
+
+	assert offered["mystery"]["unsupported"] == "hologram"
+	assert "unsupported" not in offered["grid"], "a kind it does know is left alone"

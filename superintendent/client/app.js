@@ -1316,7 +1316,8 @@ function Panel () {
 	   driving one instrument belong on one page as stacked blocks, which is
 	   what Simon settled in #1944 — and a page that showed only the first of
 	   them would be quietly wrong rather than obviously incomplete. */
-	const declaredGrids = Object.keys(controls).filter((name) => DRAWN.includes(controls[name].type));
+	const declaredGrids = Object.keys(controls).filter(
+		(name) => DRAWN.includes(controls[name].type) || controls[name].unsupported);
 
 	/* Which page is showing. A remembered choice for a page that is no longer
 	   offered falls back to the first without being forgotten: a composition
@@ -1337,6 +1338,10 @@ function Panel () {
 	/* A pitched pattern is as tall as its rows plus the velocity lane beneath
 	   them, which is what the fit has to solve for rather than the rows alone. */
 	const blocks = gridNames.map((name) => {
+		if (controls[name].unsupported) {
+			return { name, rows: 3, steps: PARAM_CELLS };
+		}
+
 		if (kindOf(name) === "params") {
 			return { name, rows: (controls[name].fields || []).length, steps: PARAM_CELLS };
 		}
@@ -1467,7 +1472,15 @@ function Panel () {
 					arranging=${arranging}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}>
-					${kindOf(name) === "params"
+					${controls[name].unsupported
+						? html`
+							<div class="unsupported">
+								This service does not know how to draw a
+								<b>${controls[name].unsupported}</b>. It is older than the
+								application that declared it, and is not keeping this
+								control's state — so nothing here would follow the music.
+							</div>`
+						: kindOf(name) === "params"
 						? html`
 							<${Params} name=${name} fields=${controls[name].fields || []}
 								values=${(state[appName] || {})[name] || {}}

@@ -114,6 +114,8 @@ MINITAUR_CC = {
 	"filter_velocity": 89,
 	"volume_velocity": 90,
 	"key_priority": 91,
+	"volume": 7,
+	"local_control": 122,
 }
 """Which control change each panel setting is wired to.
 
@@ -177,6 +179,9 @@ def _cc_value (name: str, value: typing.Any) -> int:
 
 	if isinstance(value, bool):
 		return 127 if value else 0
+
+	# Local control is the MIDI specification's own switch and takes only 0 or
+	# 127 — no band, no midpoint (#2081).
 
 	return int(value)
 
@@ -311,6 +316,10 @@ link = superintendent.subsequence_adapter.AppLink(
 				superintendent.subsequence_adapter.Parameter(
 					"key_priority", "choice", label="Note priority", default="last",
 					options=[("low", "Low"), ("high", "High"), ("last", "Last")]),
+				superintendent.subsequence_adapter.Parameter(
+					"volume", "number", label="Output level", default=127),
+				superintendent.subsequence_adapter.Parameter(
+					"local_control", "switch", label="Front panel controls", default=True),
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
 			on_change=send_setting),

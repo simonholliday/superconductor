@@ -47,6 +47,16 @@ PARAMETER_KINDS = ("switch", "number", "choice")
 """What a parameter can be, and so what a panel knows how to draw."""
 
 
+KINDS = (STEP_GRID, NOTE_GRID, PARAMS, TRANSPORT)
+"""Every kind of control this version of the service understands.
+
+An app may declare one this service has never heard of — it is older than the
+app, or the app is newer than it.  That has to be visible rather than logged:
+a control the service cannot place is one whose state it silently stops
+keeping, and a panel then shows a face that stops moving for no stated reason.
+"""
+
+
 class ControlError (Exception):
 	"""A path or a value that does not name part of a declared control."""
 

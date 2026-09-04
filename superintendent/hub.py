@@ -111,9 +111,24 @@ class Hub:
 		LOG.info("app %r disconnected", name)
 
 	def _declarations (self) -> dict[str, dict[str, typing.Any]]:
-		"""What every connected app says it can be controlled by."""
+		"""What every connected app says it can be controlled by.
 
-		return {name: app.controls for name, app in sorted(self.apps.items())}
+		A control of a kind this service does not know is marked as such rather
+		than passed on as though it were fine.  The service is what keeps each
+		app's state for panels arriving late, so a kind it cannot place is one
+		whose changes it quietly drops — which on the glass looks like a control
+		that has stopped responding, with the reason only in a log nobody is
+		reading.  Saying so is the difference between a puzzle and a message.
+		"""
+
+		return {
+			name: {
+				control: declared if declared.get("type") in superintendent.controls.KINDS
+				else {**declared, "unsupported": declared.get("type")}
+				for control, declared in app.controls.items()
+			}
+			for name, app in sorted(self.apps.items())
+		}
 
 	def _pages (self) -> list[dict[str, typing.Any]]:
 		"""Every page every connected app declared, each naming its own app.
