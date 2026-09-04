@@ -230,6 +230,7 @@ function Panel () {
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
+	const wanted = useRef(new Map());
 
 	const drop = useCallback((path) => {
 		setPending((was) => {
@@ -241,6 +242,8 @@ function Panel () {
 
 		const timer = expiries.current.get(path);
 		if (timer) { clearTimeout(timer); expiries.current.delete(path); }
+
+		wanted.current.delete(path);
 	}, []);
 
 	/* A brief mark on a cell whose request did not land. It is not a state the
@@ -284,19 +287,40 @@ function Panel () {
 					break;
 
 				case "changed": {
-					/* The face follows the sequencer, whoever moved it. */
-					const [control, row, step] = frame.path.split("/");
+					/* The face follows the app, whoever moved it.
+					 *
+					 * How to apply it depends on the kind of control, and the
+					 * path says which: three parts address a cell of a grid,
+					 * two a named field. Reading the shape rather than looking
+					 * the kind up keeps this free of the declarations, which a
+					 * handler built once at mount would only ever see empty. */
+					const [control, ...rest] = frame.path.split("/");
+
 					setState((was) => {
 						const app = { ...(was[frame.app] || {}) };
-						const grid = { ...(app[control] || {}) };
-						const list = new Set(grid[row] || []);
-						frame.v ? list.add(Number(step)) : list.delete(Number(step));
-						grid[row] = [...list].sort((a, b) => a - b);
-						app[control] = grid;
+
+						if (rest.length === 1) {
+							app[control] = { ...(app[control] || {}), [rest[0]]: frame.v };
+						} else if (rest.length === 2) {
+							const grid = { ...(app[control] || {}) };
+							const list = new Set(grid[rest[0]] || []);
+							frame.v ? list.add(Number(rest[1])) : list.delete(Number(rest[1]));
+							grid[rest[0]] = [...list].sort((a, b) => a - b);
+							app[control] = grid;
+						}
+
 						return { ...was, [frame.app]: app };
 					});
 
-					if (frame.client === clientId) drop(frame.path);
+					/* Answered in substance: the app now holds what was asked
+					 * for, whether it credits this panel or not. A transport's
+					 * confirmation arrives as the app's own doing, so waiting
+					 * for our name on it would leave the request pending until
+					 * it timed out and flashed as a failure. */
+					if (frame.client === clientId || wanted.current.get(frame.path) === frame.v) {
+						drop(frame.path);
+					}
+
 					break;
 				}
 
@@ -331,6 +355,7 @@ function Panel () {
 		const seq = link.current.set(app, path, value);
 		if (seq === null) return;
 
+		wanted.current.set(path, value);
 		setPending((was) => new Map(was).set(path, seq));
 
 		/* A ring that is never confirmed must not sit there for ever: after
@@ -346,7 +371,7 @@ function Panel () {
 
 	if (!controlName) {
 		return html`
-			<div class="bar"><span class="title">Superintendent</span><span class="spacer"></span>
+			<div class="bar"><span class="spacer"></span>
 				<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
 			</div>
 			<div class="notice">
