@@ -133,7 +133,17 @@ html, body {
 
 /* One gap between the title and the grid, which is the gap the lattice puts
    between any two cells — so a block of ten rows is exactly eleven cells. */
-.part-body { position: relative; padding-top: var(--gap); }
+.part-body {
+	position: relative;
+	padding-top: var(--gap);
+
+	/* Clipped at the block's own edge. The playhead is drawn between beats and
+	   so passes 15.9 of 16 steps before it wraps, which puts it most of a cell
+	   past the last one — enough to widen the page and flash a scrollbar up
+	   once a bar. A block is exactly as wide as its pattern, so anything drawn
+	   beyond it is a position between two steps rather than a thing to see. */
+	overflow: hidden;
+}
 
 /* The window onto a pattern taller than its block. Scrolled from the row
    labels and the gutters, as the page itself is — a swipe starting on a cell
@@ -162,6 +172,12 @@ html, body {
 	border-radius: 3px;
 	background: rgba(255, 255, 255, 0.05);
 	pointer-events: none;
+
+	/* Above the row labels, which are sticky and opaque and were painting over
+	   it — leaving the mark visible only in the gaps between rows, as a column
+	   of small squares. Sticky labels sit at z-index 1 to stay above the
+	   playhead; this has to clear them. */
+	z-index: 2;
 }
 
 /* The thumb runs down the same line the rail's dots do, so one motif carries

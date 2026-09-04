@@ -583,6 +583,34 @@ def test_a_window_shows_how_much_of_itself_you_are_seeing (panel: typing.Any) ->
 		"the mark is shorter than its track, which is what says there is more")
 
 
+def test_the_scroll_mark_is_not_painted_over_by_the_row_labels (panel: typing.Any) -> None:
+	"""It was, and showed only in the gaps between rows as a column of squares.
+
+	The labels are sticky and opaque so they can stay above the playhead while a
+	wide grid scrolls under them; the mark has to clear them in turn.
+	"""
+
+	_open_the_bass(panel)
+
+	stacking = panel.eval_on_selector_all(
+		'.part[data-part="bass"] .window .track, .part[data-part="bass"] .row-label',
+		"els => els.map(el => Number(getComputedStyle(el).zIndex) || 0)")
+
+	assert stacking[0] > max(stacking[1:]), "the mark sits above every label"
+
+
+def test_the_playhead_cannot_widen_the_page_as_it_wraps (panel: typing.Any) -> None:
+	"""It is drawn between beats, so it passes 15.9 of 16 steps before wrapping,
+	which put it most of a cell past the last one and flashed a scrollbar up
+	once a bar. A block is exactly as wide as its pattern, so it clips."""
+
+	_open_the_bass(panel)
+
+	assert panel.eval_on_selector(
+		'.part[data-part="bass"] .part-body',
+		"el => getComputedStyle(el).overflow") == "hidden"
+
+
 def test_a_part_that_fits_draws_no_scroll_mark (panel: typing.Any) -> None:
 	"""A mark on a block with nowhere to go would be furniture, and worse, a lie."""
 
