@@ -55,6 +55,7 @@ const SIZES = [
 const FIT_FLOOR = 22;
 const FIT_CEILING = 96;
 const FIT_SLACK = 2;
+const PART_GAP = 10;
 const DEFAULT_SIZE = "fit";
 
 /* ------------------------------------------------------------------ */
@@ -179,7 +180,7 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 					return html`
 						<div
 							key=${path}
-							data-path=${`${row}/${step}`}
+							data-path=${path}
 							class=${["cell", on ? "on" : "", pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
@@ -188,6 +189,25 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 				})}
 			`)}
 		</div>`;
+}
+
+/* One part: a titled block holding one control.
+ *
+ * The title comes from the app, never from here (#2071). Superintendent does
+ * not know that a grid is a drum pattern or that a row is a voice, and a title
+ * invented here would be the one place a rig's names leaked into the package.
+ * An app that offers none gets its address tidied up, which is honest about
+ * where the words came from.
+ *
+ * The bar is also the handle. A step grid is tappable over its whole face, so
+ * there is nowhere on it to take hold of that is not a control; the title is
+ * the surface that is not one. */
+function Part ({ title, name, children }) {
+	return html`
+		<section class="part" data-part=${name}>
+			<header class="part-title">${title || name.replace(/_/g, " ")}</header>
+			<div class="part-body">${children}</div>
+		</section>`;
 }
 
 /* The highlight tracking what is sounding.
@@ -346,7 +366,7 @@ function Build ({ service, stale }) {
  * the closest thing to per-person storage that exists while page files are
  * still unsettled (#1948) — one browser profile is one panel is, in practice,
  * one pair of hands. */
-function useCellSize (rows, steps) {
+function useCellSize (rows, steps, blocks) {
 	const [choice, setChoice] = useState(() => {
 		try {
 			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
@@ -376,11 +396,16 @@ function useCellSize (rows, steps) {
 		if (!named) { setChoice(DEFAULT_SIZE); return; }
 		if (named.px) { setCell(named.px); return; }
 
-		/* Fitting. The grid is one label column and `steps` cells across, and
-		   `rows` deep, so the largest cell that fits is whichever of the two
-		   directions runs out first. A couple of pixels are left over on each
-		   axis: an exact fit that rounds the wrong way raises a scrollbar,
-		   which narrows the box, which would start the sum again. */
+		/* Fitting. Across, it is one label column and the widest grid's worth
+		   of cells; down, it is every row of every block, plus a title bar for
+		   each and the space between them. The largest cell that fits is
+		   whichever direction runs out first. A couple of pixels are left over
+		   on each axis: an exact fit that rounds the wrong way raises a
+		   scrollbar, which narrows the box, which would start the sum again.
+
+		   Title bars are subtracted rather than scaled because they do not
+		   scale: text has a legibility floor, so a block's chrome is a fixed
+		   cost against the glass however small its cells are. */
 		const fit = () => {
 			const box = wrap.current;
 
@@ -402,9 +427,35 @@ function useCellSize (rows, steps) {
 			   larger, scrollbar returns. The border box does not move. */
 			const outer = box.getBoundingClientRect();
 
-			const across = outer.width - padX - FIT_SLACK
+			/* Everything a block costs that is not its cells — its title, its
+			   padding, its border — measured rather than enumerated, by taking
+			   the difference between a block and the grid inside it. That
+			   difference does not move when the cells resize, which is what
+			   makes it safe to measure at the current size and solve for the
+			   next one. */
+			const parts = Array.from(box.querySelectorAll(".part"));
+
+			const chrome = parts.reduce((total, part) => {
+				const inside = part.querySelector(".grid");
+
+				return total + part.getBoundingClientRect().height
+					- (inside ? inside.getBoundingClientRect().height : 0);
+			}, 0);
+
+			const sides = parts.reduce((widest, part) => {
+				const inside = part.querySelector(".grid");
+
+				return Math.max(widest, part.getBoundingClientRect().width
+					- (inside ? inside.getBoundingClientRect().width : 0));
+			}, 0);
+
+			const across = outer.width - padX - FIT_SLACK - sides
 				- label.getBoundingClientRect().width - gap * steps;
-			const down = outer.height - padY - FIT_SLACK - gap * (rows - 1);
+
+			/* A block of r rows has r - 1 gaps inside it, so every block gives
+			   one back; the space between blocks is counted separately. */
+			const down = outer.height - padY - FIT_SLACK - chrome
+				- gap * Math.max(0, rows - blocks) - PART_GAP * Math.max(0, blocks - 1);
 
 			const size = Math.floor(Math.min(across / steps, down / rows));
 
@@ -421,7 +472,7 @@ function useCellSize (rows, steps) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, rows, steps]);
+	}, [choice, rows, steps, blocks]);
 
 	useEffect(() => {
 		document.documentElement.style.setProperty("--cell", `${cell}px`);
@@ -648,21 +699,31 @@ function Panel () {
 
 	const appName = Object.keys(apps)[0];
 	const controls = appName ? apps[appName] : {};
-	const controlName = Object.keys(controls).find((name) => controls[name].type === "step_grid");
 	const up = appName ? present[appName] !== false : false;
 
-	/* Asked for before the page can return early, because a hook must be. The
-	   grid it measures may not exist yet, and it copes: nothing is fitted until
-	   there is something on the glass to fit. */
-	const declared = controlName ? controls[controlName] : null;
-	const size = useCellSize(declared ? declared.rows.length : 0, declared ? declared.steps : 0);
+	/* Every grid the app declared, not the first one it declared. Two patterns
+	   driving one instrument belong on one page as stacked blocks, which is
+	   what Simon settled in #1944 — and a page that showed only the first of
+	   them would be quietly wrong rather than obviously incomplete. */
+	const gridNames = Object.keys(controls).filter((name) => controls[name].type === "step_grid");
+
+	/* Asked for before the page can return early, because a hook must be. What
+	   has to fit is every row of every block down, and the widest block across.
+	   With nothing declared these are zero and nothing is fitted. */
+	const size = useCellSize(
+		gridNames.reduce((total, name) => total + controls[name].rows.length, 0),
+		gridNames.reduce((widest, name) => Math.max(widest, controls[name].steps), 0),
+		gridNames.length);
 
 	/* Both halves have to be known before they can disagree: a page served
 	   without a stamp, or a service too old to send one, is not evidence of
 	   anything and must not raise a warning it cannot justify. */
 	const stale = Boolean(service && service.build && pageBuild && service.build !== pageBuild);
 
-	if (!controlName) {
+	const transportName = Object.keys(controls).find((name) => controls[name].type === "transport");
+	const transportFields = transportName ? (state[appName] || {})[transportName] || {} : {};
+
+	if (!gridNames.length) {
 		return html`
 			<div class="bar">
 				<span class="spacer"></span>
@@ -675,12 +736,6 @@ function Panel () {
 					: "Waiting for the Superintendent service."}
 			</div>`;
 	}
-
-	const control = controls[controlName];
-	const cells = (state[appName] || {})[controlName] || {};
-
-	const transportName = Object.keys(controls).find((name) => controls[name].type === "transport");
-	const transportFields = transportName ? (state[appName] || {})[transportName] || {} : {};
 
 	return html`
 		<div class="bar">
@@ -697,10 +752,14 @@ function Panel () {
 			<${Build} service=${service} stale=${stale} />
 		</div>
 		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
-			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
-				cells=${cells} pending=${pending} failed=${failed} onTap=${request} />
-			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4}
-				paused=${transportFields.paused === true} />`}
+			${gridNames.map((name) => html`
+				<${Part} key=${name} name=${name} title=${controls[name].title}>
+					<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
+						cells=${(state[appName] || {})[name] || {}}
+						pending=${pending} failed=${failed} onTap=${request} />
+					${up && html`<${Playhead} anchor=${anchor} steps=${controls[name].steps}
+						beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
+				<//>`)}
 		</div>`;
 }
 

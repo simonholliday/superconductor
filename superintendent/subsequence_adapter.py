@@ -57,6 +57,15 @@ class Control:
 
 	name: str
 
+	title: str | None = None
+	"""What to call this on the glass, if not the name it is addressed by.
+
+	The app names its own parts and the panel repeats them (#2071).  Nothing in
+	Superintendent knows that a row called ``kick`` is a drum or that a grid is
+	a pattern for one, so a title is the composition's to give: it is the same
+	rule as the row names, and the same reason.
+	"""
+
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to draw this."""
 
@@ -107,6 +116,7 @@ class StepGrid (Control):
 		beats: int = 4,
 		data_key: str = "grid",
 		name: str = "grid",
+		title: str | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps."""
 
@@ -116,11 +126,18 @@ class StepGrid (Control):
 		self.beats = beats
 		self.data_key = data_key
 		self.name = name
+		self.title = title
 
 	def declaration (self) -> dict[str, typing.Any]:
-		"""Rows, width, and how long one time round the grid takes."""
+		"""Rows, width, how long one time round takes, and what to call it."""
 
-		return {"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats}
+		declared: dict[str, typing.Any] = {
+			"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats}
+
+		if self.title is not None:
+			declared["title"] = self.title
+
+		return declared
 
 	def snapshot (self) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.

@@ -88,6 +88,14 @@ panel, which is the whole point of the exercise.
 composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
+composition.data["layer"] = {row: [] for row in ROWS}
+"""A second pattern over the same drum machine, empty until somebody fills it.
+
+Two patterns driving one instrument belong on one page as stacked blocks rather
+than on two pages, which Simon settled as Subroutine #1944.  This is that case
+made real: both write the same ten voices on the same channel, and what you hear
+is the two laid over each other.
+"""
 
 
 @composition.pattern(
@@ -106,7 +114,24 @@ def drums (p: typing.Any) -> None:
 	about 20 ms at 120 BPM — before it can be heard, rather than a whole beat.
 	"""
 
-	grid = composition.data["grid"]
+	_play(p, composition.data["grid"])
+
+
+@composition.pattern(
+	channel=DRUM_CHANNEL,
+	steps=STEPS,
+	step_duration=STEP_DURATION,
+	drum_note_map=drm1.VERMONA_DRM1_DRUM_MAP,
+	reschedule_lookahead=1 / 24,
+)
+def layer (p: typing.Any) -> None:
+	"""A second pass over the same machine, built the same way as the first."""
+
+	_play(p, composition.data["layer"])
+
+
+def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
+	"""Put whatever a grid holds onto the pattern being built."""
 
 	for row in ROWS:
 		steps = grid.get(row)
@@ -118,7 +143,12 @@ def drums (p: typing.Any) -> None:
 link = superintendent.subsequence_adapter.AppLink(
 	composition,
 	controls=[
-		superintendent.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=STEPS, beats=BEATS),
+		superintendent.subsequence_adapter.StepGrid(
+			composition, rows=ROWS, steps=STEPS, beats=BEATS,
+			data_key="grid", name="grid", title="DRM1 — pattern 1"),
+		superintendent.subsequence_adapter.StepGrid(
+			composition, rows=ROWS, steps=STEPS, beats=BEATS,
+			data_key="layer", name="layer", title="DRM1 — pattern 2"),
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	url=SERVICE_URL,

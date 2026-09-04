@@ -22,10 +22,17 @@ import superintendent.service
 
 
 CONTROLS: dict[str, typing.Any] = {
-	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2},
+	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums"},
+	"second": {"type": "step_grid", "rows": ["kick"], "steps": 8, "beats": 2},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
-"""A small declaration: enough shapes to draw, few enough cells to read."""
+"""A small declaration: enough shapes to draw, few enough cells to read.
+
+Two grids rather than one, and the second sharing a row name with the first on
+purpose.  A panel that addressed a cell by row and step alone would confuse
+them, and did until cells were addressed by their whole path.  One grid carries
+a title and one does not, so both halves of that are drawn every run.
+"""
 
 
 def _free_port () -> int:
@@ -77,7 +84,8 @@ class FakeApp:
 			await socket_.send(superintendent.protocol.encode(
 				superintendent.protocol.declare(
 					"subsequence", CONTROLS,
-					{"grid": {"kick": [0, 4], "snare": []}, "transport": {"paused": False, "bpm": 120.0}},
+					{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
+					 "transport": {"paused": False, "bpm": 120.0}},
 					self.version)))
 
 			self._ready.set()
@@ -176,8 +184,10 @@ def panel (page: typing.Any, service_url: str, fake_app: FakeApp) -> typing.Any:
 
 
 def cell (path: str) -> str:
-	"""The selector for one cell, addressed the way the protocol addresses it."""
+	"""The selector for one cell, addressed the way the protocol addresses it.
 
-	_, row, step = path.split("/")
+	By its whole path, control included: two grids may name a row the same and
+	only the control tells them apart.
+	"""
 
-	return f'.grid .cell[data-path="{row}/{step}"]'
+	return f'.cell[data-path="{path}"]'

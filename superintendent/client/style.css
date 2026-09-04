@@ -71,7 +71,38 @@ html, body {
 }
 .lamp.up::before { background: #51cf66; }
 
-.grid-wrap { flex: 1; position: relative; overflow: auto; padding: 0.5rem; }
+.grid-wrap {
+	flex: 1;
+	overflow: auto;
+	padding: 0.5rem;
+	display: flex;
+	flex-direction: column;
+	align-items: start;
+	gap: 10px;
+}
+
+/* One part: a titled block holding one control.
+ *
+ * The title is what makes several instruments on one screen legible rather
+ * than a wall of cells (#2071), and it is also the only surface on a block
+ * that is not a control — which is what a hand needs to take hold of one. */
+.part { border: 1px solid var(--edge); border-radius: 10px; background: #14161a; }
+
+.part-title {
+	padding: 0.35rem 0.7rem;
+	border-bottom: 1px solid var(--edge);
+	color: var(--ink-quiet);
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	white-space: nowrap;
+
+	/* Never scaled by the cell size. Text has a legibility floor, and a block
+	   whose name cannot be read is not contained, only boxed. */
+}
+
+.part-body { position: relative; padding: 0.4rem; }
 
 .grid {
 	display: grid;
@@ -152,7 +183,7 @@ html, body {
 
 /* The app behind this grid has gone. The cells stay, because they are the last
    thing the sequencer actually held, but nothing here is live. */
-.grid-wrap.absent .grid { opacity: 0.45; }
+.grid-wrap.absent .part { opacity: 0.45; }
 
 .bar .warn { color: #ffa94d; }
 

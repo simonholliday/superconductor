@@ -36,7 +36,7 @@ pytestmark = pytest.mark.skipif(
 def test_the_grid_is_drawn_from_what_the_app_declared (panel: typing.Any) -> None:
 	"""Two rows of eight, because that is what was declared — not what was coded."""
 
-	assert panel.locator(".grid .cell").count() == 16
+	assert panel.locator('.part[data-part="grid"] .cell').count() == 16
 	assert panel.locator(conftest.cell("grid/kick/0")).count() == 1
 	assert panel.locator(conftest.cell("grid/snare/7")).count() == 1
 
@@ -195,3 +195,33 @@ def test_a_page_left_behind_by_the_service_says_so_and_offers_the_way_back (
 
 	finally:
 		marker.unlink(missing_ok=True)
+
+
+def test_every_declared_grid_is_drawn_not_only_the_first (panel: typing.Any) -> None:
+	"""Two patterns driving one instrument belong on one page (#1944), so a page
+	showing only the first grid an app declared would be quietly wrong."""
+
+	assert panel.locator(".part").count() == 2
+	assert panel.locator(conftest.cell("second/kick/2")).count() == 1
+
+
+def test_two_grids_sharing_a_row_name_do_not_share_its_cells (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Both fixtures declare a row called 'kick'. A cell addressed by row and
+	step alone would move both, which is the bug this addressing prevents."""
+
+	fake_app.confirm("second/kick/5", True, by="app")
+
+	playwright_api.expect(panel.locator(conftest.cell("second/kick/5"))).to_have_class(
+		lambda value: "on" in value, timeout=5_000)
+
+	assert "on" not in (panel.locator(conftest.cell("grid/kick/5")).get_attribute("class") or "")
+
+
+def test_a_part_is_titled_by_the_app_or_by_its_address (panel: typing.Any) -> None:
+	"""The title is the app's to give (#2071): nothing here knows that a grid is
+	a drum pattern. An app that offers none gets its address tidied, which is
+	honest about where the words came from."""
+
+	assert panel.locator('.part[data-part="grid"] .part-title').inner_text().strip().lower() == "drums"
+	assert panel.locator('.part[data-part="second"] .part-title').inner_text().strip().lower() == "second"
