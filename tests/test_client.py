@@ -75,3 +75,16 @@ def test_the_page_asks_for_the_assets_the_service_stamps () -> None:
 
 	for asset in ("/client/style.css", "/client/app.js"):
 		assert f'"{asset}"' in markup, f"{asset} is not spelled the way the service rewrites it"
+
+
+def test_the_gap_between_cells_is_the_same_number_in_both_languages () -> None:
+	"""The lattice is arithmetic in JavaScript and layout in CSS, and the two
+	only agree because they use the same gap. Nothing else would notice."""
+
+	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	styles = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+
+	in_script = next(line for line in source.splitlines() if line.startswith("const GAP = "))
+	in_styles = next(line for line in styles.splitlines() if line.strip().startswith("--gap:"))
+
+	assert in_script.split("=")[1].strip(" ;") == in_styles.split(":")[1].strip(" ;").removesuffix("px")

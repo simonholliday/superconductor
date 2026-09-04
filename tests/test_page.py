@@ -289,12 +289,18 @@ def test_a_remembered_page_that_is_no_longer_offered_is_not_forgotten (
 	assert panel.evaluate("() => localStorage.getItem('superintendent.page')") == "a-page-that-went-away"
 
 
-def test_a_page_lays_its_parts_out_in_the_columns_it_asked_for (
+def test_parts_are_placed_on_the_lattice_and_their_steps_line_up (
 	panel: typing.Any, service_url: str) -> None:
-	"""A wide panel showing one column of blocks is wasting half of itself, so
-	how many stand side by side is the page's to say."""
+	"""#2078's reason for making the lattice cell the step cell: two patterns on
+	one page land step-aligned, so step five of one sits above step five of the
+	other. Almost-aligned would be worse than either aligned or plainly apart."""
 
 	boxes = [panel.locator(f'.part[data-part="{name}"]').bounding_box() for name in ("grid", "second")]
 
-	assert boxes[0]["y"] == boxes[1]["y"], "two columns puts them level with each other"
-	assert boxes[1]["x"] > boxes[0]["x"], "and the second beside the first, not beneath it"
+	assert boxes[1]["x"] > boxes[0]["x"], "placed left to right before wrapping"
+
+	cells = [panel.locator(conftest.cell(f"{part}/kick/3")).bounding_box()["x"]
+	         for part in ("grid", "second")]
+
+	assert abs(cells[0] - (cells[1] - (boxes[1]["x"] - boxes[0]["x"]))) < 1, (
+		"the same step of each pattern sits at the same offset within its block")

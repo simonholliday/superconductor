@@ -10,7 +10,7 @@
  *   3. A tap acts on the finger landing, not on it lifting.
  */
 
-import { html, render, useState, useEffect, useRef, useCallback }
+import { html, render, useState, useEffect, useRef, useCallback, useMemo }
 	from "./vendor/htm-preact-standalone.module.js";
 
 const PING_EVERY = 2000;
@@ -81,7 +81,13 @@ const SIZES = [
 const FIT_FLOOR = 22;
 const FIT_CEILING = 96;
 const FIT_SLACK = 2;
-const PART_GAP = 10;
+
+const GAP = 4;
+const LABEL_CELLS = 3;
+const TITLE_FLOOR = 24;
+/* The gap between cells, how many of them the row labels span, and the height
+   a title bar will not go below. GAP is written in the stylesheet too and the
+   two must agree; there is a test that says so. */
 const DEFAULT_SIZE = "fit";
 
 /* ------------------------------------------------------------------ */
@@ -228,9 +234,16 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, children }) {
+function Part ({ title, name, at, cell, depth, children }) {
+	const pitch = cell + GAP;
+	const place = {
+		left: `${(at ? at.x : 0) * pitch}px`,
+		top: `${(at ? at.y : 0) * pitch}px`,
+		zIndex: depth,
+	};
+
 	return html`
-		<section class="part" data-part=${name}>
+		<section class="part" data-part=${name} style=${place}>
 			<header class="part-title">${title || name.replace(/_/g, " ")}</header>
 			<div class="part-body">${children}</div>
 		</section>`;
@@ -421,14 +434,85 @@ function Build ({ service, stale }) {
 /* How big a cell is                                                   */
 /* ------------------------------------------------------------------ */
 
-/* The cell size, as a person chose it or as their own viewport implies.
+/* Where the parts sit, and how big a cell is — one question, not two.
+ *
+ * The lattice cell is the step cell (#2078). A part is placed at (x, y) in
+ * those cells and nothing about its size is stored: its footprint follows its
+ * contents at whatever size the person has set, so a pattern that gains steps
+ * simply reaches further from the same corner. Every position is legal and
+ * parts may overlap, which is what makes that safe — without it a part that
+ * grew would demand a re-flow, and re-flowing somebody's layout behind their
+ * back is exactly what #2072 refused.
+ *
+ * Steps line up between parts for free. Every block carries the same label
+ * column and the same inset, and every position is a whole number of cells, so
+ * step five of one pattern lands directly above step five of another.
  *
  * Returns the element to measure, the size in pixels, the choice behind it and
  * a way to change that choice. The choice is remembered on the panel, which is
  * the closest thing to per-person storage that exists while page files are
  * still unsettled (#1948) — one browser profile is one panel is, in practice,
  * one pair of hands. */
-function useCellSize (blocks, columns) {
+
+/* What a block measures, in pixels, at a given cell size.
+ *
+ * Everything scales with the cell except the parts that cannot: a block's
+ * border and padding, which are constant, and the title bar, which has a
+ * legibility floor. A block one cell taller than it looks at the smallest size
+ * is a rounding error; a title nobody can read is not. */
+function blockSize (block, cell, chrome) {
+	const width = LABEL_CELLS * cell + (LABEL_CELLS - 1) * GAP
+		+ GAP + block.steps * cell + (block.steps - 1) * GAP + chrome.x;
+
+	const height = Math.max(TITLE_FLOOR, cell)
+		+ block.rows * cell + (block.rows - 1) * GAP + chrome.y;
+
+	return { width, height };
+}
+
+/* Where a part goes when nobody has placed it yet.
+ *
+ * Left to right and then down, which is the arrangement a person is least
+ * surprised by before they have made one of their own. It is a starting point
+ * and nothing more: the moment anything is dragged, this stops being consulted
+ * for that part. */
+function autoPlace (blocks, across) {
+	const placed = {};
+
+	let x = 0;
+	let y = 0;
+	let tallest = 0;
+
+	for (const block of blocks) {
+		/* A block's footprint in cells comes from what is in it: the label
+		   column plus a cell per step across, a title plus a cell per row
+		   down. Nothing measured, because nothing here needs pixels. */
+		const wide = LABEL_CELLS + block.steps;
+		const high = 1 + block.rows;
+
+		if (x && x + wide > across) { x = 0; y += tallest; tallest = 0; }
+
+		placed[block.name] = { x, y };
+
+		x += wide;
+		tallest = Math.max(tallest, high);
+	}
+
+	return placed;
+}
+
+/* How many cells across a panel this wide would hold at the tested size.
+ *
+ * Deliberately not the current size. A starting arrangement worked out from
+ * the size in force would move every time somebody changed that setting, and
+ * an arrangement that rearranges itself is not one. */
+function acrossAtTestedSize () {
+	const tested = SIZES.find((size) => size.key === "tested").px;
+
+	return Math.max(1, Math.floor(window.innerWidth / (tested + GAP)));
+}
+
+function useCellSize (blocks, layout) {
 	const [choice, setChoice] = useState(() => {
 		try {
 			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
@@ -458,96 +542,65 @@ function useCellSize (blocks, columns) {
 		if (!named) { setChoice(DEFAULT_SIZE); return; }
 		if (named.px) { setCell(named.px); return; }
 
-		/* Fitting. Across, it is one label column and the widest grid's worth
-		   of cells; down, it is every row of every block, plus a title bar for
-		   each and the space between them. The largest cell that fits is
-		   whichever direction runs out first. A couple of pixels are left over
-		   on each axis: an exact fit that rounds the wrong way raises a
-		   scrollbar, which narrows the box, which would start the sum again.
-
-		   Title bars are subtracted rather than scaled because they do not
-		   scale: text has a legibility floor, so a block's chrome is a fixed
-		   cost against the glass however small its cells are. */
+		/* Fitting an arrangement cannot be divided out, because not everything
+		   in it scales: a title bar has a floor and a block's border does not
+		   move at all. So the largest cell that fits is searched for rather
+		   than solved for — seven halvings of the range, each asking the same
+		   plain question of a candidate size: does every part still land inside
+		   the box? That also means the sum never has to be rewritten when
+		   something new stops scaling. */
 		const fit = () => {
 			const box = wrap.current;
 
 			if (!box || !blocks.length) return;
 
-			const label = box.querySelector(".row-label");
-			const shape = getComputedStyle(box);
-			const gap = parseFloat(getComputedStyle(document.documentElement)
-				.getPropertyValue("--gap")) || 0;
+			const first = box.querySelector(".part");
+			const inside = first && first.querySelector(".grid");
+			const title = first && first.querySelector(".part-title");
 
-			if (!label) return;
+			if (!first || !inside || !title) return;
 
-			const padX = parseFloat(shape.paddingLeft) + parseFloat(shape.paddingRight);
-			const padY = parseFloat(shape.paddingTop) + parseFloat(shape.paddingBottom);
-
-			/* The border box, not the content box. A scrollbar takes its width
-			   out of the content box, so measuring that would make the sum's
-			   answer depend on the answer: fit smaller, scrollbar goes, fit
-			   larger, scrollbar returns. The border box does not move. */
 			const outer = box.getBoundingClientRect();
+			const shape = getComputedStyle(box);
 
-			/* Everything a block costs that is not its cells — its title, its
-			   padding, its border — measured rather than enumerated, by taking
-			   the difference between a block and the grid inside it. That
-			   difference does not move when the cells resize, which is what
-			   makes it safe to measure at the current size and solve for the
-			   next one. */
-			const parts = Array.from(box.querySelectorAll(".part"));
+			const room = {
+				width: outer.width - parseFloat(shape.paddingLeft) - parseFloat(shape.paddingRight) - FIT_SLACK,
+				height: outer.height - parseFloat(shape.paddingTop) - parseFloat(shape.paddingBottom) - FIT_SLACK,
+			};
 
-			const chrome = parts.map((part) => {
-				const inside = part.querySelector(".grid");
+			/* The part of a block that does not scale, measured rather than
+			   enumerated: what is left of it once the grid inside and the
+			   title bar above are taken away. */
+			const chrome = {
+				x: first.getBoundingClientRect().width - inside.getBoundingClientRect().width,
+				y: first.getBoundingClientRect().height - inside.getBoundingClientRect().height
+					- title.getBoundingClientRect().height,
+			};
 
-				return part.getBoundingClientRect().height
-					- (inside ? inside.getBoundingClientRect().height : 0);
-			});
+			const fits = (candidate) => {
+				const pitch = candidate + GAP;
 
-			const sides = parts.reduce((widest, part) => {
-				const inside = part.querySelector(".grid");
+				return blocks.every((block) => {
+					const at = layout[block.name] || { x: 0, y: 0 };
+					const size = blockSize(block, candidate, chrome);
 
-				return Math.max(widest, part.getBoundingClientRect().width
-					- (inside ? inside.getBoundingClientRect().width : 0));
-			}, 0);
+					return at.x * pitch + size.width <= room.width
+						&& at.y * pitch + size.height <= room.height;
+				});
+			};
 
-			/* Blocks fill the page left to right and then wrap, so column c
-			   holds blocks c, c + columns, c + 2 columns, and so on. Each
-			   column is solved on its own and the tightest one wins: a page
-			   fits when its worst column fits. */
-			const perColumn = Array.from({ length: columns }, () => ({ rows: 0, count: 0, chrome: 0 }));
+			let low = FIT_FLOOR;
+			let high = FIT_CEILING;
 
-			blocks.forEach((block, index) => {
-				const column = perColumn[index % columns];
+			if (!fits(low)) { setCell(FIT_FLOOR); return; }
 
-				column.rows += block.rows;
-				column.count += 1;
-				column.chrome += chrome[index] || 0;
-			});
+			while (high - low > 1) {
+				const middle = Math.floor((low + high) / 2);
 
-			const widest = blocks.reduce((most, block) => Math.max(most, block.steps), 0);
-			const labels = label.getBoundingClientRect().width;
+				if (fits(middle)) low = middle; else high = middle;
+			}
 
-			const room = (outer.width - padX - FIT_SLACK - PART_GAP * (columns - 1)) / columns;
-			const across = (room - sides - labels - gap * widest) / widest;
-
-			/* A block of r rows has r - 1 gaps inside it, so every block in a
-			   column gives one back; the space between blocks is separate. */
-			const height = outer.height - padY - FIT_SLACK;
-
-			const down = perColumn.reduce((tightest, column) => {
-				if (!column.rows) return tightest;
-
-				const spare = height - column.chrome
-					- gap * Math.max(0, column.rows - column.count)
-					- PART_GAP * Math.max(0, column.count - 1);
-
-				return Math.min(tightest, spare / column.rows);
-			}, Infinity);
-
-			const size = Math.floor(Math.min(across, down));
-
-			setCell(Math.max(FIT_FLOOR, Math.min(FIT_CEILING, size)));
+			setCell(low);
 		};
 
 		fit();
@@ -560,7 +613,7 @@ function useCellSize (blocks, columns) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, JSON.stringify(blocks), columns]);
+	}, [choice, JSON.stringify(blocks), JSON.stringify(layout)]);
 
 	useEffect(() => {
 		document.documentElement.style.setProperty("--cell", `${cell}px`);
@@ -823,16 +876,24 @@ function Panel () {
 		? declaredGrids.filter((name) => (page.parts || []).includes(name))
 		: declaredGrids;
 
-	/* How many blocks stand side by side. The composition's starting choice,
-	   and one when it says nothing — which is where every page began. */
-	const columns = Math.max(1, (page && page.columns) || 1);
+	const blocks = gridNames.map((name) => ({
+		name, rows: controls[name].rows.length, steps: controls[name].steps }));
 
-	/* Asked for before the page can return early, because a hook must be. It
-	   is given the shape of every visible block rather than a total, since a
-	   page in columns is only as tall as its tallest column. */
-	const size = useCellSize(
-		gridNames.map((name) => ({ rows: controls[name].rows.length, steps: controls[name].steps })),
-		columns);
+	/* Where the parts sit, until somebody moves them.
+	 *
+	 * Worked out once per page rather than on every resize: a starting
+	 * arrangement that shuffled itself as the glass changed would be a layout
+	 * nobody chose and nobody could rely on. It wraps at whatever a panel this
+	 * wide would hold at the tested cell size, which is a fixed number for a
+	 * given panel and so cannot chase its own answer. */
+	const layout = useMemo(
+		() => autoPlace(blocks, acrossAtTestedSize()),
+		[page && page.id, blocks.map((block) => block.name).join(",")]);
+
+	/* Asked for before the page can return early, because a hook must be. It is
+	   given every block's shape and where each one sits, because an arrangement
+	   is only as large as its furthest corner. */
+	const size = useCellSize(blocks, layout);
 
 	/* Both halves have to be known before they can disagree: a page served
 	   without a stamp, or a service too old to send one, is not evidence of
@@ -871,10 +932,10 @@ function Panel () {
 			</span>
 			<${Build} service=${service} stale=${stale} />
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}
-			style=${{ "--columns": columns }}>
-			${gridNames.map((name) => html`
-				<${Part} key=${name} name=${name} title=${controls[name].title}>
+		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
+			${gridNames.map((name, index) => html`
+				<${Part} key=${name} name=${name} title=${controls[name].title}
+					at=${layout[name]} cell=${size.cell} depth=${index}>
 					<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
 						cells=${(state[appName] || {})[name] || {}}
 						pending=${pending} failed=${failed} onTap=${request} />

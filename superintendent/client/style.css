@@ -22,11 +22,13 @@
 	--cell: 44px;
 	--gap: 4px;
 
-	/* The row labels take a share of the viewport rather than a share of the
-	   grid. That is what keeps the fitted size solvable: if the column grew
-	   with its text and the text grew with the cell, the cell would depend on
-	   itself and the layout would never settle. */
-	--label: clamp(3.5rem, 6vw, 7.5rem);
+	/* The row labels are three lattice cells wide, gaps included. A whole
+	   number of cells rather than a share of anything, because a block has to
+	   measure a whole number of cells for the lattice to mean anything — and
+	   because that is what makes step five of one pattern land directly above
+	   step five of another (#2078). The text ellipsises when three cells is
+	   not enough for it, which at the compact size it will not be. */
+	--label: calc(var(--cell) * 3 + var(--gap) * 2);
 	--part: #14161a;
 }
 
@@ -86,27 +88,38 @@ html, body {
 	flex: 1;
 	overflow: auto;
 	padding: 0.5rem;
-
-	/* Blocks fill the page across and then wrap. One column is a stack, which
-	   is where every page began; more than one puts grids side by side rather
-	   than leaving half a wide panel empty. How many is the page's to say. */
-	display: grid;
-	grid-template-columns: repeat(var(--columns, 1), max-content);
-	align-content: start;
-	justify-content: start;
-	gap: 10px;
+	position: relative;
 }
 
-/* One part: a titled block holding one control.
+/* One part: a titled block holding one control, placed at its own corner of
+ * the lattice.
  *
  * The title is what makes several instruments on one screen legible rather
  * than a wall of cells (#2071), and it is also the only surface on a block
- * that is not a control — which is what a hand needs to take hold of one. */
-.part { border: 1px solid var(--edge); border-radius: 10px; background: var(--part); }
+ * that is not a control — which is what a hand needs to take hold of one.
+ *
+ * Nothing here has a border or a side padding, and that is load-bearing rather
+ * than a style choice: a block has to measure a whole number of lattice cells,
+ * and a border is a pixel that is not a cell. The outline is drawn as a shadow
+ * instead, which paints outside the box without taking any room in it. */
+.part {
+	position: absolute;
+	border-radius: 6px;
+	background: var(--part);
+	box-shadow: 0 0 0 1px var(--edge), 0 6px 18px rgba(0, 0, 0, 0.45);
+}
 
 .part-title {
-	padding: 0.35rem 0.7rem;
-	border-bottom: 1px solid var(--edge);
+	display: flex;
+	align-items: center;
+
+	/* One lattice cell tall, and never less than can be read. A block one cell
+	   taller than it looks at the smallest size is a rounding error; a title
+	   nobody can read is not. */
+	height: max(24px, var(--cell));
+	padding: 0 0.5rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	color: var(--ink-quiet);
 	font-size: 0.78rem;
 	font-weight: 600;
@@ -118,7 +131,9 @@ html, body {
 	   whose name cannot be read is not contained, only boxed. */
 }
 
-.part-body { position: relative; padding: 0.4rem; }
+/* One gap between the title and the grid, which is the gap the lattice puts
+   between any two cells — so a block of ten rows is exactly eleven cells. */
+.part-body { position: relative; padding-top: var(--gap); }
 
 .grid {
 	display: grid;

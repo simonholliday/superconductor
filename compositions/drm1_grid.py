@@ -153,7 +153,7 @@ link = superintendent.subsequence_adapter.AppLink(
 	],
 	pages=[
 		superintendent.subsequence_adapter.Page(
-			"both", parts=["grid", "layer"], title="Both", columns=2),
+			"both", parts=["grid", "layer"], title="Both"),
 		superintendent.subsequence_adapter.Page(
 			"pattern_1", parts=["grid"], title="Pattern 1"),
 		superintendent.subsequence_adapter.Page(

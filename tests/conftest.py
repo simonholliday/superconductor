@@ -35,7 +35,7 @@ a title and one does not, so both halves of that are drawn every run.
 """
 
 PAGES: list[dict[str, typing.Any]] = [
-	{"id": "all", "title": "All", "parts": ["grid", "second"], "columns": 2},
+	{"id": "all", "title": "All", "parts": ["grid", "second"]},
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
 ]
 """Two views over the same two grids, one of which carries both.
