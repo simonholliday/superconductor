@@ -117,3 +117,25 @@ html, body {
 	color: var(--ink-quiet);
 	text-align: center;
 }
+
+/* A request that was refused, or never answered. The face never moved, so this
+   marks the attempt and fades rather than showing a state the cell is in. */
+.cell.failed::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 7px;
+	background: #d64545;
+	animation: fade-out 0.9s ease-out forwards;
+}
+
+@keyframes fade-out {
+	from { opacity: 0.85; }
+	to { opacity: 0; }
+}
+
+/* The app behind this grid has gone. The cells stay, because they are the last
+   thing the sequencer actually held, but nothing here is live. */
+.grid-wrap.absent .grid { opacity: 0.45; }
+
+.bar .warn { color: #ffa94d; }

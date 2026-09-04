@@ -142,10 +142,14 @@ def ack (app: str, client: str, seq: int, version: int) -> Frame:
 	return {"t": "ack", "app": app, "client": client, "seq": seq, "ver": version}
 
 
-def nack (app: str, client: str, seq: int, reason: str) -> Frame:
-	"""Refusal of a named request, saying why so the panel can show it."""
+def nack (app: str, path: str, client: str, seq: int, reason: str) -> Frame:
+	"""Refusal of a named request, saying why and naming the cell it was for.
 
-	return {"t": "nack", "app": app, "client": client, "seq": seq, "reason": reason}
+	The path is carried so the panel can clear the mark on exactly the cell the
+	finger landed on, rather than searching for it.
+	"""
+
+	return {"t": "nack", "app": app, "path": path, "client": client, "seq": seq, "reason": reason}
 
 
 def event (app: str, name: str, **fields: typing.Any) -> Frame:

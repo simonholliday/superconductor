@@ -107,7 +107,7 @@ class Link {
 /* The grid                                                            */
 /* ------------------------------------------------------------------ */
 
-function Grid ({ control, rows, steps, cells, pending, onTap }) {
+function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 	/* A fixed label column, then one equal column per step. */
 	const style = {
 		gridTemplateColumns: `minmax(6.5rem, max-content) repeat(${steps}, minmax(44px, 1fr))`,
@@ -125,6 +125,7 @@ function Grid ({ control, rows, steps, cells, pending, onTap }) {
 						<div
 							key=${path}
 							class=${["cell", on ? "on" : "", pending.has(path) ? "pending" : "",
+								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
@@ -180,9 +181,11 @@ function Playhead ({ anchor, steps, beats }) {
 function Panel () {
 	const [status, setStatus] = useState("down");
 	const [apps, setApps] = useState({});
+	const [present, setPresent] = useState({});
 	const [state, setState] = useState({});
 	const [anchor, setAnchor] = useState(null);
 	const [pending, setPending] = useState(new Map());
+	const [failed, setFailed] = useState(new Set());
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -199,11 +202,40 @@ function Panel () {
 		if (timer) { clearTimeout(timer); expiries.current.delete(path); }
 	}, []);
 
+	/* A brief mark on a cell whose request did not land. It is not a state the
+	 * cell is in — the face never moved — so it fades by itself. */
+	const flashFailure = useCallback((path) => {
+		if (!path) return;
+
+		setFailed((was) => new Set(was).add(path));
+		setTimeout(() => setFailed((was) => {
+			const now = new Set(was);
+			now.delete(path);
+			return now;
+		}), 900);
+	}, []);
+
 	useEffect(() => {
 		const onFrame = (frame) => {
 			switch (frame.t) {
-				case "manifest":
-					setApps(frame.apps || {});
+				case "manifest": {
+					/* Declarations are remembered rather than replaced: an app that
+					 * has gone should leave its grid on the glass, greyed, rather
+					 * than take the page down with it. */
+					const listed = frame.apps || {};
+					setApps((was) => ({ ...was, ...listed }));
+					setPresent((was) => {
+						const now = {};
+						for (const name of new Set([...Object.keys(was), ...Object.keys(listed)])) {
+							now[name] = name in listed;
+						}
+						return now;
+					});
+					break;
+				}
+
+				case "app":
+					setPresent((was) => ({ ...was, [frame.app]: frame.up }));
 					break;
 
 				case "snapshot":
@@ -231,7 +263,11 @@ function Panel () {
 					break;
 
 				case "nack":
-					console.warn("refused", frame.reason);
+					/* The request was refused: the ring goes and the cell says so
+					 * briefly. The face never moved, so there is nothing to undo. */
+					drop(frame.path);
+					flashFailure(frame.path);
+					console.warn("refused", frame.path, frame.reason);
 					break;
 
 				case "event":
@@ -243,7 +279,7 @@ function Panel () {
 		};
 
 		link.current = new Link(onFrame, setStatus);
-	}, [drop]);
+	}, [drop, flashFailure]);
 
 	const onTap = useCallback((path, value) => {
 		const app = Object.keys(apps)[0];
@@ -257,12 +293,13 @@ function Panel () {
 		/* A ring that is never confirmed must not sit there for ever: after
 		 * five seconds the request is abandoned and the face — which was
 		 * always the truth — is all that is left. */
-		expiries.current.set(path, setTimeout(() => drop(path), PENDING_EXPIRES));
-	}, [apps, drop]);
+		expiries.current.set(path, setTimeout(() => { drop(path); flashFailure(path); }, PENDING_EXPIRES));
+	}, [apps, drop, flashFailure]);
 
 	const appName = Object.keys(apps)[0];
 	const controls = appName ? apps[appName] : {};
 	const controlName = Object.keys(controls).find((name) => controls[name].type === "step_grid");
+	const up = appName ? present[appName] !== false : false;
 
 	if (!controlName) {
 		return html`
@@ -284,12 +321,15 @@ function Panel () {
 			<span class="title">${appName}</span>
 			<span>${control.rows.length} rows × ${control.steps} steps</span>
 			<span class="spacer"></span>
-			<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
+			${!up && html`<span class="warn">not running — taps will be refused</span>`}
+			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
+				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
+			</span>
 		</div>
-		<div class="grid-wrap">
+		<div class=${`grid-wrap ${up ? "" : "absent"}`}>
 			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
-				cells=${cells} pending=${pending} onTap=${onTap} />
-			<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4} />
+				cells=${cells} pending=${pending} failed=${failed} onTap=${onTap} />
+			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4} />`}
 		</div>`;
 }
 

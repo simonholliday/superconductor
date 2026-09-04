@@ -137,7 +137,8 @@ class Hub:
 
 		if app is None:
 			await panel.send(superintendent.protocol.nack(
-				str(name), panel.client, int(frame.get("seq", -1)), f"{name!r} is not connected"))
+				str(name), str(frame.get("path", "")), panel.client,
+				int(frame.get("seq", -1)), f"{name} is not connected"))
 			return
 
 		await app.send(superintendent.protocol.set_frame(

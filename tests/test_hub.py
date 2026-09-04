@@ -98,7 +98,10 @@ async def test_a_tap_for_an_app_that_is_not_there_is_refused_by_name () -> None:
 	await hub.panel_joined(panel)
 	await hub.set_requested(panel, {"t": "set", "app": "subsequence", "path": "grid/kick/8", "v": True, "seq": 3})
 
-	assert glass.of_kind("nack")[0]["seq"] == 3
+	refusal = glass.of_kind("nack")[0]
+
+	assert refusal["seq"] == 3
+	assert refusal["path"] == "grid/kick/8"
 
 
 async def test_what_the_app_applied_reaches_every_panel_and_confirms_to_the_asker () -> None:
