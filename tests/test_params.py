@@ -106,3 +106,45 @@ def test_the_service_checks_a_setting_against_what_was_declared () -> None:
 	for path, value in (("moog/rate", 200), ("moog/shape", "wobble"), ("moog/glide", 1)):
 		with pytest.raises(superintendent.controls.ControlError):
 			superintendent.controls.apply_change(state, controls, path, value)
+
+
+def test_every_setting_is_asserted_to_the_instrument_after_declaring () -> None:
+	"""Nothing here can read an instrument's mind.
+
+	A synthesiser holds its own settings, remembers them through a power cycle
+	and says nothing about them — so a panel showing defaults is showing a
+	guess. And because a value that has not changed sends no message, pressing
+	the control cannot correct it either: the panel says off, the instrument is
+	on, and tapping off does nothing at all. Asserting them makes the glass
+	true rather than hopeful.
+	"""
+
+	settings, _, moved = _params()
+
+	assert settings.poll() == [], "nothing is owed until the app declares itself"
+	assert moved == []
+
+	settings.declared()
+
+	assert settings.poll() == [], "and nothing is reported to a panel by it either"
+	assert sorted(moved) == [("glide", False), ("rate", 24), ("shape", "lcr")]
+
+	moved.clear()
+	settings.poll()
+
+	assert moved == [], "paid once, not every beat"
+
+
+def test_a_reconnection_asserts_them_again () -> None:
+	"""An app that has been away may have been restarted; the instrument was not."""
+
+	settings, _, moved = _params()
+
+	settings.declared()
+	settings.poll()
+	moved.clear()
+
+	settings.declared()
+	settings.poll()
+
+	assert len(moved) == 3

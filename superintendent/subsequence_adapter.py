@@ -101,6 +101,15 @@ class Control:
 		emits no beats at all.
 		"""
 
+	def declared (self) -> None:
+		"""Called each time the app introduces itself, reconnections included.
+
+		A control whose value lives somewhere this package cannot read — inside
+		an instrument, say — uses this to put its own idea of that value back,
+		because otherwise the panel is showing a guess that pressing it cannot
+		correct.
+		"""
+
 
 class StepGrid (Control):
 	"""A grid of rows against steps, kept as a plain dict on ``composition.data``.
@@ -451,6 +460,15 @@ class Params (Control):
 		self.title = title
 		self.on_change = on_change
 
+		self._to_assert = False
+		"""Whether every setting is owed to the instrument.
+
+		Set when the app declares itself and acted on at the next beat rather
+		than at once, because the clock may not be running yet when a
+		composition first dials in — and a setting sent before there is a clock
+		to carry it is simply dropped.
+		"""
+
 		held = composition.data.setdefault(data_key, {})
 
 		for parameter in self.parameters.values():
@@ -472,6 +490,38 @@ class Params (Control):
 		"""What every setting holds at the moment."""
 
 		return dict(self.composition.data.get(self.data_key) or {})
+
+	def declared (self) -> None:
+		"""Owe the instrument every setting, to be paid at the next beat."""
+
+		self._to_assert = True
+
+	def poll (self) -> list[tuple[str, typing.Any]]:
+		"""On the first beat after declaring, tell the instrument everything.
+
+		Nothing here can read an instrument's mind.  A synthesiser holds its own
+		settings, remembers them through a power cycle and says nothing about
+		them, so a panel that merely showed defaults would be showing a guess —
+		and because a value that has not changed sends no message, pressing the
+		control could not correct it either.  Asserting them makes the glass
+		true rather than hopeful.
+
+		Reported to nobody: this is the app telling the instrument, not telling
+		a panel, and the panel already holds what the snapshot gave it.
+		"""
+
+		if not self._to_assert or self.on_change is None:
+			return []
+
+		self._to_assert = False
+
+		for name, value in (self.composition.data.get(self.data_key) or {}).items():
+			if name in self.parameters:
+				self.on_change(name, value)
+
+		LOG.info("asserted %d setting(s) of %r to the instrument", len(self.parameters), self.name)
+
+		return []
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Write one setting, and tell the composition it moved."""
@@ -974,6 +1024,9 @@ class AppLink:
 		"""Say what this app offers and what it currently holds."""
 
 		kept = self.page_store.load() if self.page_store is not None else {}
+
+		for control in self.controls.values():
+			control.declared()
 
 		await self._send(superintendent.protocol.declare(
 			self.app_name,
