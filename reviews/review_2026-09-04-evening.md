@@ -215,3 +215,32 @@ Beyond those in the first review, which still stand:
   browser exists in the session Playwright holds a loop on the main thread, and
   a second cannot be started inside it. It is also what the composition's clock
   actually is.
+
+
+---
+
+## What was done, same day
+
+Every finding above is fixed except where noted, and one more was found on the
+way by the test written for finding 4.
+
+| | |
+| --- | --- |
+| 1 | Params rows grow to hold their contents, and the fit is told the floor so a block measures as tall as it draws. Regression test at compact. |
+| 2 | The fit solves for the arrangement as it stood when arranging began, and catches up once on leaving — which is also when it is saved. Regression test asserts the cell size does not move under a drag. |
+| 3 | A page's parts and taps go to the app that declared the page. Behaviour is unchanged today, since one app dials in; the wrong-app hazard is gone. Parts from two different apps on one page remain out of scope. |
+| 4 | Both proxy tests replaced by behavioural ones. |
+| 5 | An arrangement is reduced to what a panel could draw before it is written, and refused with a reason if it cannot be. |
+| 6 | The playhead holds its anchor in a ref and builds its animation once per part rather than twice a second. |
+| 7, 8, 9 | Done as described. |
+| 10 | The startup line prints the address the machine would be reached on — 192.168.0.146 here, rather than "&lt;this machine&gt;". |
+
+**Found by finding 4's replacement**, and worth the exercise on its own: the
+header bar hung 93 px past the edge of a 1280-wide viewport, giving the whole
+document a horizontal scrollbar. It is the same fault Simon reported for the
+playhead, from an unrelated cause — the header holds a transport, a button per
+page, the size chooser and the version, and on a narrow panel that is more than
+one line. It now wraps. The proxy test it replaced asserted a line of the
+stylesheet and could never have seen it.
+
+162 tests pass, none skipped.

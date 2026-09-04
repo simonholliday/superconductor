@@ -46,8 +46,18 @@ def test_the_error_says_what_is_wrong_with_the_file (tmp_path: pathlib.Path, cap
 	assert "port" in capsys.readouterr().out  # type: ignore[attr-defined]
 
 
-def test_an_address_a_person_can_type_is_offered () -> None:
-	"""Binding every interface has no single address, and says so."""
+def test_a_listening_address_is_printed_as_something_a_person_can_type () -> None:
+	"""Binding every interface is the ordinary case, and "<this machine>" was
+	honest and useless — somebody standing at a panel needs a number."""
 
-	assert superintendent.cli._reachable_host("192.168.0.146") == "192.168.0.146"
-	assert "0.0.0.0" not in superintendent.cli._reachable_host("0.0.0.0")
+	for every in ("0.0.0.0", "::"):
+		found = superintendent.cli._addresses(every)
+
+		assert found, "something has to be offered"
+		assert "<this machine>" not in found
+
+
+def test_a_named_interface_is_printed_as_itself () -> None:
+	"""Nothing is guessed when the person has already said which one."""
+
+	assert superintendent.cli._addresses("127.0.0.1") == ["127.0.0.1"]

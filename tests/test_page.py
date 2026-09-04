@@ -658,16 +658,38 @@ def test_the_scroll_mark_is_not_painted_over_by_the_row_labels (panel: typing.An
 	assert mark > max(labels), "the mark sits above every label"
 
 
-def test_the_playhead_cannot_widen_the_page_as_it_wraps (panel: typing.Any) -> None:
+def test_the_playhead_cannot_widen_the_page_as_it_wraps (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""It is drawn between beats, so it passes 15.9 of 16 steps before wrapping,
 	which put it most of a cell past the last one and flashed a scrollbar up
 	once a bar. A block is exactly as wide as its pattern, so it clips."""
 
 	_open_the_bass(panel)
 
-	assert panel.eval_on_selector(
-		'.part[data-part="bass"] .part-body',
-		"el => getComputedStyle(el).overflow") == "hidden"
+	# Drive it to the very end of the pattern, which is where it used to reach
+	# most of a cell past the last step and widen the document.
+	fake_app.beat(7)
+	panel.wait_for_timeout(600)
+
+	assert panel.evaluate(
+		"() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"), (
+		"a playhead between two steps is a position, not something to make room for")
+
+
+def test_nothing_on_the_page_reaches_past_the_glass (panel: typing.Any) -> None:
+	"""A horizontal scrollbar on the document is always a fault here: a page
+	that does not fit scrolls inside its own area, and the header wraps. This
+	found the header hanging 93 px past the edge on a 1280-wide viewport, which
+	the playhead's own test could not see because it was asserting a stylesheet
+	line rather than looking."""
+
+	_settled(panel)
+
+	past = panel.evaluate("""() => [...document.querySelectorAll('body *')]
+		.filter(el => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+		.map(el => el.className || el.tagName)""")
+
+	assert past == [], f"these reach past the glass: {past}"
 
 
 def test_a_part_that_fits_draws_no_scroll_mark (panel: typing.Any) -> None:
@@ -736,6 +758,65 @@ def test_only_one_scrollbar_and_it_is_ours (panel: typing.Any) -> None:
 
 	_open_the_bass(panel)
 
-	assert panel.eval_on_selector(
-		'.part[data-part="bass"] .scroller',
-		"el => getComputedStyle(el).scrollbarWidth") == "none"
+	seen = panel.evaluate("""() => {
+		const part = document.querySelector('.part[data-part="bass"]');
+		const scroller = part.querySelector('.scroller');
+		return {
+			// A native scrollbar takes its width out of the content box.
+			gutter: scroller.offsetWidth - scroller.clientWidth,
+			scrolling: [...part.querySelectorAll('*')]
+				.filter(el => el.scrollHeight > el.clientHeight).length,
+			marks: part.querySelectorAll('.track').length,
+		};
+	}""")
+
+	assert seen["gutter"] == 0, "the browser's own bar takes no room, because it is not drawn"
+	assert seen["scrolling"] == 1, "exactly one thing in the block scrolls"
+	assert seen["marks"] == 1, "and exactly one mark says so"
+
+
+def test_settings_do_not_overlap_each_other_at_a_small_cell_size (panel: typing.Any) -> None:
+	"""A block's rows are a cell tall; a switch has a size below which it cannot
+	be pressed. Both are right, and until they were made to agree the settings
+	overlapped by eighteen pixels at the compact size."""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(".grid.params", timeout=5_000)
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
+
+	boxes = panel.evaluate("""() => [...document.querySelectorAll('.part[data-part="moog"] .setting')]
+		.map(el => { const b = el.getBoundingClientRect(); return [b.top, b.bottom]; })""")
+
+	for above, below in zip(boxes, boxes[1:]):
+		assert above[1] <= below[0] + 1, "one setting reaches into the next"
+
+
+def test_the_page_does_not_resize_itself_under_a_dragging_finger (panel: typing.Any) -> None:
+	"""#2072: a page that no longer fits scrolls. It does not rearrange or
+	resize itself, and a drag is the moment that decision exists for — the
+	whole page used to shrink by nearly half while the block was still moving."""
+
+	_settled(panel)
+
+	before = panel.evaluate(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
+
+	panel.locator(".bar .arrange").click()
+	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+
+	title = panel.locator('.part[data-part="second"] .part-title').bounding_box()
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 600, title["y"] + 5, steps=10)
+
+	during = panel.evaluate(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
+
+	panel.mouse.up()
+
+	assert during == before, "the cells stayed where they were while the block moved"

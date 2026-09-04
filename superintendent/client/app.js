@@ -88,6 +88,11 @@ const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
 const LANE_CELLS = 3;
 const PARAM_CELLS = 6;
+const SETTING_FLOOR = 44;
+/* How short a row of settings may be drawn. A switch is read and pressed once
+   rather than laid out in a rhythm, so it keeps a comfortable target whatever
+   the grids beside it are set to — and the fit is told, so a block is measured
+   as tall as it will draw. */
 
 const DRAWN = ["step_grid", "note_grid", "params"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
@@ -670,6 +675,14 @@ function Inventory ({ names, titles, onRaise }) {
 function Playhead ({ anchor, steps, beats, paused }) {
 	const bar = useRef(null);
 
+	/* The latest beat, held rather than depended on. Listing the anchor among
+	   the effect's dependencies cancelled the animation and started another
+	   twice a second, which was harmless with one playhead on a page and is
+	   not what should happen now that a page carries several. */
+	const from = useRef(anchor);
+
+	useEffect(() => { from.current = anchor; }, [anchor]);
+
 	/* How long the clock has been held, and since when.
 	 *
 	 * A held transport sends no beats, so extrapolation would run on without
@@ -699,16 +712,17 @@ function Playhead ({ anchor, steps, beats, paused }) {
 	useEffect(() => { held.current = 0; }, [anchor]);
 
 	useEffect(() => {
-		if (!anchor || !bar.current) return;
+		if (!bar.current) return;
 
 		let frame;
 		const grid = bar.current.parentElement.querySelector(".grid");
 
 		const move = () => {
+			const anchor = from.current;
 			const first = grid && grid.children[1];
 			const second = grid && grid.children[2];
 
-			if (first && anchor.interval) {
+			if (first && anchor && anchor.interval) {
 				const reading = heldSince.current === null ? performance.now() : heldSince.current;
 				const elapsed = Math.max(0, reading - anchor.at - held.current) / 1000;
 				const beatNow = anchor.beat + Math.min(elapsed / anchor.interval, 1);
@@ -736,7 +750,7 @@ function Playhead ({ anchor, steps, beats, paused }) {
 
 		move();
 		return () => cancelAnimationFrame(frame);
-	}, [anchor, steps, beats]);
+	}, [steps, beats]);
 
 	return html`<div class="playhead" ref=${bar}></div>`;
 }
@@ -876,8 +890,15 @@ function blockSize (block, cell, chrome) {
 	const width = LABEL_CELLS * cell + (LABEL_CELLS - 1) * GAP
 		+ GAP + block.steps * cell + (block.steps - 1) * GAP + chrome.x;
 
+	/* A row is a cell tall unless what sits in it will not go that small. A
+	   switch has to stay pressable however small the grids beside it are set
+	   (#2055), so a settings block's rows have a floor — and the fit has to
+	   know, or the block is measured shorter than it draws and its contents
+	   overlap each other. */
+	const row = Math.max(block.floor || 0, cell);
+
 	const height = Math.max(TITLE_FLOOR, cell)
-		+ block.rows * cell + (block.rows - 1) * GAP + chrome.y;
+		+ block.rows * row + (block.rows - 1) * GAP + chrome.y;
 
 	return { width, height };
 }
@@ -924,7 +945,7 @@ function acrossAtTestedSize () {
 	return Math.max(1, Math.floor(window.innerWidth / (tested + GAP)));
 }
 
-function useCellSize (blocks, layout) {
+function useCellSize (blocks, layout, arranging) {
 	const [choice, setChoice] = useState(() => {
 		try {
 			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
@@ -937,6 +958,20 @@ function useCellSize (blocks, layout) {
 
 	const [cell, setCell] = useState(SIZES.find((size) => size.key === "tested").px);
 	const wrap = useRef(null);
+
+	/* The arrangement the fit is solving for, which is deliberately not the one
+	   under the finger.
+	 *
+	 * Dragging a block changes the layout, and under "fit the glass" a larger
+	 * arrangement answers by shrinking every cell — so a drag resized the whole
+	 * page while it was still being made, by nearly half in one measurement.
+	 * Simon settled the principle in #2072: a page that no longer fits scrolls,
+	 * it does not rearrange or resize itself. So the fit uses the arrangement as
+	 * it stood when arranging began, and catches up once when it is left, which
+	 * is also when the arrangement is saved (#2075). */
+	const solving = useRef(layout);
+
+	if (!arranging) solving.current = layout;
 
 	const choose = useCallback((key) => {
 		setChoice(key);
@@ -993,7 +1028,7 @@ function useCellSize (blocks, layout) {
 				const pitch = candidate + GAP;
 
 				return blocks.every((block) => {
-					const at = layout[block.name] || { x: 0, y: 0 };
+					const at = solving.current[block.name] || { x: 0, y: 0 };
 					const size = blockSize(block, candidate, chrome);
 
 					return at.x * pitch + size.width <= room.width
@@ -1025,7 +1060,7 @@ function useCellSize (blocks, layout) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, JSON.stringify(blocks), JSON.stringify(layout)]);
+	}, [choice, JSON.stringify(blocks), arranging ? "held" : JSON.stringify(layout)]);
 
 	useEffect(() => {
 		document.documentElement.style.setProperty("--cell", `${cell}px`);
@@ -1094,6 +1129,11 @@ function Panel () {
 	const link = useRef(null);
 	const expiries = useRef(new Map());
 	const wanted = useRef(new Map());
+
+	/* Which app the page being shown belongs to. In a ref because `request` is
+	   built once and would otherwise close over whichever app had dialled in at
+	   the moment it was made. */
+	const owner = useRef(null);
 
 	/* What kind each declared control is, kept in a ref rather than read from
 	   render state. The frame handler is built once, so anything it closed over
@@ -1293,7 +1333,7 @@ function Panel () {
 	}, []);
 
 	const request = useCallback((path, value) => {
-		const app = Object.keys(apps)[0];
+		const app = owner.current;
 		if (!app || !link.current) return;
 
 		const seq = link.current.set(app, path, value);
@@ -1306,10 +1346,16 @@ function Panel () {
 		 * five seconds the request is abandoned and the face — which was
 		 * always the truth — is all that is left. */
 		expiries.current.set(path, setTimeout(() => { drop(path); flashFailure(path); }, PENDING_EXPIRES));
-	}, [apps, drop, flashFailure]);
+	}, [drop, flashFailure]);
 
-	const appName = Object.keys(apps)[0];
-	const controls = appName ? apps[appName] : {};
+	/* Whichever app declared the page being shown, rather than whichever
+	   dialled in first. Only one does today, so this changes nothing now — but
+	   a page already carries the name of its own app (#2075), and sending a tap
+	   to the wrong one would have it correctly refused by an app that has never
+	   heard of the path. */
+	const onPage = pages.find((one) => one.id === chosen) || pages[0] || null;
+	const appName = (onPage && onPage.app) || Object.keys(apps)[0];
+	const controls = appName ? apps[appName] || {} : {};
 	const up = appName ? present[appName] !== false : false;
 
 	/* Every grid the app declared, not the first one it declared. Two patterns
@@ -1323,7 +1369,9 @@ function Panel () {
 	   offered falls back to the first without being forgotten: a composition
 	   restarted with one pattern missing should not cost a performer the page
 	   they had set, once it comes back. */
-	const page = pages.find((one) => one.id === chosen) || pages[0] || null;
+	const page = onPage;
+
+	owner.current = appName;
 
 	/* A page names the parts it carries, so a part on two pages appears on
 	   both and needs nothing to keep them together — each draws the app's own
@@ -1343,7 +1391,9 @@ function Panel () {
 		}
 
 		if (kindOf(name) === "params") {
-			return { name, rows: (controls[name].fields || []).length, steps: PARAM_CELLS };
+			return {
+				name, rows: (controls[name].fields || []).length,
+				steps: PARAM_CELLS, floor: SETTING_FLOOR };
 		}
 
 		return {
@@ -1415,7 +1465,7 @@ function Panel () {
 	/* Asked for before the page can return early, because a hook must be. It is
 	   given every block's shape and where each one sits, because an arrangement
 	   is only as large as its furthest corner. */
-	const size = useCellSize(blocks, layout);
+	const size = useCellSize(blocks, layout, arranging);
 
 	/* Both halves have to be known before they can disagree: a page served
 	   without a stamp, or a service too old to send one, is not evidence of

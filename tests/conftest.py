@@ -159,6 +159,12 @@ class FakeApp:
 
 		self.send(superintendent.protocol.nack("subsequence", path, client, seq, reason))
 
+	def beat (self, number: int, interval: float = 0.5) -> None:
+		"""Report a beat, which is what a playhead moves between."""
+
+		self.send(superintendent.protocol.event(
+			"subsequence", "beat", beat=number, ts=0.0, interval=interval, steps=8, beats=2))
+
 	def await_set (self, path: str, limit: float = 5.0) -> superintendent.protocol.Frame:
 		"""Wait for the panel to ask for a path, and return what it asked."""
 

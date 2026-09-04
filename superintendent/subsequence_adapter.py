@@ -326,6 +326,13 @@ class NoteGrid (Control):
 
 		del notes[step]
 
+		# Dropped once its last note goes, which is what the service's copy of
+		# the same structure does. Nothing on the wire differs either way — the
+		# snapshot filters empty rows — but two copies of one thing drifting is
+		# how a future reader loses an afternoon.
+		if not notes:
+			grid.pop(row, None)
+
 		return True
 
 	def _shape (self, notes: dict[str, typing.Any], step: str, field: str, value: typing.Any) -> bool:
@@ -334,25 +341,23 @@ class NoteGrid (Control):
 		if step not in notes:
 			raise Refused("there is no note there to shape")
 
-		if field == "length":
-			length = int(value)
+		wanted = int(value)
 
-			if not 1 <= length <= self.steps:
+		if field == "length":
+			if not 1 <= wanted <= self.steps:
 				raise Refused(f"a note is between 1 and {self.steps} steps long")
 
 		elif field == "velocity":
-			length = int(value)
-
-			if not 1 <= length <= 127:
+			if not 1 <= wanted <= 127:
 				raise Refused("velocity is between 1 and 127")
 
 		else:
 			raise Refused(f"a note has no {field}")
 
-		if notes[step][field] == length:
+		if notes[step][field] == wanted:
 			return False
 
-		notes[step][field] = length
+		notes[step][field] = wanted
 
 		return True
 
@@ -732,6 +737,40 @@ class Transport (Control):
 		return True
 
 
+def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | None:
+	"""An arrangement reduced to what a panel could draw, or None if it could not.
+
+	This is the one thing a panel sends that is written to disk, and it comes
+	back to every panel on the next declaration — so a shape nobody can draw
+	would survive a restart and go on being handed out.  Everything else a panel
+	sends is checked by the control that owns the path; this has no control to
+	own it, so it is checked here.
+
+	Coordinates are floored at zero and coerced to whole cells: a lattice
+	position is a count, and a fractional one would put a block between two
+	squares for ever.
+	"""
+
+	if not isinstance(parts, list):
+		return None
+
+	kept: list[dict[str, typing.Any]] = []
+
+	for part in parts:
+		if not isinstance(part, dict) or not isinstance(part.get("name"), str):
+			return None
+
+		try:
+			x, y = int(part["x"]), int(part["y"])
+
+		except (KeyError, TypeError, ValueError):
+			return None
+
+		kept.append({"name": part["name"], "x": max(0, x), "y": max(0, y)})
+
+	return kept
+
+
 class PageStore:
 	"""Where a composition keeps the arrangements made on its pages.
 
@@ -1066,7 +1105,13 @@ class AppLink:
 		"""
 
 		page_id = str(frame.get("page", ""))
-		parts = list(frame.get("parts") or [])
+		parts = _readable_arrangement(frame.get("parts"))
+
+		if parts is None:
+			await self._send(superintendent.protocol.nack(
+				self.app_name, page_id, str(frame.get("client", "")),
+				int(frame.get("seq", 0)), "that arrangement could not be read"))
+			return
 
 		if self.page_store is None:
 			await self._send(superintendent.protocol.nack(

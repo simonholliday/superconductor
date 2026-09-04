@@ -8,6 +8,7 @@ import argparse
 import dataclasses
 import logging
 import pathlib
+import socket
 
 import uvicorn
 
@@ -35,7 +36,8 @@ def main (argv: list[str] | None = None) -> int:
 		port=args.port if args.port is not None else config.port,
 	)
 
-	print(f"Superintendent is serving the panel at http://{_reachable_host(config.host)}:{config.port}/")
+	for address in _addresses(config.host):
+		print(f"Superintendent is serving the panel at http://{address}:{config.port}/")
 
 	uvicorn.run(superintendent.service.build(config), host=config.host, port=config.port, log_level="warning")
 
@@ -61,10 +63,34 @@ def _parse_args (argv: list[str] | None) -> argparse.Namespace:
 	return parser.parse_args(argv)
 
 
-def _reachable_host (host: str) -> str:
-	"""Turn a listening address into something a person can type into a browser."""
+def _addresses (host: str) -> list[str]:
+	"""Every address a person could type into a panel to reach this.
 
-	return "<this machine>" if host in ("0.0.0.0", "::") else host
+	Binding every interface is the ordinary case, and printing "<this machine>"
+	for it was honest and useless: somebody standing at a touchscreen needs a
+	number.  The machine knows its own, so it says them.
+
+	If they cannot be worked out — no network, an unusual resolver — the name of
+	the machine is offered instead, which is at least something to try.
+	"""
+
+	if host not in ("0.0.0.0", "::"):
+		return [host]
+
+	try:
+		# Which address this machine would use to reach the wider network, which
+		# is the one a panel on the same network can reach it back on. Asking the
+		# resolver for the machine's own name is the obvious way and the wrong
+		# one: on a Debian-like system that answers 127.0.1.1, which is true and
+		# useless. Nothing is sent — connecting a datagram socket only chooses a
+		# route — and the address is in the range reserved for documentation.
+		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+			probe.connect(("192.0.2.1", 9))
+
+			return [str(probe.getsockname()[0])]
+
+	except OSError:
+		return [socket.gethostname()]
 
 
 if __name__ == "__main__":
