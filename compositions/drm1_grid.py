@@ -23,8 +23,14 @@ import superintendent.subsequence_adapter
 
 # --- This rig -------------------------------------------------------------
 
-MIDI_PORT = "U6MIDI Pro:U6MIDI Pro Port 1 16:0"
-"""The interface the DRM1 is plugged into."""
+MIDI_PORT = "*U6MIDI Pro Port 1*"
+"""The interface the DRM1 is plugged into.
+
+A pattern rather than the full name, because ALSA renumbers its clients when
+the set of attached devices changes: this port was ``16:0`` before a reboot and
+``20:0`` after one, and the exact name stopped matching.  Subsequence matches a
+name with wildcards as a glob, so this survives the renumbering.
+"""
 
 DRUM_CHANNEL = 10
 """The channel the DRM1 is set to receive on."""

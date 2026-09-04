@@ -174,15 +174,21 @@ function Playhead ({ anchor, steps, beats }) {
 	return html`<div class="playhead" ref=${bar}></div>`;
 }
 
-/* Silence and tempo.
+/* Pause and tempo.
  *
- * Both faces show what the sequencer holds, never what was last tapped — the
- * same rule the cells follow. Silence is not a pause: the clock runs on
- * underneath it, so lifting it drops you where the music has got to. */
+ * Both faces show what the composition holds, never what was last tapped — the
+ * same rule the cells follow. Pause keeps the composition's place: the clock
+ * is held rather than stopped, so letting go continues from the same beat.
+ *
+ * A pause can be refused, silently, when the pulse is not Subsequence's to
+ * hold — following an external clock, or in an Ableton Link session. The
+ * refusal comes back as a nack and the button springs back with the reason,
+ * because no confirming event will ever arrive. */
 function Transport ({ control, name, fields, up, onSet }) {
-	const silenced = fields.silenced === true;
+	const paused = fields.paused === true;
 	const bpm = fields.bpm;
 	const [low, high] = control.tempo_range || [40, 240];
+	const canPause = (control.fields || []).includes("paused");
 
 	const nudge = (by) => {
 		if (typeof bpm !== "number") return;
@@ -191,11 +197,12 @@ function Transport ({ control, name, fields, up, onSet }) {
 
 	return html`
 		<div class="transport">
-			<button
-				class=${`silence ${silenced ? "engaged" : ""}`}
-				disabled=${!up}
-				onPointerDown=${(event) => { event.preventDefault(); onSet(`${name}/silenced`, !silenced); }}
-			>${silenced ? "SILENCED" : "SILENCE"}</button>
+			${canPause && html`
+				<button
+					class=${`hold ${paused ? "engaged" : ""}`}
+					disabled=${!up}
+					onPointerDown=${(event) => { event.preventDefault(); onSet(`${name}/paused`, !paused); }}
+				>${paused ? "PLAY" : "PAUSE"}</button>`}
 
 			<div class="tempo">
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(-5); }}>−5</button>
@@ -219,6 +226,7 @@ function Panel () {
 	const [anchor, setAnchor] = useState(null);
 	const [pending, setPending] = useState(new Map());
 	const [failed, setFailed] = useState(new Set());
+	const [notice, setNotice] = useState(null);
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -300,6 +308,8 @@ function Panel () {
 					 * briefly. The face never moved, so there is nothing to undo. */
 					drop(frame.path);
 					flashFailure(frame.path);
+					setNotice(frame.reason || "refused");
+					setTimeout(() => setNotice(null), 4000);
 					console.warn("refused", frame.path, frame.reason);
 					break;
 
@@ -358,7 +368,8 @@ function Panel () {
 				<${Transport} control=${controls[transportName]} name=${transportName}
 					fields=${transportFields} up=${up} onSet=${request} />`}
 			<span class="spacer"></span>
-			${!up && html`<span class="warn">not running — taps will be refused</span>`}
+			${notice && html`<span class="warn">${notice}</span>`}
+			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>

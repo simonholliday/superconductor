@@ -159,17 +159,18 @@ html, body {
 
 .transport button:disabled { opacity: 0.35; }
 
-.transport .silence {
+.transport .hold {
 	min-width: 8.5rem;
 	font-weight: 700;
 	letter-spacing: 0.04em;
 }
 
-/* Engaged is a state, not an action, so it is filled rather than outlined. */
-.transport .silence.engaged {
-	background: #d64545;
-	border-color: #ff8787;
-	color: #fff;
+/* Held is a state, not an action, so it is filled rather than outlined — and
+   amber rather than red, because a held transport is not a fault. */
+.transport .hold.engaged {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: #1a1206;
 }
 
 .tempo { display: flex; align-items: center; gap: 0.35rem; }

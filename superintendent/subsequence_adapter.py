@@ -42,6 +42,16 @@ RECONNECT_CEILING = 5.0
 """Seconds between attempts to dial the service, backing off to the ceiling."""
 
 
+class Refused (Exception):
+	"""A request the app will not carry out, carrying why so a panel can say so.
+
+	Distinct from a request that changes nothing: refusing means the panel
+	asked for something this app cannot do, and the person who tapped should
+	be told rather than left watching a control that never moves.
+	"""
+
+
+
 class Control:
 	"""One thing a panel can see and work, offered under a name."""
 
@@ -71,6 +81,14 @@ class Control:
 		"""
 
 		return []
+
+	def attach (self, link: "AppLink") -> None:
+		"""Take the link, so a control that must report between beats can.
+
+		Polling once a beat is enough for anything that moves while the music
+		plays.  It is not enough for a transport, because a paused composition
+		emits no beats at all.
+		"""
 
 
 class StepGrid (Control):
@@ -141,13 +159,25 @@ class StepGrid (Control):
 
 
 class Transport (Control):
-	"""How the composition is playing: silenced or sounding, and at what tempo.
+	"""Whether the composition is playing, and at what tempo.
 
-	Silence mutes every running pattern and releases what is already sounding.
-	It is not a pause — the clock runs on, the bar count advances, and lifting
-	it drops the player back where the music has got to, not where they left
-	it.  A real pause is Subroutine #2054, and this becomes one when that
-	lands.
+	Pause holds the clock where it is: the position is kept, sounding notes are
+	released, and MIDI Stop goes out to anything following.  Resume continues
+	from the same pulse rather than restarting.
+
+	**The face follows the composition, never the button.**  A tap asks; the
+	composition answers with its own ``pause`` or ``resume`` event once the
+	clock has really stopped or started, and that is what moves the face.
+
+	**A refusal has to be caught by reading back, not by waiting.**  Subsequence
+	ignores ``pause()`` when the pulse is not its to hold — under an external
+	clock, an Ableton Link session, or in render mode — and says so only in its
+	log: no exception, and no event will ever arrive.  So the request is read
+	back at once, and a refusal is passed to the panel rather than left as a
+	button that waits forever.
+
+	A Subsequence too old to pause does not have the field declared at all, and
+	a panel draws what is declared, so nothing breaks.
 	"""
 
 	def __init__ (
@@ -156,38 +186,61 @@ class Transport (Control):
 		name: str = "transport",
 		tempo_range: tuple[float, float] = (40.0, 240.0),
 	) -> None:
-		"""Offer silence and tempo over a composition that is already playing."""
+		"""Offer tempo, and pause where the composition can hold its clock."""
 
 		self.composition = composition
 		self.name = name
 		self.tempo_range = tempo_range
 
-		self.silenced = False
-		self._muted_by_us: list[str] = []
+		self._link: "AppLink | None" = None
 		self._last_bpm: float | None = None
+		self._can_pause = (
+			callable(getattr(composition, "pause", None))
+			and callable(getattr(composition, "resume", None))
+		)
+
+		if not self._can_pause:
+			LOG.info("this Subsequence cannot hold its clock; offering tempo alone")
+
+	def attach (self, link: "AppLink") -> None:
+		"""Follow the transport the composition reports, not the button tapped."""
+
+		self._link = link
+
+		if not self._can_pause:
+			return
+
+		self.composition.on_event("pause", lambda *_: self._report_paused(True))
+		self.composition.on_event("resume", lambda *_: self._report_paused(False))
 
 	def declaration (self) -> dict[str, typing.Any]:
-		"""The two fields, and the tempo a panel may ask for."""
+		"""The fields this offers, and the tempo a panel may ask for."""
 
-		return {
-			"type": "transport",
-			"fields": ["silenced", "bpm"],
-			"tempo_range": list(self.tempo_range),
-		}
+		fields = ["bpm"]
+
+		if self._can_pause:
+			fields.insert(0, "paused")
+
+		return {"type": "transport", "fields": fields, "tempo_range": list(self.tempo_range)}
 
 	def snapshot (self) -> dict[str, typing.Any]:
-		"""Whether it is silenced, and the tempo the sequencer actually holds."""
+		"""Whether it is held, and the tempo the sequencer actually holds."""
 
-		return {"silenced": self.silenced, "bpm": self._bpm()}
+		state: dict[str, typing.Any] = {"bpm": self._bpm()}
+
+		if self._can_pause:
+			state["paused"] = self._paused()
+
+		return state
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
-		"""Silence the composition, lift the silence, or set the tempo."""
+		"""Hold the transport, let it go, or set the tempo."""
 
 		if len(rest) != 1:
 			return False
 
-		if rest[0] == "silenced":
-			return self._set_silenced(bool(value))
+		if rest[0] == "paused" and self._can_pause:
+			return self._set_paused(bool(value))
 
 		if rest[0] == "bpm":
 			return self._set_bpm(value)
@@ -205,6 +258,11 @@ class Transport (Control):
 
 		return []
 
+	def _paused (self) -> bool:
+		"""Whether the composition says it is holding."""
+
+		return bool(getattr(self.composition, "is_paused", False))
+
 	def _bpm (self) -> float | None:
 		"""The tempo the sequencer is running at, or nothing before it starts."""
 
@@ -212,56 +270,34 @@ class Transport (Control):
 
 		return round(float(bpm), 2) if bpm else None
 
-	def _set_silenced (self, silenced: bool) -> bool:
-		"""Mute every running pattern, or bring back the ones this muted.
+	def _set_paused (self, paused: bool) -> bool:
+		"""Ask the composition to hold or continue, and check it took.
 
-		Only patterns this silenced are brought back, so a pattern the musician
-		muted by hand stays muted — their mute is not ours to lift.
+		Nothing is reported from here on success: the composition's own event
+		moves the face a few milliseconds later, once the clock has actually
+		stopped.  Returning False says only that this call has changed nothing
+		a panel should be told about *yet*.
 		"""
 
-		if silenced == self.silenced:
+		if paused == self._paused():
 			return False
 
-		if silenced:
-			self._muted_by_us = []
-
-			for name, pattern in list(self.composition.running_patterns.items()):
-				if not getattr(pattern, "_muted", False):
-					self.composition.mute(name)
-					self._muted_by_us.append(name)
-
-			self._release_sounding_notes()
+		if paused:
+			self.composition.pause()
 
 		else:
-			for name in self._muted_by_us:
-				self.composition.unmute(name)
+			self.composition.resume()
 
-			self._muted_by_us = []
+		if self._paused() != paused:
+			raise Refused("the transport follows an external clock or a Link session")
 
-		self.silenced = silenced
+		return False
 
-		return True
+	def _report_paused (self, paused: bool) -> None:
+		"""Tell every panel what the transport actually did."""
 
-	def _release_sounding_notes (self) -> None:
-		"""Let go of anything already sounding, so silence starts now.
-
-		A mute takes effect at the pattern's next rebuild, so without this the
-		note under the finger would hang until its cycle came round.  Notes
-		already scheduled for the rest of the current cycle still play: that
-		tail is up to one cycle, and shortening it would need a change to
-		Subsequence.
-		"""
-
-		panic = getattr(self.composition.sequencer, "panic", None)
-
-		if panic is None:
-			return
-
-		try:
-			asyncio.ensure_future(panic())
-
-		except RuntimeError:
-			LOG.debug("no loop to release notes on; the mute alone will have to do")
+		if self._link is not None:
+			self._link.report(f"{self.name}/paused", paused)
 
 	def _set_bpm (self, value: typing.Any) -> bool:
 		"""Set the tempo, refusing anything outside what was declared."""
@@ -270,13 +306,12 @@ class Transport (Control):
 			bpm = float(value)
 
 		except (TypeError, ValueError):
-			return False
+			raise Refused(f"{value!r} is not a tempo")
 
 		low, high = self.tempo_range
 
 		if not low <= bpm <= high:
-			LOG.warning("panel asked for %s BPM, outside the %s to %s this offers", bpm, low, high)
-			return False
+			raise Refused(f"{bpm:g} is outside the {low:g} to {high:g} this offers")
 
 		self.composition.set_bpm(bpm)
 		self._last_bpm = self._bpm()
@@ -318,6 +353,9 @@ class AppLink:
 		"""
 
 		self.composition.on_event("beat", self._on_beat)
+
+		for control in self.controls.values():
+			control.attach(self)
 
 		self._thread = threading.Thread(target=self._run_link, name="superintendent-link", daemon=True)
 		self._thread.start()
@@ -377,8 +415,14 @@ class AppLink:
 		try:
 			changed = control.apply(rest.split("/"), value)
 
+		except Refused as refusal:
+			LOG.info("refused %r: %s", path, refusal)
+			self._emit(superintendent.protocol.nack(self.app_name, path, client, seq, str(refusal)))
+			return
+
 		except Exception:
 			LOG.warning("applying %r failed", path, exc_info=True)
+			self._emit(superintendent.protocol.nack(self.app_name, path, client, seq, "the app could not do that"))
 			return
 
 		if not changed:
@@ -388,6 +432,18 @@ class AppLink:
 
 		self._emit(superintendent.protocol.changed(
 			self.app_name, path, value, self.version, by="panel", client=client, seq=seq))
+
+	def report (self, path: str, value: typing.Any) -> None:
+		"""Announce something the app did of its own accord, on the clock loop.
+
+		A control polled once a beat cannot report a pause, because a paused
+		composition has no beats.
+		"""
+
+		self.version += 1
+
+		self._emit(superintendent.protocol.changed(
+			self.app_name, path, value, self.version, by="app"))
 
 	def _emit (self, frame: superintendent.protocol.Frame) -> None:
 		"""Hand a frame to the link thread, in the order it was produced.

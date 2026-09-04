@@ -175,6 +175,20 @@ class Hub:
 		if isinstance(client, str) and isinstance(seq, int):
 			await self.to_panel(client, superintendent.protocol.ack(app.name, client, seq, app.version))
 
+	async def refusal_reported (self, app: AppLink, frame: superintendent.protocol.Frame) -> None:
+		"""Pass an app's refusal back to the panel that asked for it.
+
+		An app refuses when it cannot do what was asked — a transport that
+		follows an external clock, a tempo outside what it offers. The panel
+		that tapped is told, so the control springs back with a reason instead
+		of waiting for a confirmation that is never coming.
+		"""
+
+		client = frame.get("client")
+
+		if isinstance(client, str):
+			await self.to_panel(client, dict(frame, app=app.name))
+
 	async def to_panel (self, client: str, frame: superintendent.protocol.Frame) -> None:
 		"""Send one frame to one named panel, if it is still connected."""
 

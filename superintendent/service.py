@@ -144,6 +144,9 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 			elif kind == "event":
 				await hub.event_reported(app, frame)
 
+			elif kind == "nack":
+				await hub.refusal_reported(app, frame)
+
 			else:
 				LOG.debug("app %r sent %r, which this version ignores", app.name, kind)
 

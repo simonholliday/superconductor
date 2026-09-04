@@ -2,6 +2,8 @@
 
 import typing
 
+import pytest
+
 import superintendent.protocol
 import superintendent.subsequence_adapter
 
@@ -42,6 +44,8 @@ class FakeComposition:
 		self.sequencer = FakeSequencer()
 		self.running_patterns: dict[str, FakePattern] = {"drums": FakePattern(), "bass": FakePattern()}
 		self.bpm_set_to: list[float] = []
+		self.is_paused = False
+		self.refuses_pause = False
 
 	def on_event (self, name: str, callback: typing.Any) -> None:
 		"""Register a callback the way the real composition does."""
@@ -63,6 +67,22 @@ class FakeComposition:
 
 		self.bpm_set_to.append(bpm)
 		self.sequencer.current_bpm = bpm
+
+	def pause (self) -> None:
+		"""Hold the clock, unless this composition is set to refuse.
+
+		Refusing silently is what the real one does when the pulse is not its
+		to hold — under an external clock or an Ableton Link session.
+		"""
+
+		if not self.refuses_pause:
+			self.is_paused = True
+
+	def resume (self) -> None:
+		"""Let the clock go again."""
+
+		if not self.refuses_pause:
+			self.is_paused = False
 
 
 def _link () -> tuple[superintendent.subsequence_adapter.AppLink, list[superintendent.protocol.Frame]]:
@@ -180,42 +200,69 @@ def test_the_grid_is_offered_whole_with_every_row_named () -> None:
 
 
 def _transport () -> tuple[superintendent.subsequence_adapter.Transport, FakeComposition]:
-	"""A transport over a composition with two patterns playing."""
+	"""A transport over a composition that can hold its clock."""
 
 	composition = FakeComposition()
 
 	return superintendent.subsequence_adapter.Transport(composition), composition
 
 
-def test_silencing_mutes_every_pattern_that_is_playing () -> None:
-	"""Which is what silence means while there is no pause in the engine."""
+def test_pausing_asks_the_composition_to_hold_its_clock () -> None:
+	"""Which keeps the position, unlike stopping."""
 
 	transport, composition = _transport()
 
-	assert transport.apply(["silenced"], True) is True
-	assert all(pattern._muted for pattern in composition.running_patterns.values())
+	transport.apply(["paused"], True)
+
+	assert composition.is_paused is True
 
 
-def test_lifting_the_silence_leaves_a_hand_mute_alone () -> None:
-	"""A pattern the musician muted is theirs; only what this muted comes back."""
-
-	transport, composition = _transport()
-	composition.running_patterns["bass"]._muted = True
-
-	transport.apply(["silenced"], True)
-	transport.apply(["silenced"], False)
-
-	assert composition.running_patterns["drums"]._muted is False
-	assert composition.running_patterns["bass"]._muted is True
-
-
-def test_silencing_twice_changes_nothing_the_second_time () -> None:
-	"""So a re-send after a reconnect does not re-mute what was unmuted by hand."""
+def test_the_face_is_not_moved_by_the_asking () -> None:
+	"""It moves on the composition's own pause event, once the clock really stopped."""
 
 	transport, _ = _transport()
 
-	assert transport.apply(["silenced"], True) is True
-	assert transport.apply(["silenced"], True) is False
+	assert transport.apply(["paused"], True) is False
+
+
+def test_a_refused_pause_is_reported_rather_than_left_waiting () -> None:
+	"""Subsequence refuses silently and sends no event, so the read-back is the only signal."""
+
+	transport, composition = _transport()
+	composition.refuses_pause = True
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["paused"], True)
+
+
+def test_pausing_twice_asks_nothing_the_second_time () -> None:
+	"""So a re-send after a reconnect cannot disturb a transport already held."""
+
+	transport, _ = _transport()
+
+	transport.apply(["paused"], True)
+
+	assert transport.apply(["paused"], True) is False
+
+
+def test_the_transport_reports_what_the_composition_did () -> None:
+	"""Including a pause nobody on the glass asked for."""
+
+	transport, composition = _transport()
+	reported: list[tuple[str, typing.Any]] = []
+
+	class Link:
+		"""Stands in for the link, keeping what it was told."""
+
+		def report (self, path: str, value: typing.Any) -> None:
+			"""Keep one report."""
+
+			reported.append((path, value))
+
+	transport.attach(Link())  # type: ignore[arg-type]
+	composition.listeners["pause"]()
+
+	assert reported == [("transport/paused", True)]
 
 
 def test_a_tempo_is_passed_through_and_one_outside_the_range_is_refused () -> None:
@@ -224,9 +271,13 @@ def test_a_tempo_is_passed_through_and_one_outside_the_range_is_refused () -> No
 	transport, composition = _transport()
 
 	assert transport.apply(["bpm"], 137.5) is True
-	assert transport.apply(["bpm"], 5000) is False
-	assert transport.apply(["bpm"], "quickly") is False
 	assert composition.bpm_set_to == [137.5]
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["bpm"], 5000)
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["bpm"], "quickly")
 
 
 def test_a_tempo_the_composition_changed_itself_is_reported () -> None:
@@ -248,5 +299,20 @@ def test_the_transport_declares_what_a_panel_needs_to_draw_it () -> None:
 	declaration = transport.declaration()
 
 	assert declaration["type"] == "transport"
-	assert declaration["fields"] == ["silenced", "bpm"]
+	assert declaration["fields"] == ["paused", "bpm"]
 	assert declaration["tempo_range"] == [40.0, 240.0]
+
+
+def test_a_composition_that_cannot_pause_does_not_offer_the_field () -> None:
+	"""An older Subsequence loses the button rather than gaining a broken one."""
+
+	class WithoutPause (FakeComposition):
+		"""A composition from before the transport could be held."""
+
+		pause = None  # type: ignore[assignment]
+		resume = None  # type: ignore[assignment]
+
+	transport = superintendent.subsequence_adapter.Transport(WithoutPause())
+
+	assert transport.declaration()["fields"] == ["bpm"]
+	assert "paused" not in transport.snapshot()
