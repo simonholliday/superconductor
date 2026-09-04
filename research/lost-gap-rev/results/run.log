@@ -1,0 +1,11 @@
+start 2026-09-04T01:15:56+00:00 loadavg 8.13 4.32 2.90
+== P : baseline  loadavg 1.07
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== P : ws-thread --burst 128 --burst-period 2.0  loadavg 0.67
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== P : ws-coalesce --rate 50  loadavg 0.57
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== P : baseline  loadavg 0.52
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+end 2026-09-04T01:27:41+00:00 loadavg 0.42 3.00 3.71
+ALLDONE

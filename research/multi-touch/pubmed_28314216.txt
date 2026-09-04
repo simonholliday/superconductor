@@ -1,0 +1,36 @@
+1. J Electromyogr Kinesiol. 2017 Jun;34:6-13. doi: 10.1016/j.jelekin.2017.02.007.
+ Epub 2017 Feb 24.
+
+Fingertip forces and completion time for index finger and thumb touchscreen 
+gestures.
+
+Asakawa DS(1), Crocker GH(1), Schmaltz A(1), Jindrich DL(2).
+
+Author information:
+(1)Department of Kinesiology, California State University San Marcos, 333. S. 
+Twin Oaks Valley Rd., San Marcos, CA, USA.
+(2)Department of Kinesiology, California State University San Marcos, 333. S. 
+Twin Oaks Valley Rd., San Marcos, CA, USA. Electronic address: 
+djindrich@csusm.edu.
+
+Users actuate touchscreen computers by applying forces with their fingers to the 
+touchscreen, although the amount and direction of the force is unknown. Our aim 
+was to characterize the magnitude, direction and impulse of the force applied 
+during single finger (tapping and sliding in four directions) and two finger 
+gestures (stretch and pinch). Thirteen subjects performed repeated trials of 
+each gesture. Mean(±SD) resultant force was 0.50(0.09)N for tap, 0.79(0.32)N to 
+1.18(0.47)N for sliding gestures, 1.47(0.63)N for pinch and 2.05(1.13)N for 
+stretch. Mean resultant force was significantly less (p<0.04) for tap than for 
+all gestures except slide right. The direction of force application was more 
+vertical for the two-finger gestures as compared to the single- finger gestures. 
+Tap was the fastest gesture to complete at 133(83)ms, followed by slide right at 
+421(181)ms. On average, participants took the longest to complete the stretch 
+gesture at 920(398)ms. Overall, there are differences in forces, force 
+direction, and completion times among touchscreen gestures that could be used to 
+estimate musculoskeletal exposure and help forge guidelines to reduce risk of 
+musculoskeletal injury.
+
+Copyright © 2017 Elsevier Ltd. All rights reserved.
+
+DOI: 10.1016/j.jelekin.2017.02.007
+PMID: 28314216 [Indexed for MEDLINE]

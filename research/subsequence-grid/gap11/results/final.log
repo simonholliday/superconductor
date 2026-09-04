@@ -1,0 +1,7 @@
+-- --scenario grid --steps 16 --voices 8 --fill 0.5 --lookahead 1/24 --label freq-16x8-64notes (load 0.33)
+-- --scenario grid --steps 16 --voices 8 --fill 1.0 --lookahead 1/24 --label freq-16x8-full (load 0.39)
+-- --scenario grid --steps 64 --voices 16 --fill 0.5 --lookahead 1/24 --length-beats 4 --label freq-64x16-in-4-beats (load 0.33)
+-- --scenario baseline --bpm 180 --label baseline-180 (load 0.29)
+-- --scenario grid --bpm 180 --steps 16 --voices 8 --fill 1.0 --lookahead 1/24 --label 16x8-full-180bpm (load 0.27)
+-- --scenario grid --bpm 180 --steps 64 --voices 16 --fill 0.5 --lookahead 1/24 --length-beats 4 --label 64x16-in-4-beats-180bpm (load 0.31)
+wrote /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/gap11/results/final.jsonl

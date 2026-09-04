@@ -1,0 +1,90 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>playhead bench</title>
+<style>
+ body { margin:0; background:#111; }
+ .grid { display:grid; gap:2px; width:1880px; height:1000px; }
+ .cell { background:#333; border-radius:4px; }
+ .cell.on { background:#3fb950; }
+ .cell.play { background:#fff; }
+ .cell.on.play { background:#ffe27a; }
+ #overlay { position:absolute; top:0; left:0; width:20px; height:1000px; background:rgba(255,255,255,0.5); will-change:transform; }
+ canvas { display:block; }
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+// Research prototype (playhead): rendering and clock-offset measurements run by pw_bench.py.
+function pct (xs, p) { const s = [...xs].sort((a,b)=>a-b); return s[Math.min(s.length-1, Math.floor(p*s.length))]; }
+function summ (xs) { if (!xs.length) return null; return {n: xs.length, median: +pct(xs,0.5).toFixed(3), p95: +pct(xs,0.95).toFixed(3), p99: +pct(xs,0.99).toFixed(3), max: +Math.max(...xs).toFixed(3), min: +Math.min(...xs).toFixed(3)}; }
+
+// Approximate the browser's render cost after a rAF callback: time from the end of the
+// callback to the next macrotask (MessageChannel), which runs after style/layout/paint/commit.
+function afterRender () { return new Promise(res => { const ch = new MessageChannel(); ch.port1.onmessage = () => res(performance.now()); ch.port2.postMessage(0); }); }
+
+function buildGrid (rows, cols, onFraction) {
+	const root = document.getElementById('root'); root.innerHTML = '';
+	const g = document.createElement('div'); g.className = 'grid';
+	g.style.gridTemplateColumns = `repeat(${cols}, 1fr)`; g.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+	const cells = [];
+	for (let r = 0; r < rows; r++) { cells.push([]); for (let c = 0; c < cols; c++) { const d = document.createElement('div'); d.className = 'cell' + (((r*7+c*3)%10) < onFraction*10 ? ' on' : ''); g.appendChild(d); cells[r].push(d); } }
+	root.appendChild(g);
+	return cells;
+}
+
+// mode: 'dom' (toggle .play on a column), 'canvas' (redraw everything), 'overlay' (translate one bar)
+// stepMs: highlight advances every stepMs (0 = every frame)
+async function renderBench ({rows, cols, mode, stepMs, seconds}) {
+	const frames = [], handler = [], render = [], stamps = [];
+	let cells, ctx, overlay, lastCol = -1, canvas;
+	if (mode === 'dom') cells = buildGrid(rows, cols, 0.3);
+	else if (mode === 'overlay') { cells = buildGrid(rows, cols, 0.3); overlay = document.createElement('div'); overlay.id = 'overlay'; overlay.style.width = (1880/cols) + 'px'; document.body.appendChild(overlay); }
+	else { document.getElementById('root').innerHTML = ''; canvas = document.createElement('canvas'); canvas.width = 1880; canvas.height = 1000; document.getElementById('root').appendChild(canvas); ctx = canvas.getContext('2d'); }
+	const cw = 1880/cols, chh = 1000/rows;
+	const t0 = performance.now(); let last = null;
+	await new Promise(resolve => {
+		function frame (ts) {
+			const start = performance.now();
+			if (last !== null) frames.push(ts - last); last = ts; stamps.push(ts);
+			const col = stepMs > 0 ? Math.floor((start - t0) / stepMs) % cols : (lastCol + 1) % cols;
+			if (mode === 'dom') { if (col !== lastCol) { if (lastCol >= 0) for (let r = 0; r < rows; r++) cells[r][lastCol].classList.remove('play'); for (let r = 0; r < rows; r++) cells[r][col].classList.add('play'); } }
+			else if (mode === 'overlay') { overlay.style.transform = `translateX(${col*cw}px)`; }
+			else { ctx.fillStyle = '#111'; ctx.fillRect(0,0,1880,1000); for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const on = ((r*7+c*3)%10) < 3; ctx.fillStyle = c === col ? (on ? '#ffe27a' : '#fff') : (on ? '#3fb950' : '#333'); ctx.fillRect(c*cw+1, r*chh+1, cw-2, chh-2); } }
+			lastCol = col;
+			const end = performance.now(); handler.push(end - start);
+			afterRender().then(t => render.push(t - end));
+			if (end - t0 < seconds*1000) requestAnimationFrame(frame); else resolve();
+		}
+		requestAnimationFrame(frame);
+	});
+	if (overlay) overlay.remove();
+	const gran = [...new Set(stamps.map(s => +(s % 1).toFixed(4)))].length;
+	return {rows, cols, mode, stepMs, frames: summ(frames), over20: frames.filter(f => f > 20).length, over34: frames.filter(f => f > 34).length, handlerMs: summ(handler), renderMs: summ(render), distinctSubMs: gran};
+}
+
+// NTP-style offset estimate over a WebSocket: offset_i = server_at - (t_send + rtt/2).
+async function offsetBench ({n, gapMs}) {
+	const ws = new WebSocket('ws://127.0.0.1:8903/ws');
+	await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+	const samples = [];
+	for (let i = 0; i < n; i++) {
+		const tSend = performance.timeOrigin + performance.now();
+		const p = new Promise(res => { ws.onmessage = e => res(JSON.parse(e.data)); });
+		ws.send(JSON.stringify({t: 'ping', at: tSend}));
+		const d = await p;
+		const tRecv = performance.timeOrigin + performance.now();
+		const rtt = tRecv - d.at;
+		samples.push({rtt, offset: d.server_at - (d.at + rtt/2)});
+		await new Promise(r => setTimeout(r, gapMs));
+	}
+	ws.close();
+	const rtts = samples.map(s => s.rtt), offs = samples.map(s => s.offset);
+	// windowed min-RTT filter: per 8 samples keep the offset of the lowest-RTT sample
+	const filt = []; for (let i = 0; i + 8 <= samples.length; i += 8) { const w = samples.slice(i, i+8); w.sort((a,b)=>a.rtt-b.rtt); filt.push(w[0].offset); }
+	const med = []; for (let i = 0; i + 8 <= samples.length; i += 8) { med.push(pct(samples.slice(i,i+8).map(s=>s.offset), 0.5)); }
+	const spread = xs => +(Math.max(...xs) - Math.min(...xs)).toFixed(3);
+	const sd = xs => { const m = xs.reduce((a,b)=>a+b,0)/xs.length; return +Math.sqrt(xs.reduce((a,b)=>a+(b-m)*(b-m),0)/xs.length).toFixed(3); };
+	return {n, rtt: summ(rtts), rawOffset: {median: +pct(offs,0.5).toFixed(3), spread: spread(offs), sd: sd(offs)}, minRttOffset: {spread: spread(filt), sd: sd(filt), windows: filt.length}, medianOffset: {spread: spread(med), sd: sd(med)}, dateVsPerf: +(Date.now() - (performance.timeOrigin + performance.now())).toFixed(3)};
+}
+window.renderBench = renderBench; window.offsetBench = offsetBench;
+</script>
+</body></html>

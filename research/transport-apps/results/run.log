@@ -1,0 +1,31 @@
+load average at start: 0.65 0.63 0.47
+== baseline
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-loop --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-thread --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-thread-drain --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== ws-loop --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== ws-thread --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== tcp-thread --rate 50
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-thread --rate 5
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== ws-thread --rate 5
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== baseline --selector select
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-loop --rate 50 --selector select
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== osc-thread --rate 50 --selector select
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== ws-thread --rate 50 --selector select
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== tcp-thread --rate 50 --selector select
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+load average at end: 2.45 1.46 0.91
+done

@@ -1,0 +1,28 @@
+{'label': 'throttle6x', 'throttle': 6.0, 'webgl_renderer': 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)', 'ua': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36'}
+throttle6x    dom   128  incremental  js mean   0.052 p95   0.300 max   1.100 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x    dom   128  incremental  js+style+layout mean   0.234 p95   0.700 max   1.500 ms
+throttle6x    dom   128         full  js mean   0.076 p95   0.300 max   1.400 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+throttle6x    dom   128         full  js+style+layout mean   0.235 p95   0.700 max   1.300 ms
+throttle6x    dom  1024  incremental  js mean   0.070 p95   0.300 max   0.800 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+throttle6x    dom  1024  incremental  js+style+layout mean   0.641 p95   1.300 max   1.900 ms
+throttle6x    dom  1024         full  js mean   0.392 p95   1.000 max   1.500 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x    dom  1024         full  js+style+layout mean   1.212 p95   1.800 max   2.600 ms
+throttle6x    svg   128  incremental  js mean   0.049 p95   0.300 max   1.000 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x    svg   128  incremental  js+style+layout mean   0.283 p95   0.900 max   1.500 ms
+throttle6x    svg   128         full  js mean   0.134 p95   0.500 max   1.400 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+throttle6x    svg   128         full  js+style+layout mean   0.382 p95   1.000 max   1.400 ms
+throttle6x    svg  1024  incremental  js mean   0.103 p95   0.400 max   1.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x    svg  1024  incremental  js+style+layout mean   0.941 p95   1.500 max   2.400 ms
+throttle6x    svg  1024         full  js mean   1.584 p95   2.100 max   5.900 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+throttle6x    svg  1024         full  js+style+layout mean   2.557 p95   3.200 max   3.800 ms
+throttle6x canvas   128  incremental  js mean   0.086 p95   0.400 max   1.000 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+throttle6x canvas   128         full  js mean   0.500 p95   1.100 max   1.700 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x canvas  1024  incremental  js mean   0.207 p95   0.700 max   1.300 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x canvas  1024         full  js mean   5.018 p95   5.800 max   9.000 ms | interval mean  21.22 p95  33.40 max  50.00 ms | long 81
+throttle6x  webgl   128  incremental  js mean   0.129 p95   1.000 max   1.500 ms | interval mean  20.89 p95  33.40 max  33.40 ms | long 76
+throttle6x  webgl   128         full  js mean   0.131 p95   0.900 max   1.500 ms | interval mean  20.44 p95  33.40 max  33.40 ms | long 68
+throttle6x  webgl  1024  incremental  js mean   0.120 p95   1.000 max   1.500 ms | interval mean  25.17 p95  33.40 max  33.40 ms | long 153
+throttle6x  webgl  1024         full  js mean   0.223 p95   1.200 max   1.400 ms | interval mean  25.44 p95  33.40 max  33.50 ms | long 158
+throttle6x    svg                 waveform-400bin-1920x256  js mean   1.305 p95   1.900 max   2.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x canvas                 waveform-400bin-1920x256  js mean   0.085 p95   0.300 max   1.500 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+throttle6x      -     mixed-page-512cells-8faders-waveform  js mean   1.228 p95   1.700 max   2.500 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0

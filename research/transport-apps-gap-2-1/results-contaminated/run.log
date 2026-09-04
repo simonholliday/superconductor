@@ -1,0 +1,79 @@
+start 2026-09-03T21:19:28+00:00 loadavg 10.57 7.82 4.28
+== G : baseline  loadavg 1.00
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-thread --rate 5  loadavg 0.81
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-batch-read --rate 5  loadavg 0.59
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-coalesce --burst 128 --burst-period 2.0  loadavg 0.52
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench2.py", line 214, in <module>
+    main()
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench2.py", line 192, in main
+    wcb.sender_main(a.rate, a.seconds, a.burst, a.burst_period)
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench.py", line 108, in sender_main
+    asyncio.run(main())
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench.py", line 89, in main
+    async with websockets.asyncio.server.serve(handler, "127.0.0.1", ab.WS_PORT):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 462, in __aenter__
+    return await self
+           ^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 451, in _await
+    self.server = await self.create_server()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 672, in create_server
+    return await loop.create_server(protocol_factory, host, port, **kwargs)  # type: ignore[arg-type]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1572, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 98] error while attempting to bind on address ('127.0.0.1', 9114): address already in use
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-batch-read --burst 128 --burst-period 2.0  loadavg 0.59
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-direct --burst 128 --burst-period 2.0  loadavg 0.44
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench2.py", line 214, in <module>
+    main()
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench2.py", line 192, in main
+    wcb.sender_main(a.rate, a.seconds, a.burst, a.burst_period)
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench.py", line 108, in sender_main
+    asyncio.run(main())
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/transport-apps-gap-1-2/ws_coalesce_bench.py", line 89, in main
+    async with websockets.asyncio.server.serve(handler, "127.0.0.1", ab.WS_PORT):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 462, in __aenter__
+    return await self
+           ^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 451, in _await
+    self.server = await self.create_server()
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/server.py", line 672, in create_server
+    return await loop.create_server(protocol_factory, host, port, **kwargs)  # type: ignore[arg-type]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1572, in create_server
+    raise OSError(err.errno, msg) from None
+OSError: [Errno 98] error while attempting to bind on address ('127.0.0.1', 9114): address already in use
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-batch-read --burst 1024 --burst-period 4.0  loadavg 0.48
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-thread --rate 500  loadavg 0.44
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== G : ws-batch-read --rate 500  loadavg 0.53
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']

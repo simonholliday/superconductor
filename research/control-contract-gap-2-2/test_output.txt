@@ -1,0 +1,19 @@
+ok   lattice tiles the panel exactly
+ok   play mode routes nothing to the arranger
+ok   a press in edit mode grabs the widget under the finger
+ok   a press on empty lattice grabs nothing
+ok   a move snaps the ghost to whole cells
+ok   a drop commits the snapped rectangle
+ok   an overlapping drop is refused and the widget snaps back
+ok   a drag off the lattice edge is refused
+ok   no widget is displaced by another widget being dragged
+ok   a second contact during a drag changes nothing and does not stall it
+ok   a resize from the corner grows to whole cells and refuses an overlap
+ok   a pointercancel abandons the drag with no commit
+ok   leaving edit mode mid-drag abandons it
+ok   hit test picks the later widget where two are stacked
+ok   tap-to-place moves a selected widget to the tapped cell with no drag at all
+ok   tap-to-place refuses an overlap and an off-lattice landing, and keeps the selection
+ok   tap-to-place is inert in play mode and after a select on empty lattice
+
+17 passed, 0 failed

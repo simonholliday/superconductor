@@ -1,0 +1,1500 @@
+Audio Engineering Society x
+Convention Paper 
+Presented at the 123rd Convention 
+2007 October 5–8 New York, NY, USA 
+The papers at this Convention have been selected on the basis of a submitted abstract and extended precis that have been peer 
+reviewed by at least two qualified anonymous reviewers. This convention paper has been reproduced from the author's advance 
+manuscript, without editing, corrections, or consideration by the Review Board. The AES takes no responsibility for the contents. 
+Additional papers may be obtained by sending request and remittance to Audio Engineering Society, 60 East 42 nd  Street, New 
+York, New York 10165-2520, USA; also see www.aes.org. All rights reserved. Reproduction of this paper, or any portion thereof, 
+is not permitted without direct permission from the xJournalxofxthexAudioxEngineeringxSociety.x
+ 
+The Effects of Latency on Live Sound Monitoring 
+ 
+Michael Lester 1 and Jon Boley 2  
+1 Purdue University, Indianapolis, IN 46202, USA 
+(Now at Shure Incorporated, Niles, IL 60714, USA) 
+lester_michael@shure.com 
+2 Shure Incorporated, Niles, IL 60714, USA 
+(Now at Purdue University, West Lafayette, IN 47907, USA) 
+jdboley@purdue.edu 
+ 
+x
+Ax subjectivex listeningx testx wasx conductedx tox determinex howx objectionablex variousx amountsx ofx latencyx arex forx 
+performersxinxlivexmonitoringxscenarios.xxSeveralxpopularxinstrumentsxwerexusedxandxthexresultsxofxtestsxwithxwedgex 
+monitorsxarexcomparedxtoxthosexwithxin9earxmonitors.xxItxisxshownxthatxthexaudibilityxofxlatencyxisxdependentxonxbothx 
+thextypexofxinstrumentxandxmonitoringxenvironment.xxThisxexperimentxshowsxthatxthexacceptablexamountxofxlatencyx 
+canxrangexfromx42msxtoxpossiblyxlessxthanx1.4msxunderxcertainxconditions.xxThexdifferencesxinxlatencyxperceptionxforx 
+eachx instrumentx arex discussed.x x Itx isx alsox shownx thatx morex latencyx isx generallyx acceptablex forx wedgex monitoringx 
+setupsxthanxforxin9earxmonitors.  
+ 
+ 
+1.  INTRODUCTION 
+Overxthexpastxcouplexdecades,xdigitalxaudioxgearxhasx 
+becomex increasinglyx commonx inx nearlyx everyx areax ofx
+audioxproductionxandxreinforcement.xxSomexconcernxhasx 
+beenxraisedxthatxthexlatencyxinherentxinxaxdigitalxsystemx 
+canxdegradexthexperceivedxqualityxofxthexaudioxandxevenx 
+affectxthexmusician’sxabilityxtoxperform.x
+Somexofxthexmostxcommonxsourcesxofxlatencyxarexthex
+usex ofx digitalx buffersx andx filters.x x Evenx thex processx ofx 
+samplingx oftenx includesx ax filter,x andx thusx introducesx 
+somexdelay.xxAsxthexnumberxofxfiltersxisxincreased,xthex 
+latencyxalsoxincreases.xxTherefore,xitxisxexpectedxthatxax 
+largexnumberxofxfilterxtapsxcanxeasilyxcreatexanxaudiblex 
+delay,x whichx mayx bex perceivedx asx combx filteringx orx
+evenx echox inx thex worstx cases.x x Theoretically,x evenxax 
+50µsx delayx (aboutx 10x samplesx @192kHz)x mightx bex 
+audiblex underx certainx conditions.x x Ifx combinedx 
+acousticallyxwithxthexoriginalxsound,xthexresultingxcombx 
+filterx wouldx havex ax nullx atx approximatelyx 10kHz.xx 
+(Note:xthisxdelayxwouldxbexequivalentxtoxsimplyxplacingx 
+onex speakerx 1.7cmx behindx anotherx speakerx thatx isx 
+playingx thex samex sound.)x x Forx anx example,x takex onex
+commercialxaudioxprocessorxthatxsamplesxatx48kHz.xxItx 
+usesx anx ADCxwithx ax groupxdelayx ofx37x samplesx andx ax
+DACxwithxaxgroupxdelayxofx29xsamples,xwhichxresultsxinx 
+ax totalx latencyx ofx aboutx 1.4ms.x x Ifx thisx isx combinedx 
+x
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 2 of 20 
+instantaneouslyxwithxthexoriginalxsound,xitxcouldxresultx 
+inx combx filteringx startingx atx frequenciesx asx lowx asx 
+357Hz.x x (Note:x thex severityx ofx thex combx filteringx 
+dependsxonxthexrelativexlevelsxofxthexoriginalxsoundxandx 
+thexprocessedxsoundxatxthexear.)x
+Somex factorsx thatx mightx affectx thex perceivedx qualityx 
+ofx ax givenx amountx ofx latencyx includex thex typex ofx 
+instrumentxplayedxandxthexcriticalxlisteningxskillsxofxthex 
+musician.x x Musiciansx onx particularx instruments,x 
+saxophonexforxexample,xmightxrequirexmoreximmediatex 
+feedbackx thanx others,x suchx asx keyboard,x duex tox thex
+physicalxcouplingxwithxthexinstrument.xxItxmayxalsoxbex 
+truexthatxtonalxinstrumentsxarexmorexorxlessximmunextox 
+perceivedx combx filteringx thanx percussivex instruments.xx 
+Asxthexlatencyxisxincreased,xthexartifactsxbecomexlessxofx 
+ax spectrum9alteringx phenomenonx andx morex ofx ax 
+temporalx perceptionx issue.x x Itx isx expectedx thatx somex 
+peoplex arex morex adeptx atx criticalx listeningx thanx othersx 
+andx willx bex ablex tox hearx smallx changesx inx thex audiox 
+qualityx thatx othersx mayx havex difficultyx inx perceivingx 
+untilxdistinctxtemporalxsmearingxisxpresent.xxx
+Thisx studyx isx intendedx tox quantifyx thex amountx ofx 
+latencyx thatx isx acceptablex inx ax typicalx live9soundx
+monitoringx situationx andx tox identifyx thex variablesxthatx 
+affectxthexvariancexofxthexresults.xxThisxstudyxisxaimedxatx 
+answeringxthexfollowingxquestions:x
+• What are the different factors that affect latency 
+perception in live monitoring? 
+• What are the differences in latency perception 
+between two different monitoring situations: Wedge 
+Monitors 4-6ft from the ear and In-Ear Monitors 
+(IEM)? 
+• What are the differences in latency perception 
+among different instrumentalists?  Which musicians are 
+more sensitive than others? 
+• Is there a difference between solo delayed 
+monitoring and monitoring one’s own delayed 
+instrument while playing with a group of non-delayed 
+musicians? 
+• How much latency can be present in a signal path 
+before a musician will perceive an artifact in the audio 
+signal? 
+• How much latency can be present in a signal path 
+before a musician will perceive an actual delay in the 
+signal?  
+Inxorderxtoxanswerxthesexquestions,xtherexisxanxattemptx 
+toxfindxthexworst9casexscenarioxandxinterpretxthexresultsx 
+withx thisx inx mind.x Inx orderx tox answerx thesex questionsx 
+withxaxhighxdegreexofxconfidence,xthisxexperimentxusesx 
+‘critical’x listenersx ratherx thanx ax generalx samplex ofx thex 
+population.x x Thex subjectsx inx thisx studyx arex practicingx 
+musiciansx andx carex isx takenx tox findx professionalx 
+musicians,x wherex thex termx ‘professional’x isx beingx 
+definedxasxaxpersonxwhosexincomexisxsolelyxorxpartiallyx 
+supplementedxbyxtheirxmusicalxability.xxxx
+ 
+2.  METHODS 
+Thex amountx ofx acceptablex latencyx inx ax livex soundx 
+applicationxisxinterestingxduextoxtheximplicationsxonxthex 
+designx andx usex ofx professionalx audiox products.xx 
+Understandingxwhatxcausesxthexperceptionxofxlatencyxtox 
+changex mayx helpx audiox engineersx determinex whatx 
+criteriaxtoxusexwhenxdesigningxandxemployingxproductsx 
+andxsystems.xThisxexperimentxwasxdesignedxwithxthesex 
+objectivesxinxmind.x
+x
+2.1.  Variables  
+Thex studyx wasx performedx withx thex followingx 
+variables:x
+• 19x Practicingx Musicians,x 11x ofx whomx werex 
+professionalx musicians,x determinedx tox bex criticalx 
+listenersxbyxinitialxboundaryxtests.x(Note:xthexboundaryx 
+testsxwerexnotxfactoredxintoxthexfinalxresults.)x
+• 6x differentx instrumentsx comprisingx ax typicalx 
+rock/popx band:x Vocal,x Saxophone,x Electricx Guitar,x 
+Keyboardxwithxaxpianoxpatch,xElectricxBass,xandxDrumsx
+• TwoxdifferentxMonitoringxMechanisms:xWedgesx49
+6ftxfromxthexearxandxIn9EarxMonitorsx
+• Twox differentx Monitoringx situations:x x solox 
+monitoringx andx monitoringx withx ax non9delayedx 
+metronome.x x Thisx isx meantx tox simulatex playingx withx
+anotherxmusicianxwhosexsignalxhasxnoxlatencyx
+ 
+2.2.  Tools  
+Inx orderx tox evaluatex ax real9timex systemx suchx asx 
+musicianx self9monitoring,x ax real9timex switchingx 
+mechanismx neededx tox bex used.x Itx isx importantx forx thex 
+musicianxtoxhavexthexabilityxtoxswitchxbetweenxsamplesx 
+quickly,x easily,x asx manyx timesx asx necessary,x andx withx 
+minimalx artifacts.x x Tox meetx thesex requirementsx anx 
+analogx audiox switchboxx wasx designedx andx builtx forx 
+thesex experiments.x Thex switchboxx allowsx thex userx tox 
+selectx betweenx 8x differentx channelsx withx ax veryx shortx 
+cross9fadexintroducedxduringxthexswitch.xx
+Inxorderxtoxassessxthexsubject’sxperceptionxofxlatency,x 
+andx tox enablex accuratex comparison,x thex MUSHRAx [1]x 
+methodologyx wasx usedx asx ax model.x x MUSHRAx isx ax 
+doublex blindx multi9stimulusx testx forx subjectivex qualityx 
+measurementsx thatx involvex mediumx tox largex signalx 
+impairments.xxThisxtestxprovidesxaxmeasurexofxthexaudiox 
+qualityxcomparedxdirectlyxwithxaxreferencex(thexoriginal,x 
+unprocessedx audiox signal).x Inx ax testx involvingx 
+intermediatex impairments,x subjectsx arex askedx tox assessx 
+thexbasicxaudioxqualityxofxeachxsound.xSincexthexsubjectx 
+canxdirectlyxcomparexthexeffectedxsignals,xtheyxcanxratex 
+thexeffectedxsignalsxwithxrespectxtoxeachxother,xallowingx 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 3 of 20 
+thex experimenterx tox obtainx gradesx withx littlex randomx 
+error.x Thisx permitsx ax highx degreex ofx resolutionx inxthex 
+assignedxgradesxinxthexstudy.xxxxx
+Thisx studyx usesx thex MUSHRAx standardx onlyx asx ax 
+modelx sincex thex exactx applicationx isx notx perfectlyx
+applicablextoxthex‘live’xnaturexofxthextest.xAxlivexpseudo9
+MUSHRAx testx wasx developedx andx employedx inx thisx 
+study.xxThexdifferencesxarexasxfollows:x
+• Whenx gradingx ax givenx sample,x ax knownx referencex 
+signalx isx notx directlyx givenx asx ax meansx ofx comparisonx 
+because,xinxaxlivexsituation,xthexinstrumentxitselfxisxthex 
+no9latencyxreferencexwithxwhichxtoxcompare.xxHowever,x 
+anxanalogxreferencexsamplexisxstillxhiddenxamongstxthex 
+samplesx tox assessx thex accuracyx ofx thex subject’sx 
+responsesx
+• Thexanchorxisxnotxaxlow9passxfilteredxversionxofxthex 
+livexsignalxsincexaxlow9passxfilterxisxinxnoxwayxrelatedxtox 
+thexperceptionxofxlatency.xxInstead,xaxsamplexthatxhasxax 
+relativelyxlargexamountxofxlatencyxisxusedxasxthexanchor.xx 
+Thexamountxofxlatencyxthatxisxintroducedxinxthexanchorx 
+samplex isx determinedx duringx anx initialx boundaryx testx 
+(describedxinxSectionx2.4).x
+• Insteadx ofx usingx ax computerx programx thatx hasx 
+slidersxtoxratexthexsamples,xthexsubjectxisxgivenxaxpaperx 
+gradingxsheetxandx isx askedx tox markx anxXxwherex inx thex 
+gradingxrangexthexsamplexisxperceived.xxx
+Additionally,x thisx experimentx isx notx doublex blindx 
+sincexthexexperimentxproctorxmustxmanuallyxsetxupxthex 
+experimentx forx eachx trial.x Thex officialx MUSHRAx 
+standardxincludesxusingxaxcomputerxtoxrandomlyxassignx 
+samplesxtoxthexvariousxchannels.xAlthoughxthextestxisxnotx 
+doublexblind,xthexproctorxdoesxnotxknowxwhatxsample(s)x 
+thex subjectx isx currentlyx testingx andx cannotx givex 
+psychologicalxcuesxtoxthexsubject;xthusxthexsinglexblindx 
+setupxwillxnotxbiasxthexresults.x
+Sincex sevenx separatex latenciesx inx additionx tox thex 
+referencexarexneeded,xanxeightxchannelxdigitalxmixerxisx 
+usedx tox introducex thex latenciesx tox thex signal.x x Itxisx 
+importantxtoxnotexthatxwhenxusingxdigitalxequipmentxtox 
+introducex latencyx intox ax systemx thatx thex propagationx 
+latencyxthroughxthexequipmentxmustxalsoxbexfactoredxin.xx 
+Thisxparticularxdevicexhadxaxtotalxthroughputxlatencyxofx 
+1.4ms.xxThisxlatencyxisxthexsmallestxamountxofxdelayxthatx 
+canx bex introducedx tox thex signal;x notex thatx thisx 
+correspondsxtox“0msxdigitalxlatency.x”xxx
+x
+2.3.  Grading Process 
+Inx MUSHRA,x thex subjectsx scorex thex stimulix 
+accordingx tox ax five9intervalx continuousx qualityx scale.x 
+Thisxscalexconsistsxofxidenticalxgraphicalxscalesxthatxarex 
+longx enoughx tox givex thex subjectx enoughx quanta,x 
+typicallyx 10cmx orx more,x withx anx internalx numericalx
+descriptionxofx0xtox100.xxThisxscalexisxdividedxintoxfivex 
+equalxintervalsxwithxthexfollowingxdescriptors:x
+Excellent 
+Good 
+Fair 
+Poor 
+Bad 
+Inx ax conventionalx MUSHRAx test,x thex subjectx 
+comparesx recordedx audiox samplesx thatx havex varyingx 
+severitiesxofxcodingxartifacts.xHowever,xthexintroductionx 
+ofx latencyx intox ax livex signalx hasx manyx morex variablesx 
+andxpotentialxsourcesxofx‘annoyance’.xx
+Thex introductionx ofx smallx latenciesx mayx notx 
+necessarilyx bex perceivedx asx ax delayx inx thex signal,x
+althoughx therex arex physicalx asx wellx asx psychophysicalx 
+changesx inx thex qualityx ofx thex monitoredx signal.x x Onex 
+physicalx effectx isx combx filteringx withinx thex monitoredx 
+signal.x x Onex psychophysicalx effectx mayx bex thex extrax 
+difficultyx inx judgingx whenx tox initiatex soundx inx thex 
+instrumentx byx strumming,x hitting,x blowing,x etc.,x basedx 
+onxthexauditoryxfeedback.x
+Therex arex twox primaryx phenomenax thatx mustx bex 
+accountedxforxinxthexgradingxprocess:xxspectralxartifactsx 
+arisingx fromx smallx amountsx ofx latency,x andx thex 
+perceptionx ofx audiblex delay.x Inx thex Pseudox Live9
+MUSHRAx test,x thex MUSHRAx gradingx standardx isx 
+adaptedx tox includex thesex phenomena.x Fivex similarx 
+descriptorsxarexused,xbutxtheirxassociatedxdefinitionsxarex 
+modifiedxtoxincludexbothxphenomena:x
+Excellent: Artifacts are imperceptible.  Delay as well 
+as artifacts cannot be identified. 
+Good: Some artifacts are perceptible, but not 
+necessarily delay.  The artifacts, though perceptible, 
+are not annoying and do not contribute badly to 
+musician’s performance .x
+Fair:  Delay and/or artifacts are perceptible.  The 
+delay and/or artifacts are slightly annoying, but in most 
+cases would not affect musician’s performance. 
+Bad:  A considerable amount of delay is 
+perceptible.  The delay is annoying and is detrimental 
+to musician performance. 
+Horrible: xA musician can’t work under these 
+conditions !x
+Thex rangex ofx thex Excellentx andx Goodx categoriesx 
+generallyx coversx thex artifactx phenomena;x particularlyx 
+combx filtering.x x Thex rangex ofx thex Fair,x Bad,x andx 
+Horriblex categoriesx coversx thex delayx phenomenon,x 
+whichx mayx bex perceivedx asx echo.x x Sincex thex orderingx 
+andx descriptionsx ofx thex gradingx criteriax arex roughlyx 
+proportionalx tox thex amountx ofx latencyx tox incitex thex 
+phenomenon,xthexgradingxschemexisxaxfairxone.xInxotherx 
+wordsxasxyouxlinearlyxincreasexthexamountxofxlatencyxinx 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 4 of 20 
+thex signal,x thex subject’sx responsesx followx thex gradingx 
+criteriax linearly.x x Thisx wasx verifiedx duringx boundaryx 
+tests. x
+Additionally,x inx anx attemptx tox helpx thex subjectx 
+describex andx gradex thex samples,x morex familiarx 
+descriptionsx werex givenx inx additionx tox thex ‘academic’x 
+descriptions:x
+• The musician would buy a product that has the 
+characteristics of the Excellent or Good category.   
+• The musician would use a product that has the 
+characteristics of the Fair category if someone else 
+owned the product or if it was installed in a venue.  
+However, the musician would not voluntarily buy the 
+product. 
+• The musician would not use a product that has the 
+characteristics of the Bad or Horrible category, but 
+would rather find an alternate product.    
+Thex subjectivex scoresx arex recordedx inx ax numericalx 
+format.x x Therex arex 5x levelsx ofx responsex andx givenx thex 
+physicalx pagex inx whichx tox respondx thex levelsx ofx 
+responsexgetxaxscorexasxfollows:x
+Excellent 100 
+Good  75 
+Fair  50 
+Bad  25 
+Horrible 0x
+Byx physicallyx measuringx thex positionx ofx ax subject’sx 
+mark,xaxnumericalxscorexbetweenx0xandx100xisxobtained.x
+ 
+2.4.  Test Process 
+Axfewxthingsxwerexdeterminedxexperimentallyxpriorxtox 
+thex mainx study.x x Thesex findingsx determinedx thex 
+hypothesisx usedx tox buildx thex parametersx ofx thex study.x 
+Thex initialx experimentalx designx hypothesisx andx 
+assumptionsxarexasxfollows:x
+1.  Therexisxnoxonexmagnitudexofxlatencyxthatxeveryonex
+willxconsiderxthexthreshold.x
+2.  Thex subjects’x responsesx forx varyingx amountsx ofx 
+latencyxwillxfollowxaxGaussianxdistribution.xInxaddition,x 
+samplingx errorx willx bex thex mainx causex ofx noisex inx thex 
+responses.x
+3.  Thex rangex ofx latencyx magnitudex inx thex eightx 
+samplesx needsx tox bex determinedx onx anx individualx andx 
+test9by9testx basis.x Itx isx notx possiblex tox determinex ax 
+perfectx setx ofx eightx latenciesx thatx willx allowx everyx 
+subjectxorxevenxeveryxinstrumentxtypextoxgivexresponsesx 
+inx thex rangex ofx thex gradingx scalex thatx alsox followsx ax 
+Gaussianxdistribution.x
+4.  Thex Gaussianx distributionsx ofx ax givenx instrumentx 
+forx differentx subjectsx willx bex somewhatx similar;x 
+howeverxthexdistributionsxforxdifferingxinstrumentsxwillx 
+bexveryxdifferent.xxx
+5.  Ax trainingx phasex isx neededx beforex recordingx testx 
+resultsxtoxfamiliarizexthexsubjectxwithxthexdifferingxtypesx 
+ofx artifactsx andx latencyx magnitudes.x x Ax trainingx phasex 
+alsox helpsx reducex specificx experimentx relatedx noisex 
+(error)xinxthexresults.x
+6.  Thex subjectsx willx bex morex sensitivex tox latencyx inx 
+thex IEMx mechanismx ratherx thanx thex floorx monitorx 
+mechanism.x
+7.  Thex subjectsx mayx bex morex sensitivex tox latencyx 
+whenxplayingxwithxanotherxmusicianxwhosexsoundxisxnotx 
+delayed.xxx
+8.  Forxsubjectsxtoxbexablextoxaccuratelyxratexthexartifactx 
+portionxofxthexgradingxscale,xcarexneedsxtoxbextakenxtox 
+tryxtoxequallyxmixxthexoriginalxandxmonitoredxsound.xx
+Duextoxnumbersx1,x3,xandx5xlistedxabove,xaxboundaryx 
+testx methodx wasx designedx tox determinex ax rangex ofx 
+latenciesx forx eachx individualx subject.x x Ax secondaryx 
+purposex ofx thisx testx wasx tox trainx thex subject.x Withx thex 
+subjectx listeningx tox ax singlex channel,x thex proctorx
+randomlyx choosesx ax delayx settingx andx asksx thex subjectx 
+toxcasuallyxratexit.xThexsubjectxrespondsxgivenxthexsamex 
+criteriax asx thex actualx experiment,x onlyx withx ax rangex ofx 
+thumbsxupxtoxthumbsxdownxforxexpediency.xThexanglex
+ofx thex thumbx determinesx thex approximatex rating.x x Thex 
+maximumx latencyx isx chosenx asx thex minimumx thatx 
+consistentlyxscoresxaxthumbsxdown.x
+Asxwellxasxdeterminingxthexrangexofxthexlatenciesxforx 
+thex experiment,x thex boundaryx testx alsox isx usedx tox 
+generalizexwhetherxorxnotxthexmusicianxisxqualifiedxasxax 
+‘critical’x listenerx forx thisx experiment.x Ifx ax subject’sx 
+responsesxarexdrasticallyxdifferentxthanxhisxorxherxpeers,x 
+orx morex deterministicallyx ifx hisx orx herx thresholdx ofx 
+perceivingxactualxlatencyxisxgreaterxthanxthexPrecedencex 
+Effect,xthenxthexsubjectxisxlikelyxnotxaxcriticalxlistener.xxx
+Thex Precedencex Effect,x alsox knownx asx thex Haasx 
+effect,xisxaxwell9knownxintervalxofxtimexwherebyxifxtwox 
+soundsx arex receivedx withinx thex interval,x thex brainx
+considersx themx asx one;x outsidex thex intervalx thex brainx 
+detectsx twox distinctx soundsx [2].x x Onex majorx factorxtox 
+notexisxthexamplitudexbetweenxthexsounds.xThexstrongerx 
+thex delayedx sound,x thex smallerx thex timex interval.x xThex 
+mostx commonx valuesx forx thisx timex intervalx arex withinx 
+thexrangexofx25950msxwithxthexdelayedxsoundxupxtoxthex 
+samex amplitude.x x Mostx Precedencex Effectx experimentsx 
+arex basedx onx speechx andx thex subjectsx arex ax randomx 
+samplex ofx thex population.x x It’sx possiblex thatx trainedx 
+musiciansxcouldxobtainxlowerxvalues.x
+Inx thisx experiment,x ifx thex subjectx doesx notx givex ax
+ratingxofxlessxthanxorxequalxtoxFair,xwithxanxintroducedx 
+latencyx ofx 50ms,x thenx thex subjectx isx consideredx anx
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 5 of 20 
+outlier.x x Thisx subject’sx resultsx willx notx bex includedx inx 
+thexcriticalxlisteningxresults.xxxx
+x
+2.4.1.  Floor Wedges 
+Therex arex ax fewx constantx conditionsx imposedx onx allx
+subjectsx regardlessx ofx instrument.x Thex firstx isx thatx thex 
+distancexbetweenxthexfloorxwedgexandxthexsubject’sxearx 
+isx inx thex rangex ofx 496ft.x Thisx distancex introducesxax 
+propagationx delayx ofx aboutx 4.596.75msx atx standardx 
+temperature.x
+Anotherx imposedx constantx isx thex amplitudex ratiox ofx
+monitoredxandxdirectxsound.xInxorderxtoxaccountxforxthex 
+mostx artifactsx arisingx fromx smallx amountsx ofx latency,x 
+thexmonitoredxandxdirectxsoundxshouldxbexroughlyxequalx 
+inxamplitude.xxHowever,xhavingxexactlyxequalxamplitudex 
+fromx directx andx monitoredx soundx isx notx alwaysx ax 
+realisticx situationx forx ax musicianx onx stage.x Thex 
+monitoredx soundx isx typicallyx louderx thanx thex directx 
+sound.xxOtherwise,xthexmusicianxwouldxbexablextoxhearx 
+himxorxherselfxandxthexmonitoringxsystemxwouldxnotxbex 
+needed.xSettingxthexsourcesxequalxonlyxraisesxthexSoundx 
+PressurexLevelx(SPL)xbyx3dB.xxThisxincreasexwouldxnotx 
+justifyx thex usex ofx monitoringx forx thex gainx inx SPL.xTox 
+accountxforxthisxvariable,xthexSPLxisxmeasuredxnearxthex 
+subject’sx earsx bothx withx andx withoutx thex monitoredx
+sound.xThexincreasexinxSPLxthatxwasxcomfortablexforxthex 
+subjectsxfellxinxthexrangexofx495dB;xhigherxthanx3dB,xbutx 
+notx highx enoughx tox eliminatex thex lowx latencyx artifactsx 
+suchx asx combx filtering.x Converselyx thex keyboard,x 
+electricxguitar,xandxelectricxbassxinstrumentsxhavexlittlex 
+orx nox directx sound.x x Althoughx theyx willx havex nox 
+physicalx artifactsx suchx asx combx filtering,x 
+psychophysicalxeffectsxmayxstillxbexpresent.x
+Inxthexfloorxwedgextrials,xthexeightxlatenciesxincludedx 
+0msx (analog)x andx sevenx otherx linearlyx increasing,x 
+digitallyxdelayedxlatencies. xxx
+x
+2.4.2.  In-Ear Monitors 
+WithxanxincreasingxnumberxofxmusiciansxusingxIn9Earx 
+Monitorsx (IEM)x onx stage,x itx isx importantx tox bothx 
+quantifyxthexlatencyxrequirementsxforxIEMxandxcomparex 
+thexresultsxtoxthatxofxthexfloorxwedges.xxWithxthexmonitorx 
+sourcex nowx directlyx inx thex subjects’x ear,x propagationx 
+delayx isx practicallyx eliminated.x x However,x thex subjectx 
+nowx directlyx controlsx thex monitoringx level.x x Subjectsx 
+werex instructedx tox setx thex volumex tox ax comfortablex
+monitoringx level.x x Fortunately,x sincex thex samex 
+musiciansx arex conductingx thex IEMx experimentx asx thex
+floorxwedgesxexperiment,xitxisxreasonablextoxassumexthatx 
+theirx levelsx forx thex IEMx experimentx willx bex similarx tox 
+thexfloorxmonitorxversionxandxthatxthexlevelxisxmorexorx 
+lessxrepresentativexofxon9stagexparameters.x
+Therex arex morex issuesx tox bex awarex ofx inx regardx tox 
+artifactsx inx thex IEMx experiment.x x Particularlyx withx 
+instrumentsx thatx havex physicalx couplingxwithx thex bodyx 
+suchx asx vocalistsx orx saxophonists,x therex isx likelyxanx 
+increasedxabilityxtoxdistinguishxartifactsxfromxcombinedx 
+versionsx ofx directx andx delayedx sound.x x Additionally,x 
+therexarexartifactsxarisingxfromxthexocclusionxeffect,xandx 
+thexpsychologicalxdiscomfortxofxthexdelayedxsoundxnotx 
+timexaligningxwithxthexvibrationsxofxthexinstrument.xxx
+Inx thex IEMx trials,x thex eightx latenciesx usedx includedx 
+0msx analog,x 1.4msx samplingx latencyx (0msx digital)x andx 
+sixxotherxdigitallyxdelayedxlinearlyxincreasingxlatenciesx 
+startingxfromx1.4ms. xxx
+x
+2.4.3.  Solo Monitoring 
+Thex firstx experimentx isx thex leastx complicated;x thex
+musicianx simplyx playsx musicx ofx his/herx choicex whilex 
+firstxmonitoringxthroughxfloorxwedgesxandxthenxthroughx 
+thex IEMx mechanism.x Thex delaysx determinedx inx thex 
+boundaryxtestxarexrandomlyxappliedxtoxthex8xchannelsxofx 
+thex switchbox.x x Thex musicianx ratesx thex channelsx 
+accordingly.xxx
+x
+2.4.4.  Delayed Self Monitoring with  Non-
+Delayed Metronome 
+Toxdeterminexthexsensitivityxtoxlatencyxwhilexplayingx 
+alongxtoxaxnon9delayedxsource,xanxexperimentxincludingx 
+axconstantxtimexsourcexisxincluded.xxAddingxanotherxlivex 
+musicianx wouldx addx ax significantx variablex tox thex 
+experimentx andx isx notx practicalx forx datax analysis.xTox 
+simplifyxthexideaxbutxmaintainxthexutility,xanxexperimentx 
+isx conductedx withx ax delayedx instrumentx signalx andx ax 
+non9delayedxmetronome.xThexmetronomexspeedxisxheldx
+atx ax constantx 120x BPMx forx allx subjectsx andx allx 
+experiments.x Thex subjectx adjustsx thex soundx pressurex 
+levelxofxthexmetronomextoxaxcomfortablexlevel.xxx
+x
+3.  ANALYSIS 
+Byxadjustingxthexsamplexlatencyxrangextoxthexspecificx 
+subject,xtherexarexmanyxdifferentxmagnitudesxofxlatencyx 
+beingx testedx inx thex breadthx ofx thex experiment.x Thex
+latencyx valuesx rangex fromx 0msx (analog)x tox 70msx inx 
+variousx linearx permutationsx ofx 8x values.x Onex shouldx 
+notexthatxthexIEMxexperimentxdoesxnotxhavex8xlinearlyx 
+relatedxlatencies,xbutxratherx7,xsincextherexarexsamplesxofx 
+bothxthexanalogxsignalxandxthex“0msxdigital”xlatency.x
+Sincex eachx subjectx hasx twox differentx setsx ofx latencyx 
+valuesx andx therex arex 19x musicians,x therex isx ax potentialx 
+forx38xcompletelyxdifferentxsetsxofxlatency.xInxorderxtox 
+correctlyxcomparexresults,xthexoverallximpliedxtrendsxofx 
+everyxsubjectxmustxbexnoted.xx
+Fromxbothxthexboundaryxtestsxandxthexoutputxresults,x 
+itxcanxbexshownxthatxeachxsubject’sxnoisyxoutputxcanxbex 
+estimatedxbyxaxcumulativexGaussianxfunction.    
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 6 of 20 
+Somex notablex examplesx ofx subject’sx rawx datax 
+followingx ax relativex noisyx cumulativex Gaussianx trendx 
+arexshownxinxFigs.x194.xx x
+Althoughxtherexarexphenomenaxthatxcausexsomexofxthex 
+datax pointsx tox fallx outsidex ofx ax cumulativex Gaussianx 
+function,xaxgeneralxtrendxcanxbexseenxbyxobservingxthex 
+data.xxThisxtrendxallowsxthexdataxtoxbexdirectlyxcomparedx 
+toxeachxotherxwithoutxhavingxexplicitlyxidenticalxstimuli.x
+Thex overallx trendx canx bex seenx whenx includingx allx 
+responsesxonxonexgraphxasxshownxinxFig.x5.x
+x
+x
+ 
+Figure 1: Vocals with Metronome Wedge Monitor 
+Raw Scores 
+ 
+ 
+ 
+ 
+Figure 2: Keyboard with Metronome Wedge 
+Monitor Raw Scores 
+ 
+ 
+Figure 3: Electric Bass In Ear Monitor Raw 
+Scores 
+ 
+ 
+ 
+Figure 4: Drums with Metronome Wedge Monitor 
+Raw Scores 
+ 
+ 
+ 
+Figure 5: All Wedge Raw Scores 
+NOTE:xxThexoutliersxarexincludedxinxallxofxthexabovex 
+graphs.x
+x
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 7 of 20 
+3.1.  The Implication of Different Criterion  
+AxsimplexglancexatxFigs.x194xrevealsxtwoxthings:x
+• Instrumentalists’xcriterionxtoxjudgextheirxperceptionx 
+ofxlatencyxvaryxfromxinstrumentxtoxinstrumentx
+• Withinx ax specificx instrument,x thex criterionx isx 
+generallyxveryxsimilarxamongstxvariousxmusicians.xxx
+Inxotherxwords,xsensitivityxtoxlatencyxisxmorexstronglyx 
+dependentxonxthexinstrumentxratherxthanxthexindividualx 
+subject. xx Toxsupportxthisxclaim,xconsiderxthexfollowing:x 
+inxthisxstudy,xtherexarextwoxmusiciansxthatxperformedxonx 
+twoxseparatexinstruments.xxThexratingsxthatxthexsubjectsx 
+gavex werex consistentx withx thex instrumentx typex ratherx 
+thanx consistentx withx theirx ownx ratingsx onx thex otherx 
+instrument.xxx
+Comparisonx ofx thex characteristicsx ofx SUBJECTx C’sx 
+performancexonxElectricxBassxandxonxKeyboardx(Note9x
+thisxisxthexsamexperson):x
+• Thextrendxcurvexfollowsxthexrespectivexinstrument’sx 
+overallxtrend.x
+• Thex thresholdsx ofx Goodx andx Fairx arex consistentx 
+withxthexinstrument’sxoverallxtrend.x
+• Thex criticalx thresholdsx ofx Goodx andx Fairx forx 
+Electricx Bassx arex aboutx 18x andx 28msx (Fig.x 6)x 
+respectivelyxwhereasxthexcriticalxthresholdxofxGoodxandx 
+Fairx forx Keyboardx isx aboutx 30x andx 43msx respectivelyx 
+(Fig.x 9).x Thisx exhibitsx anx averagex criterionx increasex ofx 
+60%xfromxElectricxBassxtoxKeyboard.xx
+x
+Note:x Thesex examplex valuesx werex takenx fromx thex 
+Wedgex Monitorx withoutx Metronomex graph.x x Thex 
+definitionx ofx criticalx thresholdx isx thex valuex inx msx atx 
+whichx thex curvex firstx crossesx thex givenx ratingx withx 
+respectxtoxthexcurvextrend.xxForxexample,xgivenxthexcasex 
+ofxDrumsxIEMxsubjectxCx(Fig.x13),xthexpositivextrendxinx 
+thex096msxrangexwouldxbexignoredxandxthexGoodxcriticalx 
+thresholdx wouldx bex aboutx 9msx evenx thoughx 23msx alsox
+crossesxthexGoodxrange. xxx
+Comparisonx ofx thex characteristicsx ofx SUBJECTx A’sx 
+performancex onx Keyboardx andx SUBJECTx B’sx 
+performancexonxDrumsx(Note9xthisxisxthexsamexperson):x
+• Thextrendxcurvexfollowsxthexrespectivexinstrument’sx 
+overallxtrend.x
+• Thex thresholdsx ofx Goodx andx Fairx arex consistentx 
+withxthexinstrument’sxoverallxtrendx
+• ThexcriticalxthresholdxofxGoodxandxFairxforxDrumsx 
+isxaboutx12xandx48msxrespectivelyx(Fig.x12)xwhereasxthex 
+criticalx thresholdx ofx Goodx andx Fairx forx Keyboardx isx 
+aboutx 21x andx 41msx (Fig.x 9).x x Therex isx anx increasex inx 
+Goodx ratingx ofx aboutx 75%,x butx therex isx ax reductionxofx 
+Fairxratingxbyxaboutx15%.xxx
+• Note:x Thesex examplex valuesx werex takenx fromx thex 
+WedgexMonitorxwithoutxMetronomexgraph.x
+x
+ 
+Figure 6: Electric Bass Wedge Monitor Raw 
+Scores 
+ 
+ 
+Figure 7: Electric Bass with Metronome Wedge 
+Monitor Raw Scores 
+ 
+ 
+Figure 8: Electric Bass with Metronome IEM Raw 
+Scores 
+ 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 8 of 20 
+ 
+Figure 9: Keyboard Wedge Monitor Raw Scores 
+ 
+ 
+ 
+Figure 10: Keyboard IEM Raw Scores 
+ 
+ 
+ 
+ 
+Figure 11: Keyboard with Metronome IEM Raw 
+Scores x
+ 
+ 
+ 
+Figure 12: Drums Wedge Monitor Raw Scores 
+ 
+ 
+ 
+Figure 13: Drums IEM Raw Scores 
+ 
+ 
+ 
+ 
+Figure 14: Drums with Metronome IEM Raw 
+Scores 
+ 
+xxx
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 9 of 20 
+WhenxanalyzingxFigs.x6914xasxwellxasxthexFigs.x15926x 
+presentedx inx thex followingx section,x therex isx anx 
+interestingx phenomenonx tox note.x x Therex isx anx 
+implicationx thatx whilex inx thex Wedgex Monitorx 
+mechanismx nox latencyx isx thex highestx ratedx sample,x inx 
+thexIEMxmechanismxthexhighestxratedxsamplexcanxmovex 
+fromxnoxlatencyxtoxaxhigherxlatency.xxThisxisxsuggestedx 
+consideringxonlyxthexsamplesxcontainingxnoxmetronomex 
+soxasxtoxnotxincludexadditionalxindependentxvariables.x
+Overallx9xoutxofx17xsubjectsx(52.9%)xreportedxthatxthex 
+higherx ratedx samplex movedx fromx nox latencyx tox somex 
+latency.x x Althoughx thisx isx notx ax veryx highx percentage,x 
+considerx thatx 0x subjectsx (0%)x followedx thex oppositex 
+trend,x reportingx thatx thex highestx ratedx samplex movedx 
+fromxsomexlatencyxtoxnoxlatency.xxx
+Itx couldx bex suggestedx thatx whenx anx instrumentalistx
+monitorsx performancex withx IEM,x ax latencyx thatx isx 
+roughlyxequalxtoxthatxofxthexdistancexinxfreexairxofxhisxorx 
+herxearxtoxthexinstrumentxmayxbexpreferable. xx
+ 
+3.2. The Impact of a Non-Delayed Metronome 
+WhenxanalyzingxFigs.x6914xasxwellxasxthexFigs.x15926x 
+presentedx below,x noticex thatx onex distinguishablex 
+differencex betweenx thex graphsx withx andx withoutx ax 
+metronomexisxthexpositionxofxthexhighestxratedxlatency.xx 
+Inxmanyxcases,xthexhighestxratedxlatencyxisxnoxlongerx0x 
+msxbutxhasxshiftedxupxbyxanxamount.xxInxotherxcases,xthex 
+generalx shapex ofx thex curvex hasx simplyx shiftedx tox thex 
+right,xindicatingxthatxmorexlatencyxisxnecessaryxtoxincitex 
+thex samex subjectivex ratingx withx ax metronomex thanx 
+without.x x Ofx thex 35x responses,x thex followingx isx 
+observed:x
+• 18xresponsesx(51.4%)xexhibitxaxshiftxinxthexhighestx 
+ratedxlatencyxfromx0msxtoxdifferentxlowxlatencyxx
+• 4x responsesx (11.4%)x exhibitx ax shiftx tox thex rightx inx 
+thexgeneralxshapexofxthexcurvexinxthexlowerxlatencyxareax 
+(<15ms).xxx
+• 13x responsesx (37.1%)x showx nox lowx latencyx 
+(<15ms)xchange.xxxx
+Overall,x62.9%xofxtrialsxexhibitedxaxtrendxshiftxinxthex 
+lowerx latencyx range.x x Thisx impliesx thatx whenx playingx 
+withx ax non9delayedx metronomex orx withx anotherx non9
+delayedxmusician,xperhapsxsomexlatencyxisxpreferablextox 
+none. xxx x
+x
+x
+x
+x
+Figure 15: Saxophone Wedge Raw Scores 
+x
+x
+x
+x
+x
+Figure 16: Saxophone IEM Raw Scores 
+ 
+ 
+ 
+ 
+ 
+Figure 17: Saxophone with Metronome Wedge 
+Monitor Raw Scores 
+ 
+ 
+ 
+ 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 10 of 20 
+ 
+Figure 18: Saxophone with Metronome IEM Raw 
+Scores 
+ 
+ 
+ 
+Figure 19: Electric Guitar Wedge Monitor Raw 
+Scores 
+ 
+ 
+ 
+Figure 20: Electric Guitar IEM Raw Scores 
+ 
+ 
+ 
+Figure 21: Electric Guitar with Metronome 
+Wedge Monitor Raw Scores 
+ 
+ 
+ 
+Figure 22: Electric Guitar with Metronome IEM 
+Raw Scores 
+ 
+ 
+ 
+Figure 23: Vocals Raw Wedge Monitor Scores 
+ 
+ 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 11 of 20 
+ 
+Figure 24: Vocals IEM Raw Scores 
+ 
+ 
+ 
+ 
+Figure 25: Vocals with Metronome Wedge 
+Monitor Raw Scores 
+ 
+ 
+ 
+ 
+Figure 26: Vocals with Metronome IEM Raw 
+Scores 
+3.3.  Data Trend Analysis 
+Itx hasx beenx shownx thatx therex isx ax trendx inx thex data,x 
+whichx allowsx itx tox bex analyzedx andx comparedx evenx 
+thoughx thex latencyx amountsx inx eachx trialx arex notx 
+identical.x x Furthermore,x thex datax pointsx shouldx bex
+preservedx ratherx thanx estimatedx tox exploitx anyx 
+additionalx unaccountedx forx phenomenon.x x However,x itx 
+hasx alsox beenx shownx thatx therex isx differentx latencyx 
+criterionxcorrelatedxtoxwhichxinstrumentxisxunderxtest.xxx
+Linearlyx interpolatingx scoresx betweenx thex actualx 
+scoresxsafelyxaugmentsxthexdataxforxanalysis.xAllxeffortx 
+isxmadextoxusexthexactualxdataxinxanalysisxratherxthanxthex 
+interpolatedx datax wherex possible.x Thex interpolationx 
+includesx allx realx integerx latenciesx necessaryx tox coverx 
+subjectivex gradex rangex ofx interest,x 50x (Fair)x –x 100x 
+(Excellent).x
+x
+x
+3.3.1. Subjective Cross Sections 
+Inxorderxtoxevaluatexthexqualityxofxvariousxamountsxofx 
+latency,xthexlatencyxthresholdsxofxGoodxandxFairxarexofx 
+interest.xxThexcriticalxthresholdxdescribedxinxSectionx3.1x 
+isxusedxtoxdefinexthisxlatency.xThexlatencyxisxestimatedx 
+withinx 0.25msx basedx onx thex interpolatedx datax forx thex 
+fourxconfigurations:xwedgexwithoutxmetronome,xwedgex 
+withx metronome,x IEMx withoutx metronome,x andx IEMx 
+withxmetronome.xx
+Datax thatx hasx similarx variablesx andx trendsx canx bex 
+combined.xxInxorderxtoxmostxaccuratelyxanalyzexthexdata,x 
+allx responsesx fromx eachx monitoringx mechanismx perx 
+instrumentx arex combined.x x Forx example,x bothx thex datax 
+withxandxwithoutxmetronomexforxkeyboardxinxthexwedgex 
+monitorxmechanismxarexusedxtoxestimatexthexthresholdsx 
+forxWedgexMonitors;xthexWedgexandxIEMxmechanismsx 
+arexnotxcombinedxnorxarexanyxseparatexinstruments.x
+Whenxcombiningxthisxdata,xthexoutliersx(subjectxBxforx 
+bothx electricx bassx andx saxophone)x werex notx included.xx 
+Notxonlyxarexthesexsubjectsxidentifiedxasxoutliersxbyxthex 
+definitionx ofx ax criticalx listenerx outlinedx inx Sectionx 2.4,x 
+butxtheirxtrendsxalsoxdoxnotxmatchxthexotherxrespectivex 
+instrumentalists.x
+x
+3.3.2.  Lower Bounds using Confidence 
+Intervals 
+Thisx experimentx isx aimedx atx identifyingx andx 
+comparingx thresholdsx ofx latencyx inx livex soundx 
+monitoring;x morex specificallyx itx isx aimedx atx findingx ax 
+lowerx bound,x orx worstx case,x trendx ofx thesex values.xTox 
+getx anx estimatedx lowerx boundx trend,x confidencex 
+intervalsx arex used.x Thex confidencex interval,x calculatedx 
+fromx thex givenx setx ofx samplex data,x givesx anx estimatedx 
+rangexofxvaluesxthatxisxlikelyxtoxincludexthexmeanxofxanyx 
+givenxsetxofxrandomxlisteners.xSincexthexsubjectsxinxthisx 
+studyxarexnotxtrulyxrandomxbutxratherxcriticalxlisteners,x 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 12 of 20 
+thexconfidencexintervalxestimatesxthexrangexnotxforxgivenx 
+setx ofx randomx listenersx butx forx ax givenx setx ofx critical x
+listeners.xThisxisxonexwayxthatxthexexperimentxconsidersx 
+thexestimatexaxlowerxbound.xxx
+Thexconfidencexintervalxgivesxaxrangexofxvaluesxbothx 
+abovexandxbelowxthexsamplexmeanxofxthexlatencyxscores.x 
+Thexwidthxofxthisxintervalxdeterminesxhowxprecisexandx 
+correlatedx thex datax is.x However,x sincex onlyx thex lowerx 
+boundxlatencyxisxofxinterest,xthexwholexintervalxdoesxnotx 
+needx tox bex calculated.x x Thex lowerx boundx ofx thex 
+confidencex intervalx isx determinedx andx plottedx atx allx 
+confidencex levelsx 09100%.x x Thex transitionx width,x thex 
+rangexofxlatenciesxitxtakesxtoxgoxfromxaxnearx100%xlevelx 
+toxaxnearx0%xlevel,ximpliesxthexprecisionxandxcorrelationx 
+ofxthexdataxusedxtoxplotxthexgivenxconfidencexcurve.xThex 
+morexnarrowxthexcurve,xthexmorexprecisexandxcorrelatedx 
+thex datax is.x x Thisx curvex allowsx thex readerx tox decide,x 
+basedxonxhisxorxherxownxcriteria,xthexthresholdsxofxGoodx 
+andx Fairx givenx thex confidencex levelx andx thex transitionx 
+widthxofxcurve.xxSeexSectionx4.1xforxthexfigures.x
+Tox determinex thex differencex betweenx thex wedgex 
+monitorx andx IEMx mechanisms,  ax horizontalx crossx 
+sectionx atx variousx confidencex levelsx isx plottedx forx allx 
+instruments.xxThisxallowsxthexreaderxtoxidentifyxtrendsxinx 
+thex acceptablex amountsx ofx latencyx inx allx mechanisms.xx 
+SeexSectionx4.2xforxthexfigures.xxxxx
+x
+3.3.3. Separating Trends from the Actual 
+Numbers 
+Inx additionx tox thex analysisx ofx Sectionx 3.3.2,  therex isx 
+meritx inx tryingx tox extractx individualx instrumentx trendsx 
+fromxthexactualxlatencyxvalues.xx(Itxisximportantxtoxnotex 
+thatx thex followingx methodsx wouldx bex morex accuratex 
+withxanxincreasedxnumberxofxsubjects.xxThextrendsxandx 
+thexmethodsxusedxtoxobtainxthemxarexsimplyxsuggestionsx 
+andxarexnotxconfidentlyxportrayedxasxfact.)xxToxidentifyx 
+thextrends,xonexvariablexisxheldxconstantxwhilexthexotherx 
+isxanalyzed.xxOnexanalysisxincludesxviewingxthexchangex 
+fromxaxGoodxtoxaxFairxratingxwithxaxconstantxofxlisteningx 
+mechanism;xthexotherxincludesxviewingxthexdifferencesx 
+inx IEMx andx Wedgex mechanismx withx ax constantx 
+subjectivexrating.xxx
+Ax visualx representationx ofx thex increasex inx latencyx
+requiredxforxaxchangexofxaxGoodxRatingxtoxaxFairxRatingx 
+(∆t G2F )xcanxbexobtainedxbyxfindingxpercentxincreasesxinx 
+latencyxforxeachxinstrumentxwithxrespectxtoxmonitoringx 
+mechanismx(MM).xxThisxallowsxthexreaderxtoxeasilyxseex 
+thex changex inx sensitivityx withx respectx tox Subjectivex 
+Ratingx amongx instruments,x inx otherx wordsx howx muchx 
+morexlatencyxwouldxneedxtoxbexaddedxtoxaxsystemxbeforex 
+thexmusicianxwillxchangextheirxopinionxonxthexquality.xxx
+Good
+GoodFair
+FG
+MM
+MMMMt −=∆ 2
+x (1)x
+Similarly,xaxvisualxrepresentationxofxthexdifferencexinx 
+latencyx amountsx forx eachx monitoringx mechanismx 
+(∆t I2W ),x IEMx tox wedge,x canx bex obtainedx byx findingx 
+percentx changex inx latencyx forx eachx instrumentx withx
+respectxtoxsubjectivexratingx(SR).xxThisxgraphxallowsxthex 
+readerx tox easilyx seex thex changex inx sensitivityx withx 
+respectx tox monitoringx mechanism,x inx otherx wordsx howx 
+likelyxaxmusicianxisxtoxchangexthexopinionxonxthexlatencyx 
+inx thex systemx basedx onx anx environmentalx changex suchx 
+asxchangexinxmonitoringxmechanism.xx
+IEM
+IEMWedge
+WI
+SR
+SRSRt −=∆ 2
+x (2)x
+Thex combinationx ofx thex twox representationsx isolatex
+thextwoxformsxofxlatencyxsensitivityxforxeachxinstrument:x 
+sensitivityx tox absolutex latencyx amounts,x whichx impliesx 
+independentx criteria,x andx sensitivityx tox changex inx
+monitoringx mechanism,x whichx impliesx dependentx 
+criteria.xxx
+Bothxsensitivitiesxhavexbeenxseparatedxfromxthexactualx 
+latencyx thresholdx magnitudes.x x Thisx meansx thatx itx isx 
+possiblexforxanxinstrumentalistxtoxhavexaxhighxsubjectivex 
+threshold.xxInxotherxwordsxthexsubjectxcanxacceptxaxlargex 
+amountx ofx latencyx beforex meetingx subjectivex criteria,x 
+butxatxthexsamextimexhavexhighxsensitivityxtoxcriteriaxandx 
+environmentalxchange.xxInxaccordancextoxthexprinciplesx 
+ofxdetectionxtheory,xifxthexcriteriaxcanxbexextractedxfromx 
+thex actualx data,x thex sensitivityx canx bex describedx 
+independentx ofx personalx biasx orx personalx subjectivex 
+criteriax [3].x x Inx thisx case,x therex arex threex measuresx ofx 
+‘bias’:x x biasx duex tox instrumentx configuration,x biasx tox 
+environmentalx(monitoring)xconfiguration,xandxbiasxduex 
+tox thex individualx subjectsx givingx eitherx liberalx orx 
+conservativexsubjectivexratings.xxSubjectxbiasxcannotxbex 
+separatedx atx thisx pointx inx analysisx sincex thex individualx 
+datax hasx alreadyx beenx combined;x however,x wex canx 
+attemptx tox separatex thex otherx biasesx byx separatingxthex 
+trendsx fromx thex datax andx viewingx thex differencesx 
+objectively.xxx
+Thex followingx describesx ax proposedx methodx tox findx 
+thex ‘Generalx Sensitivity’.x x First,x thex absolutex valuex ofx 
+thex differencex inx Goodx andx Fairx percentx increasex forx 
+‘IEMxtoxWedge’xmechanismxisxobtainedxusingxEquationx 
+1.xxThisxrepresentsxsensitivityxofxsubjectivexratingxwithx 
+respectxtoxenvironmentalxchange.xxxx
+x(Wedge)x 9 )( 221 FGFG tIEMtEq ∆∆=∆ x (3) x
+wherexx ∆Eq 1=x thex percentx differencex ofx IEMx andx 
+Wedgex mechanismsx forx ax Goodx tox Fairx 
+subjectivexincreasexx
+x ∆t G2F (IEM)x=xEquationx1xevaluatedxforxIEMsx x
+∆t G2F (Wedge)x=xEquationx1xevaluatedxforx 
+Wedgesxx
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 13 of 20 
+Next,x thex absolutex valuex ofx thex IEMx tox Wedgex 
+percentxchangexdifferencexforx‘GoodxtoxFair’xisxobtainedx 
+usingx Equationx 2.x x Thisx representsx sensitivityx ofx 
+environmentalxchangexwithxrespectxtoxsubjectivexrating.xx
+)(Fairxx 9 x )( 222 WIWI tGoodtEq ∆∆=∆  (4)x
+wherexx ∆Eq 2x =x thex percentx differencex ofx Goodx andx 
+Fairx subjectivex increasex forx ax IEMx tox Wedgex 
+changex
+∆t I2W (Good)x=xEquationx2xevaluatedxforxGoodx
+∆t I2W (Fair)x=xEquationx2xevaluatedxforxFairxx
+Bothx sensitivitiesx needx tox bex accountedx forx inx thex
+generalx sensitivityx calculation,x thusx thex un9weightedx 
+averagex( Λ )xisxtaken.xxx
+2
+xEq 21 Eq∆+∆=Λ  (5)x
+Tox describex thex generalx sensitivityx withx respectx tox 
+instrumentxtype,xthexinstrumentsxneedxtoxbexcomparedxtox 
+eachx other.x x Thex meanx ofx thex individualx un9weightedx 
+averagesxcalculatedxbyxEquationx5xforxeachxinstrumentx 
+isx takenx tox providex ax normalizationx factorx (NF)x withx 
+whichx tox usex asx ax baselinex tox graphx thex generalx 
+sensitivityxamongstxinstruments.xxx
+n
+n
+1
+i∑
+=
+Λ
+= iNF x (6)x
+wherexx Nx=xNumberxofxinstrumentsx
+iΛ x=xIndividualxinstrumentxaveragexsensitivityx 
+fromxEquationx5x
+Finally,x thex averagex forx eachx givenx instrument,x 
+calculatedx byx Equationx 5,x isx dividedx byx thex 
+normalizationxfactorx(NF)xfromxEquationx6xtoxobtainxthex 
+generalxsensitivityxmeasure.xxx
+GeneralxSensitivityx=x 
+NF
+Λ x (7)x
+Thex Generalx Sensitivityx hasx nox units.x x Generalx 
+Sensitivityx allowsx thex instrumentsx tox bex comparedx tox 
+eachx other.x x Additionally,x itx isx usedx asx ax measurexofx 
+confidencex inx describingx absolutex thresholds.x x Thex
+generalx sensitivityx measurex attemptsx tox extrapolatex 
+whenxaxmusicianxplayingxaxparticularxinstrumentxtypexisx 
+likelyx tox changex hisx orx herx opinionx ifx independentx
+variablesx thatx cannotx bex accountedx forx inx thisx 
+experimentx arex changed.x x Ax higherx generalx sensitivityx 
+signifiesx thatx thex instrumentalistx isx morex likelyx tox 
+changex hisx orx herx opinionx ofx latencyx whenx ax criterionx 
+suchx asx listeningx environmentx changes.x x Conversely,x ax 
+lowerx generalx sensitivityx signifiesx thatx thex 
+instrumentalistx isx lessx likelyx tox changex hisx orx herx 
+thresholdsxofxlatencyxwhenxcriterionxchanges.xxxx
+x
+x
+4.  RESULTS 
+ 
+4.1.  Individual Instrument Confidence Curves, 
+All Configurations 
+Thexfollowingxgraphsxplotxthexconfidencexcurvesxforx 
+eachxindividualxinstrument.xx
+x
+ 
+Figure 26: Saxophone Confidence Curve, all 
+Configurations x
+ 
+ 
+ 
+Figure 27: Vocal Confidence Curve, All 
+Configurations 
+ 
+ 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 14 of 20 
+ 
+Figure 28: Electric Guitar Confidence Curve, All 
+Configurations 
+ 
+ 
+ 
+Figure 29: Drums Confidence Curve, All 
+Configurations 
+ 
+ 
+ 
+Figure 30: Electric Bass Confidence Curve, All 
+Configurations 
+ 
+ 
+Figure 31: Keyboard Confidence Curve, All 
+Configurations 
+ 
+ 
+Figs.x26931xdemonstratexthatxthexGoodxratingxforxbothx 
+mechanismsxhasxaxhigherxthresholdxthanxthexFairxratingx 
+forx bothx mechanismsx exceptx forx thex vocals.x x Thisx 
+suggestsx thatx vocalistsx mayx bex morex sensitivex tox thex 
+monitoringxmechanismxthanxotherxmusicians.x
+Morex saxophonex musiciansx wouldx needx tox bex testedx 
+toxgetxaxmorexaccuratexresult.xxThextransitionsxwidthxofx 
+thexconfidencexlevelsxisxtooxwide,ximplyingxthatxtherexisx 
+tooxmuchxvariancexinxthexresults. x
+x
+4.2.  Individual Configurations, All Instrument 
+Confidence Curves 
+Thexfollowingxgraphsx(Figs.x32935)xplotxthex 
+confidencexcurvesxforxeachxsubjectivexratingxandx 
+monitoringxmechanismxcombinationxforxallxinstruments.x
+x
+x
+x
+x
+Figure 32: IEM Good Rating, All Instruments 
+ 
+ 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 15 of 20 
+ 
+Figure 33: IEM Fair Rating, All Instruments 
+ 
+ 
+ 
+ 
+Figure 34: Wedge Good Rating, All Instruments 
+ 
+ 
+ 
+ 
+Figure 35: Wedge Fair Rating, All Instruments 
+ 
+ 
+Thex keyboardx subjectivex thresholdx forx allx 
+mechanismsxandxallxratingsxisxsignificantlyxhigherxthanx 
+thexthresholdsxofxthexotherxinstruments.xxThexkeyboardx 
+isx thex leastx criticalx ofx latencyx whenx givingx subjectivex 
+gradexthresholds.x
+x
+4.3.  Comparison of Instruments at a Given 
+Confidence Level 
+Fig.x36xshowsxthex85%xconfidencexlevelxcross9sectionx 
+ofx thex graphsx inx Sectionx 4.2x tox morex easilyx comparex 
+criticalx thresholdsx forx ax givenx subjectivex rating.xx Thex 
+85%xconfidencexlevelxisxusedxtoxshowxbetterxdetailxforx 
+thex saxophonex results,x sincex thex variancex inx thex 
+saxophonexdataxisxhigh.xx
+x
+x
+ 
+Figure 36: Instrument Comparisons at 85% 
+Confidence Level 
+ 
+ 
+Latencyx(ms)x Saxx Vocalsx Guitarx Drums xBass x Keysx
+IEMxGoodx 0x 1x 4.5x 8x 4.5 x 27x
+WedgexGoodx 1.5x 10x 6.5x 9x 8x 22x
+IEMxFairx 3x 6.5x 14.5x 24.5x 25.5 x 43x
+WedgexFairx 10x 26x 16x 25x 30x 40.5x
+Table 1:  Instrument Comparison Table at 85% 
+Confidence Level for Clarity 
+ 
+ 
+Althoughx Fig.x 36x showsx thatx thex saxophonex hasx ax 
+morex criticalx subjectivex ratingx thresholdx thanx allxotherx 
+instruments,x duex tox thex variancex inx thex data,x morex
+musiciansx wouldx needx tox bex testedx tox completelyx 
+confirmxthisxclaim.x
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 16 of 20 
+Thesex graphsx makex itx apparentx thatx thex vocalistsx 
+followx ax trendx similarx tox otherx instrumentalistsx forx thex 
+IEMxmechanism,xbutxhavexanxincreasexinxcriticalxlatencyx 
+thresholdxforxthexWedgexMonitorxmechanismxthatxisxnotx 
+similarxtoxotherxinstruments.xxAnotherxinterestingxpointx 
+isxthatxunlikexallxotherxinstruments,xthexkeyboardistxcanx 
+acceptx morex latencyx inx thex IEMx thanx thex Wedgex 
+mechanism. xx  
+ 
+4.4. Instrument Sensitivity Measures 
+Thexfollowingxfiguresxdescribexthexsensitivityxofxeachx 
+instrumentx tox independentx variablex change.x x (Note:xax 
+divisionxbyx0msxcausesxaxresultxofxinfinity)xx
+x
+x
+x
+Figure 37: Good to Fair Latency Threshold 
+Percent Increase at 85% Confidence Level 
+ 
+ 
+ 
+ 
+Figure 38: IEM to Wedge Latency Threshold 
+Percent Increase at 85% Confidence Level 
+ 
+ 
+ 
+Thexhighxsaxophonexgeneralxsensitivityxisxduextoxthex 
+numberx infinityx beingx introducedx intox thex calculationx 
+duextoxdivisionxbyxzero.xxItxisxnotxnecessarilyxexplicitlyx 
+impliedx thatx thex saxophonex isx highlyx sensitivex tox 
+changesx inxperceptionxduex tox criteriax orx environmentalx 
+changes.xx
+Vocalistsxhavexaxhighxgeneralxsensitivityxandxarexthusx 
+morexlikelyxtoxchangextheirxperceptionxofxlatencyxbasedx 
+onx variablex change.x x Thisx meansx thatx thex thresholdsx 
+describedx inx Sectionx 4.3x arex notx precisex inx ax widex
+varietyxofxsituations.xxx
+ 
+x
+Figure 39: General Latency Sensitivity for All 
+Instruments 
+x
+Drummersx andx keyboardistsx havex ax lowx generalx 
+sensitivityxandxarexthusxlikelyxtoxperceivexlatencyxveryx 
+similarlyxinxaxwidexvarietyxofxsituations.xxxxx
+ 
+5.  DISCUSSION   
+Sensitivity to latency is more strongly dependent 
+on instrument rather than the individual subject. 
+Thisxisxsuggestedxwithxthexsinglexperformer,xmultiplex 
+instrumentx isolatedx casex discussedx inx Sectionx 3.1.xx 
+Additionally,x thisx claimx isx stronglyx supportedx inx allx ofx 
+thexfiguresxinxthisxpaper.xx
+It could be suggested that when an instrumentalist 
+monitors performance with an IEM, a latency that is 
+roughly equal to the distance between his or her ear 
+and the instrument may be preferable.  
+Thisx claimx canx onlyx bex suggestedx ratherx thanx 
+concludedxsincexthisxparticularxtestxparadigmxisxnotxsetx 
+upx tox measurex thex smallerx latencyx quantax necessaryxtox 
+getxanxaccuratexpreferencexrating.xxAxmorexcriticalxtestx 
+method,x suchx asx thatx recommendedx inx ITUx BS.1116,x 
+wouldxneedxtoxbexusedxtoxverifyxthisxclaimx[4].xxxx
+When playing with a non-delayed metronome or 
+with another non-delayed musician, some latency 
+may be preferable to none. 
+Asx shownx inx Sectionx 3.2,x 62.9%x ofx trialsx exhibitx ax
+trendxshiftxtoxaxhigherxsubjectivexthreshold.xxx
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 17 of 20 
+Considerx alsox ax studyx byx Chrisx Chafex andx Michaelx 
+Gurevichx onx Networkx Timex Delayx andx Ensemblex 
+Accuracyx [5].x x Thex studyx suggestsx thatx thex sweetx spotx 
+forx musiciansx tox playx withx eachx otherx inx tempox isx 
+11.5ms.x x This,x ofx course,x correspondsx tox ax distancex 
+betweenxthexmusiciansxinxfreexair.xxStatistically,xaxdelayx 
+ofxlessxthanx11.5msxcausedx74%xofxmusiciansxtoxspeedx 
+up,xandxaxdelayxofxmorexthanx11.5msxcausedx85%xofxthex 
+musiciansxtoxslowxdown.xxAdditionally,xtheyxdeterminedx 
+thatx thex longestx propagationx delayx inx freex airx forxax 
+typicalxensemblexisxaroundx20ms.x
+Vocalists are much more sensitive to latency in the 
+IEM mechanism than the Wedge monitor 
+mechanism. 
+AsxcanxbexseenxinxFig.x27,xvocalistsxtendxtoxhavexaxlowerx 
+latencyx thresholdx forx ax ‘Fair’x IEMx mechanismx thanx ax 
+‘Good’x Wedgex monitorx system.x x Thisx isx inx contrastx tox 
+thex resultsx fromx otherx instrumentsx (Figs.x 26x andx 289
+31).Onex possiblex explanationx forx thisx isx whenx usingx ax 
+Wedgexmonitor,xtherexisxnaturalxreverbxaddedxfromxthex 
+room.x x Whenx reverbx isx added,x latencyx tendsx tox blendx 
+itselfxinxwithxthexreverb.xxMoreover,xitxcanxbexsuggestedx 
+thatxmanyxvocalistsxpreferxtoxhearxtheirxvoicexwithxaudiox 
+processingxeffectsxsuchxasxreverb.xxThisxmeansxthatxthex 
+latencyx withx roomx reverbx isx actuallyx ax desiredx effect.xx 
+WhenxthexvocalistxusesxanxIEM,xaxdifferentxexpectationx 
+results.xxThexvocalistxdoesxnotxanticipatexhearingxreverbx
+sincex thex roomx soundx isx notx longerx present.x x Thisx 
+directlyx affectsx thex vocalists’x criteriax ofx subjectivex 
+latencyx grading.x x Perhapsx thisx differencex betweenx 
+vocalistsxandxotherxinstrumentalistsxduextoxreverbxisxthex 
+primaryx variablex thatx makesx thex vocalistsx generalx 
+sensitivityxtoxlatencyxhigherxthanxotherxinstruments.xxx
+More saxophone musicians should be tested to get 
+a more accurate result.  The transition width of the 
+confidence levels is too wide implying that there is 
+too much variance in the experiment results. 
+Sincex onex saxophonex subjectx wasx deemedx anx outlierx 
+andx notx used,x outx ofx twox subjectsx onex subjectx wasx 
+highlyx criticalx ofx latencyx andx onex subjectx wasx 
+moderatelyxcriticalxofxlatency.xxThisxresultsxinxhighxdatax 
+variance.x x Thex meanx andx standardx deviationx setsx forx 
+saxophonexdataxarexasxfollows:x
+• Wedge,xGood:x Meanx=x7.9x σx=x8.5x
+• Wedge,xFair:x Meanx=x19.7xσx=x13.4x
+• IEM,xGood:xxx Meanx=x5.7x σx=x7.8x
+• IEM,xFair:xxx Meanx=x12.5xσx=x13x
+Whenx takingx confidencex intervalsx withx thesex 
+numbers,x somex confidencex levelsx returnedx negativex 
+values.xxThisximpliesxthatxevenxatx0msxlatency,xthexresultx 
+isxnotx100%xconfident.xxMorexsubjectsxarexneededxtoxgetx 
+ax morex accuratex ideax ofx ax typicalx saxophonists’x 
+performance.x x However,x sincex thisx studyx isx aimedx atx 
+findingxthexcriticalxlatencies,xitxcouldxbexconcludedxthatx 
+thex resultsx ofx thex highlyx criticalx subjectx canx roughlyx 
+representxthexworstxcasexforxthextypicalxsaxophonist.xxOnx 
+thexotherxhand,xthisxhighlyxcriticalxlistenerxcouldxbexanx 
+outlierx withx respectx tox evenx criticalx listeners.x x Thisx 
+musician’sx thresholdsx arex offeredx withx thex advicex ofx 
+interpretingxthesexnumbersxwithxcaution.x
+CriticalxSaxophonist’sxThresholds:x
+• Withoutxmetronome:x
+o Wedge,xGood:x 4.4msx
+o Wedge,xFair:x 11.4msx
+o IEM,xGood:x 0msx
+o IEM,xFair:x 1.4msx
+• Withxmetronome:x
+o Wedge,xGood:x 0msx
+o Wedge,xFair:x 5.4msx
+o IEM,xGood:x 0msx
+o IEM,xFair:x 1.4msx
+• AveragexThresholdsx
+o Wedge,xGood:x 2.2msx
+o Wedge,xFair:x 8.4msx
+o IEM,xGood:x 0msx
+o IEM,xFair:x 1.4msx xx
+The keyboard is the least critical of latency when 
+giving subjective grade thresholds.  The keyboard 
+subjective threshold for all mechanisms and all 
+ratings is significantly below the thresholds of the 
+other instruments.  
+Thex keyboardx isx clearlyx thex leastx criticalx ofx latencyx 
+magnitude;x thisx resultx isx expected.x x Ax musicianx whox 
+playsxkeyboardxisxaccustomedxtoxplayingxwithxaxvarietyx 
+ofxsynthesizerxpatches.xManyxpatchesxhavexaxveryxslowx 
+attackx time.x x Thesex patchesx feelx likex therex isx ax lotx ofx 
+delayxbetweenxthexfingerxattackxandxthexresultingxsound.xx 
+Keyboardx musiciansx havex adaptedx tox thisx latencyx andx 
+canx easilyx playx inx timex byx slightlyx anticipatingx thex 
+actualxattackxtime.xxx
+With the exception of the keyboard, the 
+instruments in the IEM mechanism require a larger 
+latency increase to change subjective criteria 
+thresholds than in the Wedge mechanism. 
+Thisx couldx simplyx bex duex tox thex factx thatx sincex thex 
+latencyxrequiredxforxaxgoodxratingxinxIEMxisxlower,xthex 
+ratiox endsx upx beingx higherx duex tox ax consequencex ofx
+calculation.x x Indeed,x thex criteriax forx ax Goodx ratingx inx 
+IEMxwillxbexmorexstringent;xthexcriteriaxforxGoodxmeansx 
+thex subjectx canxhearxartifactsx butx notxdelay.x x Sincex thex 
+monitoredx sourcex isx nowx inx thex subject’sx ear,x artifactsx 
+arisingxfromxphenomenaxsuchxasxcombxfilteringxwillxbex 
+morexprominentxwithxlowerxamountsxofxlatency.xxxxxx
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 18 of 20 
+The keyboard is less sensitive to latency in the 
+wedge mechanism.  It takes a larger, but similar, 
+increase in latency to change subjective criteria 
+thresholds (from Good to Fair) in the Wedge 
+mechanism than it does in the IEM mechanism for 
+the Keyboard. xx
+Thexkeyboardxisxanxinstrumentxthatxprovidesxnoxdirectx 
+sound.x x Therefore,x therex arex nox artifactsx duex tox lowerx 
+amountsxofxlatencyxsincextherexisxnoxdirectxsound.xxItxisx 
+possiblex thatx keyboardistsx arex usingx thex additionalx 
+gradingxcriteriaxmorexthanxthexprimaryxcriteriaxgivenxinx 
+Sectionx 2.3.x x Ifx so,x thisx mayx explainx whyx thex increasex 
+fromx Goodx tox Fairx isx greaterx thanx thatx ofx thex otherx 
+instruments.xx
+The drummers do not show a very large criteria 
+change from IEM to Wedge, meaning the drummers 
+are not very sensitive to configuration changes. 
+Thexamountxofxlatencyxseemsxtoxbexmoreximportantxtox 
+axdrummerxwhenxprovidingxthresholdxofxqualityxthanxthex 
+wayxinxwhichxthexlatencyxisxaddedxtoxthexsignal.xxThisx 
+mayxbexbecausexaxdrummerxisxfocusedxmorexonxtimingx
+thanxanythingxelse,xandxregardlessxofxhowxitxisxpresentedx 
+thexlatencyxaffectsxthextimingxequally.xxPleasexnotexthatx 
+thisxexplanationxisxofferedxwithoutxanyxevidencexandxisx 
+simplyxaxtheory.x
+The keyboardists prefer more latency in the IEM 
+mechanism than the Wedge monitor mechanism. 
+Thex keyboardistsx seemx tox preferx similarx amountsx ofx
+latencyxandxjudgexthresholdsxofxqualityxequallyxinxbothx 
+mechanisms.xxThexfactxthatxmorexlatencyxisxrequiredxinx 
+IEMxthanxWedgextoxobtainxthexsamexthresholdximpliesx 
+thatxsimilarxtoxthexdrummers,xthexkeyboardistsxseemxtox 
+havexaxcertainxamountxofxlatencyxthatxaffectsxthresholdx 
+changex regardlessx ofx configurationx change.x x Thisx isx 
+consistentx inx thex datax asx wellx asx thex lowx variancexofx 
+keyboardxdata.xxxInxfact,xthexamountxofxdifferencexshowsx 
+thatx therex isx additionalx latencyx addedx tox thex IEMx 
+mechanismxtoxequalxthexpropagationxlatencyxinxfreexairx 
+forxthexwedgexmechanism.xxItxcanxbexconcludedxthatxthex 
+keyboardxisxonexinstrumentxwherextherexisxaxtruexlatencyx 
+thresholdx andx thex changex ofx neitherx environmentx norx 
+criteriaxthresholdxaffectsxthexkeyboardist’sxperceptionxofx
+latency.x x Inx addition,x thex relativelyx lowx generalx 
+sensitivityx forx thex keyboardx supportsx thisx conclusion. xxx 
+x x
+Vocalists have a high general sensitivity and are 
+thus more likely to change their perception of 
+latency based on variable change. xxx
+Thisx isx shownx inx Fig.x 39x andx impliesx thatx thex 
+thresholdsxdescribedxinxSectionx4.3xarexnotxprecisexinxax 
+widexvarietyxofxsituations.xxx
+Drummers and keyboardists have a low general 
+sensitivity and thus are likely to perceive latency 
+very similarly in a wide variety of situations.     
+Thisx isx shownx inx Fig.x 39x andx impliesx thatx thex 
+thresholdsxdescribedxinxSectionx4.3xarexprecisexandxvalidx 
+inxaxvarietyxofxsituations.xx
+x
+x x x x x x x
+6.  CONCLUSION 
+ 
+6.1.  Summary 
+Thisxexperimentxhasxsuccessfullyxidentifiedxtrendsxinx 
+thex effectsx ofx latencyx onx livex soundx monitoring.xx 
+Whereasx severalx trendsx canx onlyx bex suggested,x ax fewx 
+trendsxcanxbexconcludedxfromxthisxstudy.xxInxmostxcases,x 
+morex subjectsx wouldx bex neededx tox getx morex concretex
+conclusions.x x Thisx studyx introducesx manyx possibilitiesx 
+ofxfuturextestsxtoxverifyxandxexpandxonxthesexresults.xx
+x
+6.2.  Conclusions of the Study 
+Thex followingx arex thex provenx conclusionsx ofx thex 
+study:x
+• Sensitivityx tox latencyx isx morex stronglyx dependentx 
+onxinstrumentxratherxthanxthexindividualxsubject.x
+• Thex differencesx inx latencyx perceptionx fromx 
+instrumentx tox instrumentx preventx thex abilityx tox definex 
+absolutex thresholdsx forx thex qualityx ofx livex soundx 
+monitoringxgivenxaxspecificxamountxofxlatency.x
+• ThexGoodxratingxforxbothxmechanismsxhasxaxhigherx 
+thresholdxthanxthexFairxratingxforxbothxmechanismsxwithx 
+thexexceptionxofxthexvocalists.x
+• Ifxyouxcanxreducexthexlatencyxinxaxsystemxtoxearnxax 
+ratingxofxGoodxinxthexIEMxmechanism,xyouxwillxreceivex 
+axratingxofxatxleastxGoodxforxanyxotherxcombinationxofx 
+variables;xwithxthexexceptionxofxthexkeyboardistsxwhosex 
+criticalityxdependsxonxthexwedgexmechanismxratherxthanx 
+thexIEMxmechanism.x
+• Thex keyboardistsx andx drummersx havex ax latencyx 
+thresholdxforxaxgivenxrating,xGoodxorxFair,xwhichxisxnotx 
+veryx dependentx onx environmentalx considerationsx suchx 
+asxmonitoringxmechanism.x
+• Thexdegreexofxconfidencexinxwhichxyouxcanxacceptx 
+andx judgex thex individualx instrumentx confidencex curvex 
+graphsx inx Sectionx 4.1x andx thex comparisonx ofx 
+instrumentsx graphx inx Sectionx 4.3x isx dependentx onx thex 
+instrument’sxgeneralxsensitivityxrating,xfoundxinxSectionx 
+4.4.xxThexhigherxthexgeneralxsensitivity,xthexmorexlikelyx 
+thex instrumentalistsx isx tox changex hisx orx herx criteriax forx 
+latencyx qualityx threshold;x thex lowerx thex generalx 
+sensitivityx thex morex predictablex thex instrumentalist’sx 
+criteriax is.x x Thusx thex resultsx forx instrumentsx withx lowx 
+sensitivityxarexmorexaccuratexandxprecisexthatxthosexwithx 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 19 of 20 
+highx sensitivity.x x Thex followingx isx thex orderx generalx 
+sensitivitiesxandxthusxdegreesxofxconfidence:x
+• Keyboard   (High Confidence) 
+• Drums (High Confidence) 
+• Electric Guitar   (Moderate Confidence) 
+• Electric Bass    (Moderate Confidence) 
+• Vocals (Low Confidence) x
+• Saxophone (Not Confident) x
+Thex actualx thresholdsx ofx latencyx perceptionx givenx 
+monitoringx mechanismx andx gradingx criteriax canx bex 
+viewedxinxthexcomparisonxofxinstrumentxresultsxSectionx 
+4.3xbyxviewingxthex85%xconfidencexlevelxgraphsxshownx 
+inxFig.x36xandxTablex1.xxPleasexnotexthatxduextoxaxlargex 
+variancexinxthexsaxophonexcalculations,xthesexthresholdsx 
+arexnotxnecessarilyxfullyxaccurate.  
+ 
+6.3.  Answers to the Study’s Questions 
+What are the differences in latency perception 
+between two different monitoring situations: Wedge 
+Monitors 4-6ft from the ear and In-Ear Monitors 
+(IEM)?  
+Therex arex numerousxdifferencesx inx thex perceptionxofx 
+latencyx betweenx Wedgex Monitorsx andx IEMx monitors.xx 
+Thexmostxnotablexdifferencexisxthexdecreasedxamountxofx 
+latencyxnecessaryxtoxincitexthexsamexqualityxratingxinxthex 
+IEMx withx thexexceptionxofx thex Drumsx andx Keyboards.xx 
+Alsox notex thatx therex isx anx increasex inx lowx latencyx
+effects,xlikelyxduextoxthexmonitoringxsourcexbeingxinsidex 
+ofxthexear.xxx
+What are the differences in latency perception among 
+different instruments?  Are these differences 
+statistically significant?  Which instruments are more 
+sensitive than others? 
+Thex latencyx perceptionx changesx substantiallyx fromx 
+instrumentx tox instrument.x x Inx termsx ofx strictx thresholdx 
+cutoffx amplitudes,x thex sensitivityx tox qualityx changex 
+basedxonxlatencyxmagnitudexisxroughlyxasxfollows:x
+Saxophonex
+Vocalsx
+ElectricxGuitarx
+ElectricxBassx
+Drumsx
+Keyboardx
+Thexdegreexofxconfidencexinxthisxorderxisxsurprisinglyx 
+almostxcompletelyxreversed.    
+x
+Is there a difference between solo delayed monitoring 
+and monitoring one’s own delayed instrument while 
+playing with a group of non-delayed musicians? 
+Therex seemsx tox bex ax difference,x butx onlyx atx lowx 
+latencyx levels.x x x Thex differencex isx notx greatx enoughx tox 
+prohibitx thex resultsx fromx beingx combinedx tox havex ax
+morex accuratex viewx ofx generalx results.x x Ultimately,x ax 
+testx wouldx havex tox bex designedx specificallyx tox answerx 
+thisxquestion.xxx
+x
+How much latency can be present in a signal path 
+before a musician will perceive an artifact in the audio 
+signal?  
+Thisxisxhighlyxdependentxonxinstrumentxtype.xxPleasex 
+seex Fig.x 36x forx ax worstx casex estimatex andx followx thex 
+linesxforxthexGoodxRating.xxIfxwexignorexthexinconsistentx 
+saxophonex data,x latencyx valuesx greaterx thanx 6.5msx forx 
+wedgesx andx greaterx thanx 1msx forx IEMx wouldx likelyx 
+producexslightxartifactsxforxsomexinstruments.x
+x
+How much latency can be present in a signal path 
+before a musician will perceive an actual delay in the 
+signal?  
+Thisxisxhighlyxdependentxonxinstrumentxtype.xxPleasex 
+seex Fig.x 36x forx ax worstx casex estimatex andx followx thex 
+linesxforxthexFairxRating.xIfxwexignorexthexinconsistentx 
+saxophonex data,x latencyx valuesx greaterx thanx 16msx forx 
+wedgesx andx greaterx thanx 6.5msx forx IEMx wouldx likelyx
+producexsomexaudiblexdelayxforxsomexinstruments.x
+x
+6.4.  Future Research 
+Thisxexperimentxoffersxmanyxpossibilitiesxforxfurtherx 
+clarifications.x x Differentx experimentalx paradigmsx arex 
+neededx tox answerx questionsx relatedx tox veryx smallx 
+latencyxamountsxsuchxasxthexfollowing:x
+• Discriminationx betweenx anx analogx andx ax digitalx 
+signalxpathx
+• Experimentationx withx regardsx tox thex preferencex ofx 
+latencyx inx ax signalx pathx thatx isx equalx tox thex naturalx 
+latencyxinxairxforxthextypicalxinstrument’sxdirectxsound.xxx
+• Differencesx inx latencyx perceptionx withx ax non9
+delayedxmetronomexorxmusicianx
+Inx addition,x thisx experimentx wouldx benefitx fromx 
+havingxmorexsubjects.xxNotexthatxadditionalxexperimentsx 
+mayxnotxholdxconstantxvariablesxinxthexsamexmannerxasx 
+thisx experimentx allowingx differentx noisex factorsx tox bex 
+addedxtoxthexresults.xxInxthisxcasexthexresultsxofxthexnewx 
+experimentx mayx notx bex directlyx andx conclusivelyx 
+comparablex tox thisx study’sx results.x Althoughx withx 
+carefulx design,x thex resultsx couldx augmentx thex 
+experimentx presentedx inx thisx paper.x x Lastly,x sincexthex 
+mostx significantx variablex inx latencyx perceptionx wasx 
+determinedxtoxbexthexinstrument,xtherexwouldxbexaxlargex 
+utilityx inx performingx thex samex experimentalx procedurex 
+withx additionalx instrumentsx suchx asx stringsx orx brassx tox 
+comparex thex thresholdsx ofx morex instruments.x x Withx 
+morex instrumentx thresholds,x ax betterx ideax ofx thex lowerx 
+andx upperx boundsx ofx latencyx perceptionx whenx 
+Lester et al  The Effects of Latency on Live Sound Monitoring 
+AES 123rd Convention, New York, NY, USA, 2007 October 5–8 
+Page 20 of 20 
+consideringxaxrandomxinstrumentxorxrandomxpopulationx 
+couldxbexsuggested.xxx
+x
+7.  REFERENCES 
+ 
+[1]  ITU9RxRECOMMENDATIONxBS.153491:x Method 
+for the Subjective Assessment of Intermediate Quality 
+of Coding Systems. x
+[2]  H.xWallach:x“ThexPrecedencexEffectxinxSoundx 
+Localization,”x Journal of the Audio Engineering 
+Society, Vol. 21 No. 10 ,xpp.x8179826,xDecx1973.x
+[3]  N.xMacmillanxandxC.xCreelman:x Detection Theory: 
+A user’s guide ,x2 nd xedition,xMahwah,xNJ:xLawrencex 
+ErlbaumxandxAssociates,x2005.x
+[4]  ITU9RxRECOMMENDATIONxBS.111691:x 
+Methods for the Subjective Assessment of Small 
+Impairment in Audio Systems Including Multichannel 
+Sound System.  x
+[5]  C.xChafe:x“NetworkxTimexDelayxandxEnsemblex 
+Accuracy:xEffectsxofxLatency,xAsymmetry”x Proc. of 
+the AES 117 th  Conf. ,x2004.x

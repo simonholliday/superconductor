@@ -1,0 +1,9 @@
+browser: Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0
+WS text RTT (loopback)             n= 500 min    0.00  median    1.00  p95    3.00  p99   11.00  max   56.00 ms
+WS binary RTT (loopback)           n= 500 min    0.00  median    1.00  p95    3.00  p99    3.00  max    3.00 ms
+fetch POST RTT (loopback)          n= 300 min    1.00  median    3.00  p95    9.00  p99   10.00  max   11.00 ms
+SSE one-way delay (loopback)       n= 200 min   -0.81  median    0.61  p95    1.52  p99    1.73  max    2.71 ms
+WS one-way delay (loopback)        n=  20 min   -0.84  median    0.50  p95    1.12  p99    1.12  max    1.12 ms
+WS connect->open (loopback)        n=  50 min    1.00  median    2.00  p95    3.00  p99    8.00  max    8.00 ms
+WS onclose after server SIGSTOP (no FIN, no traffic): NOT fired within 30 s
+WS onclose after server SIGKILL (kernel closes socket): fired at 606 ms

@@ -1,0 +1,58 @@
+{
+ "bpm": 180.0,
+ "bars": 8,
+ "spin_wait": true,
+ "pulse_event": false,
+ "pulse_ms": 13.889,
+ "clock_jitter_wake": {
+  "n": 769,
+  "median_ms": 0.5043,
+  "p95_ms": 1.1401,
+  "p99_ms": 1.2433,
+  "max_ms": 1.4776,
+  "min_ms": 0.0003
+ },
+ "note_on_send_vs_ideal": {
+  "n": 129,
+  "median_ms": 0.4226,
+  "p95_ms": 1.1109,
+  "p99_ms": 1.2355,
+  "max_ms": 1.3091,
+  "min_ms": 0.0216
+ },
+ "beat_listener_vs_ideal_pulse": {
+  "n": 33,
+  "median_ms": 0.5537,
+  "p95_ms": 1.3473,
+  "p99_ms": 1.3991,
+  "max_ms": 1.3991,
+  "min_ms": 0.1044
+ },
+ "beat_listener_after_note_on_send": {
+  "n": 33,
+  "median_ms": 0.1531,
+  "p95_ms": 0.3042,
+  "p99_ms": 0.3272,
+  "max_ms": 0.3272,
+  "min_ms": 0.0588
+ },
+ "pattern_reschedule_listener_vs_ideal_pulse": {
+  "n": 8,
+  "median_ms": 0.8756,
+  "p95_ms": 1.49,
+  "p99_ms": 1.49,
+  "max_ms": 1.49,
+  "min_ms": 0.5061
+ },
+ "pattern_reschedule_lead_before_cycle_start": {
+  "n": 8,
+  "median_ms": 13.0133,
+  "p95_ms": 13.3828,
+  "p99_ms": 13.3828,
+  "max_ms": 13.3828,
+  "min_ms": 12.3989
+ },
+ "beats": 33,
+ "bars_seen": 9,
+ "reschedules": 8
+}

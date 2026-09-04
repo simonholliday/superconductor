@@ -1,0 +1,1 @@
+{"scenario": "osc-thread-drain", "pulses": 936, "mean_us": 1.0, "p50_us": 0.6, "p99_us": 6.4, "max_us": 170.5, "over_1ms": 0, "inbound_handled": 957, "sender": "osc", "sent": 983, "selector": "epoll"}

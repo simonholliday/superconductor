@@ -1,0 +1,662 @@
+{
+	"type": "npm",
+	"name": "gridstack",
+	"version": "13.2.0",
+	"default": "/dist/gridstack.min.js",
+	"files": [
+		{
+			"name": "/angular/README.md",
+			"hash": "/gTjYlB5ySwGNslacQZtaHNrHLHYk3dDs1O7iMN0TKU=",
+			"size": 8038
+		},
+		{
+			"name": "/dist/angular/esm2020/gridstack-angular.mjs",
+			"hash": "2RgFVYw27711RfLBAZxmEvTaPw6b7SX+tIwqZyoFftw=",
+			"size": 503
+		},
+		{
+			"name": "/dist/angular/esm2020/index.mjs",
+			"hash": "UhzJvpyAa2XWFIU75EXYRNU2Xw+teCtc7uhCQQUsEF8=",
+			"size": 999
+		},
+		{
+			"name": "/dist/angular/esm2020/lib/base-widget.mjs",
+			"hash": "BxF/w89Kxc+OFda8FoPsgl8FIH6Q9Zk683JyBjxj23E=",
+			"size": 9277
+		},
+		{
+			"name": "/dist/angular/esm2020/lib/gridstack.component.mjs",
+			"hash": "Ny/IbZlfGnBSipGPuyhRK7EFUGGsV8pNxe/+3KmElkQ=",
+			"size": 55239
+		},
+		{
+			"name": "/dist/angular/esm2020/lib/gridstack.module.mjs",
+			"hash": "GgdoBEGRPjX/rxttitLuaJmTqoyK4E//khFnJSC2niM=",
+			"size": 4809
+		},
+		{
+			"name": "/dist/angular/esm2020/lib/gridstack-item.component.mjs",
+			"hash": "1TGN7DS+FGUxV/YBiYtaEPjl9/UfXTlvJbRhw+Rv+SE=",
+			"size": 11983
+		},
+		{
+			"name": "/dist/angular/esm2020/lib/types.mjs",
+			"hash": "tjnRDh1NTfZ4vGhmh+XccxP9BWbVQQ/0dSiXxtsba+o=",
+			"size": 3188
+		},
+		{
+			"name": "/dist/angular/fesm2015/gridstack-angular.mjs",
+			"hash": "GfKFTg0DbCpmEpAqpJ5LwkEsSmhwVlh5eez8mCs1G1A=",
+			"size": 28958
+		},
+		{
+			"name": "/dist/angular/fesm2015/gridstack-angular.mjs.map",
+			"hash": "EwLGqqIpfOd/uczxRoqMGYtCT+aDmYfqWb7uXxQz+NY=",
+			"size": 44222
+		},
+		{
+			"name": "/dist/angular/fesm2020/gridstack-angular.mjs",
+			"hash": "PrBpcTaGif7thfBl2fHFGqnwMe1m70LOEXD/GWaLdhg=",
+			"size": 26996
+		},
+		{
+			"name": "/dist/angular/fesm2020/gridstack-angular.mjs.map",
+			"hash": "xhc2IeabjCU4t1CrGBovMURzWE7P0qJUhiFUViIQwfY=",
+			"size": 43993
+		},
+		{
+			"name": "/dist/angular/index.d.ts",
+			"hash": "QATjeXVD23vdFK3u+N5y3midqanbGMvvDEMjeJZOPMo=",
+			"size": 195
+		},
+		{
+			"name": "/dist/angular/lib/base-widget.d.ts",
+			"hash": "wZQTqrXiQoX3jcGCcYTbYcj/dyk6bnMuziCD25QBw4g=",
+			"size": 2943
+		},
+		{
+			"name": "/dist/angular/lib/gridstack.component.d.ts",
+			"hash": "+mzWqi8Kp8g/HrHQlh8lLgSV7MSeLPyEvBFD6I8q77I=",
+			"size": 9421
+		},
+		{
+			"name": "/dist/angular/lib/gridstack.module.d.ts",
+			"hash": "WuW0pIjhnfcDUcJATE9qubFMv/Uly85CHEvkFYRY5yE=",
+			"size": 1205
+		},
+		{
+			"name": "/dist/angular/lib/gridstack-item.component.d.ts",
+			"hash": "1M3mS8o69LOUPXd4GLYWWltQLuKfToo441x8TOZonAM=",
+			"size": 2965
+		},
+		{
+			"name": "/dist/angular/lib/types.d.ts",
+			"hash": "8PgYbV8LeSfP361q1Yty+7UKlqgA0OTaenYM0rcYtcc=",
+			"size": 1891
+		},
+		{
+			"name": "/dist/angular/package.json",
+			"hash": "hN50osVZSPoU2BC5RdpZfRZNgpvz8SZJExbOJesLZaw=",
+			"size": 867
+		},
+		{
+			"name": "/dist/angular/README.md",
+			"hash": "/gTjYlB5ySwGNslacQZtaHNrHLHYk3dDs1O7iMN0TKU=",
+			"size": 8038
+		},
+		{
+			"name": "/dist/angular/src/base-widget.ts",
+			"hash": "GoRs89LfwvL/Uk9f6vV64PyHIzoxywx2/UhsKN0FcQs=",
+			"size": 3336
+		},
+		{
+			"name": "/dist/angular/src/gridstack.component.ts",
+			"hash": "sTa0Nyol5/abCzYC+bnkfiIEHCsQdCJbLfZHqffwbL0=",
+			"size": 17857
+		},
+		{
+			"name": "/dist/angular/src/gridstack.module.ts",
+			"hash": "M71nd1CWCNbP7GlgeQ82Op2kglgXQ9uz5ZWBuptsWlE=",
+			"size": 1214
+		},
+		{
+			"name": "/dist/angular/src/gridstack-item.component.ts",
+			"hash": "Xgp5bnW5Ulxm2yK1dqdsehHXjrr68GAAsa9lTXdlPS0=",
+			"size": 4062
+		},
+		{
+			"name": "/dist/angular/src/types.ts",
+			"hash": "wyT0gPB0KzjPXwi7+M0BconuK7tCW0qvwnUqu1ZVLBw=",
+			"size": 1973
+		},
+		{
+			"name": "/dist/dd-base-impl.d.ts",
+			"hash": "jMv1OzaEYSBo8kqbMcaLeGH+I1f5ugqZxmqkVj5zeig=",
+			"size": 2532
+		},
+		{
+			"name": "/dist/dd-base-impl.js",
+			"hash": "vZaroasT86L+nTy7Rl0sbjVajfo4pNFmTPnr4JmwgA0=",
+			"size": 2190
+		},
+		{
+			"name": "/dist/dd-base-impl.js.map",
+			"hash": "jOfI1lcrSsiYMV49G2Ty1Z5gMB6MDUPcMCs3tE3YDcM=",
+			"size": 3916
+		},
+		{
+			"name": "/dist/dd-draggable.d.ts",
+			"hash": "N7X3umx5zGNzA4rBhhkM3RdKFaLME7HbONELW9OTehM=",
+			"size": 1408
+		},
+		{
+			"name": "/dist/dd-draggable.js",
+			"hash": "xiISilONYkanenbokrvRlOxuzDplAxiIH/uLkQBEG5I=",
+			"size": 23815
+		},
+		{
+			"name": "/dist/dd-draggable.js.map",
+			"hash": "FvF3TUxxlrrZvOrWoF7bb0PO2am0i5yTp0ow6cxOggg=",
+			"size": 43243
+		},
+		{
+			"name": "/dist/dd-droppable.d.ts",
+			"hash": "tvcHuRJ0MHcFWUdygS57vSVAr2FaX4kE/iRc+ZTH1Gk=",
+			"size": 1180
+		},
+		{
+			"name": "/dist/dd-droppable.js",
+			"hash": "/R/qaMmWh9cg9ODwf+ytadQQ4xTawAQpH1dKRTeZabc=",
+			"size": 6657
+		},
+		{
+			"name": "/dist/dd-droppable.js.map",
+			"hash": "jVf6LTMxbXsVn1PtZK851bsLd+WJhC+JPyLcKu8V5Vg=",
+			"size": 12710
+		},
+		{
+			"name": "/dist/dd-element.d.ts",
+			"hash": "Q7sLVtsl/A8NE97sh7IlCXGVsu6FX0BKINeD5Xkl7Cs=",
+			"size": 1024
+		},
+		{
+			"name": "/dist/dd-element.js",
+			"hash": "DbY6I9wMK248cxtJzPIAhiw27ZD4k/e3LqjcRCx8K5o=",
+			"size": 2755
+		},
+		{
+			"name": "/dist/dd-element.js.map",
+			"hash": "zY95yIvQiH0eI3GVqAzlrzxYxAdMoZJ3IU4+ozP4QPU=",
+			"size": 6060
+		},
+		{
+			"name": "/dist/dd-gridstack.d.ts",
+			"hash": "ceh7XrDi5xN4iGBRHpzYfgB16LykkAoaWW0/TaZzb/I=",
+			"size": 3777
+		},
+		{
+			"name": "/dist/dd-gridstack.js",
+			"hash": "kqXaG6ar+HFg/gQ44E1IkwNvVsd7cjw7xXARX/UL8zc=",
+			"size": 7455
+		},
+		{
+			"name": "/dist/dd-gridstack.js.map",
+			"hash": "Bj+dbL46HyRYvaUMpjY8EcU2EQvUuRwqVBr3RHfMbiI=",
+			"size": 14831
+		},
+		{
+			"name": "/dist/dd-manager.d.ts",
+			"hash": "Cjqb9tbdnca/kyWfrLxNLiCDtxF/ozTmEsGuerl9Jvs=",
+			"size": 1913
+		},
+		{
+			"name": "/dist/dd-manager.js",
+			"hash": "pLCVzHWHjH74nTRw9T9pK5k3TSve7PRpF82wApD+GZM=",
+			"size": 464
+		},
+		{
+			"name": "/dist/dd-manager.js.map",
+			"hash": "8h/SzQRzlT7XwO4D88QF7tS3M5ff2aNUBoEBwLfnIzk=",
+			"size": 2133
+		},
+		{
+			"name": "/dist/dd-resizable.d.ts",
+			"hash": "PI/3Re515d5nP0zehrTuEl9sxZOXha6UN+0hNiyINyk=",
+			"size": 1124
+		},
+		{
+			"name": "/dist/dd-resizable.js",
+			"hash": "YIfyWyfwmaJlToRE7+rVOVJrhwh0wscDmxaqQ2O+hZE=",
+			"size": 13894
+		},
+		{
+			"name": "/dist/dd-resizable.js.map",
+			"hash": "ZdYohg9x4yQl2v63ybdrllPctRsWXv+B1Zlyi9lM5Fc=",
+			"size": 28382
+		},
+		{
+			"name": "/dist/dd-resizable-handle.d.ts",
+			"hash": "98CukLM16RUSKas5JrZnJ3HisPA+aO6zHCasLVer++8=",
+			"size": 713
+		},
+		{
+			"name": "/dist/dd-resizable-handle.js",
+			"hash": "0HelgcsjECPvZjeqWpsoApMpof4Qqk1jHQN8ybmQ0mk=",
+			"size": 4931
+		},
+		{
+			"name": "/dist/dd-resizable-handle.js.map",
+			"hash": "11ZHHO6UVNEKQcRaKDraTDZ0CE62Tr1bLYjgGFa+XE0=",
+			"size": 9715
+		},
+		{
+			"name": "/dist/dd-touch.d.ts",
+			"hash": "J6p+tYqcddz5J4F9WuqJGmLTkJ9Hn6Sottn9BuPOW1Y=",
+			"size": 1542
+		},
+		{
+			"name": "/dist/dd-touch.js",
+			"hash": "FQPYYZ5z/scTRFHqCU0T48pMEho+/FkwYs4HGRXXiKc=",
+			"size": 4822
+		},
+		{
+			"name": "/dist/dd-touch.js.map",
+			"hash": "69tbc3WccXY8FEBf0bvBDbaqJ+ODm93VKTWSYDCsC8U=",
+			"size": 7866
+		},
+		{
+			"name": "/dist/file.txt",
+			"hash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+			"size": 0
+		},
+		{
+			"name": "/dist/gridstack.css",
+			"hash": "jJF39WBpZGIvRP3klM9zSVRPL3Omdl3+9aSTp+iL58s=",
+			"size": 8738
+		},
+		{
+			"name": "/dist/gridstack.css.map",
+			"hash": "Dhp2GHItMyjg6wZ2L6dtGFv4GHjdoyqL0UF5ZUqOlKg=",
+			"size": 1321
+		},
+		{
+			"name": "/dist/gridstack.d.ts",
+			"hash": "nesiCBPrJCSZduEhBb9Avdp58ZbgwuYCDkmQavu5uVg=",
+			"size": 37761
+		},
+		{
+			"name": "/dist/gridstack.js",
+			"hash": "VVeZ6uFM2nG7XN64ZKxHL8PLiFPLIYVILQHx1j6tyvw=",
+			"size": 140038
+		},
+		{
+			"name": "/dist/gridstack.js.map",
+			"hash": "Y3p9AD2yvezwRmtgYhE30I23YY3OTlBGRmMwdUHOpuc=",
+			"size": 232790
+		},
+		{
+			"name": "/dist/gridstack.min.css",
+			"hash": "PwqeY9/gX6IyzBDXkDLxPhyuFotnU5uYAaMHmcbBZY0=",
+			"size": 5476
+		},
+		{
+			"name": "/dist/gridstack-all.js",
+			"hash": "T2grO0jGUBNRe5ZF59mzDQpiPKU1ChYz5j7Q2+LKjb4=",
+			"size": 88145
+		},
+		{
+			"name": "/dist/gridstack-all.js.LICENSE.txt",
+			"hash": "vxSk7uqBko5+yFpn9XIGWWajCIRYBerJQBLRvIViMgs=",
+			"size": 183
+		},
+		{
+			"name": "/dist/gridstack-all.js.map",
+			"hash": "YFOX2zVLfxWscxwvdin4nAqi3aSKtw+1UIsqDYJeZ3o=",
+			"size": 436348
+		},
+		{
+			"name": "/dist/gridstack-engine.d.ts",
+			"hash": "Kg2QB5Ek94B7HRMy8iNNEuYVZ2Jdk7v4M+ZIfF1hWvo=",
+			"size": 14740
+		},
+		{
+			"name": "/dist/gridstack-engine.js",
+			"hash": "/dSKWr6FDv6t7i9lPZTAqxV+ifIqpj4pDpXs43+pzJs=",
+			"size": 53145
+		},
+		{
+			"name": "/dist/gridstack-engine.js.map",
+			"hash": "C4drNXrvpGqUOIrvRyQ9nh8grNxRL7FteyEM9Z90SnU=",
+			"size": 89963
+		},
+		{
+			"name": "/dist/react/base-widget.d.ts",
+			"hash": "GSZ7+w2Kyfy8fXjP7Fba+sFJSE4RfWBPRiILLd6lv8c=",
+			"size": 769
+		},
+		{
+			"name": "/dist/react/base-widget.d.ts.map",
+			"hash": "6wTSrJknAUfe4KpX4jfUaEdrn7h//7bddtNDRAkN3xc=",
+			"size": 562
+		},
+		{
+			"name": "/dist/react/base-widget.js",
+			"hash": "ye2HrUv1bpCE0C9L1LWlPJAgLMnQcToh/YSQwBn5p98=",
+			"size": 585
+		},
+		{
+			"name": "/dist/react/gridstack.d.ts",
+			"hash": "THI0Oj+79vC0Ol7pKjp7314Rbu5uWrzVDNbew5apR30=",
+			"size": 1738
+		},
+		{
+			"name": "/dist/react/gridstack.d.ts.map",
+			"hash": "D65emtuiV6nezKl++6VClYyMeJTwAwtoUoKUuvHNicI=",
+			"size": 1525
+		},
+		{
+			"name": "/dist/react/gridstack.js",
+			"hash": "dJu8+ATjIf6oULjRpl5uTJgVDZvJlCW1QNQnU9ZDaEE=",
+			"size": 10475
+		},
+		{
+			"name": "/dist/react/gridstack-context.d.ts",
+			"hash": "z5AslJUWB98ZTwELAALsLmd4WA/bycyh3FqJCR8XQfs=",
+			"size": 730
+		},
+		{
+			"name": "/dist/react/gridstack-context.d.ts.map",
+			"hash": "z45/oV5t0PfrjxaFK8ytRaugE6lmhU3oceBbcd7m08Y=",
+			"size": 581
+		},
+		{
+			"name": "/dist/react/gridstack-context.js",
+			"hash": "OgAcXEPIiAL6cG0f6VuZ9HHK7TqgiPc5dlGLcEcjfP4=",
+			"size": 294
+		},
+		{
+			"name": "/dist/react/gridstack-item.d.ts",
+			"hash": "9CP9XW4LIlnRYFZ6WrzAOs7XlnjyRcXycjgC1VksLTI=",
+			"size": 549
+		},
+		{
+			"name": "/dist/react/gridstack-item.d.ts.map",
+			"hash": "QKFREaQvhLIU+Mm4npoustfgMXoZDaxm4FqYuac2mFQ=",
+			"size": 485
+		},
+		{
+			"name": "/dist/react/gridstack-item.js",
+			"hash": "F6Qk5Xrz156ugMtGv7a80fK4C/vHPNTgPfQ4+CDdmTY=",
+			"size": 4006
+		},
+		{
+			"name": "/dist/react/gridstack-widget-context.d.ts",
+			"hash": "QjYWvN3m26br3fIABsT6S6LXaz7qebYD3tGL0tCLUwA=",
+			"size": 489
+		},
+		{
+			"name": "/dist/react/gridstack-widget-context.d.ts.map",
+			"hash": "d8XOPKA7w7ebKEaWbytSmGNw3hHGzQx2rJjXTkU2xzM=",
+			"size": 471
+		},
+		{
+			"name": "/dist/react/gridstack-widget-context.js",
+			"hash": "CCo8GXc7cwOq2XygoO8MqSb2rfvWnUWpZFDS9Kek1Tk=",
+			"size": 353
+		},
+		{
+			"name": "/dist/react/hooks.d.ts",
+			"hash": "EeP7qeqq/sVnFh2XiKoJyI5xRAXR5emCN1sFwhPbfNU=",
+			"size": 1559
+		},
+		{
+			"name": "/dist/react/hooks.d.ts.map",
+			"hash": "8tgJH830h0Em1VfHhrNfkJz+NHfS6MlLe7nwmX4DbU4=",
+			"size": 746
+		},
+		{
+			"name": "/dist/react/hooks.js",
+			"hash": "tBspboVjA9EV+QgFSUvyEhKLYvpJWjlddkE7YniNsKM=",
+			"size": 2164
+		},
+		{
+			"name": "/dist/react/index.d.ts",
+			"hash": "8ySV6pLoQTp8CVt+j36XyCrBOVGSVMbWYNmZUAA+tFk=",
+			"size": 932
+		},
+		{
+			"name": "/dist/react/index.d.ts.map",
+			"hash": "66USNRMuHvqO05rUbSlE3eLIjXBwNogwmuvz6Ud2qeM=",
+			"size": 762
+		},
+		{
+			"name": "/dist/react/index.js",
+			"hash": "eTNLjBJSsOeLTr9yD21kHZJyxEYNNar7i7XKlxS5k+Q=",
+			"size": 555
+		},
+		{
+			"name": "/dist/react/README.md",
+			"hash": "vn1Mlrw8g9gkOemOcWmBFX2oC63LpzkypHV8fJ/KtXo=",
+			"size": 5575
+		},
+		{
+			"name": "/dist/react/registry.d.ts",
+			"hash": "wEZifGZW2s+0JK9ISz/SqG8Q96GrgIXNf9IIU+YpBBo=",
+			"size": 502
+		},
+		{
+			"name": "/dist/react/registry.d.ts.map",
+			"hash": "MnRjrveBv8JA0gR1Lgs4BYT090pWpMBS4nSPHCVyeOo=",
+			"size": 497
+		},
+		{
+			"name": "/dist/react/registry.js",
+			"hash": "MAuKMQk7Hv00oPBYLgFtYadqafzspqpaFc0yAsuVMQI=",
+			"size": 4176
+		},
+		{
+			"name": "/dist/react/types.d.ts",
+			"hash": "87S1DKDGWr/GdtmPKEkuI9a38GerfTnB+n/vZ+F8cUY=",
+			"size": 2828
+		},
+		{
+			"name": "/dist/react/types.d.ts.map",
+			"hash": "C20GeC3ZxE2d9xPNG4t1oLh0AIzGUf4ZZNN91WyoW9c=",
+			"size": 1705
+		},
+		{
+			"name": "/dist/react/types.js",
+			"hash": "jmCbtxwguFjHfw6fkLsTGduEd7E/n5ZfGh4YUkv1CIE=",
+			"size": 11
+		},
+		{
+			"name": "/dist/types.d.ts",
+			"hash": "VtBUq+27bm+nHS9hZIO/+xyPoLB6XuzimBx6D7/R41I=",
+			"size": 21885
+		},
+		{
+			"name": "/dist/types.js",
+			"hash": "3R9bZLvsCBeZYb/toDD2w8h5zgRoLasjnX9fM3hqRtw=",
+			"size": 1165
+		},
+		{
+			"name": "/dist/types.js.map",
+			"hash": "IEAQAeN6yICdUlQULniW2Mb1FXLXJ8M69CSEhDmuubU=",
+			"size": 27393
+		},
+		{
+			"name": "/dist/utils.d.ts",
+			"hash": "fg89xs63ar2xsIuudzOGa6crxBkPvmqaqyW222HGHAs=",
+			"size": 11988
+		},
+		{
+			"name": "/dist/utils.js",
+			"hash": "jREBFp0w/+dSdnzywmwZpGR0n3GD8FlAL3LI+Tu77EY=",
+			"size": 26106
+		},
+		{
+			"name": "/dist/utils.js.map",
+			"hash": "8tZFiv1op226xspcENFW6N3uP0IUE67/COlsSoCH4So=",
+			"size": 43924
+		},
+		{
+			"name": "/dist/vue/base-widget.d.ts",
+			"hash": "wK4tIIvAkb47XnS8oSP1tyTyVcptEU/n7LE9WdaBRAU=",
+			"size": 855
+		},
+		{
+			"name": "/dist/vue/base-widget.d.ts.map",
+			"hash": "ZXMtr5TBPeJl88aJ6VcroxHqrv7xsquIR2SyMuPxcms=",
+			"size": 361
+		},
+		{
+			"name": "/dist/vue/base-widget.js",
+			"hash": "lhmkKe/CDHVNHXAKt3jGPxiypr2gLudVf6yLD4ogB74=",
+			"size": 823
+		},
+		{
+			"name": "/dist/vue/composables.d.ts",
+			"hash": "ZB1T4JcylZP6KjyK7ukV+YrtGTE6qt9nznUz90pQkdc=",
+			"size": 2508
+		},
+		{
+			"name": "/dist/vue/composables.d.ts.map",
+			"hash": "WE8+2c3Z1gcajGIKgj6L0KlHDRoggKhbjwxFzlWpk1E=",
+			"size": 829
+		},
+		{
+			"name": "/dist/vue/composables.js",
+			"hash": "cPZo4Xn0j58mtcsfH8UJj0C27zrFbLKf7o81k99+6kM=",
+			"size": 3441
+		},
+		{
+			"name": "/dist/vue/gridstack.d.ts",
+			"hash": "NLa9TQWDJB3bjJ1S2FGlJBKwu+KMMOLlLXz9pOyBEoY=",
+			"size": 2609
+		},
+		{
+			"name": "/dist/vue/gridstack.d.ts.map",
+			"hash": "Tw29cwmcZlOUG6/WCpDB1qAQywkA+pzhbsBDRPXa61M=",
+			"size": 545
+		},
+		{
+			"name": "/dist/vue/gridstack.js",
+			"hash": "bjaHSIt4P27PgEncKIdQDH6b2W09EE/WsYwjdDyX4+w=",
+			"size": 9588
+		},
+		{
+			"name": "/dist/vue/gridstack-context.d.ts",
+			"hash": "1Lp72tXGyXr1mllONSIwRSOn6o6rbfjWLMp+3/+rKI4=",
+			"size": 994
+		},
+		{
+			"name": "/dist/vue/gridstack-context.d.ts.map",
+			"hash": "ZiSInUODcW+7aUGC/79Brx4aC3NS536lZ1oTF3iL8Tk=",
+			"size": 974
+		},
+		{
+			"name": "/dist/vue/gridstack-context.js",
+			"hash": "GY11cX7aIe4uYVZ66VzogBKFwEvlbNQXoWKVOFaN0KY=",
+			"size": 525
+		},
+		{
+			"name": "/dist/vue/gridstack-item.d.ts",
+			"hash": "XflI/Qv6JRrkkKH3BkFlJybxtgUJc7tblF6srEmS/Ro=",
+			"size": 1291
+		},
+		{
+			"name": "/dist/vue/gridstack-item.d.ts.map",
+			"hash": "SmZBJRUsR5GHa3S4MLw1zDgGyYRGsGcGub/Qy9cPECQ=",
+			"size": 380
+		},
+		{
+			"name": "/dist/vue/gridstack-item.js",
+			"hash": "b07POCN2eqGBwsVXGUtVaGKvrBCRVQSdjmOZvQYWkiU=",
+			"size": 4375
+		},
+		{
+			"name": "/dist/vue/index.d.ts",
+			"hash": "oxqNE+GENq84tDYDMaAzapi5Qs65U3NC2A8Nr83iKMA=",
+			"size": 793
+		},
+		{
+			"name": "/dist/vue/index.d.ts.map",
+			"hash": "j6cMYFpZegl5oPiYt7JIHa0lF7xwrHNTiLj4KuePz/Q=",
+			"size": 685
+		},
+		{
+			"name": "/dist/vue/index.js",
+			"hash": "iKaedompFzGRONzsE8maoantP+wv1noI308BDS2+UdY=",
+			"size": 481
+		},
+		{
+			"name": "/dist/vue/README.md",
+			"hash": "8JLt9QNzOFGEKHorTZuPORq8YECqcEJqs+BIOgfi5u8=",
+			"size": 3679
+		},
+		{
+			"name": "/dist/vue/registry.d.ts",
+			"hash": "MH9WBhHe1GIJFrXrgaLbiGgrTQgV9zML7+iGawHMAxw=",
+			"size": 494
+		},
+		{
+			"name": "/dist/vue/registry.d.ts.map",
+			"hash": "V06gYKpJ05opgpQeJKyPpyuzw9OUnJstYUZ5B4ADhcs=",
+			"size": 495
+		},
+		{
+			"name": "/dist/vue/registry.js",
+			"hash": "ZeOmJt8caXZRduB6U5eU2aKdC+qzgyQmQxxnsoU2Qq8=",
+			"size": 3190
+		},
+		{
+			"name": "/dist/vue/types.d.ts",
+			"hash": "4C8OMPsLjNlslwPOBx9V6qxYaJamv83LyEI82ceNgpk=",
+			"size": 2398
+		},
+		{
+			"name": "/dist/vue/types.d.ts.map",
+			"hash": "+9DR8lXViFzW0iVExuR5gbs95dzVWXw37AMA1ygTDr4=",
+			"size": 1563
+		},
+		{
+			"name": "/dist/vue/types.js",
+			"hash": "jmCbtxwguFjHfw6fkLsTGduEd7E/n5ZfGh4YUkv1CIE=",
+			"size": 11
+		},
+		{
+			"name": "/doc/API.md",
+			"hash": "DuiWX6zJ5PnRIPuh4ePya7n2wSbQOLc3uXgiOm0TiR8=",
+			"size": 191773
+		},
+		{
+			"name": "/LICENSE",
+			"hash": "KNKKbgtcbryodZsWKmRMMc6iiqtZEGDA2Vx3N9hFZ2Q=",
+			"size": 1135
+		},
+		{
+			"name": "/package.json",
+			"hash": "g4Nr1OV5Lt/uMGXL4cLTGTDD6805W/v2o7HmMhjvdSs=",
+			"size": 4460
+		},
+		{
+			"name": "/react/README.md",
+			"hash": "vn1Mlrw8g9gkOemOcWmBFX2oC63LpzkypHV8fJ/KtXo=",
+			"size": 5575
+		},
+		{
+			"name": "/README.md",
+			"hash": "1rE/FD+5usH8w9k7IXcKWgIrAXQTSyQsSFQrXxbvYnw=",
+			"size": 28914
+		},
+		{
+			"name": "/vue/README.md",
+			"hash": "8JLt9QNzOFGEKHorTZuPORq8YECqcEJqs+BIOgfi5u8=",
+			"size": 3679
+		}
+	],
+	"links": {
+		"stats": "https://data.jsdelivr.com/v1/stats/packages/npm/gridstack@13.2.0",
+		"entrypoints": "https://data.jsdelivr.com/v1/packages/npm/gridstack@13.2.0/entrypoints"
+	}
+}

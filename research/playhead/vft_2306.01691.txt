@@ -1,0 +1,1198 @@
+The Influence of Variable Frame Timing on First-Person Gaming
+DEVI KLEIN, NVIDIA, USA and UC Santa Barbara, USA
+JOSEF SPJUT, BEN BOUDAOUD, and JOOHWAN KIM,NVIDIA, USA
+0.005 0.010 0.015 0.020 0.025 0.030
+2
+3
+4
+5
+6
+Mean Frame Duration [s]
+Smoothness Score
+A = 0 ms
+A = 2 ms
+A = 4 ms
+A = 6 ms
+Fig. 1. (Top Left) A demonstration of the visual effects of variable frame timing. (Bottom Left) A demonstration of how variable render/simulation workload
+timing impacts VSYNC and variable refresh rate (VRR) differently. (Right) A plot of a user rating of "smoothness" under varying mean frame time and VFT
+amplitude (2-6 ms). Generally smoothness decreases with increased frame time, as expected, with additional degredations of smoothness coming from VFT.
+Variable frame timing (VFT), or changes in the time intervals between dis-
+crete frame images displayed to users, deviates from our traditional concep-
+tualization of frame rate in which all frame times are equal. With the advent
+of variable refresh rate (VRR) monitor technologies, gamers experience VFT
+at the display. VRR, coupled with increased display refresh rates and high-
+end hardware, enables smoother variation of frame presentation sequences.
+We assess the effects of VFT on the perception of smoothness (experiment
+1) and performance (experiment 2) in first-person shooter (FPS) gameplay
+by introducing frequent but relatively small (4-12 ms) variations in frame
+time around typical refresh rates (30-240 Hz). Our results indicate that VFT
+impacts the perception of smoothness. However, the results from experiment
+2 do not indicate differences in FPS task performance (i.e., completion time)
+between variable and constant frame time sequences ranked equally smooth
+in experiment 1.
+CCS Concepts: • Human-centered computing→ Pointing devices; User
+studies; • Applied computing→ Computer games.
+Additional Key Words and Phrases: frame rate, frame time, first-person
+targeting, first-person games, perception, performance
+ACM Reference Format:
+Devi Klein, Josef Spjut, Ben Boudaoud, and Joohwan Kim. 2023. The Influence
+of Variable Frame Timing on First-Person Gaming. 1, 1 (June 2023), 12 pages.
+https://doi.org/10.1145/nnnnnnn.nnnnnnn
+1 INTRODUCTION
+Our visual perception arises from a continuous-to-continuous map-
+ping between the light reflected off objects in our 3D environment
+and entering our eye and the electrochemical transduction process
+occurring at the back of the retina [18]. With the introduction of
+Authors’ addresses: Devi Klein, devik@nvidia.com, NVIDIA, USA and UC Santa Barbara,
+USA; Josef Spjut, jspjut@nvidia.com; Ben Boudaoud, bboudaoud@nvidia.com; Joohwan
+Kim, sckim@nvidia.com, NVIDIA, USA.
+2023. This is the author’s version of the work. It is posted here for your personal
+use. Not for redistribution. The definitive Version of Record was published in , https:
+//doi.org/10.1145/nnnnnnn.nnnnnnn.
+digital images, high refresh rate displays, and the quantization of
+light into discrete bits of information, modern technologies for vi-
+sualization attempt to induce the spatio-temporal dynamics of the
+visual phototransduction process that drives real-world perception.
+Despite the advances in emerging visualization technologies, the
+inherent discrete-to-continuous mapping of information can cause
+undesirable perceptual effects.
+Take for example the prevalent problem ofmotion blur on sample-
+and-hold-type displays such as liquid crystal displays (LCDs) [25].
+Assume a viewer who is visually tracking a moving object on an
+LCD operating at 60 Hz. Because each LCD pixel ideally1 holds its
+emission for the duration of one frame time (approximately 16 ms
+for a 60 Hz display), its optical image can smear across multiple
+retinal cells while the viewer’s gaze continues to move to track
+the object. Consequently, the viewer receives a blurry impression
+of the moving objects. Display artifacts such as motion blur occur
+when the discretized information cannot faithfully approximate the
+real-world experience for our visual system.
+Prior work has focused on the visibility of motion artifacts for
+displays with constant frame time (CFT) (Sec. 2.3). CFT, however, is
+more of an idealized phenomenon in gaming due to variations in
+render time, input sampling, or network delays. Instead, high-end
+modern display technologies (e.g., variable refresh rate displays or
+VRR) present users with a sequence of frames that can persist on
+screen for different periods, a phenomenon we denote as variable
+frame timing (VFT). That is, one frame could last on screen for 16ms
+(60Hz), and the next frame could last on screen for 20 ms (50Hz).
+Given the prevalence of VFT in modern-day gaming, and the
+relatively little empirical work investigating its influence on both
+the perception of smoothness and the effect on performance in
+1LCD hold time and transition time are not necessarily a function of the frame period.
+Some transitions are longer than a frame period; others are short enough to meet this
+ideal, but the reality falls short in most LCDs.
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+arXiv:2306.01691v1  [cs.GR]  2 Jun 2023
+2 • Klein et al.
+an FPS-style targeting task, our paper provides the following key
+contributions:
+(1) An introduction to variable frame timing (VFT). What is it?
+Why does it occur?
+(2) An exploration of the effects of VFT on human perception
+(experiment 1) and performance (experiment 2) across a broad
+range of baseline frame rates.
+(3) Establishing a relationship between the perception of VFT
+and constant frame times (CFT).
+(4) Provide suggestions for gamers who want to utilize VFT in
+both professional and leisure settings and for researchers who
+want to explore VFT in contexts outside of gaming.
+2 BACKGROUND
+The following sections provide a short primer on VFT and frame tim-
+ing. The discussion points and background information underscore
+the importance of studying VFT in the wild because it is becoming
+more prevalent as users modernize their hardware and software to
+state-of-the-art technology. We follow this discussion with a brief
+overview of the perceptual quality and performance metrics used
+in experiments 1 and 2.
+2.1 Where does Variable Frame Timing (VFT) come from?
+There are many sources of VFT, including changes in game geome-
+try or shading workloads, power state and cooling of PC hardware,
+operating system preemption and scheduling, network communi-
+cation with a server, and even human interaction with the game.
+While these sources interact in different ways, the result is that
+game frames are completed after the combination of a variety of
+different processing times, with each of these times introducing a
+possible source of variability. In general, game frame time variability
+is relatively small compared to the total frame time, though this
+varies from game to game. Game developers often target a single
+constant display output rate and conduct significance testing and
+optimization to ensure that most frames finish within the fixed
+budget. This constant frame time target avoids bothersome inter-
+actions with display synchronization (i.e., VSync) that can amplify
+VFT effects when a game overshoots the target refresh period of
+the display (e.g., draws a frame for more than 33.3 ms for a 30 Hz
+target).
+2.2 Frame Rate, Frame Time, and Refresh Rate
+Many gamers and researchers use the terms frame rate and frame
+time interchangeably [5], but it is important to recognize their rela-
+tionship and distinct implied meaning. Frame rate is the number of
+frames delivered over some timeframe, typically reported in Hertz
+(Hz) or the number of frames per second. Frame time is the time
+that elapses between a pair of frames during which the first frame
+is displayed, often the time it took to complete the rendering and
+display of the second frame in that pair. Assuming frames are com-
+pleted on a regular schedule, the frame rate is precisely the inverse
+of the frame time (the frame time represents the period of the rate).
+However, in the presence of variable rendering times, a single frame
+rate cannot accurately represent this variability. Thus, we choose
+to focus primarily on frame times in this work. For those familiar
+with frame rates, it may be helpful to compute the inverse of a given
+frame time to gain an intuition for what regular frame rate that
+frame time corresponds to. We include frame rates for our constant
+frame time conditions and summarize our variable frame timing
+conditions using a 1
+𝑋 convention to provide an intuition for the
+corresponding frame rates.
+More recently (since 2013), variable refresh rate (VRR) technolo-
+gies, like G-SYNC [21] and VESA Adaptive Sync [3], have enabled
+gaming hardware to deliver frames when they are completed. VRR
+avoids the potential large magnitude stutter caused by minor frame
+time variations when VSync is on while still avoiding tearing. The
+primary functionality that VRR enables is presenting the variation
+in frame completion time directly to the display, emitting light to
+the eyes of the viewer.
+Since the introduction and widespread availability of VRR-enabled
+displays and computing systems, researchers have begun to con-
+duct studies using this paradigm. For instance, Poth et al. [16] used
+G-SYNC to limit the presentation duration of a stimulus to below
+10 ms and varied the time in small step sizes to characterize vi-
+sual processing time. Others have promoted VRR technology for
+potential energy savings by reducing power when display updates
+are not needed [12, 31]. Another study measured (constant) refresh
+rates for just noticeable differences (JND) of varying target motion,
+then leveraged VRR to adjust refresh rate dynamically based on
+object speed, but did not study the effects of varying refresh rate
+itself [6, 15]. Jindal et al. [ 10] added adaptive rate shading to the
+optimizations for motion, spatial shading rate, and temporal rate
+but once again neglected to study the effects of varying frame rate
+in isolation. This work hints that not all spatio-temporal content has
+the same presentation time requirements for the equal perception
+of quality but does not answer whether a single target’s motion is
+the primary driver of the perception of smoothness or stutter in
+VRR contexts.
+Other more relevant works studying VRR technologies’ effect
+on task performance and perception have indicated positive out-
+comes [17, 30]. While subjects struggled to identify when VRR
+techniques were enabled, results show significant effects of VRR on
+both performance and engagement. Liu et al. [ 14] studied effects
+of varied frame timing on quality of experience in 3 real games, as
+measured by mean observer score. Instead they relied on a (set of)
+CPU-based, infinite Fibonacci number counter(s), running in the
+background, to artificially create uncontrolled variations in frame
+times. They find that a 95% frame rate floor predicts quality of expe-
+rience across three games. None of these studies carefully control
+the sequence, nor the distribution of frame times experienced by
+the user. Additionally, they neglected to study any refresh rates
+above 120 Hz. We hope our study will fill in some gaps in the cur-
+rent understanding of the effects of VRR on human perception and
+performance.
+2.3 Motion Artifacts define perceptual smoothness
+To this point, we have alluded to the psychological construct of per-
+ceptual smoothness and tangentially related it to the motion artifact,
+motion blur in the introduction. Prior work has done a fine job of
+operationally defining perceptual smoothness, concerning object
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+Influence of Variable Frame Timing • 3
+motion, by binning it into various distinct visual percepts: false
+edges, motion blur, and judder [6]. The perception of smoothness
+comes down to how well people detect (i.e., the visibility of) motion
+artifacts on displays with different frame rates. For example, using
+the visual thresholds of spatio-temporally varying contrast patterns,
+one can construct a visibility filter in the frequency domain called
+the window of visibility [27, 29]. This work was motivated by the
+fact that the discretization of visual information in the real world
+adds aliases. These aliases are characterized by the spatio-temporal
+sampling rate (e.g., spatial resolution of display pixels or frame rate
+of displays) and by the modulation pattern of the sampled signals
+(e.g., pixel fill factor or the hold time of display pixels). If the win-
+dow of visibility does not filter out these aliases, the visual system
+perceives motion artifacts because such aliases are not expected in
+naturally arising visual inputs. The theory of window of visibility
+has been experimentally measured and verified for displays with
+constant frame rates [ 8, 11, 28] and it provides a comprehensive
+model of highly controlled laboratory stimuli.
+Our work does not attempt to define perceptual smoothness in
+one way or another (i.e., by the detection of Judder or motion blur)
+because the presentation of frames vary on a moment-by-moment
+basis, a different phenomenon relative to presenting frames at con-
+stant intervals. Instead, in the experiments described below, we
+leave it up to the user to define perceptual smoothness. Specifically,
+the user interacts with a gaming environment, and we display the
+most extreme ends of apparent motion (15 Hz and 360 Hz) to anchor
+their visual perception for smoothness of motion.
+2.4 First-person Aiming Performance Measures
+First-person shooters (FPS) are a popular genre of competitively
+played, high-performance games. Typically in FPS games, the player
+uses the mouse to control egocentric view rotation and the keyboard
+to translate the camera within a scene. We choose to study the FPS
+aiming context as it represents an area where high-skill human-
+computer interaction intersects high-performance rendering and
+corresponding variable frame timing in an impactful way. Specif-
+ically, we study the camera rotation aspect of FPS aiming in this
+work, disallowing player translation in the scene to avoid additional
+confounding factors. By collecting both perceptual and performance-
+oriented measures, we investigate how (relatively) small changes in
+frame timing impact the user experience in competitive FPS gaming.
+Previous work has used various metrics for quantifying FPS aim-
+ing performance. Some studies focus on game-specific outcomes tied
+to the aggregation of many aiming actions, for example, kills, deaths,
+and assists (as well as their resulting ratios) [20]. Others adopt more
+traditional HCI metrics of time to completion and accuracy (or hit
+rate) of subjects in completing more atomic tasks [26]. Composite
+score metrics are often used in experiments with more than one
+primary metric, for example, avoiding being damaged while also
+damaging targets [4]. We focus on target elimination time as our
+metric of interest in this study.
+Parameter Value
+Display 360 Hz Alienware AW2521H
+Resolution 1920× 1080
+G-SYNC (VRR) Enabled
+VSync Disabled
+Viewing Distance ∼70 cm
+CPU Intel i7-9700k @ 3.60 GHz
+GPU NVIDIA RTX 2080Ti
+RAM 32GB DDR4
+Mouse Logitech G Pro Wireless
+Mouse DPI 800
+Keyboard Logitech G Pro YU0039
+Click-to-Photon Latency 20 ms @ 120 Hz (Sec. 5.2)
+Table 1. Hardware specifications for the systems used in our experiments.
+3 EXPERIMENTAL DESIGN
+We conducted two experiments using systems with similar hardware
+specifications (see Table 1) and a shared, open-source software exper-
+imentation platform, First Person Science [2, 23] (release v22.05.01),
+to run and collect data from users. First Person Science provides a
+feature whereby an experimenter can specify a target frame time to
+be used on a per-frame basis. We use this virtual sandbox to study
+the effects of variable frame timing on the user.
+In the subsections below, we describe how we generated variable
+frame time sequences and provide detailed descriptions of the two
+experiments that focus on the effects of variable frame timing on
+perception and performance. The first experiment is concerned with
+the visual perception of smoothness of motion for sphere-shaped tar-
+gets in a first-person targeting task. The second experiment builds
+on the first by selecting subsets of equally smooth (as measured
+by experiment one) frame time sequences and comparing perfor-
+mance across those groupings. Lastly, we include a description of
+the participants in each user study.
+Based on our understanding of the impacts of frame time and its
+variation from prior art and pilot studies in FPS aiming, we expect
+that:
+(1) Players can perceive 4-12 ms variations in frame time, across
+a range of base frame rates (30-240 Hz)
+(2) Players incur additional performance impacts in FPS targeting
+under perceptually equivalent VFT conditions
+We base these hypotheses on prior studies indicating that changes
+in frame time are highly perceptible. Furthermore, we suspect that
+VFT will have additional performance impacts as prior art had found
+VRR techniques such as G-SYNC improved player performance even
+when the change was not perceived [30].
+3.1 Variable Frame Time Approach
+Across our experimental conditions, subjects experienced a range
+of constant and variable frame time sequences over which they
+ranked smoothness and attempted to complete targeting tasks as
+quickly as possible. In deciding which type of variable frame timing
+(VFT) scheme to use, we had many different candidates. Initially,
+we considered a "1:N stutter" scheme where a series of N frames
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+4 • Klein et al.
+0.0 0.1 0.2 0.3 0.4 0.5 0.6
+Time [s]
+8
+9
+10
+11
+12Frame Time [ms]
+A
+T
+1
+80  CFT
+Time
+1
+120  CFT
+3 Hz Sine
+Fig. 2. Two periods of an example 3 Hz sine wave of varying frame time
+over time with 2 ms amplitude (A), 333.33 ms period (T), and time-weighted
+mean frame time (𝜇Time = 10.42 ms). Note that the scatter points (and their
+relative order over time) overlaid on the waveform are the frame times
+users experience when participating in the task. The dashed red/blue lines
+indicate the minimum and maximum frame duration denoted( 1
+120, 1
+80) (see
+the supplement for more details).
+occur at constant frame timing, followed by a single (or small set
+of) frames(s) that is (are) longer/shorter. This model creates a rapid
+change in frame timing that emulates a single performance hitch
+or unpredictable rendering which are common in real games. How-
+ever, this approach is not desirable for the purpose of this study, in
+particular for experiment 2, because participants may accomplish
+the task in a time window adjacent to where the stutter occurs and
+thus the VFT scheme would not impact performance.
+We elected to use a sine wave sampling scheme of frame time over
+time to produce our VFT sequences. The signal had a frequency of
+3 Hz, and the waveform spanned between pairs of CFTs also tested.
+We chose a sine wave of this frequency because it gives a smoothly
+varying VFT over time. 3 Hz is slow enough that the waveform
+will have enough samples with frame times as high as 33.3 ms and
+fast enough that a player will experience at least one full waveform
+within an expected task completion time of over 500 ms 2. Fig. 2
+plots two periods of an example waveform and shows an example
+of how a thoughtful sampling of the intended signal is required
+to avoid pitfalls. The supplemental video visualizes this approach
+using lower frame times (<30 Hz) and a lower VFT sine wave period
+(1 Hz), to make the effects more clearly visible on common displays.
+3.2 Experiment 1: Perceptual Smoothness
+The high-level flow of experiment 1 is summarized in the left-most
+portion of Fig. 3. Participants were instructed to rate the smoothness
+of the gameplay on a scale of 1-7 as they performed a secondary
+first-person targeting task. This task required participants to destroy
+as many moving targets on screen as possible in the allotted time.
+To destroy a target, a participant aligns a reticle (crosshair) over
+a moving target and clicks once. Following a valid mouse click,
+the target is destroyed and automatically respawns at a random
+2A pilot study considering a few different frequencies showed minor differences in
+perception.Thus we selected only a single frequency.
+location in the scene. Four targets were presented simultaneously
+and moved in random directions across the screen. Participants
+could not translate (move) their camera within the 3D scene but
+could rotate the view direction by moving the mouse, reproducing
+aiming controls typical of FPS gaming.
+3.2.1 Trial flow. Each trial began with a red reference target cen-
+tered on the screen, with the reticle’s default position set to the
+center of this target. A message was overlaid on-screen stating:
+“Click the red target to begin. ” When participants were ready to be-
+gin a trial, they clicked on the reference target. Afterward, four green
+targets appeared on the screen. The targets moved randomly within
+a predefined region in world-space coordinates for four seconds.
+We instructed participants to try their best to destroy the targets in
+each trial and warned them that their data would be discarded if the
+number of targets destroyed did not meet an unspecified threshold.
+We kept this threshold vague to ensure that participants focused
+on the judgment of smoothness while simultaneously doing the
+secondary task of destroying the targets. We decided to have the
+targets respawn infinitely to ensure that participants experienced
+the complete sequence of frame times before making a perceptual
+judgment.
+After four seconds of gameplay elapsed, a rating screen appeared.
+Participants indicated their perception of smoothness on a Likert
+scale ranging from 1-7, with 1 mapping to the least smooth per-
+ceptual experience and 7 mapping to the smoothest perceptual
+experience. Participants marked their responses by pressing the
+appropriate number key on the keyboard. To end the trial, a dy-
+namic visual noise mask (run as a 2D shader) [1] would appear on
+the screen for half a second. We added the mask in an attempt to
+remove any carryover effects or motion adaption from the previous
+trial. This flow is summarized visually on the left side of Fig. 3.
+Before the experiment started, participants were allowed to ad-
+just their mouse sensitivity to their desired setting. The mouse
+sensitivity adjustment task was similar in design to the description
+above, except it ended once all 4 targets were destroyed with no time
+limit. Afterward, participants were provided task instructions and
+practice trials to get comfortable with the experiment design. The
+instructions consisted of two separate trials. The first trial lasted
+ten seconds instead of four, with the game rendered at 15 Hz. Par-
+ticipants were instructed to pay attention to the smoothness of the
+gameplay, as this visual experience represented a smoothness rating
+of 1. Next, they experienced a trial at 360 Hz for ten seconds and
+were told that this visual experience mapped to a smoothness rating
+of 7. As a note, we did not include 15 Hz or 360 Hz frame rates in
+the actual experiment. After being introduced to the rating scale,
+participants experienced five warm-up trials lasting four seconds
+each. The warm-up trials consisted of variable frame time sequences
+and constant frame time sequences and were designed to introduce
+the user to the primary task of the experiment.
+3.2.2 Stimuli. We utilized four instances of a single type of target
+in each trial. The target was green and had a world-space diameter
+of 0.5 m. Note that we did not calculate degrees of visual angle
+subtended by the target on the retina as we did not use a chin rest
+to control for viewing distance. Additionally, the apparent size of
+the target changed slightly on-screen as it moved due to perspective
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+Influence of Variable Frame Timing • 5
+Fig. 3. Trial flow for experiment 1 (left) and experiment 2 (right). In experiment 1, only one weapon type results in a single flow. Note that the visual noise
+mask is presented in the final stage of the experiment 1 flow. In experiment 2, participants utilized two weapon types, and the damage sequence is depicted
+across frames of two trials.
+projection. The target moved at a constant world-space speed of
+3 m/sec. At some point, the target changed direction every 700-
+1000 ms (uniformly sampled), with the new direction also sampled
+uniformly from all possible directions. The targets spawned in a 0.5
+x 2 x 2 m box centered 7.5 m away from the player spawn position.
+Those targets moved within a larger 1 x 2.3 x 6 m box centered on
+the same position as the spawn bounding box.
+We utilized a red circle for the reticle. Participants could adjust
+their mouse sensitivity to their desired setting (in◦/mm), and the
+mouse DPI was set to 800.
+3.2.3 Conditions. Experiment 1 employed four conditions, one con-
+stant frame time and three variable frame time conditions that dif-
+fered in amplitude (see Section 3.1 above). The constant frame time
+condition was comprised of eight levels. From the longest frame du-
+ration to the shortest, we included: 1/30, 1/34, 1/40, 1/48, 1/60, 1/80,
+1/120, and 1/240 s. We selected these frame duration levels based
+on two factors. First, we wanted to adequately sample the domain
+of monitor refresh rates available in the wild. Older displays and
+TV content update at 30 Hz refresh rates, while new monitors can
+run up to 360 Hz, but we only tested up to 240 Hz as this is what is
+widely available in the gaming market. Second, the VFT conditions,
+using a sinusoidal variation, were composed of frame sequences
+that oscillated periodically between two frame times; for example,
+between 1/240 s and 1/120 s. Because the user is experiencing (at
+most) a frame time equivalent to a 120 Hz frame rate, we wanted to
+include that constant frame rate in our experiment design.
+The three VFT conditions sampled the same domain of frame
+times as the constant frame time condition but differed from one
+another in the amplitude (A) of the sine wave used to generate the
+sequence of frame times. The amplitude and the min and max frame
+duration from both the constant and variable frame time conditions
+are provided in Table 2.
+In total, there were 26 levels across the four conditions. Par-
+ticipants encountered each of the 26 levels 11 times totaling 286
+trials. To account for order or carryover effects, we presented the
+26 levels in random order within a single block (of 26 trials). Par-
+ticipants, therefore, encountered 11 blocks of 26 trials so that no
+block contained two trials of the same level. This experiment took
+approximately 1 hour to complete.
+3.2.4 Participants. A total of 10 participants completed experiment
+1. However, one participant’s data were excluded from analysis
+because their responses were overly noisy (i.e., the standard error
+of the mean for their response at each level was 2-3× as large as
+the other participants). All participants signed an informed consent
+form approved by the IRB (Protocol #00059738).
+3.3 Experiment 2: Targeting Performance
+Experiment 2 was a performance-based task focused on the effect of
+variable frame timing while controlling for perceptual smoothness
+(based on experiment 1 results) on destroying a single target with
+two weapon configurations: 2-hit and Autofire. The first weapon
+configuration was a 2-hit weapon that required participants to click
+twice on the target to destroy it. The second weapon configuration
+was set to Autofire, which required a single mouse click followed
+by a hold to fire repeatedly (15 shots/s).
+Our selection of constant and variable frame time sequences was
+based on the perceptual results from experiment 1. Specifically, we
+paired VFT sequences and constant frame time sequences that were
+perceived as equally smooth in experiment 1. With this framework
+in mind, we can assess whether the VFT sequences impact targeting
+performance relative to a constant frame time sequence despite
+being perceived as equally smooth.
+3.3.1 Trial flow. A trial in experiment 2 was similar in structure
+to a trial in experiment 1 but with a few important differences.
+First, a single green target appeared on screen as opposed to four.
+Second, the participants were instructed to destroy the target as
+quickly as possible within five seconds to complete the task. The trial
+would end if either five seconds passed or the target was destroyed,
+whichever came first. At the end of the trial, a message would appear
+stating either, “Target destroyed!” or “Target not destroyed. ” The
+subsequent trial would begin with the following message, “Click
+the red target to begin. ”
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+6 • Klein et al.
+Amplitude Count Frame Duration (min, max) [s]
+0 ms (constant) 8 1
+240 , 1
+120 , 1
+80 , 1
+60 , 1
+48 , 1
+40 , 1
+34 , 1
+30
+2 ms 7 ( 1
+240 , 1
+120 ), ( 1
+120 , 1
+80 ), ( 1
+80 , 1
+60 ), ( 1
+60 , 1
+48 ), ( 1
+48 , 1
+40 ), ( 1
+40 , 1
+34 ), ( 1
+34 , 1
+30 )
+4 ms 6 ( 1
+240 , 1
+80 ), ( 1
+120 , 1
+60 ), ( 1
+80 , 1
+48 ), ( 1
+60 , 1
+40 ), ( 1
+47 , 1
+34 ), ( 1
+40 , 1
+30 )
+6 ms 5 ( 1
+240 , 1
+60 ), ( 1
+120 , 1
+48 ), ( 1
+80 , 1
+40 ), ( 1
+60 , 1
+34 ), ( 1
+48 , 1
+30 )
+Table 2. Experiment 1 conditions are ordered by the amplitude of frame time variation. Constant (0 ms) conditions, with equal minimum and maximum
+frame duration, are represented by a single number instead of a pair. All frame duration is presented as fractions in seconds. The count column represents the
+number of levels tested in each of the four conditions.
+Fig. 4. (Left) Visualization of the experiment 2 spawn regions centered on
+the initial player aim direction. The top (cyan) and bottom (red) regions
+were 0.5 x 0.2 x 2.6 m and the left (yellow) and right (magenta) regions were
+0.5 x 1.8 x 0.2 m. An equal number of targets spawned in each region within
+each condition. The reticle was drawn in red at the center of the screen.
+(Right) Different colored reticles used for the 2-hit (black) and track (blue)
+weapon configurations.
+3.3.2 Stimuli. Participants were instructed to track and destroy a
+single green target. The target was 0.25 m in diameter and moved
+at a constant speed of 2 m/s. The target utilized the same direction
+change algorithm as experiment 1 with an equal motion change
+time range of 700-1000 ms. Given that this task was performance-
+based, we wanted to avoid the worst possible edge case (and similar
+cases) where the target spawns, by chance, directly over the player
+reticle, as this would unduly influence task performance. Therefore,
+we created four different rectangular spawn regions that comprise
+the perimeter of the bounding box of target motion. These regions
+are visualized in Fig. 4. The top and bottom regions were 0.5 x 0.2
+x 2.6 m and the side regions were 0.5 x 1.8 x 0.2 m. The target
+movement bounds were the same as in experiment 1 (a 1 x 2.3 x 6 m
+box centered 7.5 m away from the user and completely containing
+the spawn bounds).
+When the 2-hit weapon configuration was selected, the reticle
+was drawn in black, and when the Autofire weapon was used, the
+reticle was drawn in blue, as shown on the right side of Fig. 4, with
+the intent to inform the player which weapon was active. The 2-hit
+weapon fired at 4 Hz and required two shots on target to destroy.
+Each shot was followed by a cooldown period, indicated by a ring
+that appeared on the screen surrounding the reticle. It changed color
+from blue to yellow during the cooldown, and once it disappeared,
+participants could fire the weapon again, as shown in Fig. 3 right.
+The Autofire weapon fired 15 shots/s and required 10 hits to destroy
+the target. Neither weapon supported a reload action, and both had
+infinite ammunition. Lastly, participants could adjust their mouse
+sensitivity to their liking (in◦/mm), and the mouse DPI was fixed
+to 800.
+3.3.3 Experiment conditions. In this experiment, we employed three
+constant frame time levels and five variable frame time levels from
+experiment 1. Based on the perceptual results from experiment 1
+(Sec. 4.1), we grouped constant frame time sequences with VFT
+sequences that were, on average, perceived as equally smooth. The
+first pairing contained a constant frame time sequence at 1/120 s
+and a VFT sequence that oscillated between 1/240 and 1/80 s (A = 4
+ms). The second grouping contained the constant frame duration
+of 1/60 seconds and three VFT sequences: 1) 1/120 to 1/48 (A = 6
+ms), 1/80 to 1/48 (A = 4 ms), and 1/60 to 1/48 (A = 2 ms). The last
+pairing considered the constant frame time sequence of 34 Hz and
+the VFT sequence oscillating between 1/40 to 1/30 seconds (A = 4ms).
+Together, these groupings constitute 3 conditions for experiment
+2. For each of the variable and constant frame time sequences in
+the 3 conditions, participants completed the task with the 2-hit and
+Autofire weapon configurations. There were 16 unique frame time-
+by-weapon configuration combinations across the three conditions.
+We utilized a blocked design where participants completed all
+trials for one frame time sequence by weapon configuration com-
+bination (e.g., 1/60 s constant frame time sequence with the 2-hit
+weapon) before moving on to the next block of trials. Within a given
+block, participants completed 5 mini-blocks. Each mini-block con-
+tained eight trials, 2 trials for each of the four target spawn regions
+(left, right, top and bottom). We discarded the first mini-block as
+training from the initial 40 trials. We analyze 32 trials per block
+totalling 640 trials per subject in just over an hour.
+To account for order effects, we controlled the sequence of blocks
+participants encountered throughout the experiment. First, we took
+all permutations of the three conditions (6) and randomly shuffled
+the ordering of the constant and variable frame time blocks within
+each of the conditions. Then for each permutation, we created a
+sequence of blocks where the odd-numbered blocks (i.e., blocks 1,
+3, . . . , 15) used the 2-hit weapon, and the even-numbered blocks
+used the Autofire weapon. We also include a separate order where
+participants utilized the Autofire weapon on all the odd-numbered
+blocks and the 2-hit on the even-numbered blocks. Together, this
+amounted to 12 orderings of blocks.
+3.3.4 Participants. A total of 15 participants completed experiment
+2. All participants signed an informed consent form that was ap-
+proved by the IRB (Protocol #00059738).
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+Influence of Variable Frame Timing • 7
+5.0 10.0 15.0 20.0 25.0 30.0
+2
+3
+4
+5
+6SmoothnessSmoothnessSmoothnessSmoothnessSmoothnessSmoothnessSmoothnessSmoothness
+CFT (A = 0 ms)
+1
+240
+1
+120
+1
+80
+1
+60
+1
+48
+1
+40
+1
+34
+1
+30
+Sigmoid Fit (CFT)
+5.0 10.0 15.0 20.0 25.0 30.0
+Frame duration [ms]Frame duration [ms]Frame duration [ms]Frame duration [ms]
+VFT (A = 2 ms)
+( 1
+240 , 1
+120 )
+( 1
+120 , 1
+80 )
+( 1
+80 , 1
+60 )
+( 1
+60 , 1
+48 )
+( 1
+48 , 1
+40 )
+( 1
+40 , 1
+34 )
+( 1
+34 , 1
+30 )
+Sigmoid Fit (CFT)
+5.0 10.0 15.0 20.0 25.0 30.0
+VFT (A = 4 ms)
+( 1
+240 , 1
+80 )
+( 1
+120 , 1
+60 )
+( 1
+80 , 1
+48 )
+( 1
+60 , 1
+40 )
+( 1
+47 , 1
+34 )
+( 1
+40 , 1
+30 )
+Sigmoid Fit (CFT)
+5.0 10.0 15.0 20.0 25.0 30.0
+VFT (A = 6 ms)
+( 1
+240 , 1
+60 )
+( 1
+120 , 1
+48 )
+( 1
+80 , 1
+40 )
+( 1
+60 , 1
+34 )
+( 1
+48 , 1
+30 )
+Sigmoid Fit (CFT)
+Fig. 5. Perception of smoothness plotted as a function of time-weighted mean frame duration for each of the four conditions tested in experiment 1. Participants
+utilized a rating scale from 1 (low) to 7 (high) to indicate their perception of smoothness during gameplay. (Left) Mean smoothness ratings across subjects for
+each of the eight frame duration levels tested in the constant frame time condition. Error bars represent the standard error of the mean. A sigmoid function
+(see Equation 1) is fit to the pooled participant smoothness scores for constant frame rates and is superimposed over all plots in the figure (green lines). We
+computed MSE as a measure of goodness of fit, and red dotted lines depict prediction errors of the fit with respect to observed data. (From middle left to right)
+2/4/6 ms amplitude VFT condition: smoothness scores for each of the levels presented to participants are plotted against the time-weighted mean frame
+duration of each VFT sequence (i.e., the x-coordinate where vertical error bars intersect the horizontal lines).
+4 RESULTS AND ANALYSIS
+4.1 Experiment 1-Perception
+When comparing the frame time sequences (levels) within the same
+condition, perceived smoothness monotonically decreased as frame
+duration increased. This relationship held across all four conditions
+tested in experiment 1 and is shown in Fig. 5 where perceived
+smoothness is plotted against time-weighted mean frame duration
+(the x-coordinate where vertical error bars project out in the right
+three panels). This shows that the findings from prior work [ 6]
+continue to hold even when frame time varies. The smoothness
+rating changed almost linearly as the time-weighted mean frame
+duration increased, with the slope being slightly less steep at the
+short frame times. It seems that meaningfully different smoothness
+existed across the tested range of frame times. Additionally, our
+reference stimuli effectively anchored the perceived smoothness at
+15 and 360 Hz to the smoothness ratings of 1 and 7, respectively.
+To examine the effect of frame time variation, we fit a sigmoid
+function to the observed data in the CFT condition (leftmost panel
+in Fig. 5) using a least-square criterion,
+𝑓𝛼,𝑥 0,𝛽,𝐶(𝑥) = 𝛽
+1+𝑒−𝛼(𝑥−𝑥0)+𝐶 (1)
+yielding the following fit parameters: 𝛼 = −116.983, 𝛽 = 7.63,
+𝑥0 = 0.0306,𝐶 =−1.091 with a mean squared error (MSE) of 0.0458.
+We then overlaid the fitted sigmoid curve on the VFT sequences
+comprising the other three conditions, as depicted by the green
+curve re-plotted over the observed data in each of the right three
+panels of Fig. 5. For each VFT sequence (horizontal lines in Fig. 5),
+one can visually search for the CFT yielding equivalent predicted
+smoothness by finding the point on the green curve with an equal
+smoothness rating3. In other words, we identify where the green
+curve intersects the horizontal line. This equivalently smooth CFT
+tends to be closer to the longest frame duration in the given VFT
+sequence (the right edge of the horizontal line) than the shortest
+frame duration in the sequence (the left edge of the same line).
+In applying the same logic from the above analysis to each of the
+three VFT conditions, we found that the amplitude of frame time
+variation had a systematic effect on the equivalently smooth CFT
+(Fig. 6). When the amplitude of frame time variation was small (2
+ms), the equivalently smooth CFT was not strongly biased toward
+the longer frame time in the VFT condition. Additionally, it tended to
+cluster around the time-weighted mean frame duration of each VFT
+sequence. When the amplitude of frame time variation was large (6
+ms), the equivalently smooth CFT became strongly biased toward
+the longer frame time in the VFT sequence (Fig. 6 left). We can
+conceptualize this bias another way by considering the equivalently
+smooth CFT as a percentile for the distribution of frame times in
+the VFT sequence under consideration, as exemplified in the inset
+plot of Fig. 6 for the sequence (1/48, 1/30).
+After converting the equivalently smooth CFT to a percentile rank
+for each VFT sequence in a particular condition, we see that there
+is a lower variance around a higher mean percentile rank in the 6
+ms condition relative to the 4 ms and 2ms conditions (Fig. 7, right).
+However, when we consider the equivalently smooth CFTs, this
+relationship across VFT condition disappears as shown in Fig. 7, left.
+The analysis demonstrates that the perceived smoothness in VFT
+becomes dominated by the visual stimulation from longer frames,
+and the bias is stronger and more consistent when the amplitude of
+the variation is wider.
+3The green curve interested all VFT sequences except for the (1/240-1/120s) level. We
+exclude this data point from analysis but revisit it in the discussion.
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+8 • Klein et al.
+Freq.
+Frame duration [ms]
+Fig. 6. Perception of smoothness in the 6 ms VFT condition (A = 6 ms). (Left) The sigmoid fit to the constant frame duration data (green curve) is overlaid on
+top of horizontal bars representing the range of frame times for each of the five levels in the A = 6 ms VFT condition. Horizontal dashed-red lines extend
+from the time-weighted mean frame duration of each VFT sequence to the intersection point of the green curve and the horizontal lines. We consider these
+intersection points as equivalently smooth CFTs for corresponding VFT sequences. The inset figure to the right depicts the frequency distribution of frame
+times in the VFT sequence oscillating between (1/48, 1/30) frame times. Vertical bars overlaid on the distribution highlight the 25th, median (50th), and
+75th percentiles and the time-weighted mean frame duration. Additionally, the last vertical bar highlights the percentile rank of the frequency distribution
+corresponding to the equivalently smooth CFT.
+Condition MSE Weighted Mean MSE Percentile Reduction in MSE
+2 ms 0.0351 0.0334 5%
+4 ms 0.0532 0.0537 -0.95%
+6 ms 0.0053 0.0043 19.7%
+Table 3. Comparison of sigmoid MSE for time-weighted mean and percentile-based fits. Note that comparisons should occur within conditions, not across
+them, as the number of points fit by the 4-parameter sigmoid (see Eq. 1) was different between conditions.
+2 4 6
+10.0
+15.0
+20.0
+25.0
+30.0Equivalent CFT [ms]
+2 4 6
+40.0%
+50.0%
+60.0%
+70.0%
+80.0%Percentile
+VFT Ampltide [ms]
+Fig. 7. (Left) The scatter plot demonstrates a poor correlation between VFT
+amplitude and the smooth CFT metric. (Right) Improved positive correlation
+of VFT amplitude when equivalently smooth CFT is converted to a percentile
+rank for the distribution of frames in its respective VFT sequence. Note that
+the colors of scatter points map directly to the colors in the legend of 5.
+To confirm this, we fit two sigmoids for each amplitude condition.
+The first sigmoid was fit on the time-weighted mean frame duration
+of each VFT sequence, and the second one was fit on the mean
+percentile of the scatter points in Fig. 7 (right). Overall, we observe
+more accurate fits when using the mean percentile instead of the
+time-weighed mean of the frame time series (Table 3). This indicates
+that, particularly for larger frame time variations, using a model
+based on a fixed (high) percentile of frame times better predicts
+perceived smoothness than time-weighted mean frame time.
+4.2 Experiment 2-Performance
+4.2.1 Figures of merit and Analysis. We looked at time to completion
+to evaluate the effect of variable frame timing on performance. As
+a baseline check, we also looked at the average number of trials
+with the target destroyed per VFT or CFT sequence. The task, by
+design, was easy to accomplish, so the proportion of trials in which
+the target was successfully destroyed served as a measure to rule
+out outliers. We chose a threshold of 75% of trials with the target
+destroyed to rule out outliers. Two participants did not meet this
+threshold and were excluded from the statistical analysis, leaving 15
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+Influence of Variable Frame Timing • 9
+participants. Our primary focus was to assess the time to complete
+the task. We reasoned that if VFT were to affect performance, then
+this would be reflected as slower completion times for trials with
+varying frame times relative to trials with constant frame times.
+For time to complete the task, we coupled two statistical analyses
+to assess different but related hypotheses. First, we conducted a
+three-way repeated measure ANOVA (2 weapon configurations×
+3 smoothness levels× 2 frame timing regimes ) to determine if there
+was an interaction between perceptual smoothness, weapon config-
+uration, and VFT on time to destroy the target.We employed a fully
+crossed design where our focal, or moderating, variable was weapon
+configuration. We hypothesized that the effect of weapon type on
+time to completion would depend on both the smoothness of the
+gaming experience and whether the frame duration was varying or
+constant. The smoothness variable was comprised of three levels
+based on the findings from experiment 1: low smoothness (1/34 s,
+and (1/40 s-1/30 s)), average smoothness (1/60 s, and (1/80 s-1/48 s)),
+and high smoothness (1/120 s, and (1/240 s-1/80 s)). Note that each
+variable frame time sequence has an amplitude of 4 ms, so the only
+factors changing are the sequence’s minimum and maximum frame
+duration, which are directly related to the smoothness experience.
+The variable frame time factor has two levels: constant frame time
+(1/34 s, 1/60 s, and 1/120 s) and variable frame time ((1/40 s-1/30
+s), (1/80 s-1/48 s), and (1/240 s-1/80 s)). The last factor, weapon
+configuration, has two levels: 2-hit and Autofire.
+Our second analysis focused on how the sine wave’s amplitude
+influenced performance. We conditioned our analysis on a single
+smoothness score and investigated the interaction between weapon
+configuration and amplitude of the sine wave. The first factor, am-
+plitude of the sine wave, consisted of 4 levels: 1/60 s (A = 0 ms), 1/60
+s-1/48 s (A = 2 ms), 1/80 s-1/48 s (A = 4 ms), 1/120 s-1/48 s (A = 6
+ms). The second factor, weapon configuration, maintained the same
+two levels as the previous analysis. In short, we ran a fully crossed
+two-way repeated measure ANOVA (2 weapon configurations× 4
+amplitudes).
+Statistically significant main effects in both analyses were fol-
+lowed up with multiple paired-sample t-tests with Bonferroni ad-
+justments made at an alpha level of 0.05. Specifically, the p-values
+reported in the experiment 2 results section are adjusted using a
+Bonferroni correction. We also wrangled the data for each partici-
+pant to conform to the assumptions of the ANOVA test. First, we
+filtered out the data from each block’s first mini-block (8 trials) to
+focus on steady-state performance and exclude outliers that may
+have resulted from adapting to the task. Afterward, we computed
+the mean time to complete the task with the remaining 32 trials
+(although some means were based on smaller sample sizes if par-
+ticipants did not complete the task on a particular trial). We then
+applied a natural log transformation (base𝑒) to the mean value ob-
+tained for each observer to ensure that the residuals were normally
+distributed. Note that we report the descriptive statistics (in both our
+figures and text) in the original units despite running the analyses
+on the transformed data for ease of interpretation (i.e., equal length
+standard error whiskers around means on bar charts).
+4.2.2 Time to completion. The mean time to destroy the target
+provides us with an overall measure quantifying the impact of vari-
+able frame timing on performance in experiment 2. We observed a
+significant three-way interaction between weapon configuration,
+smoothness and variable frame timing, F(2, 28) = 3.490, p = 0.044,
+𝜂2𝑝 = 0.2. We observed no significant two-way interaction between
+smoothness and variable frame timing for the Autofire weapon (F(2,
+28) = 2.11, p = 0.141,𝜂2𝑝 = 0.131), nor a significant main effect for
+variable frame timing (F(1, 14) = 0.412, p = 0.531, 𝜂2𝑝 = 0.029), but
+we did observe a main effect for smoothness (F(2, 28) = 6.28, p =
+0.006,𝜂2𝑝 = 0.31), as shown in Fig. 8, left. Post-hoc analysis between
+the different levels of smoothness indicated that low smoothness
+trials took significantly longer to complete (M=2.44 s, SEM=0.104)
+relative to high smoothness (M=2.28 s, SEM=0.097), t(14) = 3.21, p
+= 0.006; and average smoothness (M=2.32 s, SEM=0.114), t(14) =
+3.01, p = 0.009. However, we did not observe a significant difference
+in time to completion between the medium and high smoothness
+levels, t(14) = -0.624, p = 0.542.
+For the 2-hit weapon configuration, we observed no significant
+interaction between smoothness and VFT (F(2, 28) = 1.28, p = 0.293,
+𝜂2𝑝 = 0.084) nor a significant main effect for VFT (F(1, 14) = 0.3, p
+= 0.593,𝜂2𝑝 = 0.021). The main effect of smoothness for the 2-hit
+weapon was significant at an uncorrected alpha level of 0.05, F(2,
+28) = 3.87, p = 0.033,𝜂2𝑝 = 0.216, but did not survive a Bonferroni
+corrected alpha level for the 4 main effects investigated here (alpha
+= 0.0125). Therefore, we did not examine pairwise comparisons
+between smoothness levels for the 2-hit weapon.
+Our second analysis, which focused on the interaction between
+the amplitude of the sine wave and weapon configuration condi-
+tioned on medium perceptual smoothness, revealed no significant
+two-way interaction between weapon configuration and amplitude
+of sine wave, F(3,42) = 2.145, p = 0.109,𝜂2𝑝 = 0.133. We also did not
+find a significant main effect for amplitude of the sine wave, F(3, 42)
+= 0.669, p = 0.576,𝜂2𝑝 = 0.046 but we observed a significant main ef-
+fect for weapon configuration, F(1,14) = 47.148, p < 0.001,𝜂2𝑝 = 0.771
+(Fig. 8, right). Utilization of the 2-hit weapon led to significantly
+faster task completion time (M=1.94 s, SEM=0.109) relative to the
+Autofire weapon (M=2.31 s, SEM=0.108).
+5 DISCUSSION
+5.1 Summary of Results
+In this study, we investigated how VFT influences users’ perception
+of smoothness (experiment 1) and their performance in FPS-style
+gameplay (experiment 2). Our analysis of the results from experi-
+ment 1 suggests that VFT impacts our perception of smoothness
+similarly to CFT (Fig. 5). Moreover, as more variation is added to a
+constant frame time baseline (i.e., larger amplitude), our perception
+of smoothness becomes tethered to the frames presented on screen
+for longer periods of time (e.g., the sampled frames near the peak
+of the sine wave in Fig. 2). This is realized by our MSE analysis
+(table 3) in the VFT conditions that found higher percentiles of the
+frequency distributions for each VFT sequence served as better pre-
+dictors of smoothness than the time-weighted mean frame duration.
+For example, we saw a 20% reduction in MSE when we regressed
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+10 • Klein et al.
+AutoFire 2-Hit
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+ *
+*
+Completion Time [s]
+Perceptual
+smoothness
+Low
+Medium
+High
+AutoFire 2-Hit
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5
+ *
+Fig. 8. Time to destroy the target. (Left) Box plots with individual data points per subject (n = 15) superimposed on top. The task completion time is stratified
+by weapon type and perceptual smoothness. (Right) The task completion time is stratified by weapon type only. Horizontal black bars with the * symbol
+indicate statistically significant comparisons.
+the smoothness scores of participants in the A = 6 ms condition
+on the frame duration corresponding to the 70th percentile of each
+of the five VFT sequences as opposed to the time-weighted mean
+frame duration. However, it should be noted that we fit four free
+parameters of the sigmoid function to (essentially) five data points
+(the means smoothness scores across all participants for the VFT
+sequences). So some overfitting is to be expected. Other models (e.g.,
+simple linear regression) may better predict the smoothness in the
+VFT sequences with considerable variation in frame timing, espe-
+cially when the VFT sequence oscillates between 1/240 and 1/120 s
+because it did not intersect the green curve in Fig. 5. However, this
+does not preclude our conclusion that frames persisting on screen
+for the longest period of time in the VFT sequences have a more
+pronounced influence on the perception of smoothness in gameplay
+than the frames near the time-weighted mean frame duration of the
+VFT sequence.
+The results from experiment 2 demonstrated that variable frame
+timing did not significantly impact task completion. However, per-
+ception of smoothness and the weapon type did account for the
+variability in task performance. Participants took longer to destroy
+targets with the Autofire weapon in the low smoothness condition
+relative to the average and high smoothness conditions; however,
+we did not find the same pattern of results with the 2-hit weapon
+(Fig. 8 left). Our second analysis on the effect of the sine wave am-
+plitude, conditioned on average perceptual smoothness, showed no
+additional interesting effects of VFT and reconfirmed the influence
+of weapon configuration on completion time. Taken together, these
+analyses reject our hypothesis that performance is impacted beyond
+perceivable changes in VFT. While frames that last on screen for
+long periods of time (e.g., 1/30 s) do create significant impacts on
+task completion time relative to frames that last on screen for short
+periods of time (e.g., 1/120 s), they do not appear to drive changes
+in performance amongst CFT and VFT sequences ranked as equally
+smooth (on average) by users.
+1/120
+(1/240, 1/80)(1/120, 1/48)
+1/60
+(1/80, 1/48)(1/60, 1/48)
+1/34
+(1/40, 1/30)
+Frame Time [s]
+0
+10
+20
+30
+40
+50
+60Click-to-Photon [ms]
+Fig. 9. Distribution of click-to-photon latency (measured based on 200 clicks)
+across the stimuli levels selected for high, mid, and low smoothness for
+experiment 2 (performance). Horizontal lines indicate median, box bounds
+upper and lower quartile, and whiskers indicate min and max, excluding
+outliers. Frame times are sorted by measured latency. Measurements were
+collected using a click-to-photon tool similar to [7, 19]. Latency may partially
+explain differences in aiming time (Sec. 5.2).
+5.2 Latency Effects
+Prior work has demonstrated that end-to-end latency affects FPS
+aiming task performance [9, 13, 22] with changes as small as 8 ms
+showing measurable differences [24]. Frame time contributes to the
+latency of a system, with the expected latency linearly proportional
+to frame duration. In our experiment, we chose not to attempt to
+normalize latency across frame time conditions as there was no
+obvious method for controlling latency during dynamic frame time
+stimuli. As a result, different VFT levels result in different mean and
+range of latencies, as seen in Fig. 9. The difference in average latency
+between the 120 Hz and the 34 Hz constant frame rate conditions was
+∼10 ms. Though this likely impacted performance results between
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+Influence of Variable Frame Timing • 11
+the high, mid, and low frame rate conditions, the impact based on the
+difference in latency between grouped conditions (i.e., 120 Hz fixed
+vs. (1/240, 1/80) VFT) is likely small. Future studies on the impacts
+of VFT on latency and variable latency on performance would be
+interesting next steps in better understanding these impacts. We
+accept that the change in latency across conditions may cause some
+portion of the measured change in performance in our experiments.
+5.3 Suggestions for Researchers
+Researchers studying frame rate or time as an independent vari-
+able in perceptual contexts should carefully consider the effects of
+variation over time. Systems used to conduct experiments should
+have appropriate hardware specifications to guarantee they meet
+or exceed the desired frame rate and potentially inject additional
+delay to regularize frame times to as close to constant as possible.
+When reporting frame times as a single period, or frame rate, inves-
+tigators should report variational statistics demonstrating how well
+controlled their constant frame rate/time was. When frame rates
+or times are not sufficiently well controlled, we have demonstrated
+that they significantly affect the perception of smoothness, with
+the mean frame time mispredicting the equivalent perception of a
+constant frame time condition.
+We did not observe evidence that, beyond perceptually equivalent
+conditions, our choice of variable frame timing stimuli impacts FPS
+aiming task performance. However, this does not imply that variable
+frame timing cannot impact task performance. Specifically, we mea-
+sured a relatively small frame time variation at typical, lower-end
+refresh rates. More considerable variations in frame time, such as the
+doubling of frames introduced by VSync, could more significantly
+impact performance through variable frame timing.
+5.4 Suggestions for Gamers
+Gamers should be mindful of additional dynamic workloads and
+other sources of VFT in their systems. However, unlike other metrics
+where performance is often impacted without a perceived differ-
+ence, variable frame timing appears to be primarily a perceptual
+effect. For this reason, gamers are uniquely well suited to evaluate
+the impacts of variable frame timing on their gameplay as the im-
+pacts seem primarily perceptual. When VFT becomes bothersome
+to gamers, they have several options for improving the regularity of
+frame times. Traditional techniques like buffering larger numbers of
+frames and enabling VSync can help in some cases, but at the cost
+of additional latency and increased VFT in certain non-performant
+cases. Alternatively, gamers can use VRR technology or approaches
+like in-game frame rate limiters and adjust settings to reduce addi-
+tional compute workloads. Here the primary benefit of VRR is that,
+unlike more traditional display techniques, it can target constant
+frame rates other than traditional display refresh rates without ex-
+otic display configuration (i.e., 60, 120, 144, 240 Hz). This allows
+the gamer to better tailor their ideal, consistent refresh rate to the
+system capabilities by running at 100 Hz instead of duty cycling
+between 1/60 s and 1/120 s frames.
+6 CONCLUSIONS
+This work focused on the influence of Variable Frame Timing (VFT)
+on human perception of smoothness and performance in FPS-style
+gameplay. It considered a wide range of constant frame time se-
+quences from 1/30 to 1/240 s and variable frame time sequences
+that oscillated between those typical frame times encountered in
+the wild. Across the domain of frame times tested, two user studies
+demonstrate that large deviations from the average frame time of the
+VFT sequence affect the perception of smoothness while minimally
+influencing performance beyond the smoothness effect.
+ACKNOWLEDGMENTS
+REFERENCES
+[1] ap. 2015. Visual sorbet. https://www.shadertoy.com/view/Xdd3D7
+[2] Ben Boudaoud, Josef Spjut, and Joohwan Kim. 2022. FirstPersonScience: An
+Open Source Tool for Studying FPS Esports Aiming. In Special Interest Group on
+Computer Graphics and Interactive Techniques Conference Talks . 1–2.
+[3] Ed Callway. 2018. Variable Frame Rate Technology — Change Is Good!. In SMPTE
+2018. 1–11. https://doi.org/10.5594/M001823
+[4] Kajal T Claypool and Mark Claypool. 2007. On frame rate and player performance
+in first person shooter games. Multimedia systems 13, 1 (2007), 3–17.
+[5] Mark Claypool, Kajal Claypool, and Feissal Damaa. 2006. The effects of frame
+rate and resolution on users playing first person shooter games. In Multimedia
+computing and networking 2006 , Vol. 6071. SPIE, 607101.
+[6] Gyorgy Denes, Akshay Jindal, Aliaksei Mikhailiuk, and Rafał K. Mantiuk. 2020.
+A Perceptual Model of Motion Quality for Rendering with Adaptive Refresh-
+Rate and Resolution. ACM Trans. Graph. 39, 4, Article 133 (jul 2020), 17 pages.
+https://doi.org/10.1145/3386569.3392411
+[7] Federico Dossena and Andrea Trentini. 2022. OpenLDAT—A system for the
+measurement of display latency metrics. Journal of the Society for Information
+Display (2022).
+[8] David M Hoffman, Vasiliy I Karasev, and Martin S Banks. 2011. Temporal pre-
+sentation protocols in stereoscopic displays: Flicker visibility, perceived motion,
+and perceived depth. Journal of the Society for Information Display 19, 3 (2011),
+271–297.
+[9] Zenja Ivkovic, Ian Stavness, Carl Gutwin, and Steven Sutcliffe. 2015. Quantifying
+and mitigating the negative effects of local latencies on aiming in 3d shooter
+games. In Proceedings of the 33rd annual acm conference on human factors in
+computing systems. 135–144.
+[10] Akshay Jindal, Krzysztof Wolski, Karol Myszkowski, and Rafał K Mantiuk. 2021.
+Perceptual model for adaptive local shading and refresh rate. ACM Transactions
+on Graphics (TOG) 40, 6 (2021), 1–18.
+[11] Paul V Johnson, Joohwan Kim, David M Hoffman, Andy D Vargas, and Martin S
+Banks. 2014. Motion artifacts on 240-Hz OLED stereoscopic 3D displays. Journal
+of the Society for Information Display 22, 8 (2014), 393–403.
+[12] Seung Hoon Ko. 2019. A-24 db in-band noise-immunity mutual capacitance
+readout system for variable refresh rate of active-matrix oled display. IEEE
+Transactions on Circuits and Systems I: Regular Papers 67, 4 (2019), 1126–1135.
+[13] Shengmei Liu, Mark Claypool, Atsuo Kuwahara, Jamie Sherman, and James J
+Scovell. 2021. Lower is better? The effects of local latencies on competitive first-
+person shooter game players. In Proceedings of the 2021 CHI Conference on Human
+Factors in Computing Systems . 1–12.
+[14] Shengmei Liu, Atsuo Kuwahara, James J Scovell, and Mark Claypool. 2023. The
+Effects of Frame Rate Variation on Game Player Quality of Experience. In Pro-
+ceedings of the 2023 CHI Conference on Human Factors in Computing Systems .
+1–10.
+[15] Rafał K. Mantiuk and Gyorgy Denes. 2021. Adaptive Refresh Rate and Resolution:
+Exploiting the Limitations of Spatio-Temporal Vision. SID Symposium Digest of
+Technical Papers 52, 1 (2021), 465–468. https://doi.org/10.1002/sdtp.14718
+[16] Christian H Poth, Rebecca M Foerster, Christian Behler, Ulrich Schwanecke,
+Werner X Schneider, and Mario Botsch. 2018. Ultrahigh temporal resolution of
+visual presentation using gaming monitors and G-Sync.Behavior research methods
+50, 1 (2018), 26–38.
+[17] Maryam Riahi and Benjamin Allen Watson. 2021. Am I Playing Better Now? The
+Effects of G-SYNC in 60Hz Gameplay. Proc. ACM Comput. Graph. Interact. Tech. 4,
+1, Article 6 (apr 2021), 17 pages. https://doi.org/10.1145/3451269
+[18] Robert W Rodieck and Robert W Rodieck. 1998. The first steps in seeing . Vol. 1.
+Sinauer Associates Sunderland, MA. 158—176 pages.
+[19] Andreas Schmid and Raphael Wimmer. 2021. Yet Another Latency Measuring
+Device. (2021).
+, Vol. 1, No. 1, Article . Publication date: June 2023.
+12 • Klein et al.
+[20] Kyong Jin Shim, Kuo-Wei Hsu, Samarth Damania, Colin DeLong, and Jaideep
+Srivastava. 2011. An Exploratory Study of Player and Team Performance in Mul-
+tiplayer First-Person-Shooter Games. In 2011 IEEE Third International Conference
+on Privacy, Security, Risk and Trust and 2011 IEEE Third International Conference on
+Social Computing. 617–620. https://doi.org/10.1109/PASSAT/SocialCom.2011.155
+[21] Gerrit A Slavenburg, Marcel Janssens, Luis Lucas, Robert Jan Schutten, and Tom
+Verbeure. 2020. Variable Refresh Rate Displays. In SID Symposium Digest of
+Technical Papers, Vol. 51. Wiley Online Library, 669–672.
+[22] Josef Spjut, Ben Boudaoud, Kamran Binaee, Jonghyun Kim, Alexander Majer-
+cik, Morgan McGuire, David Luebke, and Joohwan Kim. 2019. Latency of 30
+Ms Benefits First Person Targeting Tasks More Than Refresh Rate Above 60
+Hz. In SIGGRAPH Asia 2019 Technical Briefs (Brisbane, QLD, Australia) (SA ’19).
+Association for Computing Machinery, New York, NY, USA, 110–113. https:
+//doi.org/10.1145/3355088.3365170
+[23] Josef Spjut, Ben Boudaoud, Kamran Binaee, Alexander Majercik, Morgan McGuire,
+and Joohwan Kim. 2019. FirstPersonScience: Quantifying Psychophysics for First
+Person Shooter Tasks. In UCI Esports Conference. UCI, Irvine, 7 pages.
+[24] Josef Spjut, Ben Boudaoud, and Joohwan Kim. 2021. A Case Study of First Person
+Aiming at Low Latency for Esports. arXiv preprint arXiv:2105.10498 (2021).
+[25] Sylvain Tourancheau, Patrick Le Callet, Kjell Brunnström, and Börje Andrén.
+2009. Psychophysical study of LCD motion-blur perception. In Human Vision
+and Electronic Imaging XIV , Bernice E. Rogowitz and Thrasyvoulos N. Pappas
+(Eds.), Vol. 7240. International Society for Optics and Photonics, SPIE, 724015.
+https://doi.org/10.1117/12.811757
+[26] Rodrigo Vicencio-Moreira, Regan L Mandryk, Carl Gutwin, and Scott Bateman.
+2014. The effectiveness (or lack thereof) of aim-assist techniques in first-person
+shooter games. In Proceedings of the SIGCHI Conference on Human Factors in
+Computing Systems. 937–946.
+[27] Andrew Watson and Albert Ahumada. 2016. The pyramid of visibilty. Journal of
+Vision 16, 12 (2016), 567–567.
+[28] Andrew B Watson. 2013. High frame rates and human vision: A view through
+the window of visibility. SMPTE Motion Imaging Journal 122, 2 (2013), 18–32.
+[29] Andrew B Watson, Albert J Ahumada, and Joyce E Farrell. 1986. Window of
+visibility: a psychophysical theory of fidelity in time-sampled visual motion
+displays. JOSA A 3, 3 (1986), 300–307.
+[30] Benjamin Watson, Rachit Shrivastava, and Ajinkya Gavane. 2019. The Effects of
+Adaptive Synchronization on Performance and Experience in Gameplay. Proc.
+ACM Comput. Graph. Interact. Tech. 2, 1, Article 5 (jun 2019), 13 pages. https:
+//doi.org/10.1145/3320286
+[31] Bonghyun You, Hui Nam, and Hyojin Lee. 2020. Image Adaptive Refresh Rate
+technology for Ultra Low Power Consumption. SID Symposium Digest of Technical
+Papers 51, 1 (2020), 676–679. https://doi.org/10.1002/sdtp.13958
+, Vol. 1, No. 1, Article . Publication date: June 2023.

@@ -1,0 +1,1 @@
+{"scenario": "baseline", "pulses": 936, "mean_us": 0.6, "p50_us": 0.6, "p99_us": 1.2, "max_us": 16.8, "over_1ms": 0}

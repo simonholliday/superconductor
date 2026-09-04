@@ -1,0 +1,507 @@
+[
+ {
+  "label": "gpu",
+  "webgl_renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1660/PCIe/SSE2, OpenGL ES 3.2)",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
+ },
+ {
+  "scenario": "dom_same",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.722,
+   "p50": 0.9,
+   "p95": 1.2,
+   "p99": 1.3,
+   "max": 1.3
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 2.195,
+   "p50": 2.3,
+   "p95": 3.2,
+   "p99": 3.3,
+   "max": 3.4
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_snapshot",
+  "cells": 1024,
+  "change": "half",
+  "js": {
+   "n": 300,
+   "mean": 1.32,
+   "p50": 1.3,
+   "p95": 1.9,
+   "p99": 2,
+   "max": 2.1
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_inc_class",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.43,
+   "p50": 0.5,
+   "p95": 0.8,
+   "p99": 0.9,
+   "max": 0.9
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_inc_overlay",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.306,
+   "p50": 0.3,
+   "p95": 0.6,
+   "p99": 0.6,
+   "max": 0.7
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "svg_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 2.498,
+   "p50": 2.5,
+   "p95": 4,
+   "p99": 7.3,
+   "max": 7.3
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "svg_snapshot",
+  "cells": 1024,
+  "change": "half",
+  "js": {
+   "n": 300,
+   "mean": 1.682,
+   "p50": 1.6,
+   "p95": 2.4,
+   "p99": 4.4,
+   "max": 6
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "canvas_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 1.343,
+   "p50": 1.4,
+   "p95": 2.3,
+   "p99": 2.5,
+   "max": 3.6
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "canvas_inc",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.168,
+   "p50": 0.2,
+   "p95": 0.4,
+   "p99": 0.4,
+   "max": 0.4
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "preact_full",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 2.244,
+   "p50": 2.5,
+   "p95": 4.2,
+   "p99": 4.9,
+   "max": 5.4
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 1.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_same",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 1.04,
+   "p50": 1.1,
+   "p95": 1.7,
+   "p99": 2.3,
+   "max": 2.6
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 8.165,
+   "p50": 8.1,
+   "p95": 9.2,
+   "p99": 9.7,
+   "max": 10.9
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.833,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 33.2,
+   "max": 33.4
+  },
+  "longFrames": 3,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_snapshot",
+  "cells": 1024,
+  "change": "half",
+  "js": {
+   "n": 300,
+   "mean": 4.781,
+   "p50": 4.8,
+   "p95": 5.6,
+   "p99": 5.9,
+   "max": 6.4
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_inc_class",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.536,
+   "p50": 0.5,
+   "p95": 1.3,
+   "p99": 1.6,
+   "max": 1.8
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "dom_inc_overlay",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.33,
+   "p50": 0.2,
+   "p95": 1,
+   "p99": 1.5,
+   "max": 1.9
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "svg_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 10.2,
+   "p50": 10.1,
+   "p95": 12.1,
+   "p99": 13,
+   "max": 13.5
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.888,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 33.3,
+   "max": 33.4
+  },
+  "longFrames": 4,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "svg_snapshot",
+  "cells": 1024,
+  "change": "half",
+  "js": {
+   "n": 300,
+   "mean": 6.664,
+   "p50": 6.6,
+   "p95": 7.8,
+   "p99": 8.3,
+   "max": 9.1
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "canvas_invert",
+  "cells": 1024,
+  "change": "invert",
+  "js": {
+   "n": 300,
+   "mean": 3.481,
+   "p50": 3.5,
+   "p95": 4.1,
+   "p99": 4.5,
+   "max": 4.9
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "canvas_inc",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 0.123,
+   "p50": 0.1,
+   "p95": 0.5,
+   "p99": 1.2,
+   "max": 1.4
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ },
+ {
+  "scenario": "preact_full",
+  "cells": 1024,
+  "change": "toggle4",
+  "js": {
+   "n": 300,
+   "mean": 2.756,
+   "p50": 2.8,
+   "p95": 3.7,
+   "p99": 4.3,
+   "max": 4.6
+  },
+  "interval": {
+   "n": 300,
+   "mean": 16.666,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8
+  },
+  "longFrames": 0,
+  "preact": true,
+  "rate": 6.0,
+  "label": "gpu"
+ }
+]

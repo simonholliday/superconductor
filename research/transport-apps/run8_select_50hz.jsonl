@@ -1,0 +1,4 @@
+{"scenario": "baseline", "pulses": 936, "mean_us": 0.6, "p50_us": 0.6, "p99_us": 1.1, "max_us": 14.1, "over_1ms": 0, "selector": "select"}
+{"scenario": "osc-loop", "pulses": 936, "mean_us": 0.6, "p50_us": 0.6, "p99_us": 4.3, "max_us": 15.2, "over_1ms": 0, "inbound_handled": 980, "sender": "osc", "sent": 982, "selector": "select"}
+{"scenario": "ws-thread", "pulses": 936, "mean_us": 0.7, "p50_us": 0.6, "p99_us": 1.8, "max_us": 17.5, "over_1ms": 0, "inbound_handled": 979, "sender": "ws", "sent": 979, "broadcasts_received": 198, "selector": "select"}
+{"scenario": "ws-thread-drain", "pulses": 936, "mean_us": 0.6, "p50_us": 0.6, "p99_us": 1.3, "max_us": 14.8, "over_1ms": 0, "inbound_handled": 970, "sender": "ws", "sent": 981, "broadcasts_received": 198, "selector": "select"}

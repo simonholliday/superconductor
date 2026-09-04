@@ -1,0 +1,12 @@
+default (epoll)  120 BPM  median  0.0006 ms  p95  0.0016 ms  max  0.0233 ms  over 1 ms 0/768
+default (epoll)  130 BPM  median  0.0008 ms  p95  1.0349 ms  max  1.5735 ms  over 1 ms 44/768
+default (epoll)  140 BPM  median  0.0008 ms  p95  0.0023 ms  max  0.9975 ms  over 1 ms 0/768
+default (epoll)  150 BPM  median  0.0017 ms  p95  0.0180 ms  max  0.1006 ms  over 1 ms 0/768
+default (epoll)  160 BPM  median  0.0017 ms  p95  0.1357 ms  max  0.3797 ms  over 1 ms 0/768
+default (epoll)  180 BPM  median  0.5660 ms  p95  1.3963 ms  max  1.5765 ms  over 1 ms 154/768
+SelectSelector   120 BPM  median  0.0006 ms  p95  0.0022 ms  max  0.0301 ms  over 1 ms 0/768
+SelectSelector   130 BPM  median  0.0006 ms  p95  0.0009 ms  max  0.0242 ms  over 1 ms 0/768
+SelectSelector   140 BPM  median  0.0006 ms  p95  0.0008 ms  max  0.0165 ms  over 1 ms 0/768
+SelectSelector   150 BPM  median  0.0006 ms  p95  0.0020 ms  max  0.0191 ms  over 1 ms 0/768
+SelectSelector   160 BPM  median  0.0006 ms  p95  0.0019 ms  max  0.0127 ms  over 1 ms 0/768
+SelectSelector   180 BPM  median  0.0006 ms  p95  0.0020 ms  max  0.0146 ms  over 1 ms 0/768

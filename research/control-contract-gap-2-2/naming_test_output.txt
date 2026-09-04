@@ -1,0 +1,13 @@
+ok   a generated id from a candidate matches the service id rule
+ok   awkward labels still yield a legal id
+ok   an empty or punctuation-only label falls back to page
+ok   a duplicate id is suffixed and stays legal and unique
+ok   a suffix on a maximum-length id does not overflow
+ok   the key grid fits the panel at a 60 px cell
+ok   keys accumulate a label with shift, backspace and space
+ok   cancel and done are states, not text
+ok   a label is bounded so it cannot grow without limit
+ok   a hardware keystroke drives the same state machine as a drawn key
+ok   modified and non-text keystrokes are ignored rather than typed
+
+11 passed, 0 failed

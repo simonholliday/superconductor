@@ -1,0 +1,503 @@
+:root {
+    /* Base palette */
+    --color-bg: #0d1117;
+    --color-bg-raised: #161b22;
+    --color-border: #30363d;
+    --color-text: #c9d1d9;
+    --color-text-muted: #8b949e;
+
+    /* Semantic colours */
+    --color-active: #3fb950;       /* green — connected, active channel, success */
+    --color-warning: #d29922;      /* amber — backlog, threshold */
+    --color-error: #ff7b72;        /* red — error, danger */
+    --color-accent: #58a6ff;       /* blue — default accent */
+
+    /* App identity colours */
+    --color-app-subsequence: #58a6ff;
+    --color-app-subsample: #3fb950;
+    --color-app-substation: #d2a8ff;
+
+    /* Typography */
+    --font-data: 'JetBrains Mono', monospace;
+}
+
+* {
+    box-sizing: border-box;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: 'Inter', -apple-system, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* ── Layout ── */
+
+#app {
+    display: flex;
+    height: 100vh;
+}
+
+#sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: var(--color-bg-raised);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    transition: margin-left 0.2s ease;
+}
+
+#sidebar.collapsed {
+    margin-left: -280px;
+}
+
+#sidebar-toggle {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 100;
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+#sidebar-toggle:hover {
+    background: var(--color-border);
+}
+
+#main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+/* ── Sidebar sections ── */
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.sidebar-collapse-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.sidebar-collapse-btn:hover {
+    color: var(--color-text);
+}
+
+.sidebar-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 8px;
+}
+
+.sidebar-app-group {
+    margin-bottom: 12px;
+}
+
+.sidebar-app-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.sidebar-app-label .app-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sidebar-panel-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 0 4px 14px;
+    font-size: 0.82rem;
+}
+
+.sidebar-panel-item .panel-desc {
+    color: var(--color-text-muted);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-panel-item button {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.sidebar-panel-item button:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+
+/* ── Settings panel ── */
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+}
+
+.settings-row label {
+    color: var(--color-text-muted);
+    min-width: 60px;
+}
+
+.settings-row input[type="text"] {
+    flex: 1;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 4px 8px;
+    font-size: 0.82rem;
+    font-family: inherit;
+}
+
+.settings-row input[type="checkbox"] {
+    accent-color: var(--color-text-muted);
+}
+
+.settings-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn {
+    background: var(--color-border);
+    border: none;
+    color: var(--color-text);
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: inherit;
+}
+
+.btn:hover {
+    background: var(--color-text-muted);
+    color: var(--color-bg);
+}
+
+.btn--danger {
+    background: rgba(255, 123, 114, 0.15);
+    color: var(--color-error);
+}
+
+.btn--danger:hover {
+    background: var(--color-error);
+    color: var(--color-bg);
+}
+
+/* ── Gridstack overrides ── */
+
+.grid-stack {
+    min-height: calc(100vh - 24px);
+}
+
+.grid-stack-item-content {
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: move;
+    flex-shrink: 0;
+}
+
+.panel-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.panel-header .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.panel-header .close-btn:hover {
+    color: var(--color-text);
+}
+
+.panel-body {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+    font-family: var(--font-data);
+}
+
+.panel-disconnected {
+    color: var(--color-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+/* ── Reusable: Key-Value ── */
+
+.panel-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 0;
+}
+
+.panel-kv-label {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+.panel-kv-value {
+    font-weight: 600;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Reusable: Gauge Bar ── */
+
+.panel-gauge {
+    margin-bottom: 10px;
+}
+
+.panel-gauge-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 0.85rem;
+}
+
+.panel-gauge-label {
+    color: var(--color-text-muted);
+}
+
+.panel-gauge-value {
+    font-variant-numeric: tabular-nums;
+}
+
+.panel-gauge-track {
+    width: 100%;
+    height: 10px;
+    background: var(--color-border);
+    overflow: hidden;
+}
+
+.panel-gauge-fill {
+    height: 100%;
+    background: var(--color-text-muted);
+    transition: width 0.15s linear;
+}
+
+/* ── Reusable: Status Dot ── */
+
+.panel-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.panel-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.panel-status-dot--active {
+    background: var(--color-active);
+    box-shadow: 0 0 4px var(--color-active);
+}
+
+.panel-status-dot--inactive {
+    background: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+.panel-status-dot--warning {
+    background: var(--color-text-muted);
+}
+
+/* ── Reusable: LED Meter ── */
+
+.led-meter {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.led-meter--vertical {
+    flex-direction: column-reverse;
+}
+
+.led-meter-seg {
+    width: 0.5em;
+    height: 1em;
+    background: white;
+}
+
+/* ── Reusable: Data Table ── */
+
+.panel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.panel-table th {
+    text-align: left;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: var(--color-bg-raised);
+}
+
+.panel-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    font-variant-numeric: tabular-nums;
+}
+
+.panel-table tr:last-child td {
+    border-bottom: none;
+}
+
+.panel-table tr.panel-table-row--active {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.panel-table tr.panel-table-row--active td:first-child {
+    box-shadow: inset 3px 0 0 var(--color-active);
+}
+
+.panel-table tr.panel-table-row--dimmed {
+    opacity: 0.5;
+}
+
+/* ── Reusable: Event Log ── */
+
+.panel-log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.85rem;
+}
+
+.panel-log-item {
+    display: flex;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+}
+
+.panel-log-item:last-child {
+    border-bottom: none;
+}
+
+.panel-log-time {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.panel-log-message {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Reusable: Empty State ── */
+
+.panel-empty {
+    color: var(--color-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px 12px;
+    font-size: 0.85rem;
+}
+
+/* ── Reusable: Section Header ── */
+
+.panel-section {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 12px 0 6px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.panel-section:first-child {
+    margin-top: 0;
+}

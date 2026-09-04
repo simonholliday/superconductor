@@ -1,0 +1,1997 @@
+1
+When Next-Gen Sensing Meets Legacy Wi-Fi:
+Performance Analyses of IEEE 802.11bf and
+IEEE 802.11ax Coexistence
+Navid Keshtiarast, Graduate Student Member, IEEE, Pradyumna Kumar Bishoyi, Member, IEEE, Ido Manuel
+Lumbantobing, and Marina Petrova, Member, IEEE
+Abstract—Sensing is emerging as a vital future service in next-
+generation wireless networks, enabling applications such as object
+localization and activity recognition. The IEEE 802.11bf standard
+extends Wi-Fi capabilities to incorporate these sensing functional-
+ities. However, coexistence with legacy Wi-Fi in densely populated
+networks poses challenges, as contention for channels can impair
+both sensing and communication quality. This paper develops an
+analytical framework and a system-level simulation in ns-3 to
+evaluate the coexistence of IEEE 802.11bf and legacy 802.11ax
+in terms of sensing delay and communication throughput. For
+this purpose, we have developed a dedicated ns-3 module for
+IEEE 802.11bf, which is made publicly available as open-source.
+We provide the first coexistence analysis between IEEE 802.11bf
+and IEEE 802.11ax, supported by link-level simulation in ns-3
+to assess the impact on sensing delay and network performance.
+Key parameters, including sensing intervals, access categories,
+network densities, and antenna configurations, are systematically
+analyzed to understand their influence on the sensing delay
+and aggregated network throughput. The evaluation is further
+extended to a realistic indoor office environment modeled after
+the 3GPP TR 38.901 standard. Our findings reveal key trade-
+offs between sensing intervals and throughput and the need for
+balanced sensing parameters to ensure effective coexistence in
+Wi-Fi networks.
+Index Terms—IEEE 802.11bf, IEEE 802.11ax, Sub-7 GHz
+I. I NTRODUCTION
+Integrated sensing and communication (ISAC) will be a
+major technology enabler for new services in the next-
+generation wireless networks [1]–[3]. Wi-Fi networks, due
+to their widespread popularity and ultra-dense deployment,
+are an ideal platform for large-scale ISAC applications [4],
+[5]. In September 2020 the IEEE 802.11 Wi-Fi working
+group established a new Task Group, namely IEEE 802.11bf
+(TGbf), to specify the essential modification to the existing
+physical and medium access control (PHY and MAC) layers
+to support sensing [6], [7]. IEEE 802.11bf will operate in
+both sub-7 (2.4 GHz, 5 GHz, and 6 GHz) and mmWave
+(above 45 GHz) unlicensed frequency bands and is planned to
+support diverse applications ranging from passive localization
+of objects/humans to activity recognition by capturing micro-
+Part of this work was accepted for presentation at the 2025 IEEE Interna-
+tional Conference on Communications (ICC).
+This work was supported by the German Federal Ministry of Education and
+Research (BMBF) within the project “Open6GHub” under grant 16KISK012.
+All the authors are with Mobile Communications and Computing Group,
+at RWTH Aachen University, Germany (e-mail: {navid.keshtiarast@mcc,
+pradyumna.bishoyi@mcc, ido.lumbantobing, petrova@mcc}.rwth-aachen.de).
+doppler signature [8], [9] and up to 3D mapping of indoor
+environment [10].
+The PHY of IEEE 802.11bf reuses the existing features of
+IEEE 802.11 ac/ax for sub-7 GHz and IEEE 802.11 ad/ay for
+mmWave and introduces additional processing modules for
+sensing operation [11], [12]. In terms of the MAC layer, it
+is expected to adhere to the listen-before-talk (LBT) protocol
+for channel access, following the other wireless technologies
+operating in the unlicensed bands such as 5G new radio
+unlicensed (NR-U) [13], ZigBee, and Bluetooth. However,
+certain modifications are necessary to enhance the sensing
+framework and ensure co-existence with the widely deployed
+legacy Wi-Fi networks in the sub-7 GHz bands, which is
+the primary focus of our work. Consequently, the design
+and analysis of an appropriate MAC layer protocol for IEEE
+802.11bf networks is an emerging topic of high importance for
+the success of Wi-Fi sensing in sub-7 GHz unlicensed bands.
+A. Motivation
+In an 802.11bf network, when an access point (AP) intends
+to perform sensing, it has to adopt carrier sense multiple access
+with collision avoidance (CSMA/CA) protocols to contend for
+the channel with other 802.11bf APs and legacy Wi-Fi stations
+[4], [14]. As the number of contending nodes increases, the
+probability of accessing the channel for sensing decreases.
+This intermittent access to the channel results in irregular
+acquisition of sensing measurements and coarse-grained sens-
+ing accuracy [15]. Further, in applications involving dynamic
+environment, e.g., moving target detection, this sporadic access
+to the channel significantly increases the position estimation
+error. In contrast, frequent channel acquisition for sensing,
+adversely affects the communication network performance.
+Balancing these conflicting objectives demands a thorough un-
+derstanding of how MAC-layer mechanisms and key network
+parameters influence overall coexistence outcomes.
+Despite initial studies on 802.11bf, there remains a gap in
+quantifying how its sensing MAC protocol affects the perfor-
+mance of 802.11ax, and current simulation tools do not fully
+capture the nuances of Wi-Fi sensing MAC protocols. Further-
+more, no scenario-driven examination currently explores how
+varying network configurations, such as AP density, channel
+bandwidth, antenna array size, and sensing intervals, can each
+introduce unique performance bottlenecks. Additionally, prior-
+itizing the 802.11bf sensing traffic by varying access categories
+arXiv:2503.04637v1  [cs.NI]  6 Mar 2025
+2
+can improve the sensing performance at the expense of legacy
+communication throughput. Our work tackles these issues by
+presenting an analytical model that captures how coexistence
+impacts both sensing latency and legacy throughput, coupled
+with a novel ns-3 simulation module that implements 802.11bf
+on top of the standard 802.11ax framework.
+B. Related Works
+In recent years, very few works [16]–[18] have addressed
+the coexistence of sensing and communication networks in
+unlicensed bands by studying the effect of mutual interference
+from a PHY layer perspective, using stochastic geometry
+approach. While stochastic geometry provides valuable in-
+sights into large-scale interference patterns and helps quantify
+coverage or outage probabilities, it generally does not account
+for MAC-layer functionalities, such as distributed coordina-
+tion and channel access strategies that significantly influence
+coexistence performances.
+A recent work in [19], has analyzed the sensing performance
+of an 802.11bf network from MAC layer perspective and
+discussed the impact of different channel contention protocols
+to obtain the initial channel access for sensing. In particular,
+the authors consider AP as a sensing initiator under two
+channel access methods, namely enhanced distributed channel
+access (EDCA) and point coordination function (PCF) inter-
+frame space (PIFS). The performance of both channel access
+methods is compared in terms of sensing overhead and the
+percentage of missed sensing instances for different sensing
+application requirements, and the simulation results reveal that
+PIFS outperforms EDCA since the PIFS gives priority access
+to the channel. We note that this study confirming the advan-
+tage of PIFS-based access, has been performed in a single
+802.11bf network scenario without consideration of legacy
+Wi-Fi communication networks. In the case of a coexistence
+scenario with 802.11ax networks, prioritizing access for the
+802.11bf network over the 802.11ax network will result in a
+significant unfair advantage in terms of channel access and
+will be more disruptive to 802.11ax users.
+C. Contributions
+In this paper, we bridge the above gap and investigate the
+performance of 802.11bf networks as well as their coexistence
+with 802.11ax communication networks in terms of commu-
+nication throughout and sensing delay. The main contributions
+of our work are:
+• First, we analyze and determine the sensing delay that
+802.11bf network is going to endure in case of coexis-
+tence, and the cost of coexistence in terms of throughput
+to the legacy Wi-Fi network . We develop an analytical
+framework that quantifies the performance of both net-
+works.
+• Second, we design and implement a system-level simu-
+lation framework using network simulator 3 (ns-3) for
+802.11bf network . The code is implemented on ns-3.40
+and includes the following prominent features to integrate
+the sensing functionality in the existing 802.11ax module:
+(i) point coordination function (PCF) on top of 802.11ax’s
+Sensing Initiator &  
+Transmitter
+Sensing  
+Responder & 
+Receiver
+Sensing Initiator &  
+Receiver
+Sensing  
+Responder & 
+Transmitter
+Sensing Initiator, 
+Transmitter &  
+Receiver
+Sensing  
+Responder,  
+Transmitter & 
+Receiver
+Sensing Initiator
+Sensing
+Responder,  
+Transmitter & 
+Receiver
+NDP
+Request
+Report
+NDP
+Report
+Request
+NDP
+NDP
+Report
+NDP
+Figure 1. Illustration of roles and sensing configuration of 802.11bf.
+EDCA for channel access and (ii) Channel sounding to
+perform sensing measurement instances. To the best of
+our knowledge, this is the first network simulator frame-
+work for analyzing 802.11bf networks. We made our
+framework code available [20] to the research community
+to enable reproducibility and support further research on
+the performance evaluation of 802.11bf in sub-7 GHz.
+• Finally, we validate the 802.11bf ns-3 module output
+with the analytical model. We consider two different
+environment layouts: the first is a generic layout, and
+the second is an indoor office environment (as specified
+in 3GPP TR 38.901 [21]). Through extensive simula-
+tions, we analyze coexistence performance in terms of
+sensing latency and throughput, as well as the tradeoff
+between them by tuning various MAC parameters. These
+parameters include assigning different access categories
+to 802.11bf, adjusting sensing intervals, varying available
+channel bandwidth and altering the number of 802.11bf
+and 802.11ax APs.
+The remainder of this paper is organized as follows: Section
+II provides a primer on the 802.11bf standard. In Section III,
+we present our analytical model for coexistence performance
+analyses. Section IV presents the 802.11bf implementation
+on ns-3. Section V offers a comprehensive analysis of the
+simulation results and discusses their implications. Finally,
+Section VI concludes the paper.
+II. P RIMER ON 802.11 BF
+The primary objective of the 802.11bf standard is to estab-
+lish a unified and standardized WLAN sensing operation for
+acquisition of sensing measurements. For that, the standard
+defines two roles for APs and stations (STAs). The first one
+is sensing initiator and responder , wherein the participant
+that initiates the sensing, either an AP or STA, is termed
+the initiator, while the participant that responds is designated
+3
+Sensing  
+Transmitter&  
+Receiver
+Sensing  
+Transmitter
+Sensing  
+Transmitter
+Sensing  
+Receiver
+Polling TF
+CTS-to-Self
+CTS-to-Self
+CTS-to-Self
+NDPAto  
+STA3
+SI2SR  
+NDP
+SIFS
+SIFS
+SIFS
+SIFS
+SIFS
+ SIFS TF to  
+STA1 & STA2
+SR2SI  
+NDP
+SR2SI  
+NDP
+SIFS
+SIFS
+SIFS
+SIFS
+Receiver
+Receiver
+Polling Phase NDPA Sounding Phase TF Sounding Phase Reporting  
+Phase
+AP
+STA1
+STA2
+STA3
+Sensing  
+Receiver
+STA4
+Sensing  
+Initiator
+Sensing  
+Responder
+Transmitter
+Transmitter
+Transmitter
+Reporting
+Reporting
+Reporting
+Figure 2. Trigger-based sensing measurement protocol.
+as the responder. The second role is the sensing transmitter
+and receiver, where the participant transmitting the null data
+packet (NDP) is the transmitter, and the participant receiving
+the NDPs and performing sensing measurements is termed
+the receiver. Figure 3 shows all possible role combinations. A
+sensing initiator can be either a sensing transmitter or receiver,
+both or neither. For instance, in the first scenario (in Figure
+3), the sensing initiator functions as a transmitter, transmitting
+the NDPs, while the sensing responder reports back the
+downlink channel state information (CSI) measurement. In the
+second scenario, the initiator functions as a receiver, requests
+the sensing responder to transmit the NDPs, and performs
+the uplink CSI measurement itself. Unlike the previous two
+scenarios, in the third case, the sensing initiator functions as
+both transmitter and receiver. This is mostly used to gather
+both uplink and downlink CSI measurements. In the fourth
+scenario, the sensing initiator is neither a transmitter nor a
+receiver. In this case, the sensing responder reports back the
+stored sensing information to the initiator, referred to as the
+sensing by proxy (SBP) procedure in the 802.11bf standard
+[6]. Analogous to the functions of the sensing initiator, the
+sensing responder can be either the sensing transmitter or
+receiver or both during a sensing measurement procedure.
+The IEEE 802.11bf sensing procedure in sub-7 GHz, which
+is the main focus of this work, distinguishes two broad
+categories based on the use of trigger frames to initiate the
+sensing measurement. One is trigger-based (TB) configuration,
+where the sensing initiator is the AP and the responders are
+one or multiple STAs. The other one is non-TB configuration,
+where the STA is the sensing initiator and the AP is the
+responder. In this work, we focus on TB configuration. In the
+following subsections, we first discuss how the AP obtains
+access to the channel for performing sensing measurement;
+then we describe the phases in the TB configuration-based
+sensing measurement instance.
+A. Initial Channel Access
+Prior to initiating the TB-based measurement, the sensing
+transmitter AP first adheres to a legacy CSMA/CA protocol
+to access the channel. In particular, the AP as sensing initiator
+contends for the transmission opportunity (TXOP) with other
+contending sensing and communication APs using the EDCA
+mechanism as introduced in IEEE 802.11e standard [22].
+The EDCA differentiates services using different priorities
+and maps them to access category (AC) with AC-specific
+contention window (CW) sizes, arbitrary interframe space
+(AIFS) values, and TXOPs. The EDCA parameters of different
+ACs are provided in Table I. The higher-priority-ACs are
+assigned lower AIFS and smaller CW ranges to facilitate
+prioritized access to the channel. The effect of different ACs
+on the overall sensing performance in shown in Section V-C.
+B. Phases in TB Configuration
+TB configuration involves four phases, namely polling
+phase, null data packet (NDP) Announcement (NDPA) sound-
+ing phase, Trigger Frame (TF) sounding phase, and Reporting
+phase, as described below (see also Figure 2).
+• Polling Phase: The AP starts the procedure by broadcast-
+ing the polling trigger frame (TF). The sensing receivers,
+in this case STAs, respond if available by transmitting
+clear to send (CTS)-to-self frame following a short inter-
+frame space (SIFS) period. Using OFDMA, multiple
+STAs can transmit their CTS-to-self frame simultane-
+ously. The STA can refrain from participating in the
+sensing process by not responding to the polling TF frame
+(e.g., STA 4 in Figure 2).
+• NDPA sounding phase: In this phase, the AP transmits the
+NDPA frame to the intended receiver to initiate the mea-
+surement. Thereafter, following an interval of SIFS, the
+AP transmits the sensing initiator to the sensing responder
+(SI2SR) NDP to perform downlink-based sensing.
+• TF sounding phase: The roles of transmitter and receiver
+are then reversed and the sensing is done in uplink
+transmission in this phase. Mutilple STAs transmit the
+responder to sensing initiator (SR2SI) NDP frame to the
+AP. To accommodate multiple STAs, the AP transmits a
+TF frame to allocate resources and timing prior to the
+transmission of SR2SI frame.
+• Reporting phase : The STAs transmit the sensing mea-
+surement results in a reporting feedback frame to the
+AP. The reporting frame mainly consists of CSI collected
+by the STAs during the NDPA sounding phase. The AP
+may use OFDMA or multi-user multiple input multiple
+output (MU-MIMO) to schedule the simultaneous uplink
+of multiple STAs.
+The sensing procedure of IEEE 802.11bf protocol starts with
+the AP’s initial channel access process, followed by the four
+phases of the sensing measurement session. The AP’s proba-
+bility of getting access to the channel depends on its EDCA
+parameters and the number of contending APs. Moreover, in
+a coexistence scenario, the number of APs contending for the
+channel would increase, leading to a higher initial channel
+access delay. In the following section, we develop an analytical
+framework and detailed performance analysis of sensing delay
+in the 802.11bf network and aggregated throughput in the
+802.11ax network.
+III. A NALYTICAL MODEL FOR COEXISTENCE ANALYSIS
+We consider Nbf 802.11bf and Nax 802.11ax APs sharing
+the same unlicensed spectrum, as shown in the Figure 3. There
+4
+Table I
+EDCA P ARAMETERS FOR IEEE 802.11 A CCESS CATEGORIES
+Access Category CW min CWmax AIFS
+Background (BK) 15 1023 7
+Best-Effort (BE) 15 1023 3
+Video (VI) 7 15 2
+V oice (VO) 3 7 2
+802.11bf 
+Network
+802.11ax 
+Network
+Figure 3. Coexistence of 802.11bf and 802.11ax networks.
+are N sensing STAs connected to each 802.11bf AP and M
+STA associated with each 802.11ax AP. We assume that all
+the APs and STAs are exposed to one another, i.e. are located
+within the range where energy detection is possible. The
+CSMA/CA scheme with binary slotted exponential backoff
+is adopted for both the 802.11bf and 802.11ax networks.
+We consider aggregated throughput as the Key Performance
+Indicator (KPI) for the communication network, while the
+average sensing delay is the KPI for the 802.11bf network. We
+assumed that the 802.11ax APs have saturated traffic, while
+the 802.11bf APs continuously request to perform sensing
+procedures. Further, we extend our sensing delay analysis to
+account for in-frequent sensing request scenario, where the
+802.11bf AP perform sensing with various sensing repetition
+intervals, as specified in the 802.11bf standard [6], [19].
+A. Channel Access Mechanism
+Figure 4 illustrates the channel access mechanism of both
+802.11ax and 802.11bf networks in a coexistence scenario.
+Initially, both technologies contend for channel access using
+the EDCA mechanism as discussed in Section II. When
+an 802.11ax AP successfully accesses the channel, it can
+hold the channel for a Transmission Opportunity (TXOP)
+duration, which, according to the 802.11ax standard [23], can
+be up to 5.484 ms when using aggregated A-MPDU frame
+transmissions. Conversely, if an 802.11bf AP gains access,
+it initiates the sensing procedure. In Figure 4, we present
+two scenarios: one without collisions, allowing uninterrupted
+channel access, and another with collisions. In the collision
+scenario, retransmissions are required, which lead to increased
+sensing delays.
+Sensing Delay
+IEEE  
+802.11bf
+IEEE  
+802.11ax
+SIFS SIFS SIFS
+ReportingSoundingPollingBeaconReportingSoundingPollingBeacon
+Backoff Slot 
+Backoff Slot 
+Application Sensing Request Application Sensing Request
+IEEE  
+802.11bf
+IEEE  
+802.11ax
+SIFS SIFS SIFS
+ReportingSoundingPollingBeaconReportingSoundingPollingBeacon
+Backoff Slot 
+Backoff Slot 
+Data Transmission
+...
+...
+...
+Collision
+Data Transmission
+Application Sensing Request
+...
+...
+...
+Data Transmission
+Successful Sensing Successful Sensing 
+Successful Sensing 
+Sensing Delay
+Sensing Delay
+Figure 4. Illustration of 802.11bf and 802.11ax AP operation in a coexistence
+scenario.
+B. Derivation of Probability of Collision and Success
+We assume that the time is divided into MAC slots. Since
+both 802.11ax and 802.11bf APs MAC employ CSMA/CA, we
+describe the behaviour of each node using the well-established
+Bianchi’s two-dimensional discrete-time Markov chain [24],
+[25] and modify it to include the effect of coexistence of two
+heterogeneous networks.
+Let τax, τbf define the attempt probability of an 802.11ax
+AP and 802.11bf in a given slot, respectively. The expression
+for τbf is given as
+τbf =
+(1−P L+1
+bf )/(1−Pbf)PL
+j=0
+
+1 + 1
+1−Pf
+PW bf
+j −1
+k=1
+W bf
+j −k
+W bf
+j
+
+P j
+bf
+, (1)
+where Pbf denotes the collision probability of the 802.11bf
+AP,L + 1 is the maximum retry limit. W bf
+j is the contention
+window size of 802.11bf, which is W bf
+j = 2jCW bf
+min, where
+CW bf
+min is the minimum contention size window of 802.11bf.
+Unlike Bianchi’s model, we have Pf as the freezing probabil-
+ity, which captures the phenomenon that an AP in a backoff
+stage freezes its backoff counter when it senses the channel
+busy [25]. Similarly, the expression for τax is given as
+τax = (1−P L+1
+ax )/(1−Pax)PL
+j=0
+h
+1 + 1
+1−Pf
+PW ax
+j −1
+k=1
+W ax
+j −k
+W ax
+j
+i
+P j
+ax
+, (2)
+where Pax denotes the collision probability of the 802.11ax
+AP.W ax
+j is the contention window size of 802.11ax.
+Further, the τbf and τax are functions of Pbf and Pax,
+respectively. The probability of collision occurs when at least
+two APs out of Nbf 802.11bf APs and Nax 802.11ax APs
+transmit simultaneously in the same time slot, i.e.,
+Pbf = 1− (1−τbf)Nbf −1(1−τax)Nax (3)
+Pax = 1− (1−τax)Nax−1(1−τbf)Nbf. (4)
+Let Pt,bf and Pt,ax denote the probability that at least
+one of the Nbf 802.11bf APs and one of the Nax 802.11ax
+5
+Tm = (1−Pt,ax)(1−Pt,bf)σ +Pt,axPs,ax(1−Pt,bf)Ts,ax +Pt,bfPs,bf(1−Pt,ax)Ts,bf +Pt,ax(1−Ps,ax)(1−Pt,bf)Tc,ax
++Pt,bf(1−Ps,bf)(1−Pt,ax)Tc,bf +Tc(Pt,axPs,axPt,bfPs,bf +Pt,axPs,axPt,bf(1−Ps,bf) +Pt,ax(1−Ps,ax)Pt,bfPs,bf
++Pt,ax(1−Ps,ax)Pt,bf(1−Ps,bf))
+(8)
+APs attempts to transmit in a given time slot. These can be
+expressed as,
+Pt,bf = 1− (1−τbf)Nbf
+Pt,ax = 1− (1−τax)Nax. (5)
+Now, letPs,bf andPs,ax denote the probability of successful
+transmission occurring on the channel by 802.11bf or 802.11ax
+under the condition that at least one of the AP (either 802.11bf
+or ax) transmits. These can be written as
+Ps,bf = Nbfτbf(1−τbf)Nbf
+Pt,bf
+Ps,ax = Naxτax(1−τax)Nax
+Pt,ax
+. (6)
+We will use the probabilities in Equations (3) to (6) for
+subsequent throughput and mean delay derivations in the next
+sections.
+C. Throughput Analysis of 802.11ax
+The normalized throughput or MAC efficiency of the
+802.11ax network is defined as the fraction of successful
+packet transmissions over the mean time of all possible events.
+It is a measure of how effectively the medium is used for
+successful data transmissions, and can be expressed as
+S = Pt,axPs,ax(1−Pt,bf)Tf,ax
+Tm
+, (7)
+whereTf,ax is the total frame duration of 802.11ax. Tm is the
+average time of all possible events, such as idle, collision or
+successful transmission events, and is given in Equation (8)
+(on top of next page). Where, σ is the duration of an idle
+slot, Ts,ax(Ts,bf) is the successful transmission duration of
+802.11ax (802.11bf), and Ts,ax(Ts,bf) is the collision dura-
+tion of 802.11ax (802.11bf), and Tc is the cross-technology
+collision duration, i.e., max(Tc,ax,T c,bf). The expressions for
+all these parameters are explained subsequently.
+1) Expression for Tf,x: Let the duration of the frame, Tf,x,
+depends on the technology and is given by:
+Tf,x =
+
+
+
+PHY header + MAC x
+R , if x is 802.11ax AP
+TCFP, if x is 802.11bf AP,
+(9)
+Here,MAC x =MAC header+MSDU , i.e., duration of MAC
+header and MAC service data unit size (MSDU) and R is the
+transmission data rate. For 802.11bf, the frame duration is
+equal to the total Contention-Free Period (CFP), i.e., the total
+duration of all three phases, as shown in Figure 2, i.e.,
+TCFP =TP olling +SIFS +TCT S| {z }
+Polling Phase
++SIFS
++N×
+
+TN DP A +SIFS +TN DP
+
+| {z }
+Sounding Phase
++SIFS
++N×TReporting| {z }
+Reporting Phase
+,
+(10)
+where TP olling, TCT S, TN DP A, and TN DP are the trans-
+mission duration of polling, CTS-to-self, NDPA packet, and
+NDP frames, respectively. These are all 802.11bf standard
+specific parameters [4]. Further, N represent the number of
+STA participants in the sensing procedure.
+The duration of the reporting frame, i.e. TReporting (last
+term in Equation (10)), is mainly dependent on the CSI report
+size of each participating STA. Specifically in the 802.11bf
+standard [6], the CSI size is given by the following formula:
+CSI Report Size =⌈1.5∗Ntx∗Nrx⌉ + Ntx∗Nrx∗Nb∗Nsc
+4
++2∗Ntx
+(11)
+The CSI size depends on the number of transmitting antennas
+(Ntx), receiving antennas ( Nrx), subcarriers ( Nsc), and the
+number of bits used for quantizing each CSI value ( Nb). Now,
+the duration of TReporting can be determined by dividing the
+size of the CSI report by the transmission rate (R), i.e.,
+TReporting = CSI Report Size
+R . (12)
+The effect of the number of transmitting and receiving antenna
+elements and corresponding CSI report size on the overall
+sensing performance is examined in Section V-E.
+2) Expression for Ts,x: The duration of a successful trans-
+mission, Ts,x, is:
+Ts,x =
+
+
+
+Tf,x +DIFS +SIFS +PHY header + ACK
+Rmin
+,
+if x is 802.11ax AP,
+Tf,x +DIFS if x is 802.11bf AP,
+(13)
+3) Expression for Ts,x: The collision duration, Tc,x, in
+Equation (8) is given by
+Tc,x =
+(
+Tf,x +DIFS, if x is 802.11ax AP
+Tf,x +DIFS, if x is 802.11bf AP. (14)
+Substituting the Equations (13)-(14) in Equation (8), we
+obtain the final expression for Tm. Further, using the expres-
+sions of Tm andTf,x (from Equation (9)) in the Equation (7),
+we obtain the final normalized throughput expression for the
+802.11ax network.
+6
+D. Sensing Delay Analysis of 802.11bf
+In this subsection, we derive the expression for the sens-
+ing delay of 802.11bf network. The 802.11bf APs perform
+CSMA/CA to access the channel in presence of IEEE 802.11
+APs. Once the 802.11bf AP has accessed the channel, it starts
+the sensing measurement procedure, which consists of four
+phases as discussed in Section II. The overall sensing latency
+at one measurement instance is defined from the time the AP
+starts contending for the channel till the end of the reporting
+phase. The sensing latency in 802.11bf is mostly attributed to
+the channel access delay, primarily caused by collisions and
+backoff procedures, as all phases outlined in the standard are
+deterministic.
+Let the 802.11bf AP gets access to the channel in its
+(i + 1)-th attempt. The average channel access delay after
+experiencing i collisions can be written as follows:
+T (i) =TCFP +i∗Tc,bf +
+iX
+j=0
+WjF, (15)
+where TCFP is the CFP period as in Equation (10), Tc,bf is
+the collision duration expressed in Equation (14), Wj is the
+average number of backoff slots in stage j, i.e., Wj = Wj −1
+2 ,
+andF is the average slot duration that the AP waits in a stage.
+Let P (i)
+suc denote the probability of the AP getting access to
+the channel in i + 1 attempt, then, from Equation (3), P (i)
+suc =
+(1−Pbf)P i
+bf . Conditioning on the probability of success, the
+overall channel access delay of AP is
+T = 1
+1−P L+1
+bf
+LX
+i=0
+P (i)
+suc
+
+TCFP +i∗Tc,bf +
+
+
+iX
+j=0
+WjF
+
+
+
+,
+(16)
+where L is the maximum backoff stage. From Equation (16),
+the expression for the overall channel access delay of an AP
+depends on the average duration it stays in each backoff stage
+before the backoff decrement occurs, i.e. F. To calculate the
+F, we need to consider when we enter the backoff states,
+which are either from a previous backoff state or from a
+transmission state. As τbf is the transmission probability of
+the AP, 1−τbf is the probability of remaining in backoff
+state. Therefore, the average slot duration F is
+F = (1−τbf)Fb +τbfFt, (17)
+whereFb is the average time duration AP stays in the current
+backoff state while entering from a previous backoff state, and
+Ft is the average time duration the AP stays in the backoff
+state following an attempt, either successful or collision. Let
+dI, dS, and dC denote the duration that the AP stays in the
+backoff state when the channel status at the beginning of that
+slot is idle, involved in a successful event, or experiencing a
+collision, respectively. Detailed calculations for these durations
+are provided in the Appendix.
+LetPd be the backoff decrement probability, which depends
+on the probability of the channel being idle. In that case,
+conditioning on Pd, the average duration AP will stay in the
+current stage Fb is
+Fb = PidI +PsdS +PcdC
+Pd
+, (18)
+where Pi = 1 − Pbf , the expression of Pbf is defined
+in Equation (3), which represents the probability that no
+transmission occurred in the slot.Ps denote the probability that
+when AP enters to backoff stage and finds the channel busy
+due to successful transmission (either from another 802.11bf
+AP or 802.11ax APs). The expressions for Ps is
+Ps =
+Nbf− 1
+1
+
+τbf(1−τbf)Nbf −2(1−τax)Nax
++
+Nax
+1
+
+τax(1−τax)Nax−1.
+(19)
+Further,Pc denotes the probability that the previous transmis-
+sion ended in collision, i.e., Pc = 1−Ps−Pi.
+Now, we derive the expression for Ft. After each attempt,
+either successful or collision, the AP selects a new backoff
+counter. LetCW be the average backoff window size over all
+stages. Then, the probability that the AP will content for the
+channel is 1/CW and the probability that it will go to one of
+the backoff stages is 1− 1/CW . In this case, the average slot
+duration when the AP enters from a transmission state:
+Ft = (CW− 1)(PidI +PsdS +PcdC)
+CW , (20)
+where the expression for CW is
+CW = 1
+1−P L+1
+bf
+LX
+i=0
+(1−Pbf)P i
+bfWi. (21)
+Substituting the expressions for Fb and Ft in Equation (17),
+we obtain the average channel access delay of 802.11bf AP.
+1) Sensing Interval: Up to this point, we have assumed that
+the application continuously requests the sensing procedure.
+However, to make the model more realistic, we assume that
+the application requests sensing according to a Poisson arrival
+process. In this case, the probability that doesn’t have sensing
+request is equal to
+P0 = 1− λ
+¯µ. (22)
+In this study, we assume that 802.11ax devices have saturated
+traffic, while 802.11bf devices operate under non-saturated
+conditions with sensing requests following a Poisson arrival
+process. Under these conditions, we can calculate the mean
+channel access delay when i number of 802.11bf APs are
+contending for channel access with Poisson-based sensing
+requests, while all 802.11ax APs are operating in a saturated
+state and continuously attempt to access the channel. So, the
+total number of contending APs at any given time isNax+ni
+bf ,
+where the number bf AP which are contending ni
+bf follows a
+binomial distribution with probability:
+ni
+bf =
+Nbf
+i
+
+(1−P0)iP Nbf −i
+0 . (23)
+Therefore the expected channel access delay can be calculated
+as follows given that Nax 80.11ax and ni
+bf 80.211bf APs are
+7
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+8
+10
+12
+14
+16802.11bf Latency (ms)
+Numerical Model
+(a) 802.11bf Latency Distribution
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+0
+10
+20
+30
+40
+50
+60802.11ax Throughput (Mbit/s)
+Numerical Model (b) 802.11ax Throughput Distribution
+Figure 5. The effect of increasing the number of 802.11bf AP on sensing latency and 802.11ax throughput.
+1 bf
+1 ax
+1 bf
+2 ax
+1 bf
+3 ax
+1 bf
+4 ax
+1 bf
+5 ax
+1 bf
+6 ax
+1 bf
+7 ax
+1 bf
+8 ax
+1 bf
+9 ax
+Number of BSS
+10
+15
+20
+25
+30802.11bf Latency (ms)
+Numerical Model
+(a) 802.11bf Latency Distribution
+1 bf
+1 ax
+1 bf
+2 ax
+1 bf
+3 ax
+1 bf
+4 ax
+1 bf
+5 ax
+1 bf
+6 ax
+1 bf
+7 ax
+1 bf
+8 ax
+1 bf
+9 ax
+Number of BSS
+0
+10
+20
+30
+40
+50
+60802.11ax Throughput (Mbit/s)
+Numerical Model (b) 802.11ax Throughput Distribution
+Figure 6. The effect of increasing the number of 802.11ax AP on sensing latency and 802.11ax throughput.
+contending :
+E[T ] =
+NbfX
+i=1
+ni
+bf×T (i). (24)
+The average service rate is
+¯µ = 1
+E[T ]. (25)
+Equations (22) and (25) are coupled with each other and can
+be solved iteratively using the numerical technique [24], [25].
+In what follows, we first introduce our ns-3 implementation
+of 802.11bf, and then use it to analyze the coexistence of
+802.11bf and 802.11ax networks.
+IV. T HE NS -3 802.11 BF IMPLEMENTATION
+In this Section, we provide an overview of our 802.11bf
+module implementations in ns-3. We emphasize that this is
+the first implementation of 802.11bf within ns-3. Figure 7
+illustrates the UML diagram of our implementation, highlight-
+ing the modifications, newly added attributes, and functions
+integrated into the Wi-Fi module classes to accurately model
+the sensing behavior of 802.11bf. Our implementation is open
+source and available at [20], allowing the research community
+to reproduce our work and extend it in future research.
+ns-3 [26] is an open-source discrete-event network simulator
+widely used for modeling and analyzing communication sys-
+tems. It is designed in a modular structure, where each module
+represents the behavior of a specific technology. The Wi-Fi
+module in ns-3 provides detailed implementations of IEEE
+802.11 standards. It supports various IEEE 802.11 standards,
+including 802.11a/b/g/n/ac/ax/be [27]–[29].
+We implemented 802.11bf within ns-3.40, by extending the
+existing Wi-Fi module, which leverages 802.11ax’s EDCA and
+Multi-User OFDMA (MU-OFDMA) features. These features
+provide efficient channel access and allow for simultaneous
+uplink transmissions by multiple users. We adapted ns-3,
+most importantly the TB-based sensing measurement pro-
+cedure ( cf. Section II-B), to comply with 802.11bf’s Wi-Fi
+sensing requirements. To mimic the 802.11bf operation, we
+implemented a similar PCF mechanism layered on top of
+EDCA. This integration allows the AP to initiate sensing
+sessions by polling the associated STAs for CSI informa-
+tion. This polling process begins with a trigger frame sent
+by the AP, and associated STAs respond with CTS-to-Self
+frames, signaling their readiness for sensing. Modifications
+to the ns3::InfrastructureWifiMac class were made
+to enable these contention-free periods, which are critical for
+preventing interference during CSI measurement.
+We implemented three key phases: polling, NDPA sound-
+ing, and reporting. We incorporated the NDPA, NDP, and
+reporting frames based on the implementation by Zhang et
+al. in [30] for 802.11ax channel sounding. We also modified
+the ns3::MultiUserScheduler to manage Resource
+Unit (RU) allocation, allowing MU OFDMA transmissions
+that enable simultaneous reception of CTS-to-self frames by
+8
+ns3::HeFrameExchangeManager
+ns3::WifiPhy
+ns3::Txop
+# m_inf
+# m_currentPacket
+# m_currentHdr
+# m_txOkCallback
++ SendCfFrame()
++ EndTxNoAck()
++ SetInfMac()
++ NotifyChannelReleasedForPCF()
+ns3::QosTxop
+ns3::ApWifiMac
++ m_sensingPriority
+- m_inf
+- m_staList
+- m_sensingInterval
++ StartSensing()
++ EndSensing()
++ SensingRetransmission()
++ SetCfpMaxDuration()
++ GetCfpMaxDuration()
++ SetChannelSoundingSupported()
++ GetChannelSoundingSupported()
++ SetSensingPriority()
++ GetSensingPriority()
++ SetSensingInterval()
++ GetSensingInterval()
+ns3::InfrastructureWifiMac
++ m_muSensingSupported
+# m_WiFiSensingSupported
+- m_cfpMaxDuration
+- m_cfpStart
+- m_cfpForeshortening
++ SetPcfSupported()
++ GetPcfSupported()
++ EndTxNoAck()
++ SetInfo()
++ StartCfPeriod()
++ StopCfPeriod()
++ IsCfPeriod()
++ GetRemainingCfpDuration()
+ns3::ChannelAccessMechanism
++ m_pcfSupported
++ MostRecent()
++ setPcfSupported()
+- DoGrantPcfAccess()
+- DoNavStartNowPCF()
+ns3::WifiMac
+Request
+Listen ns3::HeWifiPhy
+ns3::ChannelSounding
+ns3::StaWifiMac
++ SetChannelSoundingSupported()
++ GetChannelSoundingSupported()
+Figure 7. UML diagram of the ns-3 802.11bf implementation.
+multiple STAs. In the polling phase, the AP initiates the
+sensing session by sending polling trigger frames to associated
+STAs, which respond with CTS-to-Self frames, indicating
+their readiness. During the NDPA sounding phase, the AP
+transmits an NDPA frame followed by an NDP to each STA.
+The NDP enables STAs to measure the channel and obtain
+CSI based on randomized channel conditions, simulating real-
+world variability. In the reporting phase, as shown in Figure 2,
+STAs send their CSI back to the AP using Beamforming
+Report Poll (BFRP) frames. Our implementation supports both
+immediate and delayed reporting methods to provide flexibility
+under different network conditions. For scenarios involving
+multiple STAs, we used MU-OFDMA in the uplink direction
+as well, permitting concurrent transmission of CSI reports.
+The ns3::MultiUserScheduler was further modified to
+handle RU allocation for these uplink transmissions during the
+reporting phase.
+V. P ERFORMANCE EVALUATION
+In this section, we present simulation results obtained using
+our own ns-3 module for 802.11bf, specifically designed to
+evaluate its coexistence with 802.11ax networks and validated
+against our analytical expressions obtained in Section III.
+A. Simulation Setup
+We use two different environment layouts for our studies
+as follows. First, we consider a generic 100 m× 100 m,
+layout I, where the 802.11bf and 802.11ax APs are randomly
+located. Each AP, regardless of whether it uses 802.11bf or
+802.11ax, is connected to two STAs, and this network setup is
+called a one basic service set (BSS) [31]. Second, we adopt a
+realistic indoor office deployment, namely layout II, based on
+the 3GPP TR 38.901 standard [21]. This layout incorporates
+detailed channel characteristics and structural features such as
+corridors, open spaces, and partitioned work areas.
+The simulations investigate the impact of key network
+parameters in five scenarios: (i) varying the number of APs
+for both 802.11bf and 802.11ax, (ii) assigning different access
+categories to 802.11bf sensing APs, (iii) varying different sens-
+ing intervals, (iv) changing the number of antenna elements
+used for sensing in 802.11bf APs, and (v) varying the channel
+bandwidth. These scenarios are designed to capture how
+network configurations influence the coexistence of sensing
+and communication functionalities. The first four scenarios are
+evaluated within the generic layout, while the fifth scenario is
+specific to the indoor office deployment.
+The analysis focuses on two performance metrics: the sens-
+ing delay of 802.11bf and the aggregated downlink throughput
+of 802.11ax networks. Unless otherwise stated, the simulation
+9
+parameters are summarized in Table II.
+Table II
+SIMULATION PARAMETERS
+Layout Simple 100×100 meters layout and
+office layout from 3GPP TR 38.901
+Carrier frequency 5 GHz
+Sensing interval 100 ms
+Transmit power 23 dBm
+Channel bandwidth 20 MHz, 80 MHz, 160 MHz
+Frame Aggregation A-MPDU 64 Frame
+Simulation duration 10 s
+802.11ax Traffic Downlink saturated best-effort traf-
+fic with a payload of 1474 bytes per
+packet
+Sensing threshold -62 dBm
+PHY header 20 µs
+DIFS 34 µs
+SIFS 16 µs
+No. of seeds 50 iterations for each network size
+B. Effect of Varying 802.11bf and 802.11ax APs
+In this case study, we consider layout I with two separate
+scenarios. In the first scenario, we vary the number of 802.11bf
+APs while keeping a single 802.11ax AP. This approach allows
+us to more clearly distinguish and understand the impact
+of introducing 802.11bf on the performance of 802.11ax.
+Similarly, in the second scenario, we reverse the roles: we fix
+one 802.11bf AP and vary the number of 802.11ax APs. For
+each variation in both scenarios, we run the simulation with
+50 different seeds to capture a wide range of environmental
+conditions. We then present the simulation results using vi-
+olin plots to visualize the underlying distribution, where the
+width reflects data density, and we use markers to represent
+numerical results.
+In the first scenario, illustrated in Figure 5, increasing the
+number of 802.11bf APs leads to a noticeable rise in sensing
+latency. As shown in Figure 5(a), the median latency at one
+802.11bf AP is approximately 8 ms, but increases to about
+15 ms when nine 802.11bf APs are deployed. This growth
+in latency primarily stems from channel access delays and
+the corresponding polling (Tpolling) and reporting (TReporting)
+phases, as detailed in Section III-D.
+In Figure 5(b), we see that introducing additional 802.11bf
+APs exerts only a minor influence on 802.11ax throughput,
+which decreases slightly from 56 Mbps to 50 Mbps. The
+limited impact arises from the fact that 802.11bf’s sensing
+operations briefly occupy the channel. Moreover, in our sim-
+ulations, the sensing interval is set to 100 ms, meaning the
+sensing activity is infrequent compared to the total simula-
+tion duration. The effect of this configuration is examined
+later in SectionV-D. Furthermore, this plot confirms that the
+analytical and simulation models closely match in terms of
+the 802.11bf sensing latency and the aggregated 802.11ax
+downlink throughput.
+In the second scenario, as shown in Figure 6(a), increasing
+the number of 802.11ax APs leads to a significant rise in
+the sensing latency of the 802.11bf network. For instance,
+with one 802.11ax AP, the latency of the 802.11bf network is
+approximately 8 ms, but it increases to 26 ms when the number
+of 802.11ax APs reaches nine. The primary cause of this
+latency growth is the heightened contention for channel access,
+which delays the 802.11bf AP from securing the channel for
+its sensing operations. Moreover, the 802.11ax APs tend to
+capture the channel for longer periods due to saturated traffic
+and frame aggregations, causing the sensing operations to
+experience longer waiting times before they can commence.
+In Figure 6(b), we observe that the mean throughput of the
+802.11ax networks decreases from approximately 56 Mbps
+with one 802.11ax AP to around 5 Mbps when there are nine
+802.11ax APs. This reduction is expected due to increased
+competition and potential collisions among the 802.11ax net-
+works themselves. Each AP have to contend more frequently
+for channel access, leading to reduced available airtime and
+lower throughput per network. Furthermore, the numerical
+and simulation results closely align under most network con-
+ditions. The slight discrepancies between the analytical and
+simulation outcomes stem from the fact that the numerical
+analysis employs averaged values for random parameters (e.g.,
+contention window sizes), whereas the simulations inherently
+capture random variations in these parameters.
+Finally, comparing Figure 5(a) and Figure 6(a), we find that
+the sensing latency of 802.11bf is higher when coexisting with
+802.11ax APs than when coexisting with additional 802.11bf
+APs. More specifically, in the presence of 802.11bf APs, the
+sensing delay increases linearly as a function of the number of
+APs. This behavior occurs because the overall sensing latency
+is primarily dictated by the polling ( Tpolling) and reporting
+(TReporting) phases, both of which scale linearly with the
+number of APs, as shown in Equation (10). In contrast,
+when 802.11bf coexists with a growing number of 802.11ax
+APs, the sensing latency increases nonlinearly, as shown in
+Equation (16). This is due to the dominant influence of the
+channel access delay. As 802.11ax APs aggressively capture
+the channel and maintain it for longer periods, the 802.11bf
+AP experiences significantly prolonged waiting times before
+it can perform its sensing operations. Similar to the sensing
+delay, the aggregated throughput of 802.11ax APs suffers more
+severely when these APs coexist among themselves than when
+they coexist with 802.11bf APs
+C. Effect of Assigning Different Access category (AC) to
+Sensing Networks
+The results presented in Figure 8 illustrate how varying the
+access categories (ACs) affects latency for a single 802.11bf
+sensing AP coexisting with an 802.11ax AP. We evaluate all
+ACs defined in Table I—background (BK), best-effort (BE),
+video (VI), and voice (VO)—while keeping the 802.11ax AP
+fixed at AC_BE. We find that AC_BK exhibits the high-
+est median latency, approximately 15 ms, with substantial
+variability ranging from about 10 ms to 25 ms. This ele-
+vated latency and broad dispersion in the violin curve are
+10
+AC_BK AC_BE AC_VI AC_VO
+Access Category
+0
+5
+10
+15
+20
+25
+30Latency (ms)
+Figure 8. Effect of different access categories on the 802.11bf latency.
+due to AC_BK’s lower priority channel access parameters,
+particularly its larger contention window. In contrast, the VO
+access category achieves the lowest median latency of roughly
+5 ms, with a narrow range of 4 ms to 7 ms, reflecting its
+higher priority and shorter contention periods (smaller CW and
+AIFS). Overall, these findings suggest that employing higher-
+priority ACs in 802.11bf, such as AC_VI and AC_VO, can
+effectively reduce latency in coexistence scenarios, thereby
+improving performance for time-sensitive sensing applications.
+D. Effect of Assigning Different Sensing Intervals
+In Figure 9, we show how varying sensing intervals in-
+fluence overall coexistence performance. We consider five
+different intervals— 10 ms, 50 ms, 100 ms, 500 ms, and
+1000 ms—each corresponding to how often the application
+layer generates sensing requests. For instance, certain applica-
+tions, such as human target localization defined in the 802.11bf
+standard, require a sensing interval of less than 20 ms [4],
+[5]. We focus on a coexistence scenario that includes one
+802.11ax AP and a growing number of 802.11bf APs. From
+Figure 9(a), we observe that reducing the sensing interval from
+1000 ms to 10 ms, significantly decreases the average 802.11bf
+latency. For example, in the presence of one 802.11bf AP
+and one 802.11ax AP, shortening the interval from 1000 ms
+to 100 ms reduces the latency from approximately 8 ms to
+4 ms. This improvement arises because shorter intervals enable
+more frequent sensing attempts, allowing the 802.11bf AP
+to secure channel access more regularly and thus lower the
+overall sensing latency. However, as the number of 802.11bf
+APs increases, the average latency gradually rises, particularly
+at longer intervals. This indicates a compounded effect of
+additional sensing traffic and multiple contending APs, which
+collectively lead to increased waiting times and, consequently,
+higher latency.
+Notably, with a sensing interval of 10 ms, the average
+latency remains almost constant as the number of 802.11bf
+APs increases. This is due to the exclusion of sensing failure
+events from the average latency calculation, where sensing
+attempts that cannot be completed before the next sensing
+interval are dropped. Table III presents the sensing failure
+percentages across different sensing intervals. We define a
+sensing failure for an 802.11bf AP as an event where a sensing
+instance cannot be completed before the next sensing interval
+begins due to collisions or channel occupation by other APs.
+In such cases, the sensing attempt is dropped and excluded
+from the delay calculations. As shown in Table III, sensing
+failures are more prominent for the 10 ms sensing interval,
+with failure rates exceeding 50% even when the number of
+802.11bf APs is three or more.
+Table III
+SENSING FAILURE ACROSS DIFFERENT SENSING INTERVALS
+Number of BSS Sensing Interval
+10 ms 50 ms 100 ms 500 ms 1000 ms
+1 bf & 1 ax 34.91% 0.27% 0.03% 0.00% 0.00%
+2 bf & 1 ax 48.83% 1.38% 0.68% 0.01% 0.03%
+3 bf & 1 ax 60.74% 2.42% 0.91% 0.09% 0.02%
+4 bf & 1 ax 68.94% 3.44% 1.57% 0.14% 0.04%
+5 bf & 1 ax 77.51% 4.10% 1.58% 0.20% 0.07%
+Figure 9(b) shows that the throughput of 802.11ax sig-
+nificantly declines as the sensing interval becomes shorter.
+For instance, when we have one 802.11bf and one 802.11ax
+network for a 10 ms sensing interval, the throughput of
+802.11ax drops to 50 Mbps compared to 58 Mbps for 1000 ms.
+This reduction becomes more pronounced as the number of
+802.11bf APs increases, with throughput dropping to 30 Mbps
+for 10 ms intervals in case of having five 802.11bf networks.
+This degradation occurs because more frequent sensing leads
+to increased contention for the channel, reducing the airtime
+available for 802.11ax transmissions.
+In summary, while the latency performance of 802.11bf
+sensing applications benefits from shorter sensing intervals,
+it comes at the cost of reduced 802.11ax throughput. This
+trade-off emphasizes the importance of balancing sensing in-
+terval durations to optimize coexistence performance in shared
+networks.
+E. Effect of number of antenna element
+Having more antenna elements in 802.11bf networks en-
+ables richer CSI acquisition (as shown in Equation (11)),
+potentially improving sensing accuracy and performance [5].
+However, this benefit comes at the expense of increased
+reporting overhead and, consequently, higher latency. In this
+subsection, we quantify this trade-off by examining how
+scaling up the number of antenna elements at both the AP
+and STA affects coexistence with 802.11ax networks.
+Until now, we have assumed the use of a single omnidirec-
+tional antenna for both the AP and STA in 802.11bf networks.
+In this subsection, we examine the impact of increasing
+the number of antenna elements at both the AP and STA.
+Specifically, we configure the STA with a 2x2 antenna array
+and vary the number of antenna elements at the AP to 4x4,
+8x8, and 16x16, while keeping the 802.11ax omnidirectional.
+Figure 11 presents the results of this study. The first row
+illustrates 802.11bf latency, while the second row shows the
+corresponding 802.11ax throughput. In all subfigures, increas-
+ing the number of 802.11bf APs leads to a performance trend
+similar to that observed in Figure 5. However, comparing
+subfigures (a), (b), and (c) reveals that scaling the AP’s antenna
+configuration from 4x4 to 8x8 slightly increases 802.11bf la-
+tency and decreases 802.11ax throughput. This effect becomes
+11
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+Number of BSS
+4
+6
+8
+10
+12
+14
+16Average Latency (ms)
+Sensing Interval = 10ms
+Sensing Interval = 50ms
+Sensing Interval = 100ms
+Sensing Interval = 500ms
+Sensing Interval = 1000ms
+(a) 802.11bf Average Latency
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+Number of BSS
+0
+10
+20
+30
+40
+50
+60
+Mean Throughput of 
+ IEEE 802.11ax (Mbit/s)
+Sensing Interval = 10ms
+Sensing Interval = 50ms
+Sensing Interval = 100ms
+Sensing Interval = 500ms
+Sensing Interval = 1000ms (b) 802.11ax Average Throughput
+Figure 9. The effect of different sensing intervals on sensing latency and 802.11ax throughput.
+120 m
+50 m
+IEEE 802.11axAP IEEE 802.11bf AP
+Figure 10. Layout of indoor office scenario.
+even more pronounced at 16x16. The root cause lies in the
+enlarged CSI reporting size, as described in (11). With more
+antenna elements, the CSI feedback is more data-intensive,
+prolonging the reporting phase and subsequently affecting both
+802.11bf latency and 802.11ax throughput under coexistence
+conditions.
+F . Performance Evaluation in Indoor Office Scenario
+In this Subsection, we consider the indoor office scenario
+defined by the 3GPP TR 38.901 standard [21] serves as a re-
+alistic environment for evaluating the coexistence of 802.11bf
+sensing and 802.11ax communication networks. We consider
+typical office conditions—featuring corridors, open spaces,
+and partitioned areas—where line-of-sight (LoS) and non-line-
+of-sight (NLoS) propagation paths coexist. The layout, illus-
+trated in Figure 10, encompasses an area of 120× 50 meters,
+within which 12 APs are uniformly distributed at an inter-AP
+spacing of 20 meters. To systematically assess the interplay
+between sensing and communication, we vary the ratio of
+802.11bf (sensing) APs to 802.11ax (communication) APs,
+thereby enabling us to explore different coexistence conditions
+under varying densities of each technology. Additionally, we
+investigate the impact of larger channel bandwidths (e.g.,
+80 MHz or 160 MHz) on practical indoor sensing scenarios.
+Employing wider bandwidths improves the spatial and tem-
+poral resolution of the acquired CSI, thereby enabling more
+precise sensing tasks such as human target localization or
+object detection [4].
+Figure 12 shows the latency and throughput distributions for
+802.11bf and 802.11ax coexistence under 20 MHz, 80 MHz,
+and 160 MHz channel bandwidths. The violin curves reveal
+that as the ratio of 802.11bf APs increases relative to 802.11ax
+APs, the overall latency distribution shifts toward lower values.
+For instance, at 20 MHz, the average latency for 802.11bf
+drops from about 33 ms when only one 802.11bf AP coexists
+with eleven 802.11ax APs, to approximately 8 ms when eleven
+802.11bf APs coexist with one 802.11ax AP. This trend is
+even more pronounced at higher bandwidths, with the median
+latency decreasing from around 12 ms to 7 ms at 80 MHz,
+and from about 8 ms to 5.5 ms at 160 MHz.
+This improvement stems from the fact that 802.11bf APs
+engage in shorter, more frequent sensing operations—polling,
+sounding, and reporting—especially when richer CSI, enabled
+by wider bandwidths, provides more accurate and efficient
+sensing with less overhead per operation. Wider bandwidths
+also enhance the resolution and quality of CSI, enabling more
+precise sensing and shorter reporting periods. Conversely,
+802.11ax APs, operating with full-buffered traffic, hold the
+channel longer during each TXOP, potentially up to 5,484 ms,
+thus increasing latency for 802.11bf when they dominate the
+network. By visualizing results as violin curves, we clearly
+see how the latency distribution narrows and shifts downward
+as the ratio of sensing APs grows,
+For throughput analysis, we observe that under scenarios
+where 802.11ax APs are higher relative to 802.11bf APs, chan-
+nel time becomes heavily contested, resulting in lower per-
+network throughput. As the ratio shifts towards more 802.11bf
+APs, contention among 802.11ax APs decreases, allowing
+each network to utilize available airtime more effectively and
+thereby enhancing throughput. This improvement is further
+amplified by wider channel bandwidths, which provide greater
+capacity and reduce the number of competing 802.11ax APs.
+For instance, at a 20 MHz bandwidth, 802.11ax throughput
+increases from approximately 5Mbps with a 1:11 ratio of
+802.11bf to 802.11ax APs, up to 50Mbps at an 11:1 ratio.
+Similarly, at 80 MHz and 160 MHz bandwidths, throughput
+rises significantly as the ratio of 802.11bf APs increases,
+reaching up to 200 Mbps and nearly 350 Mbps, respectively.
+For throughput, the results show that for 20 MHz channel
+bandwidth, the mean throughput of 802.11ax starts at approx-
+12
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+20.0
+22.5
+25.0802.11bf Latency (ms)
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+20.0
+22.5
+25.0802.11bf Latency (ms)
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+5.0
+7.5
+10.0
+12.5
+15.0
+17.5
+20.0
+22.5
+25.0802.11bf Latency (ms)
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+30
+35
+40
+45
+50
+55
+60802.11ax Throughput (Mbit/s)
+(a) 4 Antenna Elements
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+30
+35
+40
+45
+50
+55
+60802.11ax Throughput (Mbit/s) (b) 8 Antenna Elements
+1 bf
+1 ax
+2 bf
+1 ax
+3 bf
+1 ax
+4 bf
+1 ax
+5 bf
+1 ax
+6 bf
+1 ax
+7 bf
+1 ax
+8 bf
+1 ax
+9 bf
+1 ax
+Number of BSS
+30
+35
+40
+45
+50
+55
+60802.11ax Throughput (Mbit/s) (c) 16 Antenna Elements
+Figure 11. 802.11bf Latency and 802.11ax Throughput Distribution for various number of antenna elements.
+imately 5 Mbps when the ratio of 802.11bf APs to 802.11ax
+APs is low (1:11) and increases steadily to 50 Mbps as the
+ratio increases to 11:1. For 80 MHz, the mean throughput
+begins higher, starting at around 25 Mbps and increasing to
+200 Mbps. Similarly, for 160 MHz, the throughput exhibits
+a significant rise, beginning at approximately 50 Mbps and
+reaching almost 350 Mbps. This is because reducing the num-
+ber of 802.11ax APs sharing the channel leads to an increase
+in the mean throughput for each network. In particular, the
+available channel time is divided among fewer APs with
+saturated traffic, leaving more time for individual networks
+to transmit.
+VI. C ONCLUSIONS
+In this paper, we provide key insights into how 802.11bf
+sensing networks coexist with legacy 802.11ax. By developing
+an analytical framework and conducting detailed simulations
+in ns-3, we demonstrated that while 802.11bf can operate ef-
+fectively alongside 802.11ax, channel contention significantly
+affects performance, leading to increased sensing delays and
+reduced communication throughput. Our analysis quantifies
+these trade-offs and illustrates how factors such as node
+density, sensing intervals, and MAC configurations influence
+the coexistence dynamics. Moreover, by examining various
+choices for sensing intervals, channel bandwidth, and antenna
+configurations, and validating in a 3GPP TR 38.901 office
+channel scenario, we confirmed the practical impact of these
+design considerations on real-world deployments. In future
+work, we plan to incorporate the intelligent channel access
+mechanism into 802.11bf networks to further mitigate sensing
+delays, reduce protocol overhead, and minimize adverse effects
+on other Wi-Fi networks.
+REFERENCES
+[1] F. Liu, C. Masouros, A. P. Petropulu, H. Griffiths, and L. Hanzo, “Joint
+Radar and Communication Design: Applications, State-of-the-Art, and
+the Road Ahead,” IEEE Trans. Commun., vol. 68, no. 6, pp. 3834–3862,
+2020.
+[2] T. Wild, A. Grudnitsky, S. Mandelli, M. Henninger, J. Guan, and
+F. Schaich, “6G Integrated Sensing and Communication: From Vision
+to Realization,” in Proc. IEEE EuRAD , 2023, pp. 355–358.
+[3] V . Shatov et al., “Joint Radar and Communications: Architectures, Use
+Cases, Aspects of Radio Access, Signal Processing, and Hardware,”
+IEEE Access, vol. 12, pp. 47 888–47 914, 2024.
+[4] T. Ropitault, C. R. C. M. da Silva, S. Blandino, A. Sahoo, N. Golmie,
+K. Yoon, C. Aldana, and C. Hu, “IEEE 802.11bf WLAN Sensing
+Procedure: Enabling the Widespread Adoption of WiFi Sensing,” IEEE
+Communications Standards Magazine , vol. 8, no. 1, pp. 58–64, 2024.
+[5] R. Du et al., “An Overview on IEEE 802.11bf: WLAN Sensing,” IEEE
+Communications Surveys & Tutorials , pp. 1–1, 2024.
+[6] “IEEE Draft Standard for Information Technology – Telecommunica-
+tions and Information Exchange Between Systems Local and Metropoli-
+tan Area Networks – Specific Requirements - Part 11: Wireless LAN
+Medium Access Control (MAC) and Physical Layer (PHY) Specifica-
+tions - Amendment 4: Enhancements for Wireless Local Area Network
+(WLAN) Sensing,” IEEE P802.11bf/D6.0, November 2024 , pp. 1–232,
+2024.
+[7] F. Meneghello, C. Chen, C. Cordeiro, and F. Restuccia, “Toward Inte-
+grated Sensing and Communications in IEEE 802.11bf Wi-Fi Networks,”
+IEEE Communications Magazine , vol. 61, no. 7, pp. 128–133, 2023.
+[8] J. Wang, J. Chuang, S. Berweger, C. Gentile, and N. Golmie, “Toward
+Opportunistic Radar Sensing Using Millimeter-Wave Wi-Fi,” IEEE
+Internet of Things Journal , vol. 11, no. 1, pp. 188–200, 2024.
+[9] J. Pegoraro et al. , “RAPID: Retrofitting IEEE 802.11ay Access Points
+for Indoor Human Detection and Sensing,”IEEE Trans. Mobile Comput.,
+vol. 23, no. 5, pp. 4501–4519, 2024.
+[10] S. Blandino et al. , “Low Overhead DMG Sensing for Vital Signs
+Detection,” in Proc. IEEE ICASSP , 2024, pp. 13 041–13 045.
+[11] D. Garcia, J. O. Lacruz, P. Jiménez Mateo, and J. Widmer, “POLAR:
+Passive object localization with IEEE 802.11ad using phased antenna
+arrays,” in Proc. IEEE INFOCOM , 2020, pp. 1838–1847.
+[12] S. Blandino et al. , “IEEE 802.11bf DMG Sensing: Enabling High-
+Resolution mmWave Wi-Fi Sensing,” IEEE Open Journal of Vehicular
+Technology, vol. 4, pp. 342–355, 2023.
+[13] N. Keshtiarast et al. , “Wireless MAC Protocol Synthesis and Opti-
+mization With Multi-Agent Distributed Reinforcement Learning,” IEEE
+Networking Letters, vol. 6, no. 4, pp. 242–246, 2024.
+[14] C. J. Vaca-Rubio et al. , “mmWave Wi-Fi Trajectory Estimation with
+Continuous-Time Neural Dynamic Learning,” in Proc. IEEE ICASSP ,
+2023, pp. 1–5.
+[15] C. J. Vaca-Rubio, P. Wang, T. Koike-Akino, Y . Wang, P. Boufounos,
+and P. Popovski, “Object Trajectory Estimation with Continuous-Time
+Neural Dynamic Learning of Millimeter-Wave Wi-Fi,” IEEE J. Sel.
+Topics Signal Process., pp. 1–16, 2024.
+[16] E. Grossi, M. Lops, L. Venturino, and A. Zappone, “Opportunistic Radar
+in IEEE 802.11ad Networks,” IEEE Transactions on Signal Processing ,
+vol. 66, no. 9, pp. 2441–2454, 2018.
+13
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+15
+20
+25
+30
+35
+40802.11bf Latency (ms)
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+6
+8
+10
+12
+14
+16
+18802.11bf Latency (ms)
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+4
+6
+8
+10
+12
+14802.11bf Latency (ms)
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+10
+20
+30
+40
+50802.11ax Throughput (Mbit/s)
+(a) 20 MHz
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+25
+50
+75
+100
+125
+150
+175
+200802.11ax Throughput (Mbit/s) (b) 80 MHz
+1bf
+11ax
+2bf
+10ax
+3bf
+9ax
+4bf
+8ax
+5bf
+7ax
+6bf
+6ax
+7bf
+5ax
+8bf
+4ax
+9bf
+3ax
+10bf
+2ax
+11bf
+1ax
+Number of BSS
+0
+50
+100
+150
+200
+250
+300
+350802.11ax Throughput (Mbit/s) (c) 160 MHz
+Figure 12. 802.11bf Latency and 802.11ax throughput distribution for various channel bandwidth.
+[17] A. Munari, N. Grosheva, L. Simi ´c, and P. Mähönen, “Performance of
+Radar and Communication Networks Coexisting in Shared Spectrum
+Bands,” in Proc. IEEE PIMRC , 2019, pp. 1–7.
+[18] N. Keshtiarast, P. Kumar Bishoyi, and M. Petrova, “Modeling and
+Performance Analysis of CSMA-Based JCAS Networks,” in Proc. IEEE
+WCNC, 2024, pp. 01–06.
+[19] A. Sahoo, T. Ropitault, S. Blandino, and N. Golmie, “Sensing Per-
+formance of the IEEE 802.11bf Protocol and Its Impact on Data
+Communication,” arXiv preprint arXiv:2403.19825 , 2024.
+[20] [Online.], Available: https://git.rwth-aachen.de/navid.keshtiarast/
+coexistence-of-802.11bf-and-802.11ax.
+[21] Study on channel model for frequencies from 0.5 to 100 GHz, 3GPP ,
+TR 38.901, v17.0.0, 2022.
+[22] “IEEE Standard for Information technology–Local and metropolitan area
+networks–Specific requirements–Part 11: Wireless LAN Medium Access
+Control (MAC) and Physical Layer (PHY) Specifications - Amendment
+8: Medium Access Control (MAC) Quality of Service Enhancements,”
+IEEE Std 802.11e-2005 (Amendment to IEEE Std 802.11, 1999 Edition
+(Reaff 2003), pp. 1–212, 2005.
+[23] E. Khorov, A. Kiryanov, A. Lyakhov, and G. Bianchi, “A tutorial on
+ieee 802.11ax high efficiency wlans,” IEEE Communications Surveys &
+Tutorials, vol. 21, no. 1, pp. 197–216, 2019.
+[24] G. Bianchi, “Performance analysis of the ieee 802.11 distributed coor-
+dination function,” IEEE Journal on Selected Areas in Communications ,
+vol. 18, no. 3, pp. 535–547, 2000.
+[25] E. Felemban and E. Ekici, “Single Hop IEEE 802.11 DCF Analysis
+Revisited: Accurate Modeling of Channel Access Delay and Throughput
+for Saturated and Unsaturated Traffic Cases,” IEEE Transactions on
+Wireless Communications, vol. 10, no. 10, pp. 3256–3266, 2011.
+[26] T. R. Henderson, M. Lacage, G. F. Riley, C. Dowell, and J. Kopena,
+“Network simulations with the ns-3 simulator,” SIGCOMM demonstra-
+tion, vol. 14, no. 14, p. 527, 2008.
+[27] K. Ayush et al. , “Supporting Throughput Fairness in IEEE 802.11ac
+Dynamic Bandwidth Channel Access: A Hybrid Approach,” in Proc.
+IEEE LCN, 2017, pp. 462–470.
+[28] N. Keshtiarast and M. Petrova, “ML Framework for Wireless MAC
+Protocol Design,” in Proc. IEEE ICMLCN , 2024, pp. 560–565.
+[29] D. Magrin, S. Avallone, S. Roy, and M. Zorzi, “Performance Evaluation
+of 802.11ax OFDMA Through Theoretical Analysis and Simulations,”
+IEEE Trans. Wireless Commun. , vol. 22, no. 8, pp. 5070–5083, 2023.
+[30] J. Zhang et al., “Implementation and evaluation of ieee 802.11ax channel
+sounding frame exchange in ns-3,” in ACM WNS3 ’23 , New York, NY ,
+USA, 2023, p. 10–18.
+[31] D. Bertsekas and R. Gallager, Data networks. Athena Scientific, 2021.
+APPENDIX
+EXPRESSIONS FOR dI ,dS, AND dC
+As specified in Equation (16), to compute the overall
+channel access delay of a tagged 802.11bf AP, we need to
+calculateF, which is the average duration that the AP stays
+in the backoff state before decrementing its counter. The time
+elapsed in each backoff state depends on the channel state of
+the current new time slot as well as the previous time slot. We
+definedI,dS, and dC as the duration that the AP stays in the
+backoff state when the channel status at the beginning of that
+slot is idle, involved in a successful event, or experiencing a
+collision, respectively.
+In case the channel is idle, the tagged AP remain in this
+state for one time slot duration, i.e. dI = 1 . For successful
+sensing operation of 802.11bf sensing, the delay dS can be
+expressed by using the geometric distribution as
+dS =dI + Pt,axPs,ax(1−Pt,bf)Ts,ax
+1−Pss
++ Pt,bfPs,bf(1−Pt,ax)Ts,bf
+1−Pss
+.
+(26)
+Where Pss denotes the probability of successive successful
+sensing events, i.e., Pss = 1/W0, and W0 is the minimum
+contention window size at backoff stage 0. The expressions of
+Pt,bf , Pt,ax, Ps,bf , and Ps,ax are given in equations (5) and
+(6), respectively. Further, the expressions of Ts,ax, Ts,bf are
+provided already in equation (13).
+Further, the delay experienced when the AP enter the
+backoff state and encounter a collision, dC, is given by
+dC =
+ LX
+i=0
+iP i
+cc
+!
+Γ + Pcs
+1−Pcc
+dS + Pci
+1−Pcc
+dI. (27)
+Where PL
+i=0iP i
+cc represents the average number of consec-
+utive collisions. Pcs is the probability of transitioning from
+a collision to a successful sensing event, and Pci is the
+probability of transitioning from a collision to an idle state.
+14
+Finally, Γ represents the total time elapsed in both inter and
+intra-technology collisions and can be expressed as:
+Γ =Pt,ax(1−Ps,ax)(1−Pt,bf)Tc,ax
++Pt,bf(1−Ps,bf)(1−Pt,ax)Tc,bf +Tc(Pt,axPs,ax
+Pt,bfPs,bf +Pt,axPs,axPt,bf(1−Ps,bf) +Pt,ax(1−Ps,ax)
+Pt,bfPs,bf +Pt,ax(1−Ps,ax)Pt,bf(1−Ps,bf)).
+The expressions of Tc,ax and Tc,bf are given in the equation
+(14).
+To calculate the probability of Pcs and Pcs, we need to
+define the joint probability mass function (PMF) of a number
+of colliding APs. Let Q(nax,n bf) be the probability that nax
+802.11ax APs and nbf 802.11bf APs collide in the current
+time slot, which can be expressed as:
+Q(nax,n bf) =
+Nax
+nax
+
+τ nax
+w (1−τax)Nax−nax
+×
+Nbf
+nbf
+
+τ nbf
+bf (1−τbf)Nbf −nbf.
+(28)
+Now, utilizing Equation (28), we can express the Pci as
+following
+Pci =
+Nbf −1X
+nbf =2
+NaxX
+nax=0
+
+Q(nax,n bf)
+
+1− 1
+CW ax
+nax
+
+1− 1
+CW bf
+nbf
+,
+(29)
+where CW bf and CW ax denote the average backoff window
+size for all backoff stages defined in 802.11bf and ax stan-
+dards, respectively. Similarly, the expression of Pcs is
+Pcs =
+Nbf −1X
+nbf =2
+NaxX
+nax=0
+Q(nax,n bf)nbf
+ 1
+CW bf
+
+×
+
+1− 1
+CW bf
+nbf −1
+1− 1
+CW ax
+nax
++
+NaxX
+nax=1
+Q(1,n ax)
+ 1
+CW bf
+
+×
+
+1− 1
+CW ax
+nax
+.
+(30)
+Finally, the probability of transitioning from a collision to a
+collision state is:
+Pcc = 1−Pci−Pcs. (31)
+Substituting the equations (29), (30), and (31) in Equation
+(27), we can obtain the final expression of dC.

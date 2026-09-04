@@ -1,0 +1,2 @@
+warm: {'outcome': 'responded', 'ms': 1.8999999985098839}
+after SIGSTOP (30 s cap): {'outcome': 'error:AbortError', 'ms': 30000.5}

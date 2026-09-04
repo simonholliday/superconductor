@@ -1,0 +1,2 @@
+short.wav: 65424 bytes, 2.02 s @ 16000 Hz; ensure_sample_assets(with_preview=True) x3: 12104, 291, 369 ms; sidecar 10169 B (preview block 3666 B), png 9090 B; bare 400-bin envelope 0.91 ms; render_svg(800x200) 1.28 ms -> 34225 B
+long.wav: 2051872 bytes, 64.10 s @ 16000 Hz; ensure_sample_assets(with_preview=True) x3: 4544, 4684, 4693 ms; sidecar 98603 B (preview block 6066 B), png 11309 B; bare 400-bin envelope 1.04 ms; render_svg(800x200) 1.47 ms -> 66947 B

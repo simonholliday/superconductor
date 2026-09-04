@@ -1,0 +1,1025 @@
+11Wessel and Wright
+David Wessel and Matthew Wright
+Center for New Music and Audio Technologies
+Department of Music
+University of California, Berkeley
+Berkeley, California 94720 USA
+www.cnmat.berkeley.edu
+[wessel,matt]@cnmat.berkeley.edu
+Problems and Prospects
+for Intimate Musical
+Control of Computers
+When asked what musical instrument they play,
+few computer musicians respond spontaneously
+with ’’I play the computer.’’ Why not? In this re-
+port, we examine the problems associated with the
+notion of the computer as musical instrument and
+the prospects for their solution.
+We begin with a discussion of our goals and re-
+quirements for computer-based musical instru-
+ments, raising the main issues that inform our
+work. Then we discuss a variety of metaphors for
+musical control that we have found to be powerful.
+Finally, we discuss some of the technology we have
+developed for implementing these instruments.
+Goals and Requirements
+Musical instruments and their gestural interfaces
+succeed for a variety of reasons, most of which are
+social in character. These sociological aspects, such
+as the development of a repertoire for the instru-
+ment, are beyond the scope of this article. Here we
+will concentrate on factors such as ease of use, po-
+tential for development of skill, reactive behavior,
+and coherence of the cognitive model for control.
+Relationships of Gestures to Acoustic Results
+The image immediately called to most people’s
+minds by the statement ’’I play the computer’’ is of
+a performer physically interacting with the
+QWERTY keyboard and pointing device of a typical
+computer workstation live on stage. Many musi-
+cians do indeed perform live music with this inter-
+face, but we prefer to interact with more
+specialized gestural interfaces, because they offer
+lower latency, higher precision, higher data rates,
+and a broader range of physical gestures than the
+keyboard/mouse-type interface. There is also the is-
+sue of the visual appearance of a performance and
+the association of standard computer interfaces
+with of/bullet5 ce work (Zicarelli 1991).
+At the onset, it would be useful to consider some
+of the special features that computer technology
+brings to musical instrumentation. Most tradi-
+tional acoustic instruments such as strings, wood-
+winds, brass, and percussion place the performer in
+direct contract with the physical sound production
+mechanism. Strings are plucked or bowed, tubes
+are blown, and surfaces are struck. The performer’s
+gesture plays a direct role in exciting the acoustic
+mechanism. With the piano and organ, the connec-
+tion between gesture and sound is mediated by a
+mechanical linkage (and in some modern organs by
+an electrical connection). But the relationship be-
+tween gesture and acoustic event remains in what
+one might call a ’’one-gesture-to-one-acoustic -
+event’’ paradigm.
+One obvious feature of computer technology is
+immense timbral freedom. Although skilled players
+of acoustic instruments can produce a wide variety
+of timbres, they are nevertheless constrained by the
+sound production mechanism. In contrast, comput-
+ers can produce arbitrary sampled or synthesized
+sounds. A sample-playback synthesizer can repro-
+duce any recorded sound in response to any ges-
+ture. The extreme case can be found in tape music:
+with the single gesture of pressing the ’’play’’ but-
+ton, the acoustic result is an entire composition. A
+more interactive middle ground is the kind of piece
+where a performer steps through a sequence of pre-
+recorded computer sound cues—for example, with
+a foot pedal. An even more interactive example
+would be the typical sampling keyboard, where
+each key depression triggers a potentially different
+sound. In each of these examples, the acoustic re-
+sult of a gesture may be arbitrarily complex, per-
+haps consisting of multiple perceived sonic events,
+but the control model is still a one-to-one mapping
+from gestures to acoustic results.
+When sensors are used to capture gestures and a
+computing element is used to generate the sound,
+an enormous range of possibilities becomes avail-
+Computer Music Journal, 26:3, pp. 11–22, Fall 2002
+Ó 2002 Massachusetts Institute of Technology.
+http://cnmat.berkeley.edu/publications/problems-and-prospects-intimate-musical-control-computers-0
+12 Computer Music Journal
+Human Performer Musical Instrument
+Evaluation by
+Perception
+Sound
+Output
+Intentions Motor
+Program
+Gestural
+Interface Controller Generative
+Algorithm
+Physical Interface
+able. Sadly but understandably, the electronic mu-
+sic instrument industry, with its insistence on
+standard keyboard controllers, maintains the tradi-
+tional paradigm.
+Figure 1 provides a conceptual framework for our
+controller research and development. Our human
+performer intends to produce a certain musical re-
+sult. These intentions are communicated to the
+body’s sensorimotor system (’’motor program’’). Pa-
+rameters are sensed from the body at the gestural
+interface. These parameters are then passed to con-
+troller software that conditions, tracks, and maps
+them to the algorithms that generate the musical
+material. Admittedly, this diagram is schematic
+and incomplete. One aspect that is not well cap-
+tured by this diagram is the way in which perform-
+ers’intentions are elaborated upon by discovery of
+new possibilities afforded by the instrument. Exper-
+imental and otherwise exploratory intentions are
+certainly dear to us. We /bullet5nd that this albeit sche-
+matic framework allows us to view the roles of hu-
+man motor learning, controller mapping, and
+generative software as an overall adaptive system
+(Lee and Wessel 1992).
+Unlike the ’’one-gesture-to-one-acoustic-event’’
+paradigm, our framework allows generative algo-
+rithms that can produce complex musical struc-
+tures consisting of many events. In this model, the
+performer’s gestures can guide and control high-
+level parameters of these generative algorithms
+rather than directly triggering each event. One of
+our central metaphors for musical control is that of
+driving or /bullet6ying about in a space of musical pro-
+cesses. Gestures move through time, as do the mu-
+sical processes.
+Low ’’Entry Fee’’with No Ceiling on Virtuosity
+We believe that ’’getting started’’with a computer-
+based instrument should be relatively easy, but this
+early stage ease-of-use should not stand in the way
+of the continued development of musical expressiv-
+ity. Most traditional acoustical musical instru-
+ments are not easy to play at /bullet5rst but afford the
+development of a high degree of musicality. On the
+other hand, many simple-to-use computer inter-
+faces proposed for musical control seem— after
+even a brief period of use— to have a toy-like char-
+acter. By this we mean that one quickly ’’out-
+grows’’the interface by discovering the limits of
+how it can be used. Many such simple-to-use inter-
+faces do not invite continued musical evolution.
+Is a low ’’entry fee’’with no ceiling on virtuosity
+an impossible dream? We think not and argue that
+a high degree of control intimacy can be attained
+with compelling control metaphors, reactive low
+latency variance systems, and proper treatment of
+gestures that are continuous functions of time.
+With the potential for control intimacy assured by
+the instrument, musicians will be much more in-
+clined to develop their performance skills and per-
+sonal styles.
+Latency Requirements for Control Intimacy
+Latency is the elapsed time between a stimulus
+and the response. Some kinds of latency are rela-
+Figure 1. A conceptual
+framework for our control-
+ler research and develop-
+ment.
+13Wessel and Wright
+tively easy to measure— for example, the time be-
+tween a computer’s receipt of a control message
+and the beginning of the audio event generated in
+response (Freed et al. 1997). The conceptual model
+in Figure 1 includes elements whose latency is very
+dif/bullet5cult— if not impossible— to measure, but pre-
+sumably all latencies within the human performer
+have already been compensated for by the timing of
+the motor program.
+Few practitioners of live computer music would
+deny that low latency is essential, but just how low
+is the subject of considerable debate. We place the
+acceptable upper bound on the computer’s audible
+reaction to gesture at 10 msec, and the systems de-
+scribed in this article provide measured latencies
+closer to 7 msec.
+Low variation of latency is also critical, and we
+argue that the range of variation should not exceed
+1 msec. Grace note–generated events such as /bullet6ams
+can be controlled by percussionists with temporal
+precision of less than 1 msec. This is accomplished
+by controlling the relative distance of the sticks
+from the head during the strokes. Timbral changes
+in the /bullet6ams begin to become audible when the var-
+iations in the time between the grace note and the
+primary note exceed 1 msec. Psychoacoustic exper-
+iments on temporal auditory acuity provide strik-
+ing evidence for this criterion (Ronken 1970;
+Henning and Gaskell 1981). As we will argue later,
+prospects for the solution to the latency variation
+problem can be found by using time tags or by
+treating gestures as continuous signals tightly syn-
+chronized with the audio input/output (I/O)
+stream.
+Representing Control Gestures as Events
+and Signals
+All music, in the end, exists as sound— that is, con-
+tinuous variations in air pressure. However, the no-
+tion of discrete events is a very powerful and
+effective metaphor for musical control, providing
+much-simpli/bullet5ed reasoning about rhythms, en-
+trances and exits, notes, and many other aspects of
+music. The long-term success of extremely note-
+centric music languages such as the Music-N fam-
+ily (Roads 1996) attests to the usefulness of this
+model, and we believe that the representation of
+some control gestures as discrete events is an im-
+portant part of the toolbox for building computer
+music instruments. OpenSound Control (described
+later) and MIDI are network protocols that can rep-
+resent musical events and communicate them to
+our software.
+Nevertheless, many musical gestures are contin-
+uous functions of time and should be treated as
+such— for example, the position along the string of
+a /bullet5nger on a violinist’s left hand. We note that al-
+most all traditional acoustic instruments afford
+(and require) continuous control, and, for the most
+part, it is this continuous control that makes them
+expressive. Many sensing technologies exist today
+that can transduce a variety of continuous physical
+gestures and digitize them at high data rates; we
+will describe some of our favorites later.
+How do we get continuous gestural information
+into our software? Although it is common to sam-
+ple continuous gestures asynchronously (at rela-
+tively low rates) and treat each change of the value
+as an event (for example, MIDI continuous control-
+lers), we are not satis/bullet5ed with this approach. In ad-
+dition to the loss of the higher-frequency
+components of our control signals from the long
+times between ’’control change’’events, latency
+variation destroys the /bullet5ne shapes of control ges-
+tures and also introduces an unpredictable timing
+error between the control gesture input to our soft-
+ware and any audio signals that may also be input
+to our software.
+Our solution is to represent continuous control
+gestures as audio signals and get them into our
+software with the same high-bandwidth isochro-
+nous data paths that we use for audio input. Be-
+cause most control gestures do not have frequency
+components in the upper ranges of the audible
+spectrum, we can multiplex lower-rate control ges-
+tures into a single audio channel. The new genera-
+tion of software synthesis programming
+environments such as Max/MSP (Zicarelli 1998,
+2002), SuperCollider (McCartney 2000), Pd ( Puck-
+ette 1996), and Open Sound World (Chaudhary,
+Freed, and Wright 1999; see cnmat.CNMAT
+.Berkeley.EDU/OSW) provide multi-rate signal pro-
+cessing. In these programming environments, it is
+quite natural to treat gestures with a sample-
+14 Computer Music Journal
+synchronous signal processing approach. An addi-
+tional advantage is the ability to apply existing
+audio DSP modules (for example, /bullet5lters, Fast Fou-
+rier Transforms, and linear predictors) to process,
+condition, and otherwise manipulate our control-
+gesture signals.
+CNMAT’s connectivity processor (Avizienis et
+al. 2000) described below provides a mechanism for
+getting continuous gestures into the computer in a
+manner that is very tightly synchronized with the
+audio sample stream. With this system, we demon-
+strate a signi/bullet5cant increase in control intimacy.
+Musical Features Desired for All Instruments
+The traditional ’’one-gesture-to-one-acoustic-
+result’’paradigm automatically provides many im-
+portant musical features that must sometimes be
+implemented explicitly. One of the most critical
+features of any musical control system is a ’’si-
+lencer,’’a mechanism that allows the performer to
+gracefully shut down a musical process. More gen-
+erally, the performer should always have control of
+the overall volume and density of the sound an in-
+strument is producing, even when a semi-
+autonomous generative algorithm is handling the
+details.
+We believe that there should be some sort of cor-
+respondence between the ’’size’’of a control ges-
+ture and the acoustic result. Although any gesture
+can be mapped to any sound, instruments are most
+satisfying both to the performer and the audience
+when subtle control gestures result in subtle
+changes to the computer’s sound and larger, more
+forceful gestures result in dramatic changes to the
+computer’s sound.
+Another feature we /bullet5nd very important is pre-
+dictability. Although we want our generative algo-
+rithms to /bullet5ll in musical details not directly
+speci/bullet5ed by the control gestures, we always want
+to feel that we have complete control, at least at a
+high level of abstraction, over the sounds our in-
+struments produce. We /bullet5nd the analogy of the con-
+ductor useful: individual instrumentalists in the
+orchestra determine /bullet5ne details, while the conduc-
+tor exercises overall control.
+The possibility of a performer’s controlling a gen-
+erative algorithm raises issues about memory and
+state. If the output of the algorithm depends in a
+complicated way on the history of the control ges-
+tures that have guided the algorithm, then the
+’’predictability’’goal requires the performer to
+know the algorithm’s state at any given time. It is
+too easy to build interesting interfaces that place a
+large burden on the performer’s memory. One alter-
+native is for the computer to provide some sort of
+display, typically visual, of its current state. Ideally,
+the performer does not need to look at a computer
+screen during the entire performance and will be
+able to look at fellow performers and at the audi-
+ence. One of our design goals has been to create
+stateless or mostly stateless interfaces; the chal-
+lenge in this case is to be able to produce complex
+results without accumulating information from
+multiple gestures.
+Metaphors for Musical Control
+As suggested in the introduction, metaphors for
+control are central to our research agenda. We have
+found the work of George Lakoff and his collabora-
+tors (Lakoff and Johnson 1999; Lakoff and Nu´ n¯ ez
+2000) on embodied cognition to be particularly ap-
+plicable. They argue that abstract concepts like
+time and space and even the loftier concepts of
+mathematics are grounded in sensorimotor experi-
+ence. We now present some of the metaphors that
+have inspired the development of our controller
+software.
+Spaces of Musical Sounds and Processes
+Spatial metaphors can play an important role in
+characterizing the materials of music. The basic
+concept is that sounds that are similar to each
+other are placed proximate to each other in the spa-
+tial representation.
+A rich variety of spatial representations that go
+beyond the one-dimensional layout of a traditional
+keyboard have been proposed for pitch. Fred Ler-
+15Wessel and Wright
+dahl, in his book Tonal Pitch Space (2001), provides
+a review of the work in music theory and music
+perception and cognition on the spatial representa-
+tion of pitch. W. A. Mathieu (1997) in his book en-
+titled Harmonic Experience, uses a variety of pitch
+lattices to pedagogical advantage. Two-dimensional
+pitch space representations have been used as con-
+trol structures in a variety of musical instruments,
+most notably the button keyboards of Bandoneons
+and accordions. Another example is Harry Partch’s
+Tonality Diamond (Partch 1949) used to lay out the
+bars of his Diamond Marimba. Keislar (1987) pro-
+vides a review of keyboard layouts for microtonal
+pitch systems and points out the importance of the
+way transpositional invariance of pitch material
+corresponds to translational invariance of the ge-
+ometry of gesture. For example, on the two-
+dimensional keyboard of Bosanquet’s enharmonic
+harmonium (Bosanquet 1875), chords and melodic
+patterns are /bullet5ngered identically in all transposi-
+tions.
+Timbre space (Wessel 1979) has been proposed as
+a multidimensional musical control structure. Fol-
+lowing the basic metaphor that similar timbres are
+represented as proximate in the multidimensional
+control structure, timbre space concepts have
+found their way into a variety of control schemes.
+One novel implementation of timbre space as a
+musical control structure involves attaching a
+pointing device to the tip of a wind controller. The
+wind controller then becomes a pointing device it-
+self and can be used in a very natural manner to
+navigate timbre space. We have implemented this
+idea by attaching a Buchla Lightning infrared-based
+pointing transmitter to the tip of a Yamaha WX-7
+wind-controller.
+The metaphor of geometric translational invari-
+ance can be generalized to control attributes other
+than pitch. A number of experiments (McAdams
+and Cunibile 1992; Wessel 1979) suggest that tim-
+bral sequence transpositions can be heard and pre-
+dicted by parallel paths in timbre space. We suggest
+that translational invariance in the spatial repre-
+sentation of musical material is a compelling meta-
+phor for the design of interfaces.
+The spatial metaphor that maps perceptual simi-
+larity to spatial proximity in the control interface
+can be generalized to more complex musical pro-
+cesses and structures, such as those involved in the
+generation of melody, rhythm, and complex tex-
+tures. One notable example is the musical texture
+space provided by David Huron (Huron 1989, 2001).
+Georg Hajdu (1994) has demonstrated the use of
+Huron’s texture space as a control structure.
+It should be noted that meaningful spatial con-
+trol con/bullet5gurations can be produced without the
+multidimensional scaling of tediously collected
+similarity judgments for all pairs of sounds in the
+set under consideration. We have found that plac-
+ing the sounds intuitively in a two-dimensiona l
+space works well, and we have developed a conve-
+nient interface to assist in this task. With this di-
+rect placement method, we have laid out useful
+timbre spaces consisting of more than 120 sounds
+in a few hours— a real gain in ef/bullet5ciency over mak-
+ing more than 7,000 pair-wise judgments of simi-
+larity. Experimental veri/bullet5cation of the validity of
+the intuitive spatial layout approach to the collec-
+tion of similarity judgments has been provided by
+Goldstone (1994).
+The direct placement method for laying out a
+controller con/bullet5guration can be carried out with a
+variety of criteria. In the loosest sense, the layout
+need not have a priori dimensions associated with
+it. The material can be laid out by similarity alone
+with the possibility that an interpretable dimen-
+sional structure will emerge in an ad hoc manner.
+At another extreme, one could arrange things with
+an a priori dimensional structure in mind. Yet an-
+other possibility would involve layout constraints
+based on the metaphor of translational invariance.
+Whatever the constraints, one should not loose
+sight of the goals of such interfaces: they should fa-
+cilitate navigation in performance and suggest mu-
+sically interesting trajectories for gesture.
+’’Drag and Drop’’
+The ’’drag and drop’’metaphor is well known to
+users of the Apple Macintosh computer. An object
+is selected, picked up, and dropped upon a process.
+16 Computer Music Journal
+This is a natural application of Lakoff’s movement
+and container metaphors. Our use of ’’drag and
+drop’’is based on gestural interfaces with two-
+dimensional surfaces and accurate position sensing.
+We represent both musical material and musical
+processes as objects occupying area of the surface.
+For example, the musical material might consist of
+a collection of samples, and the musical processes
+might be different ways of playing the samples
+with or without looping, pitch shifting, etc. The
+performer selects a musical object, drags it to the
+appropriate part of the surface, and drops it onto
+the desired musical process. This metaphor can be
+extended with musical objects representing other
+parameters of the musical processes, for example,
+/bullet5lter shapes.
+Scrubbing and Its Variants
+Sinusoidal, granular, and other models allow arbi-
+trary time-scale manipulation without changes in
+pitch or spectral shape. ’’Scrubbing’’interfaces re-
+quire controllers with very accurate detection of
+one-dimensional position; this position parameter
+maps to the time index of the sound model. Mov-
+ing gradually from left to right at the appropriate
+rate results in a resynthesis with the original tem-
+poral behavior, but any other gesture results in an
+alteration of the original. This interface allows a
+performer to play more arbitrary musical material
+while preserving the /bullet5ne continuous structure of
+the original input sounds. This kind of interface
+has been used in live performance contexts with
+classical Indo-Pakistani singing (Wessel, Wright,
+and Khan 1998), trombone samples with expressive
+glissandi, and saxophone quartet material. Other
+dimensions of sensed data can be mapped to syn-
+thesis parameters such as loudness and spectral
+shape.
+’’Dipping’’
+In the ’’dipping’’metaphor, the computer con-
+stantly generates musical material via a musical
+process, but this material is silent by default. The
+performer controls the volume of each process— for
+example, by using a poly-point touch-sensitive in-
+terface with the pressure in each region mapped to
+the volume of a corresponding process. Other ges-
+tural parameters control other parameters of the
+musical processes.
+An advantage of this metaphor is that each musi-
+cal event can be precisely timed, regardless of the
+latency or jitter of the gestural interface. Once a
+given process is made audible, its rhythm is not de-
+pendent on the performer in an event-by-event
+way. This kind of interface is most satisfying when
+there are multiple simultaneous musical processes
+of different timbres, allowing the performer to or-
+chestrate the result in real time by selecting which
+processes will be heard.
+’’Catch and Throw’’
+The ’’catch and throw’’metaphor involves the no-
+tion of selectively trapping musical phrases from
+an ongoing performance, transforming them in
+some way, and then sending these transformed ma-
+terials back into the performance. Transformation
+of musical material is critical for this kind of per-
+formance; literal echoing grows old very quickly.
+An early application of this concept was used in
+a work for Roscoe Mitchell and David Wessel enti-
+tled Contacts Turbulants (Wessel et al. 1987),
+which was commissioned by IRCAM in 1986.
+Here, a standard MIDI keyboard controller was the
+interface to a MIDI recording and playback system.
+The lower octave of the keyboard became a 12-
+channel MIDI sequence recorder, and the remain-
+ing six octaves were used for playback. The
+standard pitch meanings of the keyboard were com-
+pletely abandoned. If a phrase produced by the
+MIDI pitch tracker on Roscoe Mitchell’s saxophone
+were recorded into the key normally associated
+with, for example, the note C, then the C’s in all
+octaves of playback keys referred to that material.
+A different kind of transformation of the recorded
+data was associated with each playback octave.
+The essential idea of this performance situation
+is that the performer at the keyboard captures ma-
+terial from the companion performer and then
+17Wessel and Wright
+transforms and re-injects this material into the per-
+formance. The recording and playback processes
+run in parallel. In fact, the keyboard is fully poly-
+phonic, and if one had enough /bullet5ngers, all 12 re-
+cording processes could run while all of the
+remaining keys were playing the transformed mate-
+rial. The keyboard performer has complete control
+over the initiation and termination of a recording
+process, but there will certainly be some delay be-
+tween the beginning of the phrase to be captured
+and the decision that it should be captured. In
+these improvisatory contexts, the keyboard per-
+former is unable to decide if a phrase is interesting
+to capture until after the phrase has begun. For this
+reason, some computer-implemente d forms of an
+echoic memory mechanism (Snyder 2001) are re-
+quired so that the performer can reach back in time
+to the beginning of the desired phrase. Automatic
+phrase segmentation can be used to start and stop
+the recording process at musically appropriate
+times.
+One of the challenges of the ’’catch and throw’’
+situation is the memory load on the performer,
+who is required to remember the caught phrases
+and where they are placed. A visual or tactile
+cueing system would help solve this problem. An-
+other solution would be an adaptation of the
+headphone-on-one-ea r technique used by disk jock-
+eys who listen to material as they cue it for intro-
+duction into the ongoing mix.
+’’Catch and throw’’is a rich metaphor and lies at
+the heart of musical dialog. In its most general
+sense, ’’catch and throw’’is really ’’listen and re-
+spond.’’
+Technology
+In this section, we describe some of the underlying
+technology we have developed for building com-
+puter music instruments.
+Open Sound Control
+Open Sound Control (OSC; Wright and Freed 1997)
+is a discrete event protocol for communication
+among controllers, computers, sound synthesizers,
+and other multimedia devices that is optimized for
+modern networking technology. OSC is an open
+protocol, and OSC messages can be carried by any
+networking protocol, including UDP and TCP/IP.
+Entities within a system are named individually by
+an open-ended, URL-style, symbolic, hierarchical
+address space. OSC includes a pattern-matchin g
+language to specify multiple recipients of a single
+message. There is also a mechanism for dynami-
+cally querying an OSC system to /bullet5nd out its capa-
+bilities and features. OSC has been integrated into
+Max/MSP, OSW, SuperCollider, Pd, Jmax (Dechelle
+et al. 1999), Csound (www.csounds.com) , Native
+Instruments’Reaktor (www.nativeinstruments.de) ,
+Siren (Pope 2002), RTCmix (Garton and Topper
+1997), Mike Berry’s Grainwave (www.7cities.net /
+users/mikeb/GRAINW.HTM), and
+SodaConstructor (www.soda.co.uk /explore/
+osc.htm). (See www.cnmat.berkeley.edu /OSC for
+more details and downloadable OSC software.)
+OSC for Distributed Processing on Local
+Area Networks
+OSC was originally developed to enable distributed
+processing on local area networks. In particular, we
+designated the role of a ’’synthesis server,’’a com-
+puter whose entire processing power would be de-
+voted to sound synthesis. This frees the machine
+physically connected to the gestural interfaces to
+devote all of its resources to controller I/O, gestural
+data conditioning and mapping, and implementa-
+tion of control structures based on the metaphors
+described previously. Many precedents exist for a
+’’black box’’synthesizer producing sound in re-
+sponse to control messages; it is conceptually easy
+to provide an interface and a layer of abstraction
+between deciding what should be sounded and the
+implementation of that sound.
+To achieve our overall latency and jitter goals
+with this kind of system architecture, OSC pro-
+vides high-resolution time tags and a mechanism
+for specifying groups of messages whose effects
+should occur simultaneously. Time tags allow the
+receiving device (in this case, the synthesis server)
+18 Computer Music Journal
+to follow a scheduling discipline (Dannenberg
+1989) that reduces jitter by trading it for latency.
+Bene/bullet5ts of OSC Addressing
+OSC’s symbolic names and open-ended hierarchical
+name space grew out of our frustration with ad-
+dressing limitations inherent in protocols such as
+MIDI and ZIPI (McMillen, Wessel, and Wright
+1994) that rely on short, /bullet5xed-length bit /bullet5elds. As
+authors of synthesis servers, we wanted to name
+our control parameters as we designed them rather
+than pick from control parameter names pre-
+selected by the authors of a networking protocol.
+Likewise, we wanted to organize the control inter-
+face according to project-speci/bullet5c structures with-
+out being bound by /bullet5xed architectures such as
+’’notes’’within ’’channels.’’
+The features that make OSC attractive for repre-
+senting synthesizer control messages also make
+OSC good for representing the sensed gestures from
+physical controllers (Wright et al. 2001). OSC’s
+symbolic and numeric argument types are suf/bullet5-
+cient to represent the parameters of all the control-
+lers we have used. Symbolic parameter names
+make programs easier to read and understand. The
+pervasive use of OSC provides a uniform syntax
+and conceptual framework at all stages of the
+gesture-to-soun d mapping problem, from controller
+data input to sound control output. An OSC inter-
+face to a gestural-sensing or signal-processin g sub-
+program is a powerful form of abstraction that can
+expose all of the important features while hiding
+the implementation.
+A Programmable Connectivity Processor
+The conventional approach for communicating
+gesture and sound to real-time performance sys-
+tems is to combine a microcontroller or DSP chip
+with A/D and D/A converters and a network inter-
+face, such as a MIDI serial controller. We have de-
+veloped an alternative, more /bullet6exible approach that
+supports scalable implementations from a few
+channels of audio and gestures to hundreds of
+channels.
+Our new system to address computer music and
+audio connectivity problems is based on integrating
+all digital functions on a single /bullet5eld-programmable
+gate array (FPGA). All functions are determined by
+compiling high-level hardware descriptions (in
+VHDL) into FPGA con/bullet5gurations. This approach
+allows the considerable investment in developing
+the interface logic to each peripheral to be easily
+reused with a wide variety of FPGAs from different
+vendors and of different sizes. Since FPGAs are
+now available in sizes greater than one million
+gates, entire DSP chips and microcontrollers can
+also be integrated if required.
+We have developed and tested VHDL descrip-
+tions for processing serial audio data for the
+S/PDIF, AES/EBU, AES-3, and ADAT lightpipe in-
+dustry standards. Other VHDL modules support the
+Synchronous Serial Interface (SSI) protocol used for
+communicating with codecs; this allows us to pro-
+vide multichannel analog I/O for both audio and
+continuous gestures. We also provide modules for
+multiple MIDI input and output streams. Although
+such descriptions have been developed for proprie-
+tary systems, this library of modules represents the
+/bullet5rst complete, independent suite available in
+VHDL.
+This suite makes possible some unusual cross-
+codings such as embedding gestural data in audio
+streams, thereby increasing temporal precision by
+exploiting isochronous data paths in the control
+processor. We sample continuous gestural signals
+at a submultiple of the audio sampling rate, multi-
+plex the channels, and represent them as audio in-
+put signals. This allows us to read gestural signals
+into our software with the same low latencies as
+audio input, and it guarantees that gestural and au-
+dio input signals will be tightly synchronized.
+A novel module of particular importance in por-
+table computer-music performance systems imple-
+ments Fast Ethernet all the way up through IP to
+the UDP protocol of TCP/IP. Owing to the impor-
+tance of Internet performance, Fast Ethernet imple-
+mentations are extremely reliable and /bullet5nely tuned
+on all modern operating systems.
+A key feature of the connectivity processor is the
+analog subsystem for continuous gesture acquisi-
+tion. We currently provide 32 channels of analog-
+19Wessel and Wright
+to-digital conversion. Voltage ranges of the
+converters are selectable, as are the sampling rates
+and the appropriate anti-aliasing /bullet5lter cutoff fre-
+quencies.
+Our system combines VHDL connectivity mod-
+ules that multiplex 8 channels of bidirectional au-
+dio, MIDI, S/PDIF and transduced gestures into
+UDP packets which are exchanged with a portable
+computer using new, customized ASIO drivers in
+Max/MSP. (See www.cnmat.berkeley.ed u
+/connectivity for a more detailed description of
+CNMAT’s connectivity processor.)
+Digitizing Tablets
+Throughout history, people have adapted whatever
+objects were in their environment into musical in-
+struments. The computer industry has invested sig-
+ni/bullet5cant resources in creating broadly available,
+low-cost gestural controllers without any particular
+musical application in mind; thoughtful adaptation
+of these controllers for music is a fruitful yet over-
+looked route.
+We /bullet5nd the latest incarnations of the venerable
+digitizing tablet (also known as the ’’artist’s tab-
+let’’) very interesting for musical control. Tablets
+offer accurate and fast absolute position sensing of
+cordless devices in three dimensions. Additionally,
+pressure, orientation, tilt, and rotation estimates
+are available. The tablet we use allows simultane-
+ous sensing of two devices, usually one in each
+hand. This rich, multidimensional control informa-
+tion can be mapped to musical parameters in a va-
+riety of interesting ways.
+The most direct kind of mapping associates a sin-
+gle synthesis parameter with each control dimen-
+sion— for example, vertical position controlling
+loudness, horizontal position controlling pitch, etc.
+The high resolution of the tablet’s position sensing
+makes this kind of mapping capable of /bullet5ne sub-
+tlety, but the results of instruments with this kind
+of mapping tend to be very homogenous; the chal-
+lenge for the performer is to produce drastically dif-
+ferent sonic results.
+More interesting interfaces de/bullet5ne regions of the
+tablet associated with particular behaviors. For ex-
+ample, one region might consist of a grid providing
+access to a large palette of musical material, while
+other regions represent musical processes that can
+operate on selected musical material. Repeating
+rhythmic cycles can be represented graphically on a
+region of the tablet, and sonic events can be placed
+at particular time points within the cycle (Wright
+and Wessel 1998).
+One way to silence a process is for the performer
+to place the pen on the process, and, using a circu-
+lar motion like the traditional copy editor’s cursive
+’’delete’’sign, the performer can silence the process
+at a rhythmically appropriate point in time. Other
+interfaces use the ’’eraser’’end of the pen to silence
+processes.
+We have created software in the Max/MSP envi-
+ronment that we use to develop control structures
+for the two-handed digitizing tablet. Examples in-
+clude navigation in timbre space, multidimensional
+synthesis control, note stream synthesis, and emu-
+lations of the gestures of strumming, plucking, and
+bowing strings.
+’’Catch and throw’’interfaces have also been im-
+plemented for digitizing tablets. Regions on the
+tablet represent buffers that store the ’’caught’’mu-
+sical material and can be thought of as virtual con-
+tainers. Touching the pen to the tablet in one of
+these regions begins recording. We map the hori-
+zontal position of the contact point within the re-
+gion to the amount of time to go back in the echoic
+memory: touching the pen to the rightmost part of
+the region begins recording from the current time,
+while positions further left in the region begin the
+recording from increasingly further back in time.
+Joysticks
+USB joysticks used for computer games also have
+good properties as musical controllers. One model
+senses two dimensions of tilt, rotation of the joy-
+stick, and a large array of buttons and switches.
+The buttons support ’’chording,’’meaning that
+multiple buttons can be pressed at once and de-
+tected individually.
+Ali Momeni at CNMAT developed a modal in-
+terface in which each button corresponds to a par-
+ticular musical behavior (Wright et al. 2001). With
+20 Computer Music Journal
+Table 1. OSC Messages Output from Tactex
+Triangle Detection
+/area ^ area_of_inscribed_triangle&
+/averageX ^ avg_X_value&
+/averageY ^ avg_Y_value&
+/incircle/radius ^ inscribed circle radius&
+/incircle/area ^ inscribed circle area&
+/sideLengths ^ side1 & ^ side2& ^ side3&
+/baseLength ^ length_of_longest_side &
+/orientation ^ slope_of_longest_side &
+/pressure/average ^ avg_pressure_value&
+/pressure/max ^ maximum_pressure_value &
+/pressure/min ^ minimum_pressure_value &
+/pressure/tilt ^ leftmost_Z-rightmost_Z &
+no buttons pressed, no sound results. When one or
+more buttons are pressed, the joystick’s tilt and ro-
+tation continuously affect the behaviors associated
+with those buttons.
+Some Custom Controllers
+At CNMAT, we have developed applications for
+variety of custom controllers. Don Buchla’s Thun-
+der is a polyphonic, continuous, multidimensional
+interface that provides a two-dimensional surface
+containing 12 continuously pressure-and position-
+sensitive strips that are all sensed simultaneously .
+This polyphonic continuous control is excellent for
+interfaces based on the ’’dipping’’metaphor.
+Tactex’s MTC Express controller (see
+www.tactex.com ) senses pressure at multiple
+points on a surface. The primary challenge of using
+the device is to reduce the high dimensionality of
+the raw sensor output (over one hundred pressure
+values) to a small number of parameters that can
+be reliably controlled. We interpret the output of
+the tactile array as an ’’image’’and use computer
+vision techniques to estimate overall pressure and
+2D position for each /bullet5nger of the hand. The anat-
+omy of the human hand makes it impossible to
+control these three variables independently for
+each of /bullet5ve /bullet5ngers. We have developed another
+level of analysis based on interpreting the parame-
+ters of three /bullet5ngers as a triangle, as shown in Fig-
+ure 2. This results in the parameters shown in
+Table 1. These parameters are particularly easy to
+control and have the advantage of working with
+any orientation of the hand— an application of the
+metaphor of translational invariance.
+Several of our current research projects exploit a
+key feature of the previously described connectiv-
+ity processor, namely the synchronization of con-
+trol signals with the audio I/O stream. These
+projects include an organ keyboard with continu-
+ous sensing of each key’s position (Freed and Avi-
+zienis 2000), a variety of micro-acceleromete r
+projects, and new force-sensing resistor-type (FSR)
+devices. In addition, we have developed new sensor
+systems for multidimensional string motion (Freed
+and Isvan 2000) and have made some advances in
+extracting control signals from vocal sounds.
+Conclusions
+We have described our efforts toward the develop-
+ment of live-performanc e computer-based musical
+instrumentation. Our design criteria include initial
+ease of use coupled with a long-term potential for
+virtuosity, minimal and low variance latency, sup-
+port for both event-based and signal-based control,
+and clear and simple strategies for programming
+the relationship between gesture and musical re-
+sult. We believe that compelling metaphors are the
+key to rich and expressive gesture-to-soun d map-
+pings and presented some of our favorites. We also
+presented some of the underlying technology we
+have developed in the course of this work, includ-
+Figure 2. A visual interpre-
+tation of Tactex’s MTCEx-
+press controller, for three
+/bullet5ngers.
+21Wessel and Wright
+ing custom controllers and unique adaptations of
+standard gestural interfaces, a programmable con-
+nectivity processor, and the Open Sound Control
+communications protocol.
+Acknowledgments
+We wish to thank Rimas Avizienis, Adrian Freed,
+and Takahiko Suzuki for their work on the connec-
+tivity processor, as well as Gibson Guitar, DIMI,
+and the France Berkeley Fund for their generous
+support. Additional thanks to Doug Keislar and
+Cynthia Null for their comments and suggestions.
+References
+Avizienis, R., et al. 2000. ’’Scalable Connectivity Proces-
+sor for Computer Music Performance Systems.’’Pro-
+ceedings of the 2000 International Computer Music
+Conference. San Francisco: International Computer
+Music Association, pp. 523–526.
+Bosanquet, R. H. M. 1875. ’’Temperament; or, the Divi-
+sion of the Octave.’’Proceedings of the Musical Asso-
+ciation 1(4–17):112–158.
+Chaudhary, A., A. Freed, and M. Wright. 1999. ’’An Open
+Architecture for Real-Time Audio Processing Soft-
+ware.’’1999 Audio Engineering Society 107th Conven-
+tion, preprint #5031. New York: Audio Engineering
+Society.
+Dannenberg, R. 1989. ’’Real-Time Scheduling and Com-
+puter Accompaniment.’’In M. V. Mathews and J. R.
+Pierce, eds. Current Directions in Computer Music Re-
+search. Cambridge, Massachusetts: MIT Press, pp.
+225–261.
+Dechelle, F., et al. 1999. ’’jMax: An Environment for
+Real-Time Musical Applications.’’Computer Music
+Journal 23(3):50–58.
+Freed, A., and R. Avizienis. 2000. ’’A New Music Key-
+board Featuring Continuous Key-Position Sensing and
+High-Speed Communication Options.’’Proceedings of
+the 2000 International Computer Music Conference.
+San Francisco: International Computer Music Associa-
+tion, pp. 515–516.
+Freed, A., A. Chaudhary, and B. Davila. 1997. ’’Operating
+Systems Latency Measurement and Analysis for Sound
+Synthesis and Processing Applications.’’Proceedings of
+the 1997 International Computer Music Conference.
+San Francisco: International Computer Music Associa-
+tion, pp. 479–481
+Freed, A., and O. Isvan. 2000. ’’Musical Applications of
+New, Multi-axis Guitar String Sensors.’’Proceedings
+of the 2000 International Computer Music Confer-
+ence. San Francisco: International Computer Music
+Association, pp. 543–546.
+Garton, B., and D. Topper. 1997. ’’RTcmix: Using CMIX
+in Real Time.’’Proceedings of the 1997 International
+Computer Music Conference. San Francisco: Interna-
+tional Computer Music Association, pp. 399–402.
+Goldstone, R. L. 1994. ’’An Ef/bullet5cient Method for Obtain-
+ing Similarity Data.’’Behavior Research Methods, In-
+struments, & Computers 26:381–386.
+Hajdu, G. 1994. Personal communication.
+Henning, G. B., and H. Gaskell. 1981. ’’Monaural Phase
+Sensitivity Measured with Ronken’s Paradigm.’’Jour-
+nal of the Acoustical Society of America 70(6):1669–
+1673.
+Huron, D. 1989. ’’Characterizing Musical Textures.’’Pro-
+ceedings of the 1989 International Computer Music
+Conference. San Francisco: International Computer
+Music Association, pp. 131–133.
+Huron, D. 2001. ’’Tone and Voice: A Derivation of the
+Rules of Voice Leading from Perceptual Principles.’’
+Music Perception 19(1):1–64.
+Keislar, D. 1987. ’’History and Principles of Microtonal
+Keyboards.’’Computer Music Journal 11(1):18–28.
+Lakoff, G., and M. Johnson. 1999. Philosophy in the
+Flesh: The Embodied Mind and Its Challenge to West-
+ern Thought. New York: Basic Books.
+Lakoff, G., and R. E. Nu´ n¯ ez. 2000. Where Mathematics
+Comes From: How the Embodied Mind Brings Mathe-
+matics into Being. New York: Basic Books.
+Lee, M. A., and D. Wessel. 1992. ’’Connectionist Models
+for Real-Time Control of Synthesis and Compositional
+Algorithms.’’Proceedings of the 1992 International
+Computer Music Conference. San Francisco: Interna-
+tional Computer Music Association, pp. 277–280.
+Lerdahl, F. 2001. Tonal Pitch Space. New York: Oxford
+University Press.
+Mathieu, W. A. 1997. Harmonic Experience: Tonal Har-
+mony from Its Natural Origins to Its Modern Expres-
+sion. Rochester, Vermont: Inner Traditions
+International.
+McAdams, S., and J. C. Cunibile. 1992. ’’Perception of
+Timbral Analogies.’’Philosophical Transactions of the
+Royal Society Series B 336:383–389.
+McCartney, J. 2000. ’’A New, Flexible Framework for
+Audio and Image Synthesis.’’Proceedings of the 2000
+22 Computer Music Journal
+International Computer Music Conference. San Fran-
+cisco: International Computer Music Association, pp.
+258–261.
+McMillen, K., D. Wessel, and M. Wright. 1994. ’’The
+ZIPI Music Parameter Description Language.’’Com-
+puter Music Journal 18(4):52–73.
+Partch, H. 1949. Genesis of a Music. New York: Da Capo
+Press.
+Pope, S. T. 2002. ’’Music and Sound Processing in Squeak
+Using Siren.’’In M. Guzdial and K. Rose, eds. Squeak:
+Open Personal Computing and Multimedia. Upper
+Saddle River, New Jersey: Prentice-Hall, pp. 377–421.
+Puckette, M. S. 1996. ’’Pure Data.’’Proceedings of the
+1996 International Computer Music Conference. San
+Francisco: International Computer Music Association,
+pp. 269–272.
+Roads, C. 1996. The Computer Music Tutorial. Cam-
+bridge, Massachusetts: MIT Press.
+Ronken, D. 1970. ’’Monaural Detection of a Phase Differ-
+ence Between Clicks.’’Journal of the Acoustical Soci-
+ety of America 47(4):1091–1099.
+Snyder, B. 2001. Music and Memory. Cambridge Massa-
+chusetts: MIT Press.
+Wessel, D., M. Wright, and S. A. Khan. 1998. ’’Prepara-
+tion for Improvised Performance in Collaboration with
+a Khyal Singer.’’Proceedings of the 1998 International
+Computer Music Conference. San Francisco: Interna-
+tional Computer Music Association, pp. 497–503.
+Wessel, D. 1979. ’’Timbre Space as a Musical Control
+Structure.’’Computer Music Journal 3(2):45–52.
+Wessel, D., et al. 1987. ’’MIDI-Lisp: A Lisp-Based Pro-
+gramming Environment for MIDI on the Macintosh.’’
+Proceedings of the 1987 AES 5th International Confer-
+ence: Music and Digital Technology. New York: Audio
+Engineering Society, pp. 185–197.
+Wright, M. and A. Freed. 1997. ’’Open Sound Control: A
+New Protocol for Communicating with Sound Synthe-
+sizers.’’Proceedings of the 1997 International Com-
+puter Music Conference. San Francisco: International
+Computer Music Association, pp. 101–104.
+Wright, M., et al. 2001. ’’Managing Complexity with Ex-
+plicit Mapping of Gestures to Sound Control with
+OSC.’’Proceedings of the 2001 International Com-
+puter Music Conference. San Francisco: International
+Computer Music Association, pp. 314–317.
+Wright, M., and D. Wessel. 1998. ’’An Improvisation En-
+vironment for Generating Rhythmic Structures Based
+on North Indian ’Tal’Patterns.’’Proceedings of the
+1998 International Computer Music Conference. San
+Francisco: International Computer Music Association,
+pp. 125–128.
+Zicarelli, D. 1991. ’’Music for Mind and Body.’’Elec-
+tronic Musician 7(2):154.
+Zicarelli, D. 1998. ’’An Extensible Real-Time Signal Pro-
+cessing Environment for Max.’’Proceedings of the
+1998 International Computer Music Conference. San
+Francisco: International Computer Music Association,
+pp. 463–466.
+Zicarelli, D. 2002. ’’Max/MSP’’. Available at www
+.cycling74.com/products/maxmsp.html.

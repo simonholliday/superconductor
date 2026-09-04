@@ -1,0 +1,10 @@
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+in-process ws server, 32 bars at 120 BPM, clients broadcast at 20 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.114 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.287 ms
+  P95 jitter      :    0.767 ms
+  P99 jitter      :    1.194 ms
+  Max jitter      :    4.606 ms
+  clients at end  : 0

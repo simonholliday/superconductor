@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- Superintendent ui-host research PROTOTYPE. Not product code.
+     Open this file full-screen in the browser under test on the iiyama panel.
+     It records what the host actually delivers: contact count, pointer types,
+     concurrent pointerIds, long-press context menu, gesture suppression, frame time. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>touch-probe</title>
+<style>
+  html, body { margin:0; height:100%; background:#111; color:#ddd; font:14px/1.4 monospace;
+    touch-action:none; overscroll-behavior:none; user-select:none; -webkit-user-select:none; cursor:none; }
+  #pad { position:fixed; inset:0 0 40% 0; background:#1b1b1b; }
+  #pad .dot { position:absolute; width:56px; height:56px; margin:-28px; border-radius:50%;
+    border:3px solid #6cf; pointer-events:none; }
+  #log { position:fixed; inset:60% 0 0 0; overflow:auto; padding:8px; background:#000; white-space:pre-wrap; }
+  #hud { position:fixed; top:8px; left:8px; color:#9f9; pointer-events:none; }
+</style>
+</head>
+<body>
+<div id="pad"></div>
+<div id="hud"></div>
+<div id="log"></div>
+<script>
+  const log = document.getElementById('log'), hud = document.getElementById('hud'), pad = document.getElementById('pad');
+  const say = s => { log.textContent = new Date().toISOString().slice(11,23) + ' ' + s + '\n' + log.textContent; };
+  say('UA ' + navigator.userAgent);
+  say('maxTouchPoints=' + navigator.maxTouchPoints + ' PointerEvent=' + ('PointerEvent' in window)
+      + ' TouchEvent=' + ('TouchEvent' in window) + ' screen=' + screen.width + 'x' + screen.height
+      + ' dpr=' + devicePixelRatio + ' inner=' + innerWidth + 'x' + innerHeight + ' fullscreen=' + !!document.fullscreenElement);
+  const active = new Map(); let peak = 0; const types = new Set();
+  function draw() {
+    pad.innerHTML = ''; for (const [id, p] of active) { const d = document.createElement('div'); d.className = 'dot';
+      d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.textContent = id; pad.appendChild(d); }
+    hud.textContent = 'active=' + active.size + ' peak=' + peak + ' types=' + [...types].join(',') + ' frame=' + frame.toFixed(1) + 'ms (max ' + frameMax.toFixed(1) + ')';
+  }
+  pad.addEventListener('pointerdown', e => { types.add(e.pointerType); active.set(e.pointerId, {x:e.clientX, y:e.clientY, t:performance.now()});
+    peak = Math.max(peak, active.size); say('down id=' + e.pointerId + ' type=' + e.pointerType + ' primary=' + e.isPrimary + ' n=' + active.size + ' btn=' + e.buttons + ' p=' + e.pressure.toFixed(2)); draw(); });
+  pad.addEventListener('pointermove', e => { const p = active.get(e.pointerId); if (p) { p.x = e.clientX; p.y = e.clientY; draw(); } });
+  for (const ev of ['pointerup','pointercancel','pointerout','lostpointercapture']) pad.addEventListener(ev, e => {
+    const p = active.get(e.pointerId); if (p && (ev === 'pointerup' || ev === 'pointercancel')) { say(ev + ' id=' + e.pointerId + ' held=' + (performance.now()-p.t).toFixed(0) + 'ms'); active.delete(e.pointerId); draw(); } });
+  document.addEventListener('contextmenu', e => { say('contextmenu fired (long-press?) -> preventDefault'); e.preventDefault(); });
+  document.addEventListener('touchstart', e => { say('touchstart touches=' + e.touches.length); }, {passive:true});
+  document.addEventListener('gesturestart', () => say('gesturestart (Safari pinch)'));
+  addEventListener('wheel', e => { if (e.ctrlKey) say('ctrl+wheel (pinch mapped to zoom?)'); }, {passive:true});
+  addEventListener('resize', () => say('resize inner=' + innerWidth + 'x' + innerHeight + ' visualViewport.scale=' + (visualViewport ? visualViewport.scale : 'n/a')));
+  if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (visualViewport.scale !== 1) say('PINCH ZOOM LEAKED scale=' + visualViewport.scale.toFixed(2)); });
+  document.addEventListener('selectionchange', () => { const s = document.getSelection(); if (s && s.toString()) say('TEXT SELECTION LEAKED'); });
+  // Frame time under a 1024-cell repaint, to compare hosts (indicative only).
+  let last = performance.now(), frame = 0, frameMax = 0, cells = [];
+  const grid = document.createElement('canvas'); grid.width = 1024; grid.height = 256; grid.style.cssText = 'position:fixed;right:8px;top:8px;width:256px;height:64px;opacity:.6;pointer-events:none'; document.body.appendChild(grid);
+  const g = grid.getContext('2d'); let step = 0;
+  (function tick(now) { frame = now - last; frameMax = Math.max(frameMax, frame); last = now; step = (step + 1) % 32;
+    for (let i = 0; i < 1024; i++) { g.fillStyle = (i % 32 === step) ? '#fc3' : ((i * 7) % 5 ? '#233' : '#365'); g.fillRect((i % 32) * 32, Math.floor(i / 32) * 8, 31, 7); }
+    hud.textContent = 'active=' + active.size + ' peak=' + peak + ' types=' + [...types].join(',') + ' frame=' + frame.toFixed(1) + 'ms (max ' + frameMax.toFixed(1) + ')';
+    requestAnimationFrame(tick); })(last);
+  say('ready: touch with 1..10 fingers, hold 1s for context menu, pinch, two-finger drag, swipe from edges, double-tap');
+</script>
+</body>
+</html>

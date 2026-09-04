@@ -1,0 +1,3 @@
+{"rate": 1, "speedometer20_runs_per_minute": "177", "confidence": "\u00b1 11", "browser": "151.0.7922.34"}
+{"rate": 6, "speedometer20_runs_per_minute": "56.6", "confidence": "\u00b1 1.6", "browser": "151.0.7922.34"}
+DONE

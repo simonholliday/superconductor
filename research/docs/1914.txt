@@ -1,0 +1,200 @@
+projects/#1914  The step grid lives in composition.data under a Superintendent key behind a StepGrid helper module that both hands write through; cells are sparse step maps carrying velocity in v1; the helper is the one package addition and the engine core needs no change
+  design · active · #research · #subsequence-grid · superintendent
+
+Summary: The grid should be content the builder reads, stored in `composition.data` under a Superintendent key and wrapped by a `StepGrid` helper in `subsequence/helpers/` that validates, marshals writes onto the loop, counts edits and maps cells to `p.sequence()`. The short list is a plain dict (A), the `StepGrid` helper (B), or per-pattern tweaks with a new `p.set_param()` verb (C); B is recommended. Only A ships with no package change; B adds one helper module and touches no engine file; C adds one builder verb. Cells are sparse per-row step maps with presence and velocity in v1 and probability, note, duration, nudge and ratchet reserved, each already served by an existing builder verb. Step count changes today via `set_length` plus `grid=` and lands at the next cycle boundary without touching the heap (measured), floored by the reschedule lookahead. Reading back uses `live_info()` plus `pattern.steps` on the loop, with `pattern_reschedule` as the change hook. Every bad message measured is contained before the clock: a non-dict grid or a too-short length costs one silent cycle; an out-of-range velocity is skipped at dispatch and logged every cycle until corrected; a step index at or past the grid, or a non-integer index, is not caught at all and must be refused by the helper. Cutting a cycle already in the heap needs a wave.
+
+**Question.** How does a persistent, externally editable step grid live inside a sequencer that rebuilds every pattern from a function each cycle, with Subsequence remaining the source of truth?
+
+## What the rebuild model actually gives us
+
+Every `@composition.pattern` function is re-run once per cycle by `_DecoratorPattern._rebuild()`, which first empties `steps`, `cc_events`, `osc_events` and `raw_note_events` (`composition.py:5989-5998`) and then hands the function a fresh `PatternBuilder` bound to the running pattern (`pattern = self`, `composition.py:6044`) whose `data=` is `composition.data` itself (`composition.py:6055`; `pattern_builder.py:123-187`). `Pattern.steps` is a sparse `dict[pulse_offset, Step]` (`pattern.py:147`), so a grid is never *stored* by the engine; it is *realised* into `steps` by whatever the builder places, and thrown away at the next rebuild. The rebuild fires at `cycle_start + length - reschedule_lookahead` pulses inside `_maybe_reschedule_patterns` (`sequencer.py:1776-1833`), which runs before `_process_pulse` on every pulse (`sequencer.py:1484-1485`).
+
+The consequence for the grid is simple and, once accepted, liberating: the grid is **content the builder reads**, exactly like the literal step lists in today's composition files, and the panel is one more writer of that content. Subsequence stays authoritative because only the rebuild turns content into sound, and only `pattern.steps` after a rebuild says what will actually sound. State that persists across rebuilds today is `_cycle_count`, `_rng`, `_muted`, `_tweaks`, `_default_grid` and the name maps on the pattern object (`composition.py:5965-5985`), plus `composition.data` shared by all patterns (`composition.py:1454`). The two external write paths are `composition.tweak()` read back by `p.param()` (`composition.py:4129-4151`; `pattern_builder.py:264-283`) and `composition.data[key]`, also written by `cc_map` from the rtmidi callback thread (`sequencer.py:764-800`) and by OSC `/data/<key>` (`osc.py:171-194`).
+
+This is not against #1461's grain. The through-line there is that the engine holds no cursor and no cache: position is computed from `p.cycle` (`DESIGN-COMPOSITION.md:793`), and cross-pattern reuse is shared values rather than a runtime read (`DESIGN-COMPOSITION.md:813`). A grid is a shared *value* the builder reads each cycle; it is the user's notes, not engine position, and nothing here caches realised output. The one counter proposed below is a monotonic edit counter for sync, not a playback cursor.
+
+## Where the grid state lives
+
+Four candidates were examined. C is rated with the engine verb it needs, because without one the algorithm cannot write to it and the duet, which the specification settles as the design centre, fails.
+
+| | A: plain dict in `composition.data["superintendent"]` | B: `StepGrid` object from `subsequence/helpers/grid.py`, stored under the same key | C: per-pattern tweaks (`composition.tweak()` / `p.param()`) plus a new `p.set_param()` | D: engine-native (`p.` accessor, field on `_DecoratorPattern`, new event) |
+| --- | --- | --- | --- | --- |
+| Package change | none | one new helper module; no engine file touched | one builder verb in `pattern_builder.py`, a few lines, writing to the running pattern's `_tweaks`; `p.param()` is read-only today (`pattern_builder.py:264-283`) and the builder's `_tweaks` is a fresh dict when the pattern's is empty (`tweaks or {}`, `pattern_builder.py:185`), so there is no private way round it | `composition.py`, `pattern_builder.py`, sequencer events |
+| Builder reads it | `p.data["superintendent"][name]` | `StepGrid.of(p, name, ...)` then `grid.apply(p)` | `p.param("grid")` | `p.grid_state(name)` |
+| Algorithm's hand visible on the panel | yes, it mutates the dict | yes, same API as the panel | only with `p.set_param()`; not as the engine stands | yes |
+| Panel writes from off the loop | dict assignment is GIL-atomic (`sequencer.py:771-772`), but growing a nested dict while the builder iterates it raises `RuntimeError` (Python semantics, demonstrated single-threaded in `bounds_check.py`) | the helper marshals writes onto the loop with `call_soon_threadsafe` (precedent `composition.py:4020-4030`; `_schedule_one_shot` at `composition.py:5383-5400` uses `run_coroutine_threadsafe` for a coroutine, the same idea) | `tweak()` replaces the value under one key from any thread (`composition.py:4150`), so whole-grid replacement avoids the iteration race by construction | new code |
+| Validation | none; a step index at or past the grid is placed in the next cycle's time, a velocity above 127 is skipped at dispatch with an error log every cycle (measured) | at write time, once | none | engine |
+| Change notification | diff at `pattern_reschedule` | edit counter says something changed; the same diff says what | diff of `get_tweaks()` | new event |
+| Survives live reload | yes: `composition.data` is the documented home for long-lived state (`README-AGENTS.md:232`; `live_reloader.py:1-30`), provided the seed is get-or-create (see below) | yes, same condition | hot-swap keeps the object (`composition.py:4831-4835`); an unregister and re-add loses it | as C |
+| Snapshot on connect | `live_info()["data"]` if JSON-able (`composition.py:3868-3915`) | `grid.snapshot()` | `live_info()["patterns"][i]["tweaks"]` (`composition.py:3901`) | new |
+| Persistence across restart | free: JSON in, JSON out | free | not free | not free |
+| Fit with #1461 | content, not cursor | content plus edit counter | content, in a slot whose meaning is "parameter override" | adds engine state |
+
+**Short list:** A, B, C. D is excluded because B delivers the same ergonomics with no engine change; if the `p.grid_state()` sugar is wanted later it is a two-line wrapper over B and is listed below under small changes.
+
+**Recommendation: B.** The storage is identical to A (the same key in `composition.data`, so a composition can start with a plain dict and migrate), but the four things every composition would otherwise reimplement live once: bounds, type and range validation, marshalling writes onto the loop, an edit counter for sync, and the mapping from cells to `p.sequence()` / `p.hit_steps()`. It also gives the adapter (`transport-apps`) one place to find every grid and one schema to declare (`control-contract`), which is what the brief's "one standard shape applied to each app" needs. C, with `p.set_param()` added, buys an existing external write path, an existing `live_info()` field and per-pattern namespacing for free, and whole-value replacement sidesteps the iteration race; it costs the validation, marshalling and edit counter that B carries, is lost on an unregister and re-add, and stretches the meaning of a tweak from "parameter override" to "the notes".
+
+**Where the helper sits under #1465.** #1465 sanctions `helpers/` for labelled device-specific machinery quarantined from the core (`helpers/wing.py:1-8` is the exception it names). A `StepGrid` is not device support: it carries no rig value, passes #1465's own test (nothing in it would be wrong for somebody with different hardware), and could sit in the core as a musical utility, which #1465 says the module owns. It is proposed for `helpers/` because it serves one consumer and hard-codes that consumer's key, so the honest analogy is a labelled product-specific helper, not device support; the specification's `transport-apps` point already accepts "an engine module that exposes generic control". Placement between `helpers/grid.py` and a core module is Simon's call and changes nothing else here.
+
+A sketch of the builder side, so the shape is concrete (names indicative; this is not the API):
+
+```python
+@composition.pattern(channel=defs.channels["kit"], steps=16, step_duration=dur.SIXTEENTH,
+                     drum_note_map=defs.notes, reschedule_lookahead=1/24)
+def drums (p):
+        grid = subsequence.helpers.grid.StepGrid.of(p, "drums", rows=defs.notes, steps=16)
+        if p.bar_cycle(4).last:                                   # the algorithm's hand
+                for i in subsequence.sequence_utils.density_to_steps(profile, p.rng):
+                        grid.set("hat", i, velocity=70)
+        grid.apply(p)                                             # one p.sequence() per row
+```
+
+`StepGrid.of()` gets or creates the entry under `p.data["superintendent"]["drums"]`; the panel adapter reaches the same object through `composition.data`. Rows are keyed by **name**, which is why `drum_note_map` (or `defs.notes` from the shared definitions file, `definitions.py:93-121`) is passed in: the row set is the map's keys in map order, including voices with no hits, and a row exists whether or not the primary device can voice it.
+
+**The seed must be get-or-create.** The live reloader execs the watched file into a fresh namespace on every save (`live_reloader.py:1-30`; `README-AGENTS.md:232`), so a literal `composition.data["superintendent"] = {...}` at module level re-runs on every reload and overwrites the panel's edits. `StepGrid.of()`, or `composition.data.setdefault(...)` for the plain-dict option, seeds only when the key is absent, which is what makes the "survives live reload" row true.
+
+## The cell's schema
+
+| | index lists per row | sparse cell map per row | dense parallel arrays per row |
+| --- | --- | --- | --- |
+| Shape | `{"kick": [0, 8]}` | `{"kick": {0: {}, 8: {"v": 110}}}` | `{"kick": {"on": [1,0,...], "v": [100,0,...]}}` |
+| Maps to | `p.hit_steps(name, steps)` (`pattern_builder.py:681-729`) | `p.sequence(steps, pitches, velocities, durations)` (`pattern_builder.py:1195-1254`) | `p.sequence()` over the non-zero indices |
+| Adding a field | needs a parallel structure | one more key in the cell | one more array per row |
+| Algorithm ergonomics | `density_to_steps` returns indices (`sequence_utils.py:592`); natural | a loop per hit | index arithmetic |
+| Step-count change | indices at or past the new count must be pruned | same | arrays resized |
+| Hardware idiom | Launchpad-style on/off | Elektron-style per-step locks | classic TR row |
+
+**Short list:** all three; they are the only honest shapes. **Recommendation: the sparse cell map**, because it degrades to the index list when every cell is `{}` and grows to any per-step field without changing shape. Step keys are ints in Python; the wire form (string keys, arrays) is `control-contract`'s decision.
+
+**v1 fields:** presence (on) and `v` velocity. Velocity is in v1 because accent by second finger is in the brief and `p.sequence(velocities=)` already takes per-step values; without it the hold-and-tap gesture has nothing to write.
+
+**Declared future fields, each already served by an existing verb so none needs engine work:** `p` probability (per-cell roll: `[i for i in cells if p.rng.random() < p_i]`, the same shape as `density_to_steps`); `n` note for melodic rows (`p.sequence(pitches=)`); `d` duration or tie (`p.sequence(durations=)`; a tie is a duration spanning to the next set cell); `t` micro-timing nudge (`p.note(beat + offset)`); `r` ratchet (`p.ratchet`, `pattern_algorithmic.py`). The helper reserves the keys now and ignores unknown ones, so an old page survives a new release.
+
+**Validation the helper must do, because the builder does not** (all measured with `bounds_check.py` on a 16-step, 4-beat pattern, 96 pulses per cycle): a step index at or past the grid is not rejected by `hit_steps` and lands in the following cycle's time (steps 16 and 20 placed notes at pulses 96 and 120); a non-integer index is accepted and places a note between steps (`beat = i * step_duration` with no type check, `pattern_builder.py:726`; step 1.5 placed a note at pulse 9); a negative index wraps from the end by design (`pattern_builder.py:537-539`) and must stay; velocity is stored unclamped (`pattern.py:178-190`; 128, 300 and -5 all stored) and a value outside 0-127 fails inside `mido.Message` at dispatch.
+
+## Changing the step count from the panel
+
+**Possible today.** The builder reads `steps` from the grid, calls `p.set_length(steps * step_duration)` (`pattern_builder.py:285-304`, which only checks for a positive value) and passes `grid=steps` to `hit_steps` / `sequence`. Measured (run C): a change from 16 to 12 steps written at the rebuild pulse took effect at the very next cycle boundary, which was still computed from the old length (`sequencer.py:1789-1790`; cycle starts 96, 192, then 264, 336, 408 at 72-pulse spacing); the events of the cycle already in the heap were untouched and played out. A triplet grid over the same length is the same move with `set_length` omitted.
+
+**Constraint.** The new length must be at least the pattern's `reschedule_lookahead`, otherwise `_get_schedule_timing` raises (`sequencer.py:885-906`, reached through `_get_pattern_timing` at `909-915`) and the sequencer's containment costs the pattern one silent cycle while keeping its previous timing (`sequencer.py:1810-1827`; measured, run D; pinned by `tests/test_rescheduling.py:101-152`). With the default one-beat lookahead a 16th-note grid cannot go below four steps; with the one-pulse lookahead recommended in the timing finding the floor is one step. The helper clamps. During that contained cycle the pattern object keeps the rejected length (run D: `pattern.length` read 0.5 beats in the `pattern_reschedule` listener while the sequencer ran the old 96-pulse cycle and queued nothing), so `live_info()["length"]` and `pattern.steps` both disagree with what sounds for that one cycle; the adapter must not present either as truth when the rebuild failed, and the helper's clamp is what prevents the case.
+
+**Gap.** `p.grid` and every algorithmic verb that defaults to `_default_grid` keep the decoration-time value (`pattern_builder.py:186`, `200`, `714`, `793`, `1229`, `1987`, `2035`, `2076`, `2482`; `pattern_algorithmic.py:260`, `288`, `386`, `603`, `695`, `797`, `1148`, `1393`, `1699`, `1859`, `2029`; `pattern_midi.py:1141`), so an algorithm that also draws on the grid must be passed the runtime step count explicitly, and `display.py:157` will draw the old grid. The small change `p.set_grid(n)` below closes this.
+
+**Needs a wave.** Cutting the *current* cycle short. Heap entries carry `device` and `channel` but no pattern identity (`MidiEvent`, `sequencer.py:56-87`), so a per-pattern removal from `event_queue` would need tagging, heap surgery and active-note bookkeeping. A cheaper partial option exists today: `_stop_pattern_notes` already purges `active_notes` by the pattern's `(device, channel)` targets including mirrors (`sequencer.py:1907-1945`, targets built at `1921`, filter at `1925`), and a heap purge keyed the same way is possible whenever a pattern owns its channel, which is the first use-case; it is wrong when two patterns share a channel, which this design allows, so it is a stopgap rather than the answer. `unregister()` deliberately lets queued events play out because note_offs are paired with their note_ons at queue time and only drones need the targeted pass (`composition.py:3972-3975`).
+
+## Reading the grid back
+
+**Snapshot on connect.** `live_info()` already returns every running pattern's name, channel, length, cycle, muted flag and tweaks, plus `data` (`composition.py:3868-3915`), so the intent travels for free when it is JSON-able (a `StepGrid` exposes `snapshot()`). The realised view is `pattern.steps`, read the way `web_ui.py:246-265` and `display.py:208-223` read it: iterate `steps`, map each note to a row and quantise `pulse / (length * 24 / steps)` to a cell. Neither existing consumer reads `Note.origin`: `web_ui.py` sends the raw pitch with the pattern's `drum_map` and leaves resolution to the browser (`web_ui.py:253`, `258-263`), and `display.py` reverse-maps pitch through the drum map with the first name winning (`display.py:208-212`). The adapter should prefer `Note.origin` (`pattern.py:40`), which carries the row name directly, and fall back to the reverse map for numeric pitches. Both views should be sent: intent is what the panel edits, realised is what will sound (probability, energy gating and mutes act between them).
+
+**Read on the loop.** `_rebuild` replaces `steps` with a fresh dict and repopulates it on the loop thread (`composition.py:5993`; `pattern.py:178-192`), so an adapter thread reading `pattern.steps` mid-rebuild can see a half-built pattern or raise in its own iteration. The clock is not at risk, but the realised read belongs on the loop: in the `pattern_reschedule` listener, or as a snapshot taken by a callback marshalled onto the loop and handed to the adapter thread.
+
+**Change notification.** The algorithm's edits happen *inside* the rebuild, and `pattern_reschedule(pattern, cycle_start_pulse)` is spawned immediately after it (`sequencer.py:1829`), so a listener there sees the algorithm's writes at the exact moment they take effect. `grid.version` against the last sent value says whether anything changed; the delta itself comes from diffing against the previous snapshot, which the adapter holds. Panel edits are known to the adapter that made them. Edits from the REPL land at the next rebuild and are caught the same way. No new event is needed for v1. `reschedule_pulse(pulse, patterns)` is awaited *before* the rebuild (`sequencer.py:1804`; ordering pinned by `tests/test_sequencer_events.py:10-51`) and is the natural commit point if the adapter wants to batch taps.
+
+**The legacy dashboard is unaffected.** `web_ui.py` reads `composition.data` only through `_extract_val`, which returns `None` for anything that is not a number, a bool, or an object exposing `current` or `value` (`web_ui.py:268-286`, `300-303`), so a dict or a `StepGrid` under the Superintendent key is skipped. The helper should avoid attributes named `value` or `current`; even then the worst case is a debug-level log line, never an error.
+
+**Events that would help later, none blocking:** `pattern_registered` / `pattern_unregistered` (no event today at `composition.py:1564`, `5850`, `3956-4030`; the adapter can diff `running_patterns` on `bar` meanwhile) and `source_reloaded` from the live reloader.
+
+## Failure containment
+
+Measured on offline renders with `grid_prototype.py`, `bounds_check.py` and `velocity_check.py`, re-run today. None reaches the clock.
+
+| Bad input | Caught at | Cost |
+| --- | --- | --- |
+| Grid replaced by a non-dict (builder raises) | `_rebuild` discards the half-built pattern (`composition.py:6094-6101`) | one silent cycle for that pattern; next rebuild normal (run E) |
+| OSC `/data/superintendent <scalar>` replaces the whole entry | `_handle_data` casts only when the existing value is numeric and otherwise assigns unconditionally (`osc.py:181-194`) | the same one silent cycle as the row above, but on an unauthenticated path that binds all interfaces; `security-later` should list it, and the helper's key could be kept out of `composition.data`'s top level if that matters |
+| Step count below the lookahead | `sequencer.py:1810-1827` | one silent cycle; previous timing kept; `pattern.length` and `pattern.steps` misreport for that cycle (run D) |
+| Velocity outside 0-127 | `mido.Message` raises inside `_send_midi`, whose guard logs "MIDI send failed (device may be disconnected)" (`sequencer.py:2044`, `2050-2051`); in render or when recording the recording branch raises again and logs "Failed to dispatch ... skipping" (`sequencer.py:1876-1887`) | that note skipped, an error logged each cycle until corrected, under a live-mode message that points at the cable rather than the value |
+| Step index at or past the grid | **not caught**; note plays in the following cycle's time | helper must reject |
+| Non-integer step index | **not caught**; note placed between steps | helper must reject |
+| Writer grows the row dict while the builder iterates it | `RuntimeError` inside the builder, caught by `_rebuild` | one silent cycle; avoided entirely by marshalling writes onto the loop |
+| Adapter listener raises | `EventEmitter.emit_async` isolates listeners (`event_emitter.py:74-105`) and `_spawn` logs (`sequencer.py:932-955`) | nothing |
+
+The helper should validate at write time so a bad message is refused at the boundary rather than logged every cycle under a misleading message.
+
+**Measurement record for the prototype runs cited above** (offline `composition.render()`, 120 BPM, 16-step 4-beat drum pattern reading its cells from `composition.data`, default one-beat lookahead unless stated; runs A, B, F, F2 and G are recorded in the timing finding):
+
+| Run | What was done | Observed |
+| --- | --- | --- |
+| C | `steps` 16 to 12 written at pulse 168, the rebuild for the cycle starting at 192 | cycle starts 96, 192, 264, 336, 408, 480, 552; `pattern.length` 3.0 beats from the cycle at 192; the heap held the old cycle's events untouched |
+| D | `steps` 2 (0.5 beats, below the one-beat lookahead) written at pulse 168, restored to 16 at pulse 264 | cycle at 192 silent (heap maximum unchanged at 182, four entries left), `pattern.length` read 0.5 while the next cycle still started at 288; normal from 288 |
+| E | grid entry replaced by the string `"garbage"` at pulse 168, restored at pulse 264 | builder raised `TypeError`, `_rebuild` logged "pattern will be silent this cycle", realised grid empty for the cycle at 192, normal from 288 |
+
+## Several patterns per instrument, mirrors and naming
+
+Patterns are keyed by function name and that name keys mutes, tweaks, seed streams and hot-swap (`composition.py:4837-4843`), so a grid is per pattern, not per instrument. Whether two patterns on one channel appear as two pages or stacked on one page is a page-assembly choice for `control-contract`, and the model supports both: each pattern's grid is one control with its own row set and step count, and a page may show several. Rows are named through `drum_note_map`, which the shared definitions file feeds directly (`definitions.py:93-121`; Subsample's spec `reviews/spec_project_definitions_2026-07-17.md` §3 reserves `notes` and ignores unknown sections). `Note.origin` carries the name into the realised notes (`pattern.py:40`), and mirrors re-resolve that name through their own map at schedule time (`pattern.py:15-26`; `sequencer.py:957-1010`), staying silent for a voice they lack; a name absent from the primary map but present in a mirror's is still placed (`primary_unmapped`, `pattern.py:41`; `pattern_builder.py:330-367`). So a row is a name and needs no note number on the panel; only the realised view has to reverse-map numeric pitches, where two names on one note resolve to the first (`display.py:208-212`).
+
+## Persistence across a restart
+
+Falls out for free with the recommendation: the grid is JSON-able content under one key, so a composition file can seed it get-or-create from a literal or a sidecar file and the adapter can dump it. Out of scope for this research and not designed further.
+
+## Proposed minimal engine change set
+
+**Already possible, no change:** a data-driven builder; the algorithm writing the same structure; step-count change via `set_length` plus `grid=`; snapshot via `live_info()` and `pattern.steps`; change detection on `pattern_reschedule`; containment for bad messages other than index errors; row naming via `drum_note_map` and the definitions file; per-pattern `reschedule_lookahead` down to zero (measured working, see the timing finding); an optional "audition" of a freshly set cell in the *current* cycle via `composition.trigger()` (`composition.py:5224-5400`, thread-safe), which `state-sync` may or may not want.
+
+**Small (each a few lines with a test and a README-AGENTS line):**
+- `subsequence/helpers/grid.py` with `StepGrid` (the recommendation itself; generic, no rig values, labelled as Superintendent's; a core module is the alternative placement).
+- Public read access to what `display.py:157-159` and `web_ui.py:253` reach through `getattr` on private names: extend `live_info()` pattern entries with `grid`, `drum_note_map`, `device` and `mirrors`, or add read-only properties on the running pattern.
+- `p.set_grid(n)` setting the builder-local `_default_grid` so `p.grid` and the nine `pattern_builder.py` defaults, the eleven `pattern_algorithmic.py` defaults and `pattern_midi.py:1141` follow a runtime step count.
+- `pattern_registered` / `pattern_unregistered` events at `composition.py:1564`, `5850` and in `unregister()`, and `source_reloaded` from `LiveReloader`.
+- Candidate only, check #613 first: warn once for a step index at or past the grid, or a non-integer index, in `hit_steps` / `sequence`, since both silently misplace the note; negative wrap is documented and must stay.
+- Only if C is chosen: `p.set_param()` writing to the running pattern's `_tweaks`.
+- Optional sugar `p.grid_state(name)` over the helper.
+
+**Needs a wave:** cutting a cycle already in the heap by pattern (event tagging; the `(device, channel)` purge above is the stopgap); making the grid a first-class runtime property of the pattern that `display.py` and the algorithmic verbs follow without `set_grid`; a per-step engine event (`playhead` wants it, this point does not).
+
+## Not covered
+
+Wall-clock jitter impact of the rebuild was not measured against `benchmarks/clock_jitter.py`; that benchmark drives a bare `Sequencer` with no patterns, and the offline cost figures in the timing finding (about 0.1 ms for a 16 by 8 grid) are the input for `serving`, which measures the co-located load.
+
+## Hardware-gated
+
+Nothing here needs the panel or a graphical host.
+
+## Provenance
+
+Working tree `/mnt/dev/Apps/2026-02 Sequencer/` at `v0.6.6-2-g95c14a7` (the `subsequence-cookbook` venv's install metadata says 0.6.5; the prototypes put the tree first on `sys.path`, so they ran against the tree). Read: `subsequence/composition.py` (1454, 1564, 3868-3920, 3956-3995, 4015-4032, 4125-4155, 4729-4736, 4831-4843, 5224-5226, 5380-5402, 5655-5660, 5850, 5965-6002, 6036-6072, 6090-6105), `subsequence/sequencer.py` (56-90, 764-800, 880-920, 932-960, 1483-1486, 1541-1544, 1770-1835, 1850-1890, 1905-1948, 1965-2000, 2040-2056), `subsequence/pattern.py` (38-42, 100-118, 147, 175-195), `subsequence/pattern_builder.py` (107-200, 260-310, 330-332, 536-540, 681-683, 718-730, 1195-1197; grep of `_default_grid`), `subsequence/pattern_algorithmic.py` and `subsequence/pattern_midi.py` (grep of `_default_grid`), `subsequence/event_emitter.py` (74-105), `subsequence/osc.py` (165-196), `subsequence/display.py` (157-159, 205-225), `subsequence/web_ui.py` (244-306), `subsequence/definitions.py` (93-121), `subsequence/live_reloader.py` (1-30), `subsequence/sequence_utils.py` (592), `subsequence/helpers/wing.py` (1-8), `subsequence/helpers/` listing, `README-AGENTS.md` (90-92, 228-236), `DESIGN-COMPOSITION.md` (793, 813), `tests/test_rescheduling.py`, `tests/test_sequencer_events.py`. Read in `/mnt/dev/Apps/Subsample/`: `reviews/spec_project_definitions_2026-07-17.md`. Subroutine: #1465, #1461, #613, #611, #1912. Prototypes (research only, not house style): `/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/grid_prototype.py`, `bounds_check.py`, `velocity_check.py`, run with `~/venvs/subsequence-cookbook/bin/python` (3.12.3), `mido` patched as in `tests/conftest.py`, no MIDI port opened. No external sources were needed.
+
+Links
+  Relates to  #2023  The assembly's three unfiled questions are filed as #2021, #2019 and #2020, and checking them changed all three: the crossing short list gains an off-loop column and loses its coalescing, the widening is three private names not six, and 8085 is Bamboo's own default
+
+Referred to by (20)
+   #1920               One WebSocket per page carrying JSON envelopes is the browser transport, with a snapshot on connect, absolute sets, and a 2 s client ping whose missing pong is the only way a stalled server gets noticed inside 30 s
+   #1913  in a comment The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them
+   #1924               The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed
+   #1925               Grid sync is absolute sets applied in loop order under one version, confirmed by ack at application and by a per-cycle event carrying the built version, a state word and the realised cells; the algorithm's hand is ephemeral by default and persistent when an edit is meant to last; a cell's face is the server's value and a ring is the human's unconfirmed request
+   #1926               Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers
+   #1927               V1 gestures: a press sets a cell at once, a quick press on a set cell clears it, a 400 ms hold opens a per-cell velocity strip worked by a second finger or the same finger, and a pad is one voice per contact; every two-contact gesture has a one-contact form, so the page never asks whether multi-touch exists and the contract carries effects, not gestures
+   #1928               Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path
+   #1942               Should the StepGrid helper live in subsequence/helpers/grid.py as Superintendent's, or in a core module as a generic musical utility, and may its composition.data key be named for the consumer?
+   #1943               Is a reschedule_lookahead of one pulse on grid patterns an acceptable composition-file convention?
+   #1944               When two patterns play one instrument, should the panel show two pages or one page with the grids stacked?
+   #1945               Should a freshly set cell be auditioned in the current cycle through composition.trigger(), or only heard when its cycle comes round?
+   #1946               Is changing a pattern's step count from the panel a v1 requirement?
+   #1947               On a melodic step row, should a cell's note be a MIDI note number or a scale degree resolved against the composition's key?
+   #1955               Does the composition running on the rig call composition.osc(), and if so with which receive_host?
+   #1965               Should the first use-case's algorithm contribute ephemerally or write intent persistently through the helper, and should the touched yield guard be on by default?
+   #1974               If per-message immediacy on the clock loop is ever wanted, is a SelectSelector loop or a widened spin margin acceptable in Subsequence?
+   #2009               The StepGrid helper's on-loop apply is confirmed against the real helper
+   #2018               Superintendent v1 is one co-located Starlette service holding the browser's single JSON WebSocket, three per-app adapter modules that dial it, a typed control tree written by absolute sets, and a step grid in composition.data behind a StepGrid helper; the one open coupling is whether a panel write wakes the clock loop, because the drain rule and the pending look decide together whether the cell lights at once
+   #2021               Does a panel grid set wake the composition loop for a few-millisecond acknowledgement, or wait for the next reschedule_pulse or beat drain?
+   #2023               The assembly's three unfiled questions are filed as #2021, #2019 and #2020, and checking them changed all three: the crossing short list gains an off-loop column and loses its coalescing, the widening is three private names not six, and 8085 is Bamboo's own default
+
+Not linked, but its writing suggests (15)
+    #611  All three layers of this stack share one maintainer, so changes can be coordinated rather than worked around  (this names it)
+    #613  Design intent in this repo lives in test docstrings and README-AGENTS — check there before calling behaviour a bug  (this names it)
+   #1913  The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them  (a comment there names this)
+   #1926  Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers  (it names this)
+   #1942  Should the StepGrid helper live in subsequence/helpers/grid.py as Superintendent's, or in a core module as a generic musical utility, and may its composition.data key be named for the consumer?  (it names this)
+   #1943  Is a reschedule_lookahead of one pulse on grid patterns an acceptable composition-file convention?  (it names this)
+   #1944  When two patterns play one instrument, should the panel show two pages or one page with the grids stacked?  (it names this)
+   #1945  Should a freshly set cell be auditioned in the current cycle through composition.trigger(), or only heard when its cycle comes round?  (it names this)
+   #1946  Is changing a pattern's step count from the panel a v1 requirement?  (it names this)
+   #1947  On a melodic step row, should a cell's note be a MIDI note number or a scale degree resolved against the composition's key?  (it names this)
+   #1955  Does the composition running on the rig call composition.osc(), and if so with which receive_host?  (it names this)
+   #1965  Should the first use-case's algorithm contribute ephemerally or write intent persistently through the helper, and should the touched yield guard be on by default?  (it names this)
+   #1974  If per-message immediacy on the clock loop is ever wanted, is a SelectSelector loop or a widened spin margin acceptable in Subsequence?  (it names this)
+   #2009  The StepGrid helper's on-loop apply is confirmed against the real helper  (it names this)
+   #2021  Does a panel grid set wake the composition loop for a few-millisecond acknowledgement, or wait for the next reschedule_pulse or beat drain?  (it names this)
+  Tip: subroutine link 1914 documents 611 — confirm one
+
+  Tip: subroutine comment projects/1914 "what happened"

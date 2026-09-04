@@ -1,0 +1,10 @@
+import floor, 2026-09-03T16:08:24Z, 3.13.11, load 0.44 0.49 0.88
+python -c 'import numpy, scipy.signal, pydantic, soundfile, yaml': 0.69 s wall
+python -c 'import numpy, scipy.signal, pydantic, soundfile, yaml': 0.64 s wall
+python -c 'import numpy, scipy.signal, pydantic, soundfile, yaml': 0.63 s wall
+python -c 'import substation.cli' (whole package incl. scipy, pydantic, soundfile, mutagen, noisereduce): 0.74 s wall
+python -c 'import substation.cli' (whole package incl. scipy, pydantic, soundfile, mutagen, noisereduce): 0.77 s wall
+python -c 'import substation.cli' (whole package incl. scipy, pydantic, soundfile, mutagen, noisereduce): 0.73 s wall
+python -c 'pass' (interpreter alone): 0.00 s wall
+python -c 'pass' (interpreter alone): 0.00 s wall
+python -c 'pass' (interpreter alone): 0.00 s wall

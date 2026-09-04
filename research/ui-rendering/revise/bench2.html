@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>ui-rendering bench2 (reviser prototype)</title>
+<style>
+html,body{margin:0;background:#0d1117}
+#stage{width:1920px;height:1080px;position:relative;overflow:hidden}
+.grid{display:grid;width:100%;height:100%;gap:2px;position:relative}
+.cell{background:#21262d;border-radius:3px}
+.cell.on{background:#d29922}
+.cell.ph{background:#30363d}
+.cell.on.ph{background:#ffd166}
+.overlay{position:absolute;top:0;left:0;height:100%;background:rgba(255,255,255,0.12);will-change:transform;pointer-events:none}
+canvas{display:block}
+</style></head><body><div id="stage"></div>
+<script type="module">
+/* Reviser prototype for the Superintendent ui-rendering point. Not house style.
+   All scenarios: 1024 cells (32x32), 1920x1080, 2 px gap, 3 px radius, 30% lit at start.
+   Change models: toggle4 = playhead advances + 4 random toggles (bench.html's load);
+   invert = every cell changes state; half = each cell changes with p=0.5 (a reconnect snapshot). */
+const W=1920,H=1080,COLS=32,ROWS=32,CELLS=1024,GAP=2;
+const CW=Math.floor((W-GAP*(COLS-1))/COLS), CH=Math.floor((H-GAP*(ROWS-1))/ROWS);
+const stage=document.getElementById('stage');
+function stats(a){const s=Array.from(a).sort((x,y)=>x-y);const n=s.length;const q=p=>s[Math.min(n-1,Math.floor(p*n))];return {n,mean:+(s.reduce((x,y)=>x+y,0)/n).toFixed(3),p50:+q(0.5).toFixed(3),p95:+q(0.95).toFixed(3),p99:+q(0.99).toFixed(3),max:+s[n-1].toFixed(3)};}
+function forceSL(){void stage.offsetHeight; void getComputedStyle(stage.firstChild).width;}
+function makeState(){const on=new Uint8Array(CELLS);for(let i=0;i<CELLS;i++)on[i]=Math.random()<0.3?1:0;return on;}
+function cls(on,i,ph){return 'cell'+(on?' on':'')+((i%COLS)===ph?' ph':'');}
+let preact=null, preactErr=null;
+try { preact = await import('./vendor/standalone.module.js'); } catch(e) { preact=null; preactErr=String(e); }
+function buildDom(withOverlay){
+  stage.innerHTML='';const g=document.createElement('div');g.className='grid';
+  g.style.gridTemplateColumns=`repeat(${COLS},1fr)`;g.style.gridTemplateRows=`repeat(${ROWS},1fr)`;
+  const els=[];for(let i=0;i<CELLS;i++){const d=document.createElement('div');d.className='cell';g.appendChild(d);els.push(d);}
+  let ov=null;
+  if(withOverlay){ov=document.createElement('div');ov.className='overlay';ov.style.width=CW+'px';g.appendChild(ov);}
+  stage.appendChild(g);return {els,ov};
+}
+function buildSvg(){
+  stage.innerHTML='';const NS='http://www.w3.org/2000/svg';const svg=document.createElementNS(NS,'svg');svg.setAttribute('width',W);svg.setAttribute('height',H);
+  const rects=[];for(let i=0;i<CELLS;i++){const r=document.createElementNS(NS,'rect');const c=i%COLS,row=Math.floor(i/COLS);r.setAttribute('x',c*(CW+GAP));r.setAttribute('y',row*(CH+GAP));r.setAttribute('width',CW);r.setAttribute('height',CH);r.setAttribute('rx',3);r.setAttribute('fill','#21262d');svg.appendChild(r);rects.push(r);}
+  stage.appendChild(svg);return rects;
+}
+const svgFill=(on,ph)=>on?(ph?'#ffd166':'#d29922'):(ph?'#30363d':'#21262d');
+function buildCanvas(){stage.innerHTML='';const cv=document.createElement('canvas');cv.width=W;cv.height=H;stage.appendChild(cv);return cv.getContext('2d');}
+function canvasCell(ctx,i,on,ph){const c=i%COLS,row=Math.floor(i/COLS);ctx.fillStyle=svgFill(on,ph);ctx.beginPath();ctx.roundRect(c*(CW+GAP),row*(CH+GAP),CW,CH,3);ctx.fill();}
+const SCEN = {
+  dom_same: { change:'toggle4', setup(){this.els=buildDom(false).els;}, frame(on,ph){for(let i=0;i<CELLS;i++)this.els[i].className=cls(on[i],i,ph);forceSL();}},
+  dom_invert: { change:'invert', setup(){this.els=buildDom(false).els;}, frame(on,ph){for(let i=0;i<CELLS;i++)this.els[i].className=cls(on[i],i,ph);forceSL();}},
+  dom_snapshot: { change:'half', setup(){this.els=buildDom(false).els;}, frame(on,ph){for(let i=0;i<CELLS;i++)this.els[i].className=cls(on[i],i,ph);forceSL();}},
+  dom_inc_class: { change:'toggle4', setup(){this.els=buildDom(false).els;}, frame(on,ph,prev,changed){for(const i of changed)this.els[i].className=cls(on[i],i,ph);for(let r=0;r<ROWS;r++){const a=r*COLS+prev,b=r*COLS+ph;this.els[a].className=cls(on[a],a,-1);this.els[b].className=cls(on[b],b,ph);}forceSL();}},
+  dom_inc_overlay: { change:'toggle4', setup(){const b=buildDom(true);this.els=b.els;this.ov=b.ov;}, frame(on,ph,prev,changed){for(const i of changed)this.els[i].className=cls(on[i],i,-1);this.ov.style.transform=`translateX(${ph*(CW+GAP)}px)`;forceSL();}},
+  svg_invert: { change:'invert', setup(){this.rects=buildSvg();}, frame(on,ph){for(let i=0;i<CELLS;i++)this.rects[i].setAttribute('fill',svgFill(on[i],(i%COLS)===ph));forceSL();}},
+  svg_snapshot: { change:'half', setup(){this.rects=buildSvg();}, frame(on,ph){for(let i=0;i<CELLS;i++)this.rects[i].setAttribute('fill',svgFill(on[i],(i%COLS)===ph));forceSL();}},
+  canvas_invert: { change:'invert', setup(){this.ctx=buildCanvas();}, frame(on,ph){this.ctx.fillStyle='#0d1117';this.ctx.fillRect(0,0,W,H);for(let i=0;i<CELLS;i++)canvasCell(this.ctx,i,on[i],(i%COLS)===ph);}},
+  canvas_inc: { change:'toggle4', setup(){this.ctx=buildCanvas();}, frame(on,ph,prev,changed){for(const i of changed)canvasCell(this.ctx,i,on[i],(i%COLS)===ph);for(let r=0;r<ROWS;r++){const a=r*COLS+prev,b=r*COLS+ph;canvasCell(this.ctx,a,on[a],false);canvasCell(this.ctx,b,on[b],true);}}},
+  preact_full: { change:'toggle4', setup(){if(!preact)throw new Error('no preact: '+preactErr);stage.innerHTML='';this.root=document.createElement('div');stage.appendChild(this.root);}, frame(on,ph){const {html,render}=preact;const items=[];for(let i=0;i<CELLS;i++)items.push(html`<div class=${cls(on[i],i,ph)} />`);render(html`<div class="grid" style=${`grid-template-columns:repeat(${COLS},1fr);grid-template-rows:repeat(${ROWS},1fr)`}>${items}</div>`,this.root);forceSL();}},
+};
+window.runScenario=function(name,frames=300,warm=60){
+  return new Promise((resolve,reject)=>{
+    const S=SCEN[name]; if(!S){reject(new Error('unknown '+name));return;}
+    try{S.setup();}catch(e){reject(e);return;}
+    const on=makeState(); let ph=0,prev=0,count=0; const js=[],gap=[]; let last=null;
+    const all=[];for(let i=0;i<CELLS;i++)all.push(i);
+    S.frame(on,ph,prev,all);
+    function frame(ts){
+      prev=ph; ph=(ph+1)%COLS; const changed=[];
+      if(S.change==='toggle4'){for(let k=0;k<4;k++){const i=Math.floor(Math.random()*CELLS);on[i]^=1;changed.push(i);}}
+      else if(S.change==='invert'){for(let i=0;i<CELLS;i++){on[i]^=1;changed.push(i);}}
+      else if(S.change==='half'){for(let i=0;i<CELLS;i++){if(Math.random()<0.5){on[i]^=1;changed.push(i);}}}
+      const t0=performance.now(); S.frame(on,ph,prev,changed); const t1=performance.now();
+      if(count>=warm){js.push(t1-t0); if(last!==null)gap.push(ts-last);} last=ts; count++;
+      if(count<warm+frames)requestAnimationFrame(frame); else resolve({scenario:name,cells:CELLS,change:S.change,js:stats(js),interval:stats(gap),longFrames:gap.filter(g=>g>20).length,preact:!!preact});
+    }
+    requestAnimationFrame(frame);
+  });
+};
+window.__ready=true;
+</script></body></html>

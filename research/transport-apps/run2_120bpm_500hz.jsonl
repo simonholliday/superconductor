@@ -1,0 +1,6 @@
+{"scenario": "baseline", "pulses": 936, "mean_us": 1.9, "p50_us": 0.6, "p99_us": 18.6, "max_us": 21.9, "over_1ms": 0}
+{"scenario": "osc-loop", "pulses": 936, "mean_us": 26.8, "p50_us": 0.5, "p99_us": 310.6, "max_us": 378.9, "over_1ms": 0, "inbound_handled": 9025, "sender": "osc", "sent": 9043}
+{"scenario": "ws-loop", "pulses": 936, "mean_us": 27.6, "p50_us": 0.5, "p99_us": 355.9, "max_us": 951.9, "over_1ms": 0, "inbound_handled": 8880, "sender": "ws", "sent": 8880, "broadcasts_received": 199}
+{"scenario": "ws-thread", "pulses": 936, "mean_us": 29.9, "p50_us": 0.5, "p99_us": 401.4, "max_us": 542.2, "over_1ms": 0, "inbound_handled": 8723, "sender": "ws", "sent": 8723, "broadcasts_received": 199}
+{"scenario": "udp-thread", "pulses": 936, "mean_us": 24.2, "p50_us": 0.5, "p99_us": 315.8, "max_us": 632.8, "over_1ms": 0, "inbound_handled": 9062, "sender": "osc", "sent": 9079}
+{"scenario": "ws-thread-cpu", "pulses": 936, "mean_us": 31.5, "p50_us": 0.5, "p99_us": 409.3, "max_us": 740.2, "over_1ms": 0, "inbound_handled": 8746, "sender": "ws", "sent": 8746, "broadcasts_received": 198}

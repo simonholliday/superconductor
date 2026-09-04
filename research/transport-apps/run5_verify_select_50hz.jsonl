@@ -1,0 +1,1 @@
+{"selector": "select", "rate": 50.0, "spin_ms": 1.0, "pulses": 936, "mean_us": 0.4, "p99_us": 5.1, "max_us": 17.0, "over_1ms": 0, "over_1ms_with_msg_in_sleep": 0, "sleep_overshoot_us_with_msg": {"n": 936, "p50": 270.3, "p99": 610.2, "max": 731.3}, "sleep_overshoot_us_no_msg": {}, "handled": 980}

@@ -1,0 +1,19 @@
+
+=== Option B (anchored extrapolation), topology C co-located
+  position computed for the presentation time (callback time + one frame): 5.2 .. 23.6 ms; pipeline depth off by one frame shifts this by +-16.7
+  position computed at callback time, one-vsync pipeline:              21.9 .. 40.3 ms
+  position computed at callback time, compositor adds a frame:          21.9 .. 56.9 ms
+  60 BPM: 16th step 250.0 ms; compensated worst 9% of a step, uncompensated one-vsync worst 16%
+  120 BPM: 16th step 125.0 ms; compensated worst 19% of a step, uncompensated one-vsync worst 32%
+  180 BPM: 16th step 83.3 ms; compensated worst 28% of a step, uncompensated one-vsync worst 48%
+
+=== Option B (anchored extrapolation), topology B separate host
+  position computed for the presentation time (callback time + one frame): 5.3 .. 24.6 ms; pipeline depth off by one frame shifts this by +-16.7
+  position computed at callback time, one-vsync pipeline:              22.0 .. 41.3 ms
+  position computed at callback time, compositor adds a frame:          22.0 .. 57.9 ms
+  60 BPM: 16th step 250.0 ms; compensated worst 10% of a step, uncompensated one-vsync worst 17%
+  120 BPM: 16th step 125.0 ms; compensated worst 20% of a step, uncompensated one-vsync worst 33%
+  180 BPM: 16th step 83.3 ms; compensated worst 30% of a step, uncompensated one-vsync worst 50%
+
+Panel input lag (signal to pixel) is not carried: unmeasured, hardware-gated.
+Option A adds WebSocket one-way 0.4-2.0 ms wired, up to 80 ms Wi-Fi tail (#1920) to every row.

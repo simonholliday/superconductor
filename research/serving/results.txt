@@ -1,0 +1,121 @@
+# run 2026-09-03T06:20:29+00:00 on hpz2g4 8 cores; load avg 0.57 0.61 0.46
+## baseline: no service
+  Mean jitter     :    0.003 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.065 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.003 ms
+  Max jitter      :    2.455 ms
+## starlette idle
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.001 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.003 ms
+  Max jitter      :    0.021 ms
+service cpu-seconds before/after: 0.23 37 / 0.48 37 (rss MB is 2nd field); bench wall ~68s
+## starlette load4
+  Mean jitter     :    0.011 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.098 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.351 ms
+  Max jitter      :    2.638 ms
+service cpu-seconds before/after: 0.24 37 / 3.13 40 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 8136, "echo_msgs": 9792, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.51, "bcast_oneway_ms_p99": 2.51}
+## starlette load16
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.000 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.001 ms
+  Max jitter      :    0.015 ms
+service cpu-seconds before/after: 0.22 37 / 4.05 41 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 32352, "echo_msgs": 165200, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.95, "bcast_oneway_ms_p99": 3.12}
+## aiohttp idle
+  Mean jitter     :    0.005 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.067 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.002 ms
+  Max jitter      :    1.519 ms
+service cpu-seconds before/after: 0.31 39 / 0.42 39 (rss MB is 2nd field); bench wall ~68s
+## aiohttp load4
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.009 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.016 ms
+  Max jitter      :    0.473 ms
+service cpu-seconds before/after: 0.30 38 / 1.57 39 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 7972, "echo_msgs": 10624, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.32, "bcast_oneway_ms_p99": 0.56}
+## aiohttp load16
+  Mean jitter     :    0.003 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.049 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.002 ms
+  Max jitter      :    1.630 ms
+service cpu-seconds before/after: 0.30 38 / 3.52 41 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 31616, "echo_msgs": 168704, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.64, "bcast_oneway_ms_p99": 2.03}
+## websockets idle
+  Mean jitter     :    0.004 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.051 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.016 ms
+  Max jitter      :    1.494 ms
+service cpu-seconds before/after: 0.09 27 / 0.20 27 (rss MB is 2nd field); bench wall ~68s
+## websockets load4
+  Mean jitter     :    0.002 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.036 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.001 ms
+  Max jitter      :    1.619 ms
+service cpu-seconds before/after: 0.09 27 / 1.26 27 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 7968, "echo_msgs": 10624, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.33, "bcast_oneway_ms_p99": 0.57}
+## websockets load16
+  Mean jitter     :    0.015 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.131 ms
+  P95 jitter      :    0.001 ms
+  P99 jitter      :    0.568 ms
+  Max jitter      :    2.906 ms
+service cpu-seconds before/after: 0.09 27 / 3.85 27 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 31344, "echo_msgs": 167168, "http_reqs": 680, "http_MB": 183.7, "bcast_oneway_ms_median": 0.66, "bcast_oneway_ms_p99": 3.54}
+## quart idle
+  Mean jitter     :    0.002 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.001 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.003 ms
+  Max jitter      :    0.046 ms
+service cpu-seconds before/after: 0.45 42 / 0.76 42 (rss MB is 2nd field); bench wall ~68s
+## quart load4
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.002 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.007 ms
+  Max jitter      :    0.046 ms
+service cpu-seconds before/after: 0.45 42 / 24.98 42 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 7972, "echo_msgs": 10616, "http_reqs": 679, "http_MB": 183.5, "bcast_oneway_ms_median": 1.02, "bcast_oneway_ms_p99": 2.67}
+## quart load16
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.018 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.004 ms
+  Max jitter      :    1.023 ms
+service cpu-seconds before/after: 0.44 42 / 24.70 46 (rss MB is 2nd field); bench wall ~68s
+load: {"state_msgs": 31696, "echo_msgs": 168960, "http_reqs": 679, "http_MB": 183.5, "bcast_oneway_ms_median": 1.09, "bcast_oneway_ms_p99": 7.25}
+## starlette load16, service and Subsequence both pinned to cpu 3
+  Mean jitter     :    0.116 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.385 ms
+  P95 jitter      :    0.916 ms
+  P99 jitter      :    2.049 ms
+  Max jitter      :    3.212 ms
+load: {"state_msgs": 31584, "echo_msgs": 164976, "http_reqs": 678, "http_MB": 183.2, "bcast_oneway_ms_median": 2.36, "bcast_oneway_ms_p99": 8.08}
+# done 2026-09-03T06:36:48+00:00

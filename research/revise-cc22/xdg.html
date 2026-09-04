@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>XDG Base Directory Specification</title><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" /><link rel="stylesheet" type="text/css" href="static/css/style.css" /><link rel="stylesheet" type="text/css" href="static/css/highlight.css" /><meta name="generator" content="DAPS 3.3.2" /><meta name="book-title" content="XDG Base Directory Specification" /><meta name="description" content="1 Introduction # Various specifications specify files and file formats. This specification defines where these files should be looked for by defining one or more base directories relative to which files should be located. 2 Basics # The XDG Base Directory Specification is based on the following conc…" />
+<script src="static/js/highlight.min.js" type="text/javascript"></script><script>
+
+document.addEventListener('DOMContentLoaded', (event) => {
+  document.querySelectorAll('.verbatim-wrap.highlight').forEach((block) => {
+    hljs.highlightBlock(block);
+  });
+});
+hljs.configure({
+  useBR: false
+});
+
+</script></head><body class="single offline js-off"><div class="bypass-block"><a href="#_content">Jump to content</a></div><div id="_outer-wrap"><div id="_white-bg"><div id="_header"><div id="_logo"><a href="https://specifications.freedesktop.org/"><img src="static/images/logo.svg" alt="Freedesktop Logo" /><span></span></a></div><div class="crumbs inactive"><a class="single-crumb" href="#index" accesskey="c"><span class="single-contents-icon"></span>XDG Base Directory Specification</a><div class="bubble-corner active-contents"></div></div><div class="clearme"></div></div></div><div id="_fixed-header-wrap" class="inactive"><div id="_fixed-header"><div class="crumbs inactive"><a class="single-crumb" href="#index" accesskey="c"><span class="single-contents-icon"></span>Show Contents: XDG Base Directory Specification</a></div><div class="buttons"><a class="top-button button" href="#">Top</a><div class="clearme"></div></div><div class="clearme"></div></div><div class="active-contents bubble"><div class="bubble-container"><div id="_bubble-toc"><ol><li class="inactive"><a href="#introduction"><span class="number">1 </span><span class="name">Introduction</span></a></li><li class="inactive"><a href="#basics"><span class="number">2 </span><span class="name">Basics</span></a></li><li class="inactive"><a href="#variables"><span class="number">3 </span><span class="name">Environment variables</span></a></li><li class="inactive"><a href="#referencing"><span class="number">4 </span><span class="name">Referencing this specification</span></a></li></ol></div><div class="clearme"></div></div></div></div><div id="_toc-bubble-wrap"></div><div id="_content" class=""><div class="documentation"><div xml:lang="en" class="article" id="index" lang="en"><div class="titlepage"><div><div><h2 class="title"><span class="number"> </span><span xmlns:dm="urn:x-suse:ns:docmanager" class="name">XDG Base Directory Specification</span> <a title="Permalink" class="permalink" href="#index">#</a></h2></div><div class="authorgroup"><div><span class="imprint-label">Authors: </span><div class="author-info"><span class="author-name">Waldo Bastian </span><code class="email">&lt;bastian@kde.org&gt;</code></div><div class="author-info"><span class="author-name">Allison Karlitskaya </span><code class="email">&lt;desrt@desrt.ca&gt;</code></div><div class="author-info"><span class="author-name">Lennart Poettering </span><code class="email">&lt;lennart@poettering.net&gt;</code></div><div class="author-info"><span class="author-name">Johannes Löthberg </span><code class="email">&lt;johannes@kyriasis.com&gt;</code></div></div><br /></div><div class="date"><span class="imprint-label">Publication Date: </span>08th May 2021, <span class="imprint-label">Version: </span>Version 0.8</div></div></div><div class="line"><div class="toc"><dl><dt><span class="sect1"><a href="#introduction"><span class="number">1 </span><span class="name">Introduction</span></a></span></dt><dt><span class="sect1"><a href="#basics"><span class="number">2 </span><span class="name">Basics</span></a></span></dt><dt><span class="sect1"><a href="#variables"><span class="number">3 </span><span class="name">Environment variables</span></a></span></dt><dt><span class="sect1"><a href="#referencing"><span class="number">4 </span><span class="name">Referencing this specification</span></a></span></dt></dl></div></div><div class="sect1" id="introduction"><div class="titlepage"><div><div><h2 class="title" id="introduction"><span class="number">1 </span><span xmlns:dm="urn:x-suse:ns:docmanager" class="name">Introduction</span> <a title="Permalink" class="permalink" href="#introduction">#</a></h2></div></div></div><p>
+      Various specifications specify files and file formats. This
+      specification defines where these files should be looked for by
+      defining one or more base directories relative to which files
+      should be located.
+    </p></div><div class="sect1" id="basics"><div class="titlepage"><div><div><h2 class="title" id="basics"><span class="number">2 </span><span xmlns:dm="urn:x-suse:ns:docmanager" class="name">Basics</span> <a title="Permalink" class="permalink" href="#basics">#</a></h2></div></div></div><p>
+      The XDG Base Directory Specification is based on the following concepts:
+      </p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem"><p>
+            There is a single base directory relative to which user-specific
+            data files should be written. This directory is defined by the
+            environment variable <code class="literal">$XDG_DATA_HOME</code>.
+          </p></li><li class="listitem"><p>
+            There is a single base directory relative to which user-specific
+            configuration files should be written. This directory is defined by the
+            environment variable <code class="literal">$XDG_CONFIG_HOME</code>.
+          </p></li><li class="listitem"><p>
+            There is a single base directory relative to which user-specific
+            state data should be written. This directory is defined by the
+            environment variable <code class="literal">$XDG_STATE_HOME</code>.
+          </p></li><li class="listitem"><p>
+            There is a single base directory relative to which
+            user-specific executable files may be written.
+          </p></li><li class="listitem"><p>
+            There is a set of preference ordered base directories relative to
+            which data files should be searched.  This set of directories is defined
+            by the environment variable <code class="literal">$XDG_DATA_DIRS</code>.
+          </p></li><li class="listitem"><p>
+            There is a set of preference ordered base directories relative to
+            which configuration files should be searched.
+            This set of directories is defined
+            by the environment variable <code class="literal">$XDG_CONFIG_DIRS</code>.
+          </p></li><li class="listitem"><p>
+            There is a single base directory relative to which user-specific
+            non-essential (cached) data should be written.
+            This directory is defined by the
+            environment variable <code class="literal">$XDG_CACHE_HOME</code>.
+          </p></li><li class="listitem"><p>
+            There is a single base directory relative to which
+            user-specific runtime files and other file objects should
+            be placed.  This directory is defined by the environment
+            variable <code class="literal">$XDG_RUNTIME_DIR</code>.
+          </p></li></ul></div><p>
+    </p><p>
+      All paths set in these environment variables must be
+      absolute. If an implementation encounters a relative path in any
+      of these variables it should consider the path invalid and ignore
+      it.
+    </p></div><div class="sect1" id="variables"><div class="titlepage"><div><div><h2 class="title" id="variables"><span class="number">3 </span><span xmlns:dm="urn:x-suse:ns:docmanager" class="name">Environment variables</span> <a title="Permalink" class="permalink" href="#variables">#</a></h2></div></div></div><p>
+      <code class="literal">$XDG_DATA_HOME</code> defines the base directory relative to
+      which user-specific data files should be stored. If
+      <code class="literal">$XDG_DATA_HOME</code> is either not set or empty, a default equal to
+      <code class="literal">$HOME</code>/.local/share should be used.
+    </p><p>
+      <code class="literal">$XDG_CONFIG_HOME</code> defines the base directory relative to
+      which user-specific configuration files should be stored. If
+      <code class="literal">$XDG_CONFIG_HOME</code> is either not set or empty, a default equal to
+      <code class="literal">$HOME</code>/.config should be used.
+    </p><p>
+      <code class="literal">$XDG_STATE_HOME</code> defines the base directory relative to
+      which user-specific state files should be stored. If
+      <code class="literal">$XDG_STATE_HOME</code> is either not set or empty, a default equal to
+      <code class="literal">$HOME</code>/.local/state should be used.
+    </p><p>
+      The <code class="literal">$XDG_STATE_HOME</code> contains state data that should persist between
+      (application) restarts, but that is not important or portable enough to the user that it should be stored
+      in <code class="literal">$XDG_DATA_HOME</code>. It may contain:
+      </p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem"><p>actions history (logs, history, recently used files, …)</p></li><li class="listitem"><p>current state of the application that can be reused on a restart (view, layout,
+        open files, undo history, …)</p></li></ul></div><p>
+    </p><p>
+      User-specific executable files may be stored in
+      <code class="literal">$HOME</code>/.local/bin. Distributions should ensure
+      this directory shows up in the UNIX <code class="literal">$PATH</code>
+      environment variable, at an appropriate place.
+    </p><p>
+      Since <code class="literal">$HOME</code> might be shared between systems
+      of different architectures, installing compiled binaries to
+      <code class="literal">$HOME</code>/.local/bin could cause
+      problems when used on systems of differing architectures. This
+      is often not a problem, but the fact that
+      <code class="literal">$HOME</code> becomes partially architecture-specific
+      if compiled binaries are placed in it should be kept in mind.
+    </p><p>
+      <code class="literal">$XDG_DATA_DIRS</code> defines the preference-ordered set of
+      base directories to search for data files in addition to the
+      <code class="literal">$XDG_DATA_HOME</code> base directory.
+      The directories in <code class="literal">$XDG_DATA_DIRS</code> should be separated
+      with the separator used for <code class="literal">$PATH</code> on the platform
+      (typically this is a colon <code class="literal">:</code>).
+    </p><p>
+      If <code class="literal">$XDG_DATA_DIRS</code> is either not set or empty, a value equal to
+      /usr/local/share/:/usr/share/ should be used.
+    </p><p>
+      <code class="literal">$XDG_CONFIG_DIRS</code> defines the preference-ordered set of
+      base directories to search for configuration files in addition to the
+      <code class="literal">$XDG_CONFIG_HOME</code> base directory.
+      The directories in <code class="literal">$XDG_CONFIG_DIRS</code> should be separated
+      with the separator used for <code class="literal">$PATH</code> on the platform
+      (typically this is a colon <code class="literal">:</code>).
+    </p><p>
+      If <code class="literal">$XDG_CONFIG_DIRS</code> is either not set or empty, a value equal to
+      /etc/xdg should be used.
+    </p><p>
+      The order of base directories denotes their importance; the first
+      directory listed is the most important. When the same information is
+      defined in multiple places the information defined relative to the more
+      important base directory takes precedent. The base directory defined
+      by <code class="literal">$XDG_DATA_HOME</code> is considered more important than
+      any of the base directories defined by <code class="literal">$XDG_DATA_DIRS</code>.
+      The base directory defined
+      by <code class="literal">$XDG_CONFIG_HOME</code> is considered more important than
+      any of the base directories defined by <code class="literal">$XDG_CONFIG_DIRS</code>.
+    </p><p>
+      <code class="literal">$XDG_CACHE_HOME</code> defines the base directory relative to
+      which user-specific non-essential data files should be stored. If
+      <code class="literal">$XDG_CACHE_HOME</code> is either not set or empty, a default equal to
+      <code class="literal">$HOME</code>/.cache should be used.
+    </p><p>
+      <code class="literal">$XDG_RUNTIME_DIR</code> defines the base directory
+      relative to which user-specific non-essential runtime files and
+      other file objects (such as sockets, named pipes, ...) should be
+      stored. The directory MUST be owned by the user, and they MUST be
+      the only one having read and write access to it. Its Unix access
+      mode MUST be 0700.
+    </p><p>
+      The lifetime of the directory MUST be bound to the user being
+      logged in. It MUST be created when the user first logs in and if
+      the user fully logs out the directory MUST be removed. If the
+      user logs in more than once they should get pointed to the same
+      directory, and it is mandatory that the directory continues to
+      exist from their first login to their last logout on the system,
+      and not removed in between. Files in the directory MUST not
+      survive reboot or a full logout/login cycle.
+    </p><p>
+      The directory MUST be on a local file system and not shared with
+      any other system. The directory MUST be fully-featured by the
+      standards of the operating system. More specifically, on
+      Unix-like operating systems AF_UNIX sockets, symbolic links,
+      hard links, proper permissions, file locking, sparse files,
+      memory mapping, file change notifications, a reliable hard link
+      count must be supported, and no restrictions on the file name
+      character set should be imposed. Files in this directory MAY be
+      subjected to periodic clean-up. To ensure that your files are
+      not removed, they should have their access time timestamp
+      modified at least once every 6 hours of monotonic time or the
+      'sticky' bit should be set on the file.
+    </p><p>
+      If <code class="literal">$XDG_RUNTIME_DIR</code> is not set applications
+      should fall back to a replacement directory with similar
+      capabilities and print a warning message. Applications should
+      use this directory for communication and synchronization
+      purposes and should not place larger files in it, since it might
+      reside in runtime memory and cannot necessarily be swapped out
+      to disk.
+    </p></div><div class="sect1" id="referencing"><div class="titlepage"><div><div><h2 class="title" id="referencing"><span class="number">4 </span><span xmlns:dm="urn:x-suse:ns:docmanager" class="name">Referencing this specification</span> <a title="Permalink" class="permalink" href="#referencing">#</a></h2></div></div></div><p>
+      Other specifications may reference this specification by specifying the
+      location of a data file as
+      <code class="literal">$XDG_DATA_DIRS</code>/subdir/filename. This implies that:
+      </p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem"><p>
+            Such file should be installed to <code class="literal">$datadir</code>/subdir/filename
+            with <code class="literal">$datadir</code> defaulting to /usr/share.
+          </p></li><li class="listitem"><p>
+            A user-specific version of the data file may be created in
+            <code class="literal">$XDG_DATA_HOME</code>/subdir/filename, taking into
+            account the default value for <code class="literal">$XDG_DATA_HOME</code> if
+            <code class="literal">$XDG_DATA_HOME</code> is not set.
+          </p></li><li class="listitem"><p>
+            Lookups of the data file should search for ./subdir/filename relative to
+            all base directories specified by <code class="literal">$XDG_DATA_HOME</code> and
+            <code class="literal">$XDG_DATA_DIRS</code> . If an environment
+            variable is either not set or empty, its default value as defined by this specification
+            should be used instead.
+          </p></li></ul></div><p>
+    </p><p>
+      Specifications may reference this specification by specifying the
+      location of a configuration file as
+      <code class="literal">$XDG_CONFIG_DIRS</code>/subdir/filename. This implies that:
+      </p><div class="itemizedlist"><ul class="itemizedlist"><li class="listitem"><p>
+            Default configuration files should be installed to <code class="literal">$sysconfdir</code>/xdg/subdir/filename
+            with <code class="literal">$sysconfdir</code> defaulting to /etc.
+          </p></li><li class="listitem"><p>
+            A user-specific version of the configuration file may be created in
+            <code class="literal">$XDG_CONFIG_HOME</code>/subdir/filename, taking into
+            account the default value for <code class="literal">$XDG_CONFIG_HOME</code> if
+            <code class="literal">$XDG_CONFIG_HOME</code> is not set.
+          </p></li><li class="listitem"><p>
+            Lookups of the configuration file should search for ./subdir/filename relative to
+            all base directories indicated by <code class="literal">$XDG_CONFIG_HOME</code> and
+            <code class="literal">$XDG_CONFIG_DIRS</code> . If an environment
+            variable is either not set or empty, its default value as defined by this specification
+            should be used instead.
+          </p></li></ul></div><p>
+    </p><p>
+      If, when attempting to write a file, the destination
+      directory is non-existent an attempt should be made to create it
+      with permission <code class="literal">0700</code>. If the destination directory
+      exists already the permissions should not be changed.
+      The application should be prepared to handle the case where the file
+      could not be written, either because the directory was non-existent
+      and could not be created, or for any other reason. In such case it
+      may choose to present an error message to the user.
+    </p><p>
+      When attempting to read a file, if for any reason a file in a certain
+      directory is unaccessible, e.g. because the directory is non-existent,
+      the file is non-existent or the user is not authorized to open the file,
+      then the processing of the file in that directory should be skipped.
+      If due to this a required file could not be found at all, the
+      application may choose to present an error message to the user.
+    </p><p>
+      A specification that refers to <code class="literal">$XDG_DATA_DIRS</code> or
+      <code class="literal">$XDG_CONFIG_DIRS</code> should define what the behaviour
+      must be when a file is located under multiple base directories.
+      It could, for example, define that only the file under the most
+      important base directory should be used or, as another example,
+      it could define rules for merging the information from the different
+      files.
+    </p></div></div></div><div class="page-bottom"></div></div></div><div id="_footer-wrap"><div id="_footer"><p>©
+        2026 
+        Freedesktop.org</p></div></div></body></html>

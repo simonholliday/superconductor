@@ -1,0 +1,22 @@
+
+snapshot 16x8 (128 cells)
+  json        955 bytes  encode     6.6 us  decode     5.3 us
+  msgpack     308 bytes  encode     3.3 us  decode     2.1 us
+  cbor2       292 bytes  encode    10.6 us  decode     5.9 us
+
+snapshot 64x16 (1024 cells)
+  json       6174 bytes  encode    21.6 us  decode    22.0 us
+  msgpack    1294 bytes  encode    16.3 us  decode     7.9 us
+  cbor2      1275 bytes  encode    37.1 us  decode    26.2 us
+
+toggle delta
+  json         63 bytes  encode     2.2 us  decode     1.6 us
+  msgpack      39 bytes  encode     0.6 us  decode     0.4 us
+  cbor2        39 bytes  encode     1.9 us  decode     0.9 us
+
+beat/playhead
+  json         75 bytes  encode     2.3 us  decode     1.8 us
+  msgpack      47 bytes  encode     0.6 us  decode     0.5 us
+  cbor2        48 bytes  encode     1.8 us  decode     0.9 us
+
+16x8 cells as packed bits: 16 bytes; as JSON bool array: 752 bytes; as JSON 0/1 flat string: 130 bytes

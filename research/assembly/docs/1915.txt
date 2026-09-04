@@ -1,0 +1,98 @@
+#1915  A grid tap is heard after one to two cycles depending on when it is applied relative to the rebuild: the reschedule lookahead sets the spread, a one-pulse lookahead shrinks the double-length window to one pulse at a measured cost of about 0.1 ms per rebuild
+  finding · active · #research · #subsequence-grid · superintendent
+
+Summary: A tap lands in the next cycle only if it is applied before that cycle's rebuild, which fires `reschedule_lookahead` before the cycle starts; measured offline, tap to cycle start is one lookahead at best and one cycle plus a lookahead at worst. The window is about *when* the tap is applied, not which cell is tapped: any tap applied during the last lookahead of a cycle waits a whole extra cycle. With the default one-beat lookahead that window is a quarter of a one-bar pattern, so a tap on the cell under the playhead during the last beat is heard again after two cycles instead of one (4 s instead of 2 s at 120 BPM). Declaring `reschedule_lookahead=1/24` on grid patterns shrinks the window to one pulse; it is a composition-file setting, works (measured at zero and one pulse), is safe against the form and harmony clocks, and a 16 by 8 rebuild costs about 105 us median on the workstation, about half a percent of a 20.8 ms pulse at 120 BPM. Confirmation via `pattern_reschedule` arrives within a pulse of the rebuild and precedes the cycle start by exactly the lookahead. Wall-clock jitter impact is not measured here and is input for the `serving` point.
+
+**Question.** When does a tap on the grid land in the music, worst and best case, in beats and milliseconds at representative tempi?
+
+## The mechanics that decide it
+
+A pattern's next cycle is built at `cycle_start + length - reschedule_lookahead` pulses, inside `_maybe_reschedule_patterns` (`sequencer.py:1776-1833`), which runs before that pulse's MIDI is dispatched (`sequencer.py:1484-1485`). The builder reads `composition.data` during that rebuild (`composition.py:6044-6072`). A write that is applied on the loop before that pulse is in the next cycle; a write applied after it waits a whole cycle for the following rebuild. The lookahead defaults to one beat (`pattern.py:104`, documented at `114-115`; `composition.py:4731`) and may be any non-negative value not exceeding the length (`sequencer.py:885-906`); zero is accepted.
+
+## Measured
+
+Offline `composition.render()` at 120 BPM, 24 PPQN, a 16-step 4-beat drum pattern reading its cells from `composition.data`, `mido` patched as in `tests/conftest.py`, no MIDI port opened. Script: `scratchpad/subsequence-grid/grid_prototype.py`, run with `~/venvs/subsequence-cookbook/bin/python` 3.12.3 and the working tree first on `sys.path`; re-run today with identical pulse results. Pulses are exact because render mode simulates the clock. Runs C, D and E (step-count change and containment) are recorded in the design document.
+
+| Run | What was done | Result |
+| --- | --- | --- |
+| A, best case | cell written in the `reschedule_pulse` listener at pulse 168, the rebuild for the cycle starting at 192 | realised in the cycle starting 192: 24 pulses = 1 beat = the lookahead |
+| B, worst case | cell written in the `pattern_reschedule` listener at pulse 170, just after that rebuild | realised in the cycle starting 288: 120 pulses = 5 beats = length + lookahead |
+| F, lookahead 0 | `reschedule_lookahead=0` | rebuilt at pulses 96 and 192, the cycles' own first pulses; the step-0 kick `note_on` dispatched at pulses 96 and 192, same pulse as the rebuild |
+| F2, lookahead one pulse | `reschedule_lookahead=1/24` | rebuilt at 95, 191, 287 for cycles 96, 192, 288 |
+| G, rebuild cost | 500 offline `on_reschedule()` calls per shape, two runs | 16 by 8 grid, 64 notes: median 104-105 us, p95 106-137 us; 16 by 8 full (128 notes): median 191-193 us; 32 by 8, 128 notes: median 194-196 us; 64 by 16, 512 notes: median 736-757 us, max 969-985 us |
+
+The pulse interval is 41.7 ms at 60 BPM, 20.8 ms at 120 BPM, 13.9 ms at 180 BPM, so a 16 by 8 rebuild is about half a percent of a pulse at 120 BPM and the 64 by 16 case about four percent. These are workstation figures; the headless server is slower than this machine and `serving` should re-measure there.
+
+## The formula
+
+With cycle length L beats, lookahead a, step duration s, a tap on cell c applied at offset x into the current cycle (0 <= x < L):
+
+- tap to the start of the cycle that contains it: L - x if x < L - a (applied before the rebuild), otherwise 2L - x. The extremes are a (tap just before the rebuild) and L + a (tap just after it).
+- tap to the cell being heard: L - x + c·s if x < L - a, otherwise 2L - x + c·s. This is the rule `state-sync` needs for how long a cell stays pending.
+- tap to confirmation, meaning the `pattern_reschedule` after the rebuild that included it (`sequencer.py:1829`, delivered within the same pulse interval): L - a - x if x < L - a, otherwise 2L - a - x; between 0 and L. Confirmation precedes the start of the cycle by exactly a, and the tapped cell sounds a + c·s after it.
+
+Worked example at 120 BPM, L = 4, a = 1, 16th-note steps, cell 2 (c·s = 0.5 beats): applied at x = 1 beat, heard after 4 - 1 + 0.5 = 3.5 beats = 1750 ms; applied at x = 3.5 beats, inside the lookahead window, heard after 8 - 3.5 + 0.5 = 5 beats = 2500 ms.
+
+**The tap-under-playhead gesture** is the special case x = c·s, where tap time and cell coincide: the same cell is heard again after L if c·s < L - a, otherwise after 2L. Only in that gesture does the window map onto particular cells, the last a/s of them; with the default one-beat lookahead that is the last four of sixteen on a one-bar pattern. With a one-pulse lookahead the window is one pulse wide, in practice nothing.
+
+## Table at representative tempi
+
+Tap to cycle start best / worst; tap on the cell under the playhead heard again at that cell, applied before / inside the lookahead window; confirmation worst case. Beats then milliseconds.
+
+| Tempo | Cycle | Lookahead | Tap to cycle start, beats | ms | Playhead cell heard again, beats | ms | Confirmation worst |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 60 | 4 beats | 1 beat | 1 / 5 | 1000 / 5000 | 4 / 8 (window: last 4 of 16 cells) | 4000 / 8000 | 4 beats, 4000 ms |
+| 60 | 4 beats | 1 pulse | 1/24 / 4 1/24 | 42 / 4042 | 4 (all cells) | 4000 | 4000 ms |
+| 60 | 16 beats | 1 beat | 1 / 17 | 1000 / 17000 | 16 / 32 (last 4 of 64) | 16000 / 32000 | 16000 ms |
+| 90 | 4 beats | 1 beat | 1 / 5 | 667 / 3333 | 4 / 8 (last 4 of 16) | 2667 / 5333 | 2667 ms |
+| 90 | 4 beats | 1 pulse | 1/24 / 4 1/24 | 28 / 2694 | 4 (all) | 2667 | 2667 ms |
+| 120 | 4 beats | 1 beat | 1 / 5 | 500 / 2500 | 4 / 8 (last 4 of 16) | 2000 / 4000 | 2000 ms |
+| 120 | 4 beats | 1 pulse | 1/24 / 4 1/24 | 21 / 2021 | 4 (all) | 2000 | 2000 ms |
+| 120 | 8 beats | 1 beat | 1 / 9 | 500 / 4500 | 8 / 16 (last 4 of 32) | 4000 / 8000 | 4000 ms |
+| 120 | 16 beats | 1 pulse | 1/24 / 16 1/24 | 21 / 8021 | 16 (all) | 8000 | 8000 ms |
+| 140 | 4 beats | 1 beat | 1 / 5 | 429 / 2143 | 4 / 8 (last 4 of 16) | 1714 / 3429 | 1714 ms |
+| 140 | 4 beats | 1 pulse | 1/24 / 4 1/24 | 18 / 1732 | 4 (all) | 1714 | 1714 ms |
+| 180 | 4 beats | 1 beat | 1 / 5 | 333 / 1667 | 4 / 8 (last 4 of 16) | 1333 / 2667 | 1333 ms |
+| 180 | 4 beats | 1 pulse | 1/24 / 4 1/24 | 14 / 1347 | 4 (all) | 1333 | 1333 ms |
+| 180 | 16 beats | 1 beat | 1 / 17 | 333 / 5667 | 16 / 32 (last 4 of 64) | 5333 / 10667 | 5333 ms |
+
+The full table for 60, 90, 120, 140 and 180 BPM at 4, 8 and 16 beats is produced by `scratchpad/subsequence-grid/timing_table.py`.
+
+## What the write path adds
+
+Nothing measurable at this scale. A panel write marshalled onto the loop with `call_soon_threadsafe` (the `unregister()` pattern, `composition.py:4020-4030`) runs while the loop sleeps between pulses (`sequencer.py:1541-1556`), so it is applied before the next pulse's rebuild. A direct dict assignment from another thread is GIL-atomic (`sequencer.py:771-772`) and is visible to the next rebuild too. The network hop before that belongs to `transport-ui` and `latency`.
+
+## What follows for the design
+
+- A grid pattern should declare `reschedule_lookahead=1/24` (one pulse), not the default one beat. It is a composition-file setting, needs no engine change, and is safe with respect to the other clocks: the form, harmony and bar counters use `max(1.0, harmony lookahead, max pattern lookahead)` (`composition.py:5658`), so a smaller pattern lookahead reads state that has already advanced. Zero also works (run F) but puts the rebuild on the cycle's first pulse, delaying that pulse's downbeat MIDI by the rebuild time; one pulse earlier there is normally no `note_on` on a 16th-note grid, only `note_off`s.
+- The remaining latency is the cycle length itself, which is the instrument's nature and the brief accepts it; the cell must light at once locally (`state-sync`), and confirmation from Subsequence arrives at the next rebuild, one lookahead before the cycle starts.
+- A one-pulse lookahead lowers the floor for a step-count change from four 16th steps to one (see the design document).
+
+## Not covered
+
+Wall-clock effect of the rebuild on `benchmarks/clock_jitter.py`'s figure (about 3 us mean) was not measured; the benchmark runs a bare `Sequencer` with no patterns, and the offline cost above is the input for `serving`, which measures a co-located load.
+
+## Hardware-gated
+
+Nothing here needs the panel or a graphical host.
+
+## Provenance
+
+`subsequence/sequencer.py` (885-915, 1483-1486, 1541-1544, 1770-1835, 1850-1890), `subsequence/composition.py` (4015-4032, 4729-4736, 5655-5660, 5985-6002, 6036-6072, 6090-6105), `subsequence/pattern.py` (100-118), `tests/conftest.py`, `tests/test_rescheduling.py`, `tests/test_sequencer_events.py`, `benchmarks/clock_jitter.py`. Prototypes (research only, not house style): `/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/grid_prototype.py` and `timing_table.py`. Measured on the development workstation with `~/venvs/subsequence-cookbook/bin/python` 3.12.3 against the working tree at `/mnt/dev/Apps/2026-02 Sequencer/` at `v0.6.6-2-g95c14a7` (the venv's install metadata reports 0.6.5, but the prototypes put the tree first on `sys.path` and tracebacks resolve to it); offline render, so pulse counts are exact and microsecond costs are indicative. No external sources were needed.
+
+Referred to by (7)
+   #1913  in a comment The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them
+   #1924               The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed
+   #1925               Grid sync is absolute sets applied in loop order under one version, confirmed by ack at application and by a per-cycle event carrying the built version, a state word and the realised cells; the algorithm's hand is ephemeral by default and persistent when an edit is meant to last; a cell's face is the server's value and a ring is the human's unconfirmed request
+   #1926               Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers
+   #1928               Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path
+   #1941               A step tap's visual acknowledgement costs one to two browser frames plus a vsync, 22 to 42 ms from browser event to glass before the panel's own touch-down latency, which must stay under about 25 ms to hold the 69 ms tapping threshold; a pad hit costs 2 to 19 ms from browser event to sound at 128 frames on a wired LAN, so finger to sound is about 24 ms at 256 frames on a 15 ms panel allowance, and whether the 10 ms musical standard is out of reach turns on that one unmeasured term
+   #1943               Is a reschedule_lookahead of one pulse on grid patterns an acceptable composition-file convention?
+
+Not linked, but its writing suggests (3)
+   #1924  The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed  (it names this)
+   #1925  Grid sync is absolute sets applied in loop order under one version, confirmed by ack at application and by a per-cycle event carrying the built version, a state word and the realised cells; the algorithm's hand is ephemeral by default and persistent when an edit is meant to last; a cell's face is the server's value and a ring is the human's unconfirmed request  (it names this)
+   #1928  Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path  (it names this)
+  Tip: subroutine link 1924 documents 1915 — confirm one
+
+  Tip: subroutine comment 1915 "what happened"

@@ -1,0 +1,41 @@
+== Case 1: visual acknowledgement of a step tap (software terms measured in headless browsers on the workstation)
+  Chromium 151, synthetic touch: input timestamp -> commit 17.1 / 32.9 / 34.5
+     + one vsync + 5 ms GTG = finger event -> glass, panel input excluded: 38.8 / 54.6 / 56.2
+     + panel touch-down latency 0..35 ms (guideline bound, unmeasured): 38.8 / 54.6 / 91.2
+  Chromium 151, mouse: input timestamp -> commit 0.9 / 9.6 / 18.2
+     + one vsync + 5 ms GTG = finger event -> glass, panel input excluded: 22.6 / 31.3 / 39.9
+     + panel touch-down latency 0..35 ms (guideline bound, unmeasured): 22.6 / 31.3 / 74.9
+  Firefox 153, synthetic touch: input timestamp -> commit 0.0 / 9.0 / 20.0
+     + one vsync + 5 ms GTG = finger event -> glass, panel input excluded: 21.7 / 30.7 / 41.7
+     + panel touch-down latency 0..35 ms (guideline bound, unmeasured): 21.7 / 30.7 / 76.7
+  Thresholds: direct-touch tapping JND 69 ms (Deber 2015), 64 ms mean and 20..40 ms window (Jota 2013)
+
+== Case 2: pad hit, tap to sound
+  Chromium 151, synthetic touch:
+     input -> WebSocket send: 0.5 / 16.7 / 18.6
+     send -> service -> adapter (loopback): 0.2 / 1.0 / 1.4
+     software to Subsample's mixer, all on one host: 0.8 / 19.0 / 22.9
+        + output latency at buffer_frames=128 (period..3 periods): 3.5 / 21.9 / 31.6   | + wired LAN hop 4.0 / 22.9 / 33.4   | + panel input 0..35 4.0 / 22.9 / 68.4
+        + output latency at buffer_frames=256 (period..3 periods): 6.1 / 24.8 / 40.3   | + wired LAN hop 6.6 / 25.8 / 42.1   | + panel input 0..35 6.6 / 25.8 / 77.1
+        + output latency at buffer_frames=512 (period..3 periods): 11.5 / 30.6 / 57.7   | + wired LAN hop 12.0 / 31.6 / 59.5   | + panel input 0..35 12.0 / 31.6 / 94.5
+        + output latency at buffer_frames=1024 (period..3 periods): 22.1 / 42.2 / 92.5   | + wired LAN hop 22.6 / 43.2 / 94.3   | + panel input 0..35 22.6 / 43.2 / 129.3
+     Wi-Fi tail adds up to 80 ms; WAN one way adds 6.8 / 7.7 / 12.2 nearby, 48.4 / 49.3 / 55.6 distant
+  Chromium 151, mouse:
+     input -> WebSocket send: 0.0 / 0.6 / 1.2
+     send -> service -> adapter (loopback): 0.2 / 1.0 / 2.9
+     software to Subsample's mixer, all on one host: 0.3 / 2.8 / 7.0
+        + output latency at buffer_frames=128 (period..3 periods): 3.0 / 5.7 / 15.7   | + wired LAN hop 3.5 / 6.7 / 17.5   | + panel input 0..35 3.5 / 6.7 / 52.5
+        + output latency at buffer_frames=256 (period..3 periods): 5.6 / 8.6 / 24.4   | + wired LAN hop 6.1 / 9.6 / 26.2   | + panel input 0..35 6.1 / 9.6 / 61.2
+        + output latency at buffer_frames=512 (period..3 periods): 11.0 / 14.4 / 41.8   | + wired LAN hop 11.5 / 15.4 / 43.6   | + panel input 0..35 11.5 / 15.4 / 78.6
+        + output latency at buffer_frames=1024 (period..3 periods): 21.6 / 26.0 / 76.6   | + wired LAN hop 22.1 / 27.0 / 78.4   | + panel input 0..35 22.1 / 27.0 / 113.4
+     Wi-Fi tail adds up to 80 ms; WAN one way adds 6.8 / 7.7 / 12.2 nearby, 48.4 / 49.3 / 55.6 distant
+  Firefox 153, synthetic touch:
+     input -> WebSocket send: 0.0 / 0.0 / 4.0
+     send -> service -> adapter (loopback): -0.8 / 0.4 / 1.7
+     software to Subsample's mixer, all on one host: -0.8 / 1.6 / 8.6
+        + output latency at buffer_frames=128 (period..3 periods): 1.9 / 4.5 / 17.3   | + wired LAN hop 2.4 / 5.5 / 19.1   | + panel input 0..35 2.4 / 5.5 / 54.1
+        + output latency at buffer_frames=256 (period..3 periods): 4.5 / 7.4 / 26.0   | + wired LAN hop 5.0 / 8.4 / 27.8   | + panel input 0..35 5.0 / 8.4 / 62.8
+        + output latency at buffer_frames=512 (period..3 periods): 9.9 / 13.2 / 43.4   | + wired LAN hop 10.4 / 14.2 / 45.2   | + panel input 0..35 10.4 / 14.2 / 80.2
+        + output latency at buffer_frames=1024 (period..3 periods): 20.5 / 24.8 / 78.2   | + wired LAN hop 21.0 / 25.8 / 80.0   | + panel input 0..35 21.0 / 25.8 / 115.0
+     Wi-Fi tail adds up to 80 ms; WAN one way adds 6.8 / 7.7 / 12.2 nearby, 48.4 / 49.3 / 55.6 distant
+  Thresholds: 10 ms and 1 ms jitter (Wessel and Wright 2002); 0 and 10 ms rated alike, 10+-3 and 20 ms worse (Jack et al. 2016 via Schmid 2024); drums good <= 8..9 ms, fair <= 24.5..25 ms (Lester and Boley 2007, 85 percent confidence); JND 20..30 ms theremin (Maki-Patola 2004)

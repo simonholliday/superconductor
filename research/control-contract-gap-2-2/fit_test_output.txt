@@ -1,0 +1,18 @@
+ok   the panel lattice tiles 1920x1080 exactly with no surplus
+ok   one lattice cell is 14.94 mm on the panel
+ok   a page authored for the panel renders on the panel at scale 1
+ok   a larger surface leaves surplus rather than magnifying the page
+ok   a 1600x900 surface scales to a 50 px cell and stays playable
+ok   a 1366x768 laptop shows every cell, limited by height
+ok   its 42.7 px cell is under the enhanced target size, so it is a viewer not a surface
+ok   a 1024x768 surface is width-limited and well under playable
+ok   the fit rule changes no widget coordinate
+ok   the panel lattice at every plausible cell size is floor(1920/cell) x floor(1080/cell)
+ok   60 px is the only plausible size that tiles both axes exactly
+ok   a full-width grid widget showing 32 steps beside an 80 px label column has 57.5 px step cells
+ok   that step cell is inside the 45-57 px band #1927 records for 32 columns, and is not the 60 px lattice cell
+ok   a 16-step grid on the same span has 115 px step cells, the top of #1927 band
+ok   at the enhanced 44 px target the same span holds 41 steps, so 32 is a legibility ceiling not a lattice one
+ok   a half-width grid widget holds 20 steps at 44 px
+
+16 passed, 0 failed

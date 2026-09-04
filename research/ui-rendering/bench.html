@@ -1,0 +1,277 @@
+<!doctype html>
+<!-- Research prototype for Superintendent ui-rendering (2026-09-02). Not house style; measurement only. -->
+<meta charset="utf-8">
+<title>grid render bench</title>
+<style>
+	html, body { margin: 0; background: #111; color: #ddd; font: 12px monospace; overflow: hidden; }
+	#stage { position: relative; width: 1600px; height: 900px; }
+	.grid { position: absolute; left: 0; top: 0; display: grid; gap: 2px; }
+	.cell { background: #2a2a2a; border-radius: 3px; }
+	.cell.on { background: #e8a33c; }
+	.cell.play { background: #555; }
+	.cell.on.play { background: #ffd27a; }
+	.overlay { position: absolute; top: 0; left: 0; background: rgba(255,255,255,0.18); pointer-events: none; will-change: transform; }
+	svg rect.cell { fill: #2a2a2a; }
+	svg rect.cell.on { fill: #e8a33c; }
+	svg .overlay-rect { fill: rgba(255,255,255,0.18); }
+	canvas { position: absolute; left: 0; top: 0; }
+</style>
+<div id="stage"></div>
+<script>
+'use strict';
+const q = new URLSearchParams(location.search);
+const TECH = q.get('tech') || 'dom-class';
+const COLS = parseInt(q.get('cols') || '16');
+const ROWS = parseInt(q.get('rows') || '8');
+const TOGGLES = parseInt(q.get('toggles') || '0');
+const STEP_EVERY = parseInt(q.get('step') || '4');
+const FRAMES = parseInt(q.get('frames') || '300');
+const WAVES = parseInt(q.get('waves') || '0');
+const W = 1600, H = 900;
+const gap = 2;
+const cw = Math.floor(W / COLS) - gap, ch = Math.floor(H / ROWS) - gap;
+const stage = document.getElementById('stage');
+const N = COLS * ROWS;
+const state = new Uint8Array(N);
+for (let i = 0; i < N; i++) state[i] = (i * 7919) % 5 === 0 ? 1 : 0;
+let col = 0;
+let rng = 12345;
+function rand() { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; }
+
+// ---------- techniques ----------
+const impl = {};
+
+impl['dom-class'] = (() => {
+	let cells;
+	return {
+		init() {
+			const g = document.createElement('div');
+			g.className = 'grid';
+			g.style.gridTemplateColumns = `repeat(${COLS}, ${cw}px)`;
+			g.style.gridTemplateRows = `repeat(${ROWS}, ${ch}px)`;
+			cells = new Array(N);
+			for (let i = 0; i < N; i++) {
+				const d = document.createElement('div');
+				d.className = state[i] ? 'cell on' : 'cell';
+				g.appendChild(d); cells[i] = d;
+			}
+			stage.appendChild(g);
+		},
+		toggle(i) { cells[i].classList.toggle('on', !!state[i]); },
+		playhead(prev, cur) {
+			for (let r = 0; r < ROWS; r++) {
+				cells[r * COLS + prev].classList.remove('play');
+				cells[r * COLS + cur].classList.add('play');
+			}
+		},
+	};
+})();
+
+impl['dom-overlay'] = (() => {
+	let cells, ov;
+	return {
+		init() {
+			impl['dom-class'].init();
+			cells = stage.querySelectorAll('.cell');
+			ov = document.createElement('div');
+			ov.className = 'overlay';
+			ov.style.width = (cw + gap) + 'px';
+			ov.style.height = H + 'px';
+			stage.appendChild(ov);
+		},
+		toggle(i) { cells[i].classList.toggle('on', !!state[i]); },
+		playhead(prev, cur) { ov.style.transform = `translateX(${cur * (cw + gap)}px)`; },
+	};
+})();
+
+impl['svg'] = (() => {
+	const NS = 'http://www.w3.org/2000/svg';
+	let rects, ov;
+	return {
+		init() {
+			const s = document.createElementNS(NS, 'svg');
+			s.setAttribute('width', W); s.setAttribute('height', H);
+			rects = new Array(N);
+			for (let i = 0; i < N; i++) {
+				const r = document.createElementNS(NS, 'rect');
+				const c = i % COLS, rw = (i / COLS) | 0;
+				r.setAttribute('x', c * (cw + gap)); r.setAttribute('y', rw * (ch + gap));
+				r.setAttribute('width', cw); r.setAttribute('height', ch); r.setAttribute('rx', 3);
+				r.setAttribute('class', state[i] ? 'cell on' : 'cell');
+				s.appendChild(r); rects[i] = r;
+			}
+			ov = document.createElementNS(NS, 'rect');
+			ov.setAttribute('class', 'overlay-rect');
+			ov.setAttribute('width', cw + gap); ov.setAttribute('height', H);
+			s.appendChild(ov);
+			stage.appendChild(s);
+		},
+		toggle(i) { rects[i].setAttribute('class', state[i] ? 'cell on' : 'cell'); },
+		playhead(prev, cur) { ov.setAttribute('transform', `translate(${cur * (cw + gap)} 0)`); },
+	};
+})();
+
+function drawCell(ctx, i, playing) {
+	const c = i % COLS, r = (i / COLS) | 0;
+	ctx.fillStyle = state[i] ? (playing ? '#ffd27a' : '#e8a33c') : (playing ? '#555' : '#2a2a2a');
+	ctx.fillRect(c * (cw + gap), r * (ch + gap), cw, ch);
+}
+
+impl['canvas-full'] = (() => {
+	let ctx, curCol = 0;
+	function full() {
+		ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
+		for (let i = 0; i < N; i++) drawCell(ctx, i, (i % COLS) === curCol);
+	}
+	return {
+		init() {
+			const c = document.createElement('canvas'); c.width = W; c.height = H;
+			stage.appendChild(c); ctx = c.getContext('2d'); full();
+		},
+		toggle(i) { this._dirty = true; },
+		playhead(prev, cur) { curCol = cur; this._dirty = true; },
+		flush() { if (this._dirty) { full(); this._dirty = false; } },
+	};
+})();
+
+impl['canvas-dirty'] = (() => {
+	let ctx, curCol = 0;
+	return {
+		init() {
+			const c = document.createElement('canvas'); c.width = W; c.height = H;
+			stage.appendChild(c); ctx = c.getContext('2d');
+			ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
+			for (let i = 0; i < N; i++) drawCell(ctx, i, (i % COLS) === curCol);
+		},
+		toggle(i) { drawCell(ctx, i, (i % COLS) === curCol); },
+		playhead(prev, cur) {
+			curCol = cur;
+			for (let r = 0; r < ROWS; r++) { drawCell(ctx, r * COLS + prev, false); drawCell(ctx, r * COLS + cur, true); }
+		},
+	};
+})();
+
+impl['webgl'] = (() => {
+	let gl, prog, stateBuf, uCol, dirty = true, curCol = 0;
+	const vs = `#version 300 es
+	layout(location=0) in vec2 quad;
+	layout(location=1) in float st;
+	uniform vec2 res; uniform float cols, rows, cw, ch, gap, playcol;
+	out vec3 color;
+	void main(){
+		float i = float(gl_InstanceID); float c = mod(i, cols); float r = floor(i / cols);
+		vec2 px = vec2(c*(cw+gap), r*(ch+gap)) + quad*vec2(cw,ch);
+		vec2 clip = (px/res)*2.0-1.0; clip.y = -clip.y;
+		gl_Position = vec4(clip,0,1);
+		bool play = abs(c-playcol) < 0.5;
+		color = st>0.5 ? (play? vec3(1.0,0.82,0.48): vec3(0.91,0.64,0.24)) : (play? vec3(0.33): vec3(0.165));
+	}`;
+	const fs = `#version 300 es
+	precision mediump float; in vec3 color; out vec4 o; void main(){ o = vec4(color,1.0); }`;
+	function sh(t, s) { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; }
+	return {
+		init() {
+			const c = document.createElement('canvas'); c.width = W; c.height = H; stage.appendChild(c);
+			gl = c.getContext('webgl2', { antialias: false });
+			if (!gl) throw new Error('no webgl2');
+			prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(prog);
+			if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+			gl.useProgram(prog);
+			const qb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 1,0, 0,1, 1,1]), gl.STATIC_DRAW);
+			gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+			stateBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, stateBuf);
+			gl.bufferData(gl.ARRAY_BUFFER, state, gl.DYNAMIC_DRAW);
+			gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.UNSIGNED_BYTE, false, 0, 0); gl.vertexAttribDivisor(1, 1);
+			const u = n => gl.getUniformLocation(prog, n);
+			gl.uniform2f(u('res'), W, H); gl.uniform1f(u('cols'), COLS); gl.uniform1f(u('rows'), ROWS);
+			gl.uniform1f(u('cw'), cw); gl.uniform1f(u('ch'), ch); gl.uniform1f(u('gap'), gap);
+			uCol = u('playcol');
+			gl.clearColor(0.067, 0.067, 0.067, 1);
+			this.flush();
+		},
+		toggle(i) { dirty = true; },
+		playhead(prev, cur) { curCol = cur; dirty = true; },
+		flush() {
+			if (!dirty) return; dirty = false;
+			gl.bindBuffer(gl.ARRAY_BUFFER, stateBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, state);
+			gl.uniform1f(uCol, curCol);
+			gl.clear(gl.COLOR_BUFFER_BIT);
+			gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, N);
+		},
+	};
+})();
+
+// Waveform test: WAVES waveforms of 400 bins each, fully regenerated every frame (worst case).
+const BINS = 400;
+const waveData = [];
+for (let w = 0; w < WAVES; w++) { const a = new Float32Array(BINS); for (let i = 0; i < BINS; i++) a[i] = Math.abs(Math.sin(i * 0.07 + w)) * rand(); waveData.push(a); }
+function mutateWaves() { for (const a of waveData) for (let i = 0; i < BINS; i++) a[i] = Math.min(1, Math.max(0, a[i] + (rand() - 0.5) * 0.1)); }
+
+impl['wave-svg'] = (() => {
+	const NS = 'http://www.w3.org/2000/svg'; let polys = [];
+	const wh = Math.floor(H / Math.max(1, WAVES)), ww = W;
+	function pts(a, w) { let s = ''; const mid = w * wh + wh / 2; for (let i = 0; i < BINS; i++) s += (i * ww / (BINS - 1)).toFixed(1) + ',' + (mid - a[i] * wh * 0.45).toFixed(1) + ' '; for (let i = BINS - 1; i >= 0; i--) s += (i * ww / (BINS - 1)).toFixed(1) + ',' + (mid + a[i] * wh * 0.45).toFixed(1) + ' '; return s; }
+	return {
+		init() {
+			const s = document.createElementNS(NS, 'svg'); s.setAttribute('width', W); s.setAttribute('height', H);
+			for (let w = 0; w < WAVES; w++) { const p = document.createElementNS(NS, 'polygon'); p.setAttribute('fill', '#e8a33c'); p.setAttribute('points', pts(waveData[w], w)); s.appendChild(p); polys.push(p); }
+			stage.appendChild(s);
+		},
+		toggle() {}, playhead() {},
+		flush() { mutateWaves(); for (let w = 0; w < WAVES; w++) polys[w].setAttribute('points', pts(waveData[w], w)); },
+	};
+})();
+
+impl['wave-canvas'] = (() => {
+	let ctx; const wh = Math.floor(H / Math.max(1, WAVES)), ww = W;
+	return {
+		init() { const c = document.createElement('canvas'); c.width = W; c.height = H; stage.appendChild(c); ctx = c.getContext('2d'); this.flush(); },
+		toggle() {}, playhead() {},
+		flush() {
+			mutateWaves();
+			ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#e8a33c';
+			for (let w = 0; w < WAVES; w++) {
+				const a = waveData[w], mid = w * wh + wh / 2; ctx.beginPath();
+				for (let i = 0; i < BINS; i++) ctx.lineTo(i * ww / (BINS - 1), mid - a[i] * wh * 0.45);
+				for (let i = BINS - 1; i >= 0; i--) ctx.lineTo(i * ww / (BINS - 1), mid + a[i] * wh * 0.45);
+				ctx.closePath(); ctx.fill();
+			}
+		},
+	};
+})();
+
+// ---------- driver ----------
+const t = impl[TECH];
+const t0 = performance.now();
+t.init();
+const initMs = performance.now() - t0;
+const intervals = [], scripts = [];
+let last = null, frame = 0;
+const loafs = [];
+try { new PerformanceObserver(l => { for (const e of l.getEntries()) loafs.push({ dur: e.duration, render: e.renderStart ? (e.startTime + e.duration - e.renderStart) : null }); }).observe({ type: 'long-animation-frame', buffered: true }); } catch (e) {}
+window.__done = null;
+function tick(ts) {
+	if (last !== null) intervals.push(ts - last);
+	last = ts;
+	const s = performance.now();
+	if (frame % STEP_EVERY === 0) { const prev = col; col = (col + 1) % COLS; t.playhead(prev, col); }
+	for (let k = 0; k < TOGGLES; k++) { const i = (rand() * N) | 0; state[i] ^= 1; t.toggle(i); }
+	if (t.flush) t.flush();
+	scripts.push(performance.now() - s);
+	if (++frame < FRAMES) requestAnimationFrame(tick);
+	else {
+		const sorted = a => [...a].sort((x, y) => x - y);
+		const pct = (a, p) => sorted(a)[Math.min(a.length - 1, Math.floor(a.length * p))];
+		const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+		window.__done = {
+			tech: TECH, cols: COLS, rows: ROWS, cells: N, toggles: TOGGLES, stepEvery: STEP_EVERY, waves: WAVES, frames: FRAMES, initMs,
+			interval: { mean: mean(intervals), p50: pct(intervals, 0.5), p95: pct(intervals, 0.95), p99: pct(intervals, 0.99), max: Math.max(...intervals), over20ms: intervals.filter(x => x > 20).length, over34ms: intervals.filter(x => x > 34).length },
+			script: { mean: mean(scripts), p95: pct(scripts, 0.95), max: Math.max(...scripts) },
+			loafCount: loafs.length,
+			nodes: document.getElementsByTagName('*').length,
+		};
+	}
+}
+requestAnimationFrame(tick);
+</script>

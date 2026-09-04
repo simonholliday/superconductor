@@ -1,0 +1,23 @@
+start 2026-09-03T21:29:22+00:00 loadavg 0.63 1.86 2.87
+== H : baseline  loadavg 0.72
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-thread --rate 5  loadavg 0.61
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-batch-read --rate 5  loadavg 0.69
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-coalesce --burst 128 --burst-period 2.0  loadavg 0.61
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-batch-read --burst 128 --burst-period 2.0  loadavg 0.55
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-direct --burst 128 --burst-period 2.0  loadavg 0.47
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-batch-read --burst 1024 --burst-period 4.0  loadavg 0.34
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-thread --rate 500  loadavg 0.39
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : ws-batch-read --rate 500  loadavg 0.41
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== H : baseline  loadavg 0.62
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+end 2026-09-03T21:37:09+00:00 loadavg 0.77 0.84 1.94
+ALLDONE

@@ -1,0 +1,19 @@
+# Prototype config for restart_file.py (not house style). Merged over
+# substation/config.yaml.default by substation.config.load_config.
+scanner:
+    calibration_frequency_hz: null
+
+recording:
+    audio_output_dir: "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/audio"
+
+bands:
+    probe_a:
+        type: PMR
+        freq_start: 446.00625e+6
+        freq_end: 446.19375e+6
+        sample_rate: 1.024e6
+    probe_b:
+        type: PMR
+        freq_start: 446.00625e+6
+        freq_end: 446.09375e+6
+        sample_rate: 1.024e6

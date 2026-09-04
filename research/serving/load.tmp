@@ -1,0 +1,1 @@
+{"state_msgs": 31584, "echo_msgs": 164976, "http_reqs": 678, "http_MB": 183.2, "bcast_oneway_ms_median": 2.36, "bcast_oneway_ms_p99": 8.08}

@@ -1,0 +1,33 @@
+start 2026-09-04T00:00:31+00:00 loadavg 0.36 0.41 0.39
+== J : baseline  loadavg 0.36  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== J : ws-thread --rate 25  loadavg 0.37  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== J : ws-coalesce --rate 25  loadavg 0.83  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== J : ws-batch-read --rate 25  loadavg 1.10  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== J : ws-direct --rate 25  loadavg 0.98  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== J : baseline  loadavg 0.83  tap=0
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-thread --burst 128 --burst-period 2.0  loadavg 1.08  tap=1
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-batch-read --burst 128 --burst-period 2.0  loadavg 0.89  tap=1
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-batch-read-capped --burst 128 --burst-period 2.0 --cap 64  loadavg 1.03  tap=1
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-thread --burst 1024 --burst-period 4.0  loadavg 1.08  tap=1
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+!! run interrupted after the 128-frame rows: the gate at 1.10 could not clear while this session was working, so the four remaining rows were re-run below with the gate raised to 1.50.  Each row stamps its own load.
+resume 2026-09-04T00:11:44+00:00 loadavg 1.09 1.09 0.81
+== K : ws-thread --burst 1024 --burst-period 4.0  loadavg 1.09  tap=1  gate 150
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-batch-read --burst 1024 --burst-period 4.0  loadavg 1.19  tap=1  gate 150
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : ws-batch-read-capped --burst 1024 --burst-period 4.0 --cap 64  loadavg 0.80  tap=1  gate 150
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+== K : baseline  loadavg 0.52  tap=0  gate 150
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+end 2026-09-04T00:14:20+00:00 loadavg 1.06 1.02 0.83
+ALLDONE

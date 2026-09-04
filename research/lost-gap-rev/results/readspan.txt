@@ -1,0 +1,12 @@
+start 2026-09-04T01:27:51+00:00 loadavg 0.44 2.92 3.67
+-- asyncfor  loadavg 0.44
+asyncfor bursts 8 span_ms [3.1, 11.38, 4.12, 3.45, 6.04, 6.32, 3.5, 4.91]
+  median span ms 4.515  implied cross median (half span) 2.257
+-- batchsleep  loadavg 0.34
+batchsleep bursts 8 span_ms [9.35, 11.63, 9.85, 10.97, 11.26, 11.65, 12.2, 11.28]
+  median span ms 11.266  implied cross median (half span) 5.633
+-- batchwait  loadavg 0.37
+batchwait bursts 8 span_ms [23.61, 25.31, 23.28, 24.98, 24.75, 24.97, 24.14, 25.06]
+  median span ms 24.861  implied cross median (half span) 12.431
+end 2026-09-04T01:28:23+00:00 loadavg 0.31 2.61 3.54
+ALLDONE

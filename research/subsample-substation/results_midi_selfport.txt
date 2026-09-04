@@ -1,0 +1,4 @@
+output names containing probe: ['RtMidiIn Client:Superintendent Probe Virtual MIDI 128:0']
+opened output: RtMidiIn Client:Superintendent Probe Virtual MIDI 128:0
+n=2000 send->callback ms: median 0.235 p95 0.273 p99 0.289 max 0.917 min 0.038
+last msg: note_off channel=9 note=36 velocity=64 time=0

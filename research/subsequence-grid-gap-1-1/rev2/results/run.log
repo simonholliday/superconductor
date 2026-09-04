@@ -1,0 +1,11 @@
+--- --steps 16 --voices 8 --fill 0.5 --lookahead 1/24 --bars 16 --label 16x8-64notes-la1/24 (load 1.02)
+--- --steps 16 --voices 8 --fill 0.5 --lookahead 1/4 --bars 16 --label 16x8-64notes-la1/4 (load 1.18)
+--- --steps 16 --voices 8 --fill 0.5 --lookahead 1 --bars 16 --label 16x8-64notes-la1 (load 1.16)
+--- --steps 16 --voices 8 --fill 1.0 --lookahead 1/24 --bars 16 --label 16x8full-128notes-la1/24 (load 0.89)
+--- --steps 16 --voices 8 --fill 1.0 --lookahead 1/4 --bars 16 --label 16x8full-128notes-la1/4 (load 1.02)
+--- --steps 16 --voices 8 --fill 1.0 --lookahead 1 --bars 16 --label 16x8full-128notes-la1 (load 1.19)
+--- --steps 64 --voices 16 --fill 0.5 --lookahead 1/24 --bars 32 --label 64x16-512notes-la1/24 (load 1.17)
+--- --steps 64 --voices 16 --fill 0.5 --lookahead 1/4 --bars 32 --label 64x16-512notes-la1/4 (load 1.13)
+--- --steps 64 --voices 16 --fill 0.5 --lookahead 1 --bars 32 --label 64x16-512notes-la1 (load 1.19)
+--- --scenario baseline --bars 16 --label baseline-120 (load 1.19)
+DONE

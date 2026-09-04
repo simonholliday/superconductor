@@ -1,0 +1,78 @@
+load average at start: 2.07 2.19 1.63
+== A2. baseline, nothing else running
+  Pulse interval  : 20.833 ms  (24 PPQN)
+──────────────────────────────────────────────────────────────
+  Mean jitter     :    0.002 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.014 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.002 ms
+  Max jitter      :    0.790 ms
+  Clock drift     :   +0.001 ms  (non-accumulating)
+──────────────────────────────────────────────────────────────
+  Rating          : Excellent  (sub-100 μs — tight hardware-class timing)
+
+== D2. in-process server ON the sequencer loop, 4 clients, 20 Hz (repeat of D)
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+in-process ws server, 32 bars at 120 BPM, clients broadcast at 20 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.114 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.287 ms
+  P95 jitter      :    0.767 ms
+  P99 jitter      :    1.194 ms
+  Max jitter      :    4.606 ms
+  clients at end  : 0
+clients: frames=4672 fetches=0
+== F. in-process server on a daemon THREAD (start_threaded shape), 4 clients, 20 Hz
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+threaded in-process ws server, 32 bars at 120 BPM, broadcast at 20 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.002 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.007 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.003 ms
+  Max jitter      :    0.308 ms
+  peak clients    : 4
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+== G. threaded in-process server, everything pinned to one core (taskset -c 2)
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+threaded in-process ws server, 32 bars at 120 BPM, broadcast at 20 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.020 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.140 ms
+  P95 jitter      :    0.021 ms
+  P99 jitter      :    0.589 ms
+  Max jitter      :    2.361 ms
+  peak clients    : 4
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+== H. one adapter link on the sequencer LOOP to a separate service that fans out to 4 clients
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+one adapter link (loop) to a separate service, 32 bars at 120 BPM, 20 Hz out
+  Pulses measured : 3072
+  Mean jitter     :    0.071 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.217 ms
+  P95 jitter      :    0.565 ms
+  P99 jitter      :    1.130 ms
+  Max jitter      :    1.567 ms
+  link frames     : sent=1291 received=1292
+service: clients=5 taps=2332
+clients: frames=4700 fetches=0
+== I. one adapter link on a daemon THREAD to a separate service that fans out to 4 clients
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+one adapter link (thread) to a separate service, 32 bars at 120 BPM, 20 Hz out
+  Pulses measured : 3072
+  Mean jitter     :    0.004 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.009 ms
+  P95 jitter      :    0.021 ms
+  P99 jitter      :    0.029 ms
+  Max jitter      :    0.305 ms
+  link frames     : sent=1288 received=1288
+service: clients=5 taps=2332
+clients: frames=4680 fetches=0
+load average at end: 0.48 1.02 1.26
+done

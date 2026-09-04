@@ -1,0 +1,9 @@
+wait_for_0  burst=   16  crossings=   64  frames=    64  largest=    1  mean=    1.00
+wait_0      burst=   16  crossings=    4  frames=    64  largest=   16  mean=   16.00
+sleep0      burst=   16  crossings=    4  frames=    64  largest=   16  mean=   16.00
+wait_for_0  burst=  128  crossings=  512  frames=   512  largest=    1  mean=    1.00
+wait_0      burst=  128  crossings=    4  frames=   512  largest=  128  mean=  128.00
+sleep0      burst=  128  crossings=    4  frames=   512  largest=  128  mean=  128.00
+wait_for_0  burst= 1024  crossings= 4096  frames=  4096  largest=    1  mean=    1.00
+wait_0      burst= 1024  crossings=    4  frames=  4096  largest= 1024  mean= 1024.00
+sleep0      burst= 1024  crossings=    4  frames=  4096  largest= 1024  mean= 1024.00

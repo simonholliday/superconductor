@@ -1,0 +1,96 @@
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ-SUPERINTENDENT' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/gap11/grid_jitter_bench.py", line 289, in <module>
+    main()
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/gap11/grid_jitter_bench.py", line 283, in main
+    r = asyncio.run(run(a))
+        ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/gap11/grid_jitter_bench.py", line 129, in run
+    comp = build_composition(args.steps, args.voices, args.fill, args.lookahead, args.bpm, args.length_beats, args.patterns)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsequence-grid/gap11/grid_jitter_bench.py", line 96, in build_composition
+    comp.pattern(channel = 10 + k, steps = steps, step_duration = dur.SIXTEENTH,
+  File "/mnt/dev/Apps/2026-02 Sequencer/subsequence/composition.py", line 4800, in pattern
+    channel = self._resolve_channel(channel)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/dev/Apps/2026-02 Sequencer/subsequence/composition.py", line 1591, in _resolve_channel
+    raise ValueError(f"MIDI channel must be 1-16, got {channel}")
+ValueError: MIDI channel must be 1-16, got 17

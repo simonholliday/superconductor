@@ -1,0 +1,22 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;background:#0d1117}#stage{width:1920px;height:1080px;position:relative;overflow:hidden}
+.grid{display:grid;width:100%;height:100%;gap:2px}.cell{background:#21262d;border-radius:3px}.cell.on{background:#d29922}.cell.ph{background:#30363d}.cell.on.ph{background:#ffd166}
+</style></head><body><div id="stage"></div><script>
+// Verifier prototype: does the bench's "full" DOM mode actually change 1024 cells' style, or only rewrite className to the same value?
+function build(cells){const cols=32,rows=cells/cols;const stage=document.getElementById('stage');stage.innerHTML='';const g=document.createElement('div');g.className='grid';g.style.gridTemplateColumns=`repeat(${cols},1fr)`;g.style.gridTemplateRows=`repeat(${rows},1fr)`;const els=[];for(let i=0;i<cells;i++){const d=document.createElement('div');d.className='cell';g.appendChild(d);els.push(d);}stage.appendChild(g);return {els,cols};}
+function stats(a){const s=Array.from(a).sort((x,y)=>x-y);const n=s.length;const q=p=>s[Math.min(n-1,Math.floor(p*n))];return {mean:+(s.reduce((x,y)=>x+y,0)/n).toFixed(3),p50:q(0.5),p95:q(0.95),max:s[n-1]};}
+window.run=function(mode,cells=1024,frames=300,warm=60){return new Promise(res=>{const {els,cols}=build(cells);const on=new Uint8Array(cells);for(let i=0;i<cells;i++)on[i]=Math.random()<0.3?1:0;let ph=0,count=0;const js=[],gap=[];let last=null;
+function frame(ts){ph=(ph+1)%cols;const t0=performance.now();
+ if(mode==='same'){ // bench.html 'full': rewrite every className, only 4 toggles + playhead differ
+  for(let k=0;k<4;k++){const i=Math.floor(Math.random()*cells);on[i]^=1;}
+  for(let i=0;i<cells;i++){els[i].className='cell'+(on[i]?' on':'')+((i%cols)===ph?' ph':'');}
+ } else if(mode==='invert'){ // every cell actually changes state
+  for(let i=0;i<cells;i++){on[i]^=1;els[i].className='cell'+(on[i]?' on':'')+((i%cols)===ph?' ph':'');}
+ } else if(mode==='snapshot'){ // half the cells change, as a snapshot after reconnect might
+  for(let i=0;i<cells;i++){if(Math.random()<0.5)on[i]^=1;els[i].className='cell'+(on[i]?' on':'')+((i%cols)===ph?' ph':'');}
+ }
+ void document.getElementById('stage').offsetHeight; void getComputedStyle(document.getElementById('stage').firstChild).width;
+ const t1=performance.now();if(count>=warm){js.push(t1-t0);if(last!==null)gap.push(ts-last);}last=ts;count++;
+ if(count<warm+frames)requestAnimationFrame(frame);else res({mode,cells,jsPlusLayout:stats(js),interval:stats(gap),longFrames:gap.filter(g=>g>20).length});}
+requestAnimationFrame(frame);});};
+</script></body></html>

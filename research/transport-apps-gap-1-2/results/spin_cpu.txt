@@ -1,0 +1,6 @@
+spin_ms user sys wall  (4 bars = 8.0 s wall at 120 BPM, 384 pulses)
+1 0.44 0.04 10.46  load 8.74
+2 0.67 0.03 10.44  load 8.70
+1 0.45 0.02 10.43  load 8.68
+2 0.67 0.02 10.37  load 8.74
+4 1.40 0.01 10.39  load 8.70

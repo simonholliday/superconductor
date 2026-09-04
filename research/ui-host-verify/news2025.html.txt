@@ -1,0 +1,4555 @@
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
+
+
+
+ 
+ 
+ 
+
+
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Trixie — the new version of Raspberry Pi OS - Raspberry Pi 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ We use some essential cookies to make our website work.
+ 
+ 
+ We use optional cookies, as detailed in our cookie policy , to remember your
+ settings and understand how you use our website.
+ 
+ 
+ 
+ Accept optional cookies
+ 
+ 
+ Reject optional cookies
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ Raspberry Pi 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ For industry 
+ For home 
+ 
+ 
+ Hardware 
+ Software 
+ Documentation 
+ News 
+ Forums 
+ Foundation 
+ Contact 
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ News 
+
+ 
+ 
+ All news 
+ 
+
+ 
+ 
+ Search the archive
+ 
+
+ 
+ RSS feed
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Trixie — the new version of Raspberry Pi OS 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 2nd Oct 2025 
+
+ 
+ 
+ Simon Long 
+ 
+
+ 
+ 
+ 165 comments 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ We’re past summertime, and it’s an odd-numbered year, which means there is a new major release of Debian Linux, which in turn means there is a new major release of Raspberry Pi OS. This year’s version of Debian is called Trixie — as many of you know, Debian releases are named after characters in Disney’s Toy Story series of films, but all the well-known characters have already been used, so the names are getting increasingly obscure! Trixie is apparently a blue plastic triceratops who appears in Toy Story 3 , but I must admit I can’t remember her — then again, I only watched that one once, because it got a bit sad towards the end… 
+
+
+
+ 
+
+
+ 
+ Resplendent 
+ 
+
+
+ 
+
+
+
+ But I digress. So we have a new version of Raspberry Pi OS — what has changed? 
+
+
+
+ The last few Debian releases have had fewer major architectural changes than the earlier ones; Debian itself seems to be a lot more stable in terms of the major components, and while various bits do get upgraded, the overall design seems not to change much any more. 
+
+
+
+ A time system with time ahead of it 
+
+
+
+ Probably the biggest change in Debian Trixie is one that no one will actually notice until the year 2038 — or rather, will now not notice in 2038 due to changes in this version. Linux has always used a time system based on the number of seconds since an arbitrary start time of midnight on January 1st, 1970, and this time value has been stored in a 32-bit number. If you do the sums, this 32-bit value will overflow and loop back to zero (i.e. January 1st, 1970) some time on January 19th, 2038. 
+
+
+
+ Now, clearly there are a few years left before this actually becomes a problem — indeed, I’ll probably have retired by then — but Debian wanted to get ahead of the game, and so from Trixie onwards, all times have been changed to use a 64-bit value rather than a 32-bit value. They are still using the same start date, but because there are now twice as many bits available to store the number of seconds, the calendar will not overflow until sometime around the year 292,277,026,596. (By which time I will definitely have retired, so this will then be someone else’s problem.) This means that many parts of Trixie have had to be rebuilt to ensure that the entire system is using the new time format. But as I said, you’re really not going to notice that! 
+
+
+
+ New theme 
+
+
+
+ Something you will notice, however, is that we’ve made some changes of our own in the Trixie release. The most obvious is that we have updated the theme for the desktop — we have a completely new set of icons, a new font, new desktop backgrounds, and some other small tweaks to refresh the appearance of the system. This should be apparent as soon as you launch it. 
+
+
+
+ 
+
+
+ 
+ 
+ 
+
+
+ 
+
+
+
+ Many years ago, at the very start of my career, I worked as a user interface designer at Cambridge Consultants Ltd, and I was very pleased to be able to work on this update with an old colleague from those days; this is the first time we have used an outside designer to provide input on the appearance of the desktop, and I hope you’ll agree that the results were worthwhile. 
+
+
+
+ The new font is called Nunito Sans Light, which replaces the old Piboto font we have used for the last ten years or so. We have a new selection of desktop wallpapers, again provided by Greg Annandale from the Raspberry Pi Foundation . In case you were wondering, the default wallpaper is a picture of the sun rising over the Drakensberg mountains in Lesotho. 
+
+
+
+ New Control Centre application 
+
+
+
+ Another change we have made to tidy things up is to replace all the old preferences applications — Raspberry Pi Configuration, Appearance Settings, Mouse and Keyboard Settings, Screen Configuration, Printer — with a single new Control Centre application. 
+
+
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+
+ 
+
+
+
+ All the settings that were in the preferences applications listed above can now be found in Control Centre, and they are all arranged on the same pages, so hopefully this will be relatively easy to navigate. Do note that to switch quickly between pages, you can hover the pointer over the page names on the left and use the mouse’s scroll wheel to change page. 
+
+
+
+ Control Centre is written as a very lightweight core application that loads all its functionality, at runtime, from a set of plugin libraries, which means it can easily be extended to add new tabs with new controls. So in the future, we may add new settings pages to Control Centre, but third parties will also be able to write their own settings pages for things like controlling custom hardware. 
+
+
+
+ Instructions on how to write a plugin are on the Control Centre GitHub page , or you can look at the source code for any of the existing plugins to see how they work. 
+
+
+
+ New Bookshelf features 
+
+
+
+ We launched the Bookshelf application during the COVID-19 lockdown to make it easier to access the free electronic versions of Raspberry Pi Press publications. Recently, we have changed the way that the free versions are distributed, so that subscribers to Raspberry Pi Official Magazine get early access to titles, which are then made available to everyone else free of charge a few months later. 
+
+
+
+ Recent titles are now displayed in Bookshelf with a padlock icon — these are the titles that will become available for free in the next few months. But if you are a subscriber (or would like to become one), you can click the ‘Contribute’ button to log into your account and unlock all the latest titles immediately. 
+
+
+
+ 
+
+
+ 
+ 
+ 
+
+
+ 
+
+
+
+ There will be an additional blog post in the next few days explaining more about this change to how publications are made available — watch this space! 
+
+
+
+ New packaging 
+
+
+
+ The last major change we have made for Trixie has nothing to do with what’s in the image, but has more to do with how the image is created. 
+
+
+
+ For this release, we have tried to make the installation of the packages that go into the desktop image more modular, to make it easier to create customised versions of the image. This also makes it easier to convert a Lite image into a full desktop image, and vice versa, something which we have never really supported in the past. 
+
+
+
+ To this end, all the packages that are required to convert a command-line-only Lite image into a full desktop image, along with all the configuration files and customisations, are now grouped in a hierarchical set of meta packages. 
+
+
+
+ Adding packages to Raspberry Pi OS Lite 
+
+
+
+ There are two “base” packages: rpd-wayland-core and rpd-x-core . If you want the bare-bones components required to create a Wayland-based desktop on top of a command-line image, all you need to do is to install rpd-wayland-core . For an X-based image, install rpd-x-core . 
+
+
+
+ That will give a plain vanilla, uncustomised image. To add our theme to it — the icons, the font, the GTK theme and so on — install rpd-theme . To get the Control Centre and the associated plugins, install rpd-preferences . With this done, you’ll have the bare minimum Raspberry Pi Desktop image. 
+
+
+
+ You can then add various other packages which contain the additional applications that the released image includes. rpd-applications installs things like the Geany editor, the Thonny Python environment, the Firefox and Chromium browers, et cetera. rpd-utilities installs the contents of the Utilities and Help menus, including Raspberry Pi Connect , SD Card Copier, Bookshelf, Text Editor, and Image Viewer, among others. 
+
+
+
+ rpd-developer adds things like some Python and camera libraries, and rpd-graphics adds useful command-line graphics and video tools like FFmpeg and GStreamer. And finally, rpd-wayland-extras and rpd-x-extras include tools which are specific to either Wayland or X environments, like the remote desktop and screenshot utilities. 
+
+
+
+ Removing packages from Raspberry Pi OS with desktop 
+
+
+
+ Similarly, if you start with a full desktop image, you can remove any of the above by purging the relevant meta package and running sudo apt autoremove . While to many end users this functionality won’t be of interest, it does make custom images much easier to manage, and is being incorporated into our own image generation tools, like pi-gen. 
+
+
+
+ If you are interested, you can see how the meta packages are structured and what each contains in the meta packages GitHub repository . 
+
+
+
+ In addition to the above, as with any major upgrade, we have updated everything to include all the latest bug fixes and upgrades. 
+
+
+
+ How do I get it? 
+
+
+
+ As with all major version upgrades, we do not recommend or support attempting to upgrade a running Bookworm image. (If you want to know why not, have a read of the instructions Debian provide for doing this — they are rather long and involved, but a prerequisite is basically to remove anything that you have done to customise your image.) We know some people will nonetheless insist that they have to do this; we strongly suggest you don’t, but if you really want to, there are instructions in the Raspberry Pi OS forum here . These work on a clean Bookworm image, but we cannot guarantee they will work on your image, because we cannot possibly test every change people might have made. You do this at your own risk, and you shouldn’t even consider it without having backed up first — you have been warned! 
+
+
+
+ The recommended method is to flash a clean copy of the Trixie image — either using Raspberry Pi Imager or by downloading an image file from our OS downloads page . 
+
+
+
+ An additional option for newer Raspberry Pis 
+
+
+
+ If you are using a Raspberry Pi 5 , 500 or 500+ that is connected to a network via an Ethernet cable, you can also flash a new image using the version of Raspberry Pi Imager which is embedded in the bootloader. To access this, power off the Raspberry Pi and disconnect the power cable, press and hold the shift key and then, while holding down the key, connect the power cable. The Raspberry Pi should boot into Imager, which can then be used to download and install a Trixie image. 
+
+
+
+ Support for Raspberry Pi AI add-ons and Mathematica coming soon 
+
+
+
+ Please note that packages for the Raspberry AI HAT+ and AI Kit, for the TV HAT, and for Wolfram Mathematica are not yet available in Trixie. If you are using any of these products, we advise you to continue to use your existing Bookworm image for the time being. Versions of these packages will be made available for Trixie in the near future. 
+
+
+
+ 
+
+
+ 
+ 
+ 
+
+
+ 
+
+
+
+ There’s a fair bit to explore in this release, and we’re interested to hear how you get on with it. Do let us know what you make of it; we hope Raspberry Pi OS Trixie serves you well. 
+ 
+
+ 
+ 
+ Share this post 
+
+ 
+ Post to X 
+ 
+ 
+
+ 
+ Post to Facebook 
+ 
+ 
+
+ 
+ Post to Linkedin 
+ 
+ 
+
+ 
+ Post to Pinterest 
+ 
+ 
+ 
+ 
+ 
+ 
+ raspberry pi OS 
+ 
+ 
+ 
+ Trixie 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ Related posts 
+
+ 
+ 
+ 
+
+ 
+ The ultimate all-in-one PC: Raspberry Pi 500+ on sale now at $200 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ Introducing rpi-image-gen: build highly customised Raspberry Pi software images 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 1TB Raspberry Pi SSD on sale now for $70 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ Raspberry Pi's commitment to longevity: a sustainable advantage 
+ 
+ 
+
+ 
+ Next Post
+ 
+
+ 
+ 
+ 
+
+ 
+ Sustainable solutions with Raspberry Pi: Local, zero-waste manufacturing and precious metal recovery 
+ 
+ 
+
+ 
+ Previous Post
+ 
+
+ 
+ 
+ 
+
+ 
+ $5–$10 price increases for some 4GB and 8GB products 
+ 
+ 
+
+ 
+ Share this post 
+
+ 
+ Post to X 
+ 
+ 
+
+ 
+ Post to Facebook 
+ 
+ 
+
+ 
+ Post to Linkedin 
+ 
+ 
+
+ 
+ Post to Pinterest 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 165 comments 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mrlinux2u
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:39 am 
+ 
+ 
+ 
+ Is there an official cut-off date when Bookworm will stop receiving updates as I always wait for a couple of months before updating to a new version (just to make sure) of Raspberry Pi OS? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:42 am 
+ 
+ 
+ 
+ Debian Bookworm will be supported for another two years by Debian. We will release new Linux kernels for the legacy OS for critical vulnerabilities. But otherwise there won’t be any updates to Raspberry Pi specific packages. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mrlinux2u
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:57 am 
+ 
+ 
+ 
+ That sounds fair enough – I might have a look at updating Bookworm to Trixie on my old Pi 5 16GB (replaced by my new Pi 500+) this weekend and see how it goes. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:01 am 
+ 
+ 
+ 
+ Note the length Simon goes to recommend you do not try to update from Bookworm to Trixie, unless you really know what you’re doing… Especially if you’ve made significant changes to your Bookworm image… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mrlinux2u
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:18 am 
+ 
+ 
+ 
+ I always try to update when possible and so far it’s worked OK (I just cursed myself saying that :D) when I’ve done it in the past – but I always make a clone of my install (just in case) before I start and a separate backup of my /home folders and then I make sure the backups are OK as well. 
+ If it all goes to pot with an upgrade then I’ll do a fresh install based on Raspberry Pi OS Lite (I personally prefer X over Wayland and XFCE4 for my Desktop). 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Bob M
+ 
+
+ 
+ 7th October 2025,
+ 
+ 2:28 am 
+ 
+ 
+ 
+ Over the weekend, I pulled out my old Raspberry Pi 400 to set up for my 10-year old to start programming. I set it up for the en_US-UTF8 locale / keyboard combo since I am in the US. However, it seems that no matter what I did, I could not get it to recognize a US keyboard layout on my son’s account — it persisted as en_GB. My account was fine, but his was mapped to the UK layout. I used raspi-config, used the Desktop GUI, manually set /etc/default/ files, but nothing worked. Is anyone else experiencing this? Is this a known issue, or is there another place I should be making the change? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 7th October 2025,
+ 
+ 1:25 pm 
+ 
+ 
+ 
+ Check what keyboard is set in /etc/default/keyboard. If that is correct, run “sudo raspi-config nonint update_labwc_keyboard” and then check that the keyboard set in ~/.config/labwc/environment matches that in /etc/default/keyboard – you will need to re-run the update_labwc_keyboard separately for each user account. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sarabjit Singh
+ 
+
+ 
+ 11th October 2025,
+ 
+ 10:54 pm 
+ 
+ 
+ 
+ Hailo AI HAT only work with Bookworm not with Trixie
+
+Unplanned update without thinking the original HAT not comparable with new OS and without taking care of such important hardware the new OS globally rollout 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 13th October 2025,
+ 
+ 7:52 pm 
+ 
+ 
+ 
+ If you had read the blog post all the way to the bottom – which you must have done in order to update to Trixie – you should have read the very clear warning that the AI Hat is not yet compatible with Trixie and to remain on Bookworm for the time being. So sorry, but this one is on you, not us… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ jean roch blais 
+ 
+ 
+
+ 
+ 11th November 2025,
+ 
+ 10:09 pm 
+ 
+ 
+ 
+ Hello, could you point me to the right instance to signal a small glitch in “Trixie Systemd watchdog set up” . The usual way was to set RuntimeWatchdogSec=10s in /etc/systemd/system.conf … This does not work in Trixie, the command wdctl will always show a timeout of 1min.
+
+Contrary to the previous Pi’s Os, in Trixie, you have to make this change in: /usr/lib/systemd/system.conf.d/40-rpi-enable-watchdog.conf where the default values are surprisingly:
+
+RuntimeWatchdogSec=1m
+
+RebootWatchdogSec=2m
+
+Knowing the Pi watchdog timer should not exceed 15sec. this is not right. Setting these values respectively to 10s and 15s works fine, wdctl will shows a normal timout value of 10s, and running “watch -n.2 wdclt” will show a perfectly running watchdog timer with KEEPALIVEPING STATUS coming to 1 when Timeleft: reaches 5 sec. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:48 am 
+ 
+ 
+ 
+ Just yesterday I finally got my 500+ configured as I like it with Bookwork,
+
+Here we go again….. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Jonathan Pallant
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:53 am 
+ 
+ 
+ 
+ Any word on being able to apply this excellent theme to other architectures running Debian trixie? It would be nice to have the same UI on my Pi and on my *cough*Dell*cough* laptop. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:03 am 
+ 
+ 
+ 
+ It’s something we’ll look into assuming we don’t have a huge backlog of issues with the Trixie image! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ GS
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 6:19 pm 
+ 
+ 
+ 
+ A X86 port of this would be very much appreciated for those Win 10 ‘un-upgradeables’, although I appreciate that releasing such as thing would not sell many Pis. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Alan
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:09 am 
+ 
+ 
+ 
+ Clicking the link to “the meta packages GitHub repository.” is showing a Github ‘404 this is not the page you’re looking for’ message at present. There doesn’t appear to be a meta packages repository visible publicly. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:19 am 
+ 
+ 
+ 
+ Oops… Fixed 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:10 am 
+ 
+ 
+ 
+ The new desktop looks very nice, clean, clear, and useable. The modularity for installation looks really useful. But the real icing on the cake is this new Control Centre. This Control Centre looks like it is getting back to the wonderfully easy to use admin tools on the old Acorn Archimedes. I remember some decades ago a friend asking me to look at her Acorn Archimedes because she was having some problems. I told her that though I had so many decades of experience in computing, I had never even seen an Acorn Archimedes before, but was willing to have a look. It took me just ten minutes to explore the control system and fix her problems! It looks like this new Control Centre will make it just as easy to fix problems and configure things. I particularly love the fact that there is a Github source for developing one’s own plugins for it. 
+ With the clean desktop as nice and clear as that on the Acorn Archimedes, the new RPi 500+ with the RPi Monitor looks like another all-time classic design. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Alan 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 12:45 pm 
+ 
+ 
+ 
+ It would be great if the rpi imager could allow multiple OSes on the same SSD so that I can have both Ubuntu for rpi and PiOS (trixie) and even piOS (bookworm) and have a boot up OS selector. Currently rpi imager wipes everything before it. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ bsimmo
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 5:27 pm 
+ 
+ 
+ 
+ It’s because it is an image, not an installation.
+
+You should look into PINN 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Pen
+ 
+
+ 
+ 5th October 2025,
+ 
+ 2:21 pm 
+ 
+ 
+ 
+ You can, if you’re interested, install multiple desktop environments, so you can get the feel of Ubuntu, while still being able to switch back to the normal desktop. That’s what I did, and it works great 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Steven Blackburn
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 1:19 pm 
+ 
+ 
+ 
+ Is there any comment on how well this works on older hardware (e.g. RPI3)? The system seems to feel more sluggish with each release… although that could be the fault of Chromium / modern websites: just running scratch in the browser can feel very slow. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:04 pm 
+ 
+ 
+ 
+ It was tested on older hardware, all the way back to Pi 1. It feels perfectly usable on Pi 3 to me – it’s quicker on a Pi 5, obviously, but even on a Pi 2, the main speed issues are booting the desktop from scratch and opening intensive applications like Chromium; general use of the desktop, dragging windows etc, is pretty snappy on the older hardware. I wouldn’t recommend using the desktop on a low-memory Pi 1 unless you have ample reserves of patience… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gareth Williams
+ 
+
+ 
+ 21st November 2025,
+ 
+ 5:36 pm 
+ 
+ 
+ 
+ Sorry to come in here with a small problem – I cannot find a simple answer anywhere. Again, as happened a few months ago with an upgrade, serialio has been hit on pi zero2 . I have two pizeros preventing my house from flooding, connected by serial link. Loaded is latest from the rasp pi installer, followed by full-upgrade. Previously /dev/serial0 disappeared and, on advice, I used /dev/ttyS0. Neither of these now exists. Any advice, before I have to update the main cellar pump when it will flood! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Hugh Ferrar
+ 
+
+ 
+ 26th November 2025,
+ 
+ 9:32 pm 
+ 
+ 
+ 
+ Not an answer for you, but the same problem. I installed Trixie on a pi3 with a RaspAIS HAT, had to stuff around installing linux-modules-extra-raspi to get the HAT to work. That was fine until the most recent app updates – serial0 / ttyAMA0 has stopped working and linux-modules-extra-raspi no longer exist in the repository.
+
+Going back to Bookworm for now. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ray Allen 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:15 pm 
+ 
+ 
+ 
+ Congrats, just in time for my new Pi 500+ 
+ Talking of bookshelf, anyway, for the future to have it remember the window size between power cycles. And having a button that downloads all issues in one go would be great. Each install I do, I need to go back and do them one by one. Yes, I could back up the books’ folder, but I like to start fresh with each installation. 
+ And lastly, any reason why it always starts at issue 31? What about the older issues? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:20 pm 
+ 
+ 
+ 
+ To answer your last question, I’m not 100% sure, but I believe we don’t actually own the earlier issues – the MagPi (as then was) was an independent Pi magazine which ran for a few years in the early days of the Pi. When the original creators decided they didn’t want to carry on with it, they offered us the name to use, and we then started the official magazine under the same name, maintaining the original issue sequence numbers. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ray Allen 
+ 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 4:21 pm 
+ 
+ 
+ 
+ Thank your for the reply and insight, that makes sense now. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ bsimmo
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 5:33 pm 
+ 
+ 
+ 
+ You can down them from the Magazine website
+
+ https://magazine.raspberrypi.com/issues?page=11 
+
+That’s the crossover point. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Andrew Davies
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 9:02 am 
+ 
+ 
+ 
+ If you did want to read any of the older version you can find them here
+
+ https://archive.org/search?query=magpi 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mrlinux2u
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:15 pm 
+ 
+ 
+ 
+ Will the Pi 500+ come with the Trixie based Raspberry Pi OS installed rather than Bookworm so new owners won’t have to go through the upgrade process? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:21 pm 
+ 
+ 
+ 
+ Unfortunately not, at least not in the initial batch – they were manufactured before our trixie image was released, and so were flashed with bookworm in the factory. Obviously, any 500+ produced from now on will ship with trixie, but if you buy one in the near future, it is likely to be one of the first batch with bookworm. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ mrlinux2u
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:28 pm 
+ 
+ 
+ 
+ Thanks for clarifying that for me (and for anyone else wondering the same thing). 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:38 pm 
+ 
+ 
+ 
+ A broadband connection with an ethernet cable will update the OS in a few minutes anyway. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ andrum99
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 11:17 pm 
+ 
+ 
+ 
+ Indeed. Network Install is your friend – it’s dead easy to use it to install Trixie. Just pull the SD card out then boot – you will see a red and white screen which will allow you to start the Network Install process. Once Network Install starts, put the SD card back in and you can overwrite it with Trixie using the embedded Imager. Back up your data first. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 7:09 am 
+ 
+ 
+ 
+ On a 500+ the internal SSD is the target. So with an Ethernet cable plugged in with internet access, hold down shift key and plug in the power. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Olydnad_SWE
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:19 pm 
+ 
+ 
+ 
+ I just want to thank everyone involved in Raspberry Pi OS. Trying Trixie now and liking it! For me, it’s the perfect OS as I’m a minimalist and hate unnecessary things. Not because I think RPiOS is ugly or anything. I just like it clean and nice. And Trixie is beautiful. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 2:29 pm 
+ 
+ 
+ 
+ Thank you! My personal taste is always for minimalism wherever possible – as someone much wiser than me once said, “it’s not what you put in; it’s what you leave out that matters”… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Esbeeb
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 3:12 pm 
+ 
+ 
+ 
+ Kudos on the great use of Metapackages. I know great common sense and deep sensibility when I see it. If anyone calls your desktop boring – no actually, that’s a high art. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gibbo
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 3:52 pm 
+ 
+ 
+ 
+ I’m a long time windows user (since win 1.0) I’ll be 60 next march lol, until 2013 when I bought an iMac 21.5 that was my first dab at macOS. I liked it but went and installed windows via bootcamp, I was more comfortable with windows. Currently still on the 2013 iMac, but booting windows 10 Pro via an external 1tb ssd which is fine but the specs are way to low in today’s standards. Since last year I’ve been using Emby to stream my media to tv’s and tablet’s which my iMac is fine for that but I’m planning to invest on a desktop pc. I’ve recently come across the raspberry pi system which I’ve read is perfect for streaming and was thinking of supplementing it with the new pc. My question is, which version should I go for (4 or 5) and which beginner’s sites should I visit? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ A Stevens
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:17 pm 
+ 
+ 
+ 
+ If you’re using it as a PC, definitely get a Pi 5 with 8GB, which is enough for normal desktop use. The extra speed is very worthwhile, as the 4 doesn’t quite cut it any more. If you really want speed, get the M.2 hat and a small SSD/NVMe drive, or buy the whole bundle together from the usual resellers. Then it really does make a usable mini PC, for much less money and much more coolness! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ A Stevens
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:19 pm 
+ 
+ 
+ 
+ Just to add – if you really want /easy/, then buy the shiny new 500+ kit, and just plug it into any monitor or TV. All ready to go, the ultimate low-cost but still powerful and very cool mini PC! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gibbo
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 11:42 am 
+ 
+ 
+ 
+ Thanks for your advice. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ ComputerL
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 4:10 pm 
+ 
+ 
+ 
+ I’m so excited to get a fresh OS running on my pi! My current Bookworm installation is so messed up lol. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gilbert Detillieux
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 4:18 pm 
+ 
+ 
+ 
+ Being a stickler for sums, I did the math (or “maths” for our friends in the UK), and came up with a clock rollover to 0 in early 2106, if we assume a 32-bit unsigned integer. The problem is the Unix/Linux clock traditionally used a 32-bit signed integer, which rolls over to negative numbers in 2038, taking us back in time a bit more than 68 years from 1970, to late 1901! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gilbert Detillieux
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 4:22 pm 
+ 
+ 
+ 
+ In any case, congratulations on what looks like a great new release! I like the idea of using meta-packages, and am looking forward to trying out this release. (I might even live dangerously and try an in-place upgrade!) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anton
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 5:49 pm 
+ 
+ 
+ 
+ I’ve just upgraded, it looks awesome! Thanks a lot to everybody for all the hard work!
+
+PS: Please, one question: I was about to try to decrease the power consumption by editing the EEPROM configuration (see [1]), and it looks like the setting for lower wattage is already set. Is it really the case? I mean, can one count on that this will be set by default from now on?
+
+[1] https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#power-supply 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anton
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:35 am 
+ 
+ 
+ 
+ PS: It’s on a 500. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ AndrewS
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 11:20 am 
+ 
+ 
+ 
+ Yes. If you look up the in-depth docs for POWER_OFF_ON_HALT at https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#POWER_OFF_ON_HALT you can see that it defaults to 1 on Keyboard computers. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anton
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 4:31 pm 
+ 
+ 
+ 
+ Awesome, thanks! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sven Galke
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 5:51 pm 
+ 
+ 
+ 
+ Raspberry Pi Imager is not installable. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Olydnad_SWE
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 6:44 pm 
+ 
+ 
+ 
+ I already had v1.9.6 in the Raspberry Pi OS. 64-bit Raspberry Pi OS with desktop. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ [email protected] 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 7:35 pm 
+ 
+ 
+ 
+ yes -“me too” -running 64bit. not installable on trixie 32bit version. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ martin
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:18 pm 
+ 
+ 
+ 
+ Its nice to keep up with the latest upstream releases, but rpi polish is a bit lacklustre in this release – code the classics games are not installed by default and control centre crashes when attempting to change desktop background image. why no fun little additions guys? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 10:23 pm 
+ 
+ 
+ 
+ We’ve never preinstalled the Code the Classics games, but they are available for install in Recommended Software, as before. And changing the desktop image works fine for me… 
+ Can you please try launching Control Centre from a terminal – just type rpcc and hit enter – and try changing the desktop image – do you still get a crash, and is there a message associated with it? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ martin
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 11:42 pm 
+ 
+ 
+ 
+ setting background is working smoothly for me now – maybe some other activity was causing the system to lock up when I tried earlier. Sorry if my post was a little negative, you are doing great work with the os and its exciting to see it progress (I especially like the vulkan and wayland stuff) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ andrum99
+ 
+
+ 
+ 2nd October 2025,
+ 
+ 9:28 pm 
+ 
+ 
+ 
+ Congrats on the new release. I like the usability improvements to the desktop environment, and the update to the base OS is very welcome too 👍 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Pi User
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 1:09 am 
+ 
+ 
+ 
+ Is the taskbar autohide feature working with this new version of Raspberry Pi OS?
+
+Thank you for the new release and keep up the good work. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 8:16 am 
+ 
+ 
+ 
+ No, taskbar autohide is not possible without extensions to Wayland which are not available in our compositor. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ken
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 1:13 am 
+ 
+ 
+ 
+ Running raspi-config from the command line was a valuable tool in certain situations, will there still be a way to configure the OS from command line/text terminal session? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 6:50 am 
+ 
+ 
+ 
+ You can still run raspi-config from the command line. The control centre has more GUI based settings in it such as the taskbar, the theme etc. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Giovanni Rito Russo
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 2:13 am 
+ 
+ 
+ 
+ I read that some tv-hat configurations are not yet available in trixie. Does this also include TVHeadend Server, the only software to manage and view channels with the tic-hat module? If so, do we have an approximate date for getting them? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 8:16 am 
+ 
+ 
+ 
+ TV HAT support should be available within a few weeks. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Benjamin 
+ 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:31 am 
+ 
+ 
+ 
+ I see that AI kit/TV are not yet supported. What about Build HAT? python3-build-hat is not available on apt. Is it temporary? Thanks! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ QwertyChouskie
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:39 am 
+ 
+ 
+ 
+ Is OpenCL supported now via Rusticl? Theoretically, the Mesa version should be new enough, but it’d nice to know for sure. Getting some form of GPU compute going without extra hardware would be really nice. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ sithlord48 
+ 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 11:50 am 
+ 
+ 
+ 
+ We (deskflow) get alot of quesitons about use on RpiOS. With the update to the trixie base . I wonder if the Remote Desktop and Input Capture portals are supported yet. Also what backend impl is used by the default desktop ? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Gordon77
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 12:08 pm 
+ 
+ 
+ 
+ Nice update but when do we expect the inclusion for AI hat etc, days, weeks ? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Redlegjed
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 1:22 pm 
+ 
+ 
+ 
+ Sorry this is a repeat of question I asked in a previous post. How do you upgrade the OS on an SSD with Pi 5/500/500+? I know you can use Imager in various ways, but doesn’t that wipe the contents of the SSD? If I have my own data in the /home directory, how do I preserve it through a major OS upgrade like this one? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 1:53 pm 
+ 
+ 
+ 
+ As stated in the post, we do not recommend trying to upgrade from bookworm to trixie; there are far too many ways that can fail that we cannot predict, so our recommendation would always be to flash a clean trixie image and start again. However, if you really do want to to this, there are instructions on how to do it in a post in the Raspberry Pi OS forum – link also in the post. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ crumble
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 2:58 pm 
+ 
+ 
+ 
+ Backup your folder. You can restore it after a new installation or if your upgrade failed. 
+ My upgrade worked well. Read the instructions for the upgrade completely. Otherwise you will use settings they do not recommend.
+
+Don’t fell asleep. If you lose your SSH connection you have to follow some instructions to repair the failing upgrade process. But this was easy as well. The failing upgrade will tell you which commands you shall type. 
+ My home folder was not wiped. But backups are always good to have. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Matt
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 3:14 pm 
+ 
+ 
+ 
+ make a backup of it to ssd… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Liam keane
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 2:10 pm 
+ 
+ 
+ 
+ Now my RPi is great and powerful 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Captain Rufus 
+ 
+ 
+
+ 
+ 7th October 2025,
+ 
+ 4:42 am 
+ 
+ 
+ 
+ So I see I am not the only one who thought that. But will it demand peanut butter and crackers? Or is that just the Dougworld edition? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Matt
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 3:13 pm 
+ 
+ 
+ 
+ Can you please let me know how is suppport for Rpi camera 3 on Rpi5? I want to do some camera work with python, but i am sceptical after last update to bookworm made it not usable for a while… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 6th October 2025,
+ 
+ 4:30 pm 
+ 
+ 
+ 
+ Matt,
+
+I recently got Cursor to develop a timelapse application for me using picamera2 and it all worked fine on Raspberry Pi 5 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Eddie Nleasdale
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 5:31 pm 
+ 
+ 
+ 
+ Is Raspberry Pi being subject to the same pressure as is Apple to put a ‘back door’ into the operating system? If so will this be made public? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 6:24 pm 
+ 
+ 
+ 
+ No, there’s been no pressure put on us to include any sort of back door in the OS, and I’m not aware of there being one. 
+ Mind you, that’s probably also what I would say if there *had* been pressure put on us and there *was* one, what with the government probably expecting you to keep their secret back doors … err … secret… 
+ ;) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ xeny
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 7:11 pm 
+ 
+ 
+ 
+ Isn’t it more a case of pressure to backdoor their (Apple’s) encrypted cloud services? AFAIK that isn’t something Raspberry Pi offer. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 4th October 2025,
+ 
+ 7:42 am 
+ 
+ 
+ 
+ Eddie, it’s not a back door into Apples’s operating system that the gov have been asking for, it’s a way into their end to end encryption for communications. Apples have simply switched off that encryption in the UK, the OS is unaffected. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Edward Bleasdale
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 5:34 pm 
+ 
+ 
+ 
+ Sorry. Previous post sent with a typo. Should be Bleasdale 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 6th October 2025,
+ 
+ 10:35 am 
+ 
+ 
+ 
+ Dear Edward,
+
+The attempts to get back-doors into propriety encryption services merely shows the lack of understanding that politicians have of the real world. The criminals they want to be able to monitor will just do their encryption with other tools such as pgp or gpg, or probably eventually another encryption system entirely. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Donald Church
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:00 pm 
+ 
+ 
+ 
+ Will the Raspberry Pi Desktop OS (x86) be upgraded to Trixie? Or is it dead? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:11 pm 
+ 
+ 
+ 
+ I very much hope so! The problem with it is that it is an activity which costs us time and effort, and makes us no money, so maintaining it is a loss overall for us. That said, a lot of people would like to see it happen – myself included, not least because it was originally a weekend project for me just to see if it was possible. It’s definitely on our to-do list, particularly as we never managed to get a bookworm version – but I can’t make any promises. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Donald Church
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:17 pm 
+ 
+ 
+ 
+ Well if it helps to justify the time and expense, having the x86 version is very helpful in the educational space as my students can between RPi hardware and VMs without needing to relearn basic OS skills. That makes RPi a more attractive platform for educators to invest in IMHO. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Carl
+ 
+
+ 
+ 4th October 2025,
+ 
+ 12:34 am 
+ 
+ 
+ 
+ Perhaps it can be justified as a foot-in-the-door to Raspberry Pi itself. With a lot of good hardware slated to become obsolete, a current Raspberry Pi Desktop for x86 extends the useful life of such machines. People who try it and like it will be more inclined to buy RPi products, and explore Linux generally. Speaking from experience here! (n=1). 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 4th October 2025,
+ 
+ 10:04 am 
+ 
+ 
+ 
+ It would need a feature or distinction to make it a bit more than just another Debian based distribution with a thematic variation. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 6th October 2025,
+ 
+ 10:26 am 
+ 
+ 
+ 
+ Dear Carl,
+
+All the variants of Debian began life as volunteer led projects. So the ideal would be to get a team of volunteers together to construct a Debian/RPi distribution to cover the other architectures. It will be just as much work as went into distributions like Mint. So you need a number of very dedicated volunteers to start it off. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Archisman Panigrahi
+ 
+
+ 
+ 6th October 2025,
+ 
+ 5:36 am 
+ 
+ 
+ 
+ The RPi OS for Desktop targeted old i386 computers, but the problem is that Debian Trixie dropped i386 support. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ fanoush
+ 
+
+ 
+ 6th October 2025,
+ 
+ 2:56 pm 
+ 
+ 
+ 
+ Well there are many 64bit old and slow computers now too so even 64bit version would be great. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Miles Raymond 
+ 
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 10:30 pm 
+ 
+ 
+ 
+ When will zram-swap finally be included and enabled in the default image? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Richard Oliver
+ 
+
+ 
+ 7th October 2025,
+ 
+ 9:36 am 
+ 
+ 
+ 
+ zram-swap is enabled by default in the released image. It’s configured by the ‘rpi-swap’ package and the default is a ‘zram+file’ configuration. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 3rd October 2025,
+ 
+ 11:54 pm 
+ 
+ 
+ 
+ Installing and updating Raspberry Pi OS 64-bit Lite
+
+sudo apt install kde-plasma-desktop
+
+sudo systemctl set-default graphical.target
+
+Graphical shell won’t start. Please help. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ massimo
+ 
+
+ 
+ 4th October 2025,
+ 
+ 6:22 pm 
+ 
+ 
+ 
+ login to terminal via Ctrl + Alt + F1 (or F6) and run tasksel to install a de 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 5th October 2025,
+ 
+ 1:28 am 
+ 
+ 
+ 
+ Installing kde from tasksel. Graphical environment doesn’t work Error sddm: “Failed to read display numer from pipe” 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 5th October 2025,
+ 
+ 1:00 pm 
+ 
+ 
+ 
+ KDE doesn’t work that well with Wayland; I suspect that may be the root of the problem. 
+ We don’t offer support for KDE, just for our own desktop environment. Someone on the KDE forums may be able to help you, but it’s not software we use. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 5th October 2025,
+ 
+ 2:08 pm 
+ 
+ 
+ 
+ Thanks for your reply. This isn’t a KDE-specific issue. I have the same problem in the Cinnamon shell. I appreciate your contribution to the system’s development :) I thought you could help me, as it worked in the previous version of the system. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 5th October 2025,
+ 
+ 5:15 pm 
+ 
+ 
+ 
+ I found a workaround:
+
+Installing and updating Raspberry Pi 64-bit OS Lite
+
+sudo apt install rpd-x-core
+
+sudo apt install kde-plasma-desktop
+
+sudo apt remove rpd-x-core
+
+sudo apt autoremove –purge
+
+The KDE shell works :).
+
+It’s a shame I have to use this workaround. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 5th October 2025,
+ 
+ 7:02 pm 
+ 
+ 
+ 
+ I’m sorry to say this, but something has been removed from the Raspberry Pi 64-bit Lite operating system image and moved to the rpd-x-core (rpd-wayland-core) package. Adding this package and removing it will resolve the issue with the KDE desktop. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 5th October 2025,
+ 
+ 8:40 pm 
+ 
+ 
+ 
+ Thank you all for your help. I think Raspberry OS with a default shell is a great system, but I also like to have alternatives in the form of e.g. KDE, Cinnamon etc. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Archisman Panigrahi
+ 
+
+ 
+ 6th October 2025,
+ 
+ 5:39 am 
+ 
+ 
+ 
+ From my experience, KDE v6+ works very well in Wayland, and in fact, they already dropped x11 support (it still works with x11, but they don’t plan to do further maintenance). It maybe some other issue. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 6th October 2025,
+ 
+ 8:59 pm 
+ 
+ 
+ 
+ Simon, I have a request. Maybe you could tell me which packages I should install so I don’t have to use a workaround. Thank you. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 7th October 2025,
+ 
+ 1:28 pm 
+ 
+ 
+ 
+ We don’t support (or even use) KDE, so I’m afraid I can’t tell you what packages it requires. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ massimo
+ 
+
+ 
+ 4th October 2025,
+ 
+ 6:11 am 
+ 
+ 
+ 
+ will there be a 64bit rpi os for pc based on trixie? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Tim Cliffe
+ 
+
+ 
+ 4th October 2025,
+ 
+ 11:44 pm 
+ 
+ 
+ 
+ I have made a number of comments regarding Raspberry Pis, all positive. I love my Pi and Raspberry Pi’s ethos.
+
+Subsequently, I can only hope I am mistaken…
+
+A theme illustrated appears to show yellow on a white background. If so, I trust this is easily changed.
+
+The reason I mention this is, as a former teacher of people with learning and physical disabilities, I am aware one of the worst colour combinations for printed and rendered content is yellow on white.
+
+I am also aware, considering such matters is an important aspect of user interface design.
+
+I trust Raspberry Pi will publish this comment AND respond, hopefully to address my concern.
+
+Nonetheless, I am looking forward to meeting Trixie in person.
+
+With best wishes to all.
+
+Tim 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 5th October 2025,
+ 
+ 12:56 pm 
+ 
+ 
+ 
+ Where do you see “yellow on a white background”? We have a largely yellow desktop picture, but that is trivially changed – Control Centre, Desktop tab. I cannot see anywhere in the image we have used yellow on white – unless you are referring to the folder icons in the file manager? Which were also yellow in bookworm, and indeed have been that colour for several previous releases. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 5th October 2025,
+ 
+ 9:11 pm 
+ 
+ 
+ 
+ Yellow folder icons are on Windows too.
+
+On MacOS they are blue. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ ComputerL
+ 
+
+ 
+ 5th October 2025,
+ 
+ 1:08 am 
+ 
+ 
+ 
+ Was the Main Menu Editor tool removed? I don’t see it in Preferences. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ David F.
+ 
+
+ 
+ 5th October 2025,
+ 
+ 5:04 am 
+ 
+ 
+ 
+ The Main Menu Editor appears to have been left out of this release. It can be added back by installing “alacarte” (sudo apt install alacarte). It will show up in the “Accessories” sub-menu instead of “Preferences” and will be labeled “Main Menu.” 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 5th October 2025,
+ 
+ 12:58 pm 
+ 
+ 
+ 
+ It was removed – it was a bit of an anachronism from the days when applications were a little less inclined to obey the FreeDesktop standards and install the correct desktop files so they appeared in the menu; it really shouldn’t be needed by most people in this day and age. As pointed out below, it can be installed by “sudo apt install alacarte”. (But I would be interested to know what people still need it for?) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 5th October 2025,
+ 
+ 2:41 pm 
+ 
+ 
+ 
+ Hello Simon,
+
+I like to customise the Main Menu so that I have activity based submenus selectable at the top of the Main Menu. An example is one at the top for all the LaTeX related applications for when I am working on LaTeX documents.
+
+So I will definitely be installing alacarte because I need it.
+
+I don’t use wordprocessers, and have been using LaTeX for the last 30 years or more, and used Interleaf Technical Publishing System before that. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 5th October 2025,
+ 
+ 4:38 pm 
+ 
+ 
+ 
+ For when you remove applications with apt and it fails to update the menu, which is quite often. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 6th October 2025,
+ 
+ 10:09 am 
+ 
+ 
+ 
+ Dear Anders,
+
+“apt remove” will leave the user configurable files behind. This is in case you have removed accidentally, and also to make it simpler to remove and re-install a package which might have been corrupted. If you want to remove the user configurable files as well, you should use “apt purge”. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Anders
+ 
+
+ 
+ 6th October 2025,
+ 
+ 10:31 am 
+ 
+ 
+ 
+ Thanks Helen, along with apt autoremove – that did the trick. However, it was only Geany that required this extra step. Everything else that I removed cleaned up without any extra operations. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 6th October 2025,
+ 
+ 11:27 am 
+ 
+ 
+ 
+ Dear Anders,
+
+Glad I could be of help. The definition of what files are considered user configurable is defined by the package maintainers for each package. So you will get some variation of “apt remove” behaviour between different packages. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Chris H
+ 
+
+ 
+ 5th October 2025,
+ 
+ 10:56 am 
+ 
+ 
+ 
+ I ran into an annoying problem with mpv player. When I try to watch a video on mpv with Trixie on my Pi 5 in full screen mode I get the following error “[vo/gpu/libplacebo] vk->CreateSwapchainKHR(…): VK_ERROR_OUT_OF_HOST_MEMORY (../src/vulkan/swapchain.c:622)
+
+[vo/gpu/libplacebo] Failed (re)creating swapchain!”.
+
+I was able to watch all my videos in mpv in full screen mode while using Bookworm on my Pi 5. I’m a little disappointed. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Morris B 
+ 
+ 
+
+ 
+ 5th October 2025,
+ 
+ 2:53 pm 
+ 
+ 
+ 
+ I tried to “add Chromium profile” and received:
+
+404. That’s an error.
+
+The requested URL was not found on this server. That’s all we know.
+
+Should I be able to connect my Google account to Chromium? 
+ Thanks, Morris 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ CreatedWithATrackPoint
+ 
+
+ 
+ 5th October 2025,
+ 
+ 5:35 pm 
+ 
+ 
+ 
+ yippee!
+
+No more outdated desktop environments! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sven Hakansson
+ 
+
+ 
+ 6th October 2025,
+ 
+ 5:54 am 
+ 
+ 
+ 
+ How do I increase the swap file in the September version of Raspberry PI OS. The file /etc/dphys-swapfile does not exist anymore. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Ton van Overbeek
+ 
+
+ 
+ 6th October 2025,
+ 
+ 1:49 pm 
+ 
+ 
+ 
+ dphys-swapfile is/was used when the init system uses init.d.]
+
+Trixie uses systemd sd init system. Google ‘systemd.swap’ for more info. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ William Christian Bonner 
+ 
+ 
+
+ 
+ 7th October 2025,
+ 
+ 4:33 am 
+ 
+ 
+ 
+ I’ve got a program that uses Bluetooth on the Raspberry Pi to monitor nearby low energy thermometers. In the past the Bluetooth stack has worked easily, but I’ve run into issues with machines running Trixie that require enabling the Bluetooth hardware with the command “sudo rfkill unblock bluetooth”
+
+It took me a while to figure this problem out because a secondary Bluetooth transceiver connected via USB seemed to be enabled by default.
+
+Is this by design with the new platform and is it documented somewhere? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 7th October 2025,
+ 
+ 1:56 pm 
+ 
+ 
+ 
+ Dear Simon, I’m not saying you use KDE, but in the previous version of Raspberry OS 12 Lite, everything worked. Now, in version 13, some packages have been moved from the image to rpd-x-core, and the KDE shell, Cinnamon, won’t work without the workaround I mentioned earlier. Your team is the one that creates the system image, and you know what’s been moved. That’s why I’m asking, and in my opinion, it’s not about support, but about the goodwill of the team that creates the system image. Regards. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Keith Venables
+ 
+
+ 
+ 7th October 2025,
+ 
+ 2:07 pm 
+ 
+ 
+ 
+ It seems that pigpiod is missing in Trixie install, and numpy.math isn’t found, 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Paul A
+ 
+
+ 
+ 7th October 2025,
+ 
+ 3:54 pm 
+ 
+ 
+ 
+ Hi
+
+Ive been fine tuning my fresh install of Trixie (Pi 4) for a couple of days. Agree with earlier comments that there has been a marked improvement in the desktop cosmetics.
+
+Except for one thing my desktop is still bigger than than the my screen. Has there been any progress with the lack of overcan correction under wayland ?
+
+Also I tried using wfpanelctl to send desktop notifications but they default to top right corner and are half “eaten” by the overscan issue. Is there any documentation for wfpanelctl ?
+
+Is it possible to control the location/size of the pop up ?
+
+Many thanks for all the hard work. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 7th October 2025,
+ 
+ 9:53 pm 
+ 
+ 
+ 
+ Unfortunately, there is still no way to compensate for overscan in RPiOS – it’s on the to-do list, but it is something that Wayland does not really handle all that well yet. 
+ It’s not possible to change the size or location of the notification windows at present, but it’s certainly something I can consider for a future release. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Paul A
+ 
+
+ 
+ 9th October 2025,
+ 
+ 11:54 am 
+ 
+ 
+ 
+ Thanks for the update.
+
+Re wayland desktop notifications, I recommend installing the dunst package. As well as the daemon it also has a useful notify-send replacement called dunstify. Worked a treat for me. Hope this helps others with overscan issues.
+
+regards 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 8th October 2025,
+ 
+ 1:26 pm 
+ 
+ 
+ 
+ Please look in the TV options, sometimes it can be changed there. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Nick B
+ 
+
+ 
+ 28th October 2025,
+ 
+ 2:03 pm 
+ 
+ 
+ 
+ In case it’s of use, I had success fixing an overscan issue on an older flat panel TV by editing /boot/firmware/cmdline.txt and adding `video=HDMI-A-2:1280×720@60,margin_left=32,margin_right=32,margin_top=20,margin_bottom=18` matching `HDMI-A-2` to what is shown in Screens in the Control Centre and matching everything else to the TV, with a bit of trial and error to get the margins right. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 7th October 2025,
+ 
+ 5:57 pm 
+ 
+ 
+ 
+ Dear users, I finally managed to launch the KDE (Cinnamon) shell without any workarounds. 
+ I did the following:
+
+Installing Raspberry Pi 64-bit Lite
+
+sudo apt update
+
+sudo apt full-upgrade
+
+sudo apt install xserver-xorg xinit gldriver-test xcompmgr x11-xserver-utils
+
+sudo reboot
+
+sudo apt install kde-plasma-desktop (or sudo apt install cinnamon)
+
+sudo systemctl set-default graphical.target
+
+sudo reboot 
+ KDE started :) 
+ Maybe this guide will be useful to someone.
+
+Enjoy! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ 
+ Gordon Hollingworth 
+ 
+ 
+
+ 
+ 8th October 2025,
+ 
+ 1:27 pm 
+ 
+ 
+ 
+ It looks like kde is missing some dependencies… I don’t think that’s an issue with the image. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 8th October 2025,
+ 
+ 3:05 pm 
+ 
+ 
+ 
+ It’s interesting what you write, because the Cinnamon enviroment has the same problem. Regards 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 8th October 2025,
+ 
+ 3:51 pm 
+ 
+ 
+ 
+ It doesn’t matter who’s right. Your system works well, but it lacks certain features, especially for people with poor eyesight (or I can’t see them). Therefore, there should be a choice of graphical environments. Best regards. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 9th October 2025,
+ 
+ 7:42 am 
+ 
+ 
+ 
+ Dear Robert,
+
+In 2018 I lost most of my sight. I was left completely blind in one eye, and with minimal vision in the other. I found it easy to set any Raspberry Pi desktop to make it readable. I got a 32″ monitor, and set set the resolution to one of the lower resolutions. I suggest not using a resolution of more than 1920×1080 for a large screen, and setting it lower depending on the options for your monitor. Then I set the font size, cursor size, and icon size to something large enough to be comfortable. This enabled me to use Raspberry Pis very easily. 
+ Now, after some operations at The Royal Eye Infirmary, I have greatly improved vision, but have kept my low resolution screen setting along with large font etc. Later this month I go in to discuss the next operation, and so might have a further improvement in my vision. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dianne Skoll 
+ 
+ 
+
+ 
+ 8th October 2025,
+ 
+ 3:26 am 
+ 
+ 
+ 
+ For what it’s worth, I upgraded three Pi Zeros, a Pi 3B, and three Pi 4Bs from Bookworm to Trixie. (Most were running 32-bit versions; a couple 64-bit.) 
+ The only one that had any sort of hiccup was the 3B; it’s the only one running a desktop environment and there was some weird circular dependency issue I had to solve by uninstalling the desktop environment and reinstalling it afterwards. 
+ All the others went smoothly and with no issues whatsoever. I think it’s too bad you discourage people from upgrading, because for some important server use-cases, it’s just not feasible to reinstall from scratch. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ DotLYHiyou
+ 
+
+ 
+ 8th October 2025,
+ 
+ 5:13 pm 
+ 
+ 
+ 
+ Nice. Time to go dust off my Pi Zero 2W and use it for the first time in months. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Pawel 
+ 
+ 
+
+ 
+ 8th October 2025,
+ 
+ 6:37 pm 
+ 
+ 
+ 
+ Thats cool, gonna update my spin to all my users, thanks 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Marcio Novello
+ 
+
+ 
+ 9th October 2025,
+ 
+ 1:41 pm 
+ 
+ 
+ 
+ Good morning, I would like to know when (estimated) a new version of the Raspberry Pi OS Desktop operating system will be released for Desktop (PC)? Based on Debian 13 for PC? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 9th October 2025,
+ 
+ 4:15 pm 
+ 
+ 
+ 
+ Dear users, I performed further tests on Raspberry Pi 5: 
+ Installing Raspberry Pi os 64-bit Lite
+
+sudo apt update
+
+sudo apt full-upgrade
+
+sudo reboot
+
+sudo apt install kde-plasma-desktop (or sudo apt install gnome)
+
+sudo apt install gldriver-test
+
+sudo systemctl set-default graphical.target
+
+sudo reboot 
+ KDE started (or Gnome started) 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Robert
+ 
+
+ 
+ 9th October 2025,
+ 
+ 7:36 pm 
+ 
+ 
+ 
+ Dear users.
+
+I ran further tests.
+
+Using the above procedure, typing cinnamon instead of kde-plasma-desktop, I also managed to run the Cinnamon graphical environmen 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sean McManus 
+ 
+ 
+
+ 
+ 10th October 2025,
+ 
+ 5:12 pm 
+ 
+ 
+ 
+ The new OS looks fabulous, thank you, but I’m having problems with installing Python packages on this latest OS. In Thonny, I see the error message in the Thonny shell window “Problem in Thonny’s back-end: Exception while handling ‘get_active_distributions’ (ModuleNotFoundError: No module named ‘pkg_resources’). When I go to Tools>Manage Packages, the package list down the left is missing and the search doesn’t work. I tried using pip3 to install in a virtual environment but installing sense_hat in the virtual environment failed because building a wheel for pillow did not run successfully. I’ve confirmed the web connection is okay. Do you have any pointers please on how to fix this? Thank you! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dave Swindell 
+ 
+ 
+
+ 
+ 10th October 2025,
+ 
+ 7:44 pm 
+ 
+ 
+ 
+ Trixie ships with Python 3.13 as the default. Unfortunately, the Python package lgpio isn’t available for 3.13. I realize this package isn’t maintained by the rep folks, but is there any idea when it will be available for Python 3.13? 
+ Thanks! 
+ — Dave 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Dave 
+ 
+ 
+
+ 
+ 14th October 2025,
+ 
+ 1:47 am 
+ 
+ 
+ 
+ I answered my own question. The lpgio and rpi-lgpio python packages are installed as system-wide packages by default. To pick them up when you create a virtual environment, you must use the –system-site-packages option, e.g.:
+
+python3 -m venv –system-site-packages PyTrain 
+ Although you can build lpgio from source, using the -system-site-packages option was a much easier solution for me. 
+ — Dave 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Chris H
+ 
+
+ 
+ 11th October 2025,
+ 
+ 12:12 pm 
+ 
+ 
+ 
+ I fixed my full screen mode problem with mpv player on Trixie by using “mpv –fs –gpu-api=opengl –hls-bitrate=3000000”. Had to direct mpv to use the OpenGL API and also limit the bitrate for streaming video, because mpv 0.40 doesn’t support the Raspberry Pi hardware like mpv 0.35.1 did. Otherwise I’m very happy with the improved PIXEL UI. Everything got faster and sound and graphics got even better than before. Well done! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Daniele
+ 
+
+ 
+ 11th October 2025,
+ 
+ 6:42 pm 
+ 
+ 
+ 
+ I am a blind user, is there a page with all the desktop Keyboard Shortcuts? How Can I access the System tray? Is there a possibility to have a configuration file to have some coomon Keyboard shortcuts? Thank you. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Helen McCall
+ 
+
+ 
+ 15th October 2025,
+ 
+ 12:09 pm 
+ 
+ 
+ 
+ Dear Daniele,
+
+I was myself nearly blind until some recent operations. I agree with you that what is needed for accessibility is an easily found page describing all the keyboard shortcuts, and a simple way of loading your own custom set of shortcuts. To me, this would be the most valuable accessibility tool. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Jiri 
+ 
+ 
+
+ 
+ 12th October 2025,
+ 
+ 3:48 pm 
+ 
+ 
+ 
+ Dear forum members,
+
+I used to use Ethernet Gadget through USB-C (power inlet) in Bookworm, see https://blog.hardill.me.uk/2023/12/23/pi5-usb-c-gadget/ . For Trixie, I was googling whether updated instructions exist and found https://github.com/raspberrypi/rpi-usb-gadget , where is referenced Imager 2.0 Open-Beta ( https://forums.raspberrypi.com/viewtopic.php?t=392359 ). My finding: Imager 2.0 rc3 (beta) doesn’t have claimed feature (any kind of gadget – Eth/Mass storage/Serial), as of 2025-Oct-12.
+
+Anyone has more positive experience? Share please! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Peter
+ 
+
+ 
+ 14th October 2025,
+ 
+ 12:13 am 
+ 
+ 
+ 
+ At my new install of Raspberry OS Trixie all Browsers crash with Error Code 9, when i open too many bigger tabs like Twitch or other video-streams. That won’t happen at Bookworm and hopefully it will be fixed soon. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Mick Farris
+ 
+
+ 
+ 15th October 2025,
+ 
+ 3:59 pm 
+ 
+ 
+ 
+ Hi, just completed a fresh install and then restored my data and things went very well. Only thing I am missing at the moment is a way to edit the menus, ie I dont use LibreOffice Impress and previously I could remove it from the menu. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Raspberry Pi Staff
+ 
+ 
+ Simon Long
+ — post author 
+ 
+
+ 
+ 15th October 2025,
+ 
+ 6:42 pm 
+ 
+ 
+ 
+ “sudo apt install alacarte” in a terminal window will install the menu editor. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Jean-Paul
+ 
+
+ 
+ 18th October 2025,
+ 
+ 7:40 am 
+ 
+ 
+ 
+ It would be nice to have icons in the title bars and in the window switcher. I tried modifying ~/.config/labwc/rc.xml (icon:… and …). But it doesn’t work. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Jean-Paul
+ 
+
+ 
+ 18th October 2025,
+ 
+ 7:59 am 
+ 
+ 
+ 
+ The text between > and < is not included in comments. I was talking about the “titlebar”-“layout” and “windowSwitcher” tags in ~/.config/labwc/rc.xml. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Peter
+ 
+
+ 
+ 29th October 2025,
+ 
+ 3:21 am 
+ 
+ 
+ 
+ Lost XF86Audio controls again. :< 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ A-user-Trixie@Rpi5-5GB
+ 
+
+ 
+ 31st October 2025,
+ 
+ 6:09 am 
+ 
+ 
+ 
+ Today, I have worked for moving the Bookworm to New Debian -Trixie, almost well-done for this version-up except one thing.
+
+Unfortunately, after version-up my previous- lovely comannd for screencopy ( grim -g “$(slurp)” ) does not effective ( after installing grim command into Trixie world). 
+ Hello anybody .., if you have already found any alternative solution for screen copy ( grim -g “$(slurp)” ) , please advice me. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ peter
+ 
+
+ 
+ 3rd November 2025,
+ 
+ 4:56 am 
+ 
+ 
+ 
+ well, time to see how Trixie plays with a Pi-5, Node-Red, and i2c devices… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Steve
+ 
+
+ 
+ 13th November 2025,
+ 
+ 12:07 pm 
+ 
+ 
+ 
+ I absolutely love the updated look of Pi Trixie! Thanks for the hard work in producing it. Since PC Trixie still has the old default look, I decided it could a modernized a bit by installing the Nunito font and the new icon set, but I can’t find out the icon set name. Can anyone help? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Steve (OP)
+ 
+
+ 
+ 14th November 2025,
+ 
+ 12:03 pm 
+ 
+ 
+ 
+ EDIT to original post:
+
+Solved. Icon pack name is PiXtrix. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ hoke
+ 
+
+ 
+ 14th November 2025,
+ 
+ 9:30 am 
+ 
+ 
+ 
+ I’m missing a tray. For example jdownloader can minimize to tray instead of taskbar, which worked in Bookworm as far as I remember. Any way to restore this? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Patrick 
+ 
+ 
+
+ 
+ 16th November 2025,
+ 
+ 3:14 am 
+ 
+ 
+ 
+ With Trixie the pthread_kill() fonction returns always 0 even if the task is cancelled in place of ESRH. pthread_join() always return EINVAL
+
+That was better with Linux 6.12.25. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ upgrader
+ 
+
+ 
+ 16th November 2025,
+ 
+ 7:37 am 
+ 
+ 
+ 
+ debian has been able to get upgraded for what, about 20 years now? yes there are caveats, which as the post mentions, are well documented. anyway, first time i have done the upgrade because i am aware the devs try to persuade you to not do this, but decided to try because at least steps were provided. 
+ happy to say that although i saw a lot of ” not empty, not removing” messages, i was able to upgrade and boot. having said this, some of my docker containers broke, but not due to upgrading instead of new install. rather, new docker version in trixie breaks many containers due to newer api requirement, although there is a workaround and now everything is working again 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Trevor
+ 
+
+ 
+ 16th November 2025,
+ 
+ 10:06 pm 
+ 
+ 
+ 
+ Does the method under “An additional option for newer Raspberry Pis” mean I can do this with my unboxed but not yet switched on 500+ by holding down Shift when I power it up the first time and start off on Trixie rather than trying to upgrade it at some later time? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Nigel Dennigan
+ 
+
+ 
+ 20th November 2025,
+ 
+ 6:16 pm 
+ 
+ 
+ 
+ I write because I’m perplexed. The Raspberry world is full of instructions and bits and bobs, but very little about process and connection.
+
+I have a P5 with SD. No problem; all up to date etc – waiting for my brain to engage with a project. I buy into an M2 hat with SSD. Brilliant, I think, starting to come of age, at last. The project; I think perhaps Home Assistant, the Wild West have decided that IoT needs some commonality. Now is the time. Then Trixie appears. Coincidence. I decide, get Trixie on board before Home Assistant. Stupid boy. I underestimated the clunky nature of the much lauded Imaging System. I image Trixie to an SD, stick it in the P5 ; hey presto I’m looking at Pre-Trixie on my SSD. Where’s Trixie – on the SD. I find/edit bootloader (in onboard EEPROM), point it to SD. And there’s lady Trixie. But my primary want is Home Assistant. The real fly in the ointment is that wretched Image Writer. Why can’t I just click on EVERYTHING I want and put where I WANT it. I think I understand all the upstairs downstairs stuff; I just want Imaging Software that’s fit for purpose in this age of M2 HAT. Yes, this is a much shortened version. I’m not convinced it’s in the right place… 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Georg Bisseling 
+ 
+ 
+
+ 
+ 3rd December 2025,
+ 
+ 5:43 pm 
+ 
+ 
+ 
+ I have a Pi 4 running as a server for DNS, HTTP(S), VPN etc. It still runs on bullseye.
+
+Again – as with bookworm – it is refused to provide a clean way to update even a server configuration. I have to conclude that I should not use Raspberry Pi OS for servers but switch to Ubuntu. They at least try to provide a clean update path. There are hickups sometimes, I admit that.
+
+The drawback is that I will have to boot Raspberry Pi OS when I want to update the firmware or change the settings in the EEPROM since the needed tools do not work reliably under Ubuntu, but I can live with that.
+
+All in all I feel pushed to better use a mini PC for such small servers despite the increased power draw. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Supra
+ 
+
+ 
+ 5th December 2025,
+ 
+ 2:47 pm 
+ 
+ 
+ 
+ On my Raspberry Pi 5 (8 GB) I attempted to upgrade from Debian 12 to 13, but it still reports Debian 12. How can I upgrade to Debian 13? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Supra
+ 
+
+ 
+ 6th December 2025,
+ 
+ 4:15 pm 
+ 
+ 
+ 
+ Never mind. I installed fresh new SDXC 128GB. It worked now on RPi 5. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Michel 
+ 
+ 
+
+ 
+ 31st December 2025,
+ 
+ 9:27 am 
+ 
+ 
+ 
+ had to manually reconfigure wifi though 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Michel 
+ 
+ 
+
+ 
+ 31st December 2025,
+ 
+ 9:29 am 
+ 
+ 
+ 
+ completelyy forgot to mention this is a pi model b rev 2! 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ khian
+ 
+
+ 
+ 4th February 2026,
+ 
+ 5:11 pm 
+ 
+ 
+ 
+ does rpi5 supportd ov5647 camera? 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Comments are closed 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ Follow us 
+ 
+ 
+ 
+ 
+ Sign up to newsletter
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ X
+ 
+ 
+ 
+ 
+ 
+ Threads
+ 
+ 
+ 
+ 
+ 
+ TikTok
+ 
+ 
+ 
+ 
+ 
+ YouTube
+ 
+ 
+ 
+ 
+ 
+ Instagram
+ 
+ 
+ 
+ 
+ 
+ LinkedIn
+ 
+ 
+ 
+ 
+ 
+ Facebook
+ 
+ 
+ 
+ 
+ 
+ About Raspberry Pi 
+ 
+ News 
+ Investor relations 
+ Contact us 
+ Trademark 
+ About us 
+ Our Approved Resellers 
+ Jobs 
+ Accessibility 
+ Sustainability 
+ Modern slavery statement 
+ Site use terms and conditions 
+ Acceptable use 
+ Cookies 
+ Licensing 
+ Terms and conditions of sale 
+ Privacy 
+ Security 
+ Verify our bank details 
+ 
+ 
+ 
+ For home 
+ 
+ Raspberry Pi for home 
+ Tutorials 
+ 
+ For industry 
+ 
+ Raspberry Pi for industry 
+ Product compliance 
+ Industry updates 
+ Thin clients 
+ Raspberry Pi in space 
+ Powered by Raspberry Pi 
+ Design partners 
+ Success stories 
+ 
+ Hardware 
+ 
+ Computers and microcontrollers 
+ Cameras and displays 
+ Add-on boards 
+ Power supplies and cables 
+ Cases 
+ Peripherals 
+ 
+ 
+ 
+ Software 
+ 
+ Raspberry Pi Connect 
+ Raspberry Pi Desktop 
+ Raspberry Pi Imager 
+ Raspberry Pi OS 
+ 
+ Documentation 
+ 
+ All categories 
+ Product information portal 
+ Software sources 
+ 
+ Community 
+ 
+ Forums 
+ Events 
+ 
+ Raspberry Pi Store 
+ 
+ Store information 
+ 
+ Raspberry Pi Press 
+ 
+ About Raspberry Pi Press 
+ Raspberry Pi Official Magazine 
+ Books 
+ Write for us 
+ Contact Raspberry Pi Press 
+ 
+ 
+ 
+ 
+ 
+
+ 
+
+ 
+ 
+
+
+
+
+
+ 
+ 
+
+ 
+ 
+
+ 

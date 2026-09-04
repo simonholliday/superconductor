@@ -1,0 +1,50 @@
+clients: frames=788 fetches=0
+clients: frames=1572 fetches=0
+clients: frames=2352 fetches=0
+clients: frames=3136 fetches=0
+clients: frames=3920 fetches=0
+clients: frames=4700 fetches=0
+Task exception was never retrieved
+future: <Task finished name='Task-13' coro=<client.<locals>.reader() done, defined at /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py:27> exception=ConnectionClosedError(None, None, None)>
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py", line 29, in reader
+    async for raw in ws:
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 237, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 317, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+Task exception was never retrieved
+future: <Task finished name='Task-11' coro=<client.<locals>.reader() done, defined at /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py:27> exception=ConnectionClosedError(None, None, None)>
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py", line 29, in reader
+    async for raw in ws:
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 237, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 317, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+Task exception was never retrieved
+future: <Task finished name='Task-9' coro=<client.<locals>.reader() done, defined at /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py:27> exception=ConnectionClosedError(None, None, None)>
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py", line 29, in reader
+    async for raw in ws:
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 237, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 317, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+Task exception was never retrieved
+future: <Task finished name='Task-7' coro=<client.<locals>.reader() done, defined at /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py:27> exception=ConnectionClosedError(None, None, None)>
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/load_clients.py", line 29, in reader
+    async for raw in ws:
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 237, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/topology/venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 317, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent

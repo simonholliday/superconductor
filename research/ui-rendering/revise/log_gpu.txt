@@ -1,0 +1,28 @@
+{'label': 'gpu', 'throttle': 1.0, 'webgl_renderer': 'ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1660/PCIe/SSE2, OpenGL ES 3.2)', 'ua': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36'}
+       gpu    dom   128  incremental  js mean   0.061 p95   0.200 max   0.500 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu    dom   128  incremental  js+style+layout mean   0.247 p95   0.400 max   0.500 ms
+       gpu    dom   128         full  js mean   0.098 p95   0.200 max   0.500 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    dom   128         full  js+style+layout mean   0.285 p95   0.500 max   0.500 ms
+       gpu    dom  1024  incremental  js mean   0.088 p95   0.200 max   0.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu    dom  1024  incremental  js+style+layout mean   0.434 p95   0.800 max   0.900 ms
+       gpu    dom  1024         full  js mean   0.316 p95   0.700 max   0.800 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    dom  1024         full  js+style+layout mean   0.610 p95   1.200 max   1.300 ms
+       gpu    svg   128  incremental  js mean   0.050 p95   0.100 max   0.200 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu    svg   128  incremental  js+style+layout mean   0.280 p95   0.500 max   0.600 ms
+       gpu    svg   128         full  js mean   0.158 p95   0.300 max   0.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    svg   128         full  js+style+layout mean   0.330 p95   0.600 max   0.600 ms
+       gpu    svg  1024  incremental  js mean   0.099 p95   0.200 max   0.300 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    svg  1024  incremental  js+style+layout mean   0.361 p95   0.600 max   0.900 ms
+       gpu    svg  1024         full  js mean   0.595 p95   1.400 max   1.600 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    svg  1024         full  js+style+layout mean   0.872 p95   1.700 max   2.200 ms
+       gpu canvas   128  incremental  js mean   0.116 p95   0.300 max   0.300 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu canvas   128         full  js mean   0.368 p95   0.700 max   0.800 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu canvas  1024  incremental  js mean   0.227 p95   0.400 max   0.500 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu canvas  1024         full  js mean   1.707 p95   4.000 max   4.600 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu  webgl   128  incremental  js mean   0.047 p95   0.100 max   0.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu  webgl   128         full  js mean   0.052 p95   0.100 max   0.200 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu  webgl  1024  incremental  js mean   0.048 p95   0.100 max   0.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu  webgl  1024         full  js mean   0.079 p95   0.200 max   0.300 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu    svg                 waveform-400bin-1920x256  js mean   0.640 p95   1.200 max   1.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+       gpu canvas                 waveform-400bin-1920x256  js mean   0.083 p95   0.200 max   0.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+       gpu      -     mixed-page-512cells-8faders-waveform  js mean   0.616 p95   1.100 max   1.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0

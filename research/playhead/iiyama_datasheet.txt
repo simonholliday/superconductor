@@ -1,0 +1,164 @@
+21.5” PCAP 10pt touchscreen monitor featuring IPS panel technology, Edge-to-Edge
+glass design and anti fingerprint coating
+With its Full HD (1920x1080) resolution and accurate Projective Capacitive 10 point touch technology, the ProLite T2252MSC-
+B2 delivers seamless and accurate touch response. Featuring IPS LCD screen technology, it oﬀers exceptional colour
+performance and wide viewing angels, making it a perfect choice for a vast array of interactive applications. The ﬂexible stand
+can be positioned at several angels creating a comfortable and ergonomic user experience and the integrated cable
+management system hides all the cables and electrical wires giving a neat and cable-free workspace. In addition, the edge-to-
+edge glass and ultra slim design creates an eye-catching ﬁnish. The ProLite T2252MSC-B2 is the ideal solution for interactive
+signage, instore retail, POS and interactive presentations.
+PROLITE T2252MSC-B2
+IPS Technology
+Ensure perfect visibility from any position - The IPS
+panel delivers vivid, consistent colors and wide viewing
+angles, ideal for dynamic retail environments and busy
+commercial spaces.
+Touch technology - Capacitive
+This technology uses a sensor-grid of micro-ﬁne wires
+integrated into the glass that covers the screen. Touch is
+detected because electrical characteristics of the sensor
+grid change when human ﬁnger is placed on the glass.
+Thanks to the glass overlay this technology is highly
+durable, and the touch function remains unaﬀected even
+if the glass is scratched. It oﬀers perfect picture
+performance and will work with human ﬁnger (also latex
+gloved) and stylus-pen.
+18.05.2026 10:25:06
+Design
+Edge to edge glass
+Diagonal
+21.5", 54.5cm
+Panel
+IPS
+Native resolution
+1920 x 1080 (2.1 megapixel Full HD)
+Aspect ratio
+16:9
+Panel brightness
+250 cd/m²
+Brightness
+225 cd/m² with touch
+Light transmittance
+90%
+Static contrast
+1000:1
+Response time (GTG)
+5ms
+Viewing zone
+horizontal/vertical: 89°/89°, right/left: 44.5°/44.5°, up/down: 44.5°/44.5°
+Colour support
+16.7mln
+Horizontal Sync
+30 - 83kHz
+Viewable area W x H
+478.6 x 260mm
+Pixel pitch
+0.249mm
+Bezel colour and finish
+black, matte
+Touch technology
+projective capacitive
+Touch points
+10 (HID, only with supported OS)
+Touch method
+stylus, finger, glove
+Touch interface
+USB
+Supported operating systems
+All iiyama monitors are Plug & Play and compatible with Windows and Linux. For
+details regarding the supported OS for the touch models, please refer to the driver
+instruction file available in the downloads section.
+Palm rejection
+yes
+Digital signal input
+HDMI x1
+DisplayPort x1
+Audio output
+Mini jack x1
+Speakers 2 x 1W
+HDCP
+yes
+USB HUB
+x2 (USB 3.2 Gen 1 (5Gbps, 5V, 900mA))
+Extra
+Anti-fingerprint coating, touch support with gloved hand (thickness +2mm)
+Glass hardness
+7H
+OSD key lock
+yes
+OSD languages
+EN, DE, FR, IT, CN, RU, JP, CZ, NL, PL
+Control buttons
+Joystick: right/menu/enter, left/input/exit, up/eco, down, power
+DISPLAY CHARACTERISTICS
+01
+TOUCH
+02
+INTERFACES / CONNECTORS / CONTROLS
+03
+FEATURES
+04
+GENERAL
+05
+18.05.2026 10:25:06
+User controls
+picture adjust (brightness, contrast, i-Style, adv. contrast, ECO, OD, X-Res), color
+settings (gamma, rgb range, color temp.), image settings (video mode adjust, blue
+light reducer, sharp & soft), OSD (horizontal position, vertical pos., time,
+background), extra (reset, dcc/ci, signal select, volume, mute, opening logo, led,
+touch switch)
+Convenience
+Kensington-lock™ prepared
+Blue light reducer
+yes
+Plug&Play
+DDC2B
+Tilt angle
+90° up; 
+5° down
+VESA mounting
+100 x 100mm
+Cables
+power, USB, HDMI
+Guides
+quick start guide, safety guide
+Cable cover
+yes
+Power supply unit
+internal
+Power supply
+AC 100 - 240V, 50/60Hz
+Power usage
+11W typical, 1.5W stand by, 0.3W off mode
+Regulations
+CE, TÜV-Bauart, EAC, RoHS support, ErP, WEEE, REACH, UKCA, cTUVus
+Energy efficiency class (Regulation (EU)
+2017/1369)
+C
+REACH SVHC
+above 0.1%: Lead
+Product dimensions W x H x D
+493.5 x 361.5 x 239.5mm
+Box dimensions W x H x D
+560 x 350 x 150mm
+Weight (without box)
+4.5kg
+Weight (with box)
+6kg
+EAN code
+4948570121809
+MECHANICAL
+06
+ACCESSORIES INCLUDED
+07
+POWER MANAGEMENT
+08
+SUSTAINABILITY
+09
+DIMENSIONS / WEIGHT
+10
+18.05.2026 10:25:06
+All trademarks and registered trademarks acknowledged. E & O E. Specification subject to change without notice. All LCD's comply with ISO-9241-
+307:2008 in connection with pixel defects.
+© IIYAMA CORPORATION. ALL RIGHTS RESERVED
+18.05.2026 10:25:06

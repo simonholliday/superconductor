@@ -1,0 +1,22 @@
+
+=== H7 muted from 100 to 250, panel sets clap/6 at 150: apply() skipped while muted, listener still fires
+  cycle_start=  96 rebuilt_at=95 listener_at=97 muted=False applied=True pre_ver=0 built_ver_stamp=0 ver=0 steps_empty=False intent={'kick': [0, 4, 8], 'snare': [4, 12]} realised={'kick': [0, 4, 8], 'snare': [4, 12]} off_grid=0
+  cycle_start= 192 rebuilt_at=191 listener_at=193 muted=True applied=False pre_ver=1 built_ver_stamp=0 ver=1 steps_empty=True intent={'kick': [0, 4, 8], 'snare': [4, 12], 'clap': [6]} realised={} off_grid=0
+  cycle_start= 288 rebuilt_at=287 listener_at=289 muted=False applied=True pre_ver=1 built_ver_stamp=1 ver=1 steps_empty=False intent={'kick': [0, 4, 8], 'snare': [4, 12], 'clap': [6]} realised={'clap': [6], 'kick': [0, 4, 8], 'snare': [4, 12]} off_grid=0
+  cycle_start= 384 rebuilt_at=383 listener_at=384 muted=False applied=True pre_ver=1 built_ver_stamp=1 ver=1 steps_empty=False intent={'kick': [0, 4, 8], 'snare': [4, 12], 'clap': [6]} realised={'clap': [6], 'kick': [0, 4, 8], 'snare': [4, 12]} off_grid=0
+  changed frames: [(1, 'clap/6', True, 'panel', 150)]
+  apply() calls over 4 rebuilds: 4
+
+=== H8 ordering window at the rebuild for cycle 96
+  builder: algorithm set kick/4 off -> ver 1 (pulse 0)
+  reschedule_pulse listener at pulse 95: queued a panel write
+  builder: algorithm set kick/4 off -> ver 1 (pulse 95)
+  ready-queue callback: panel set kick/4 on -> ver 2 (pulse 96); an ack sent here would carry ver 2
+  pattern_reschedule listener (pulse 97): drains algorithm log here; log order = [(1, 'algorithm'), (2, 'panel')]
+  builder: algorithm set kick/4 off -> ver 3 (pulse 191)
+  intent kick after cycle-96 rebuild: [0, 8] (panel's ver-2 write is the server's value); realised for cycle 96: {'kick': [0, 8], 'snare': [4, 12]}
+
+=== H9 ephemeral algorithm: apply(skip=kick/4) plus hit_steps hat beside it; intent and ver untouched
+  cycle_start=  96 rebuilt_at=95 listener_at=97 muted=False applied=True pre_ver=0 built_ver_stamp=0 ver=0 steps_empty=False intent={'kick': [0, 4, 8], 'snare': [4, 12]} realised={'hat': [2, 6, 10, 14], 'kick': [0, 8], 'snare': [4, 12]} off_grid=0
+  cycle_start= 192 rebuilt_at=191 listener_at=192 muted=False applied=True pre_ver=0 built_ver_stamp=0 ver=0 steps_empty=False intent={'kick': [0, 4, 8], 'snare': [4, 12]} realised={'hat': [2, 6, 10, 14], 'kick': [0, 8], 'snare': [4, 12]} off_grid=0
+  changed frames: []

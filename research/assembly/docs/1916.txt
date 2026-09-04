@@ -1,0 +1,316 @@
+#1916  Apps declare a typed control tree with stable addresses, a control message is an explicit set on a path, and the definitions YAML stays as it is
+  design · active · #control-contract · #research · superintendent
+
+Summary: Recommends that each app publish a JSON manifest that is a tree of groups and typed leaf controls (toggle, trigger, number, select, grid, text, meter, waveform), each with a stable path, a value type separate from a widget hint, an access mask, a range, a default, a unit and an `applies` field saying when a write lands (immediate, next_cycle, restart). Control messages are explicit sets on a path carrying a client sequence number, acknowledged with the server's state version; there is no toggle verb on the wire. Grid rows are the grid state's own row list, labelled through the pattern's `drum_note_map`; meters are telemetry, not versioned state. Pages are lists of bindings {app, path} plus layout, edited on the panel and persisted as files on the service, with localStorage only a cache. The shared definitions YAML needs no code change for v1, because drum voice names already flow through `drum_note_map` onto the running pattern; its spec gets two sentences amended (a reserved section name in §3, and §2 reworded to cover consumed sections only). Prior art converges on the same shape: OSCQuery attributes, MIDI 2.0 Property Exchange typeHint and priority, the W3C Thing Description's property, action and event split, Faust UI JSON groups, Open Stage Control widget bindings, and the Push and Launchpad convention of colour and animation as a layer over the value.
+
+**Question.** What does an app declare about itself, and what does a control message look like, such that free-form pages can be assembled from the declarations and a page built against one app release survives the next?
+
+## What the code offers today
+
+Subsequence has no declaration; the nearest snapshot is `Composition.live_info()`, which returns bpm, key, bar, section, chord, a pattern list of `name`, `channel`, `length`, `cycle`, `muted`, `tweaks`, and `data` (`composition.py:3868-3915`), walking `_running_patterns`, a dict keyed by the pattern function's name and exposed as `running_patterns` (`composition.py:1801-1803`). The legacy `web_ui.py` reads the same dict and adds `drum_map` from `pattern._drum_note_map`, `length_pulses` and the notes of the current cycle with `pitch`, pulse, duration and velocity (`web_ui.py:244-266`), so the drum voice names already reach the running pattern object: the composition takes `drum_note_map=` in `pattern()` (`composition.py:4721-4735`) and stores it on the `_PendingPattern` (`composition.py:4850-4865`). The inbound write paths are `tweak(name, **kwargs)` read back by `p.param()` (`composition.py:4129-4151`; `pattern_builder.py:264-283`), `composition.data`, `mute`/`unmute` (`composition.py:3917-3954`), `set_bpm` (`composition.py:3824`), and `unregister` (`composition.py:3956-4030`). The pattern's identity is its builder function name: hot-swap keeps a running pattern by `fn.__name__` (`composition.py:4831-4836`) and a duplicate name is warned about because names key mutes, tweaks and the seeded stream (`composition.py:4841-4848`). `p.grid` exposes the fixed `_default_grid` (`pattern_builder.py:198-200`), resolved from `beats`/`bars`/`steps`/`step_duration` at decoration (`composition.py:4802`). `hit_steps` takes step indices `0..grid-1` with velocity, duration and probability per call (`pattern_builder.py:681-720`). Devices gain aliases through `midi_output(device, name=, latency_ms=)` (`composition.py:3021`). The OSC vocabulary is `/bpm`, `/mute/<name>`, `/unmute/<name>`, `/data/<key>` in, `/bar`, `/chord`, `/section`, `/bpm` out (`osc.py:7-21`), and `/data/<key>` casts the argument to the existing value's numeric type (`osc.py:171-194`).
+
+Subsample's MIDI map is already a declaration of sorts: the two assignments at `midi-map.yaml:7-27` carry `name`, `channel`, `notes`, a `select` predicate, `mode` and `pan`; later assignments add a `process` chain (`midi-map.yaml:71, 93, 107`) and `gain` (`midi-map.yaml:97, 111`). Any numeric processor parameter may be replaced by a CC binding `{cc, min, max, default, channel}` (`README.md:2028-2050`, the ranged example at `README.md:2036`), and a top-level `programs:` list with `program_channel` and `default_program` selects kits live by Program Change, though editing the list needs a restart (`subsample/data/midi-map.yaml.default:196-217`). The player emits `cc` with `channel`, `cc_number`, `value` on every control change (`player.py:5055`). Substation's bands are named entries under `bands:` with `freq_start`, `freq_end`, `channel_spacing`, `sample_rate`, `modulation` (`substation/config.py:412-442`; `substation/config.yaml.default:214-300`), selected only by `--band` at start (`substation/cli.py:293-297`). Its `channel_snr` event carries, for every channel in frequency order, `{index, frequency_mhz, snr_db, is_active, duration_active_s}` every slice (`substation/scanner.py:1899-1908`), which is exactly a meter row.
+
+Supervisor's `manifest` is `{type, app, label, color, panels:[{id, name, description, default_w, default_h, min_w, min_h}]}` (`supervisor/app/subsample.py:25-53`): display panels with sizing hints and no value model, no addresses and no write path. The client built its catalogue from the manifests (`client/app.js:385-393`) and persisted layout and connection URLs in `localStorage` (`client/app.js:22-52`), so a layout lived in one browser only. Its `BroadcastServer` throttled state pushes with a dirty flag at `max_hz=2.0` (`supervisor/core.py:32-46, 231-234`).
+
+## Prior art, and what generalises
+
+| Source | What it declares | What transfers |
+| --- | --- | --- |
+| OSC 1.0 (https://opensoundcontrol.stanford.edu/spec-1_0.html) | A hierarchical address tree of `/container/.../method`; standard type tags `i f s b`; nonstandard `T F N I` (N is Nil) that "OSC applications are not required to recognize"; bundles are atomic; method and container names may not contain space, `#`, `*`, `,`, `/`, `?`, `[`, `]`, `{`, `}` | Addresses as the identity of a control; the forbidden-character list as the segment grammar; a bundle as the model for "apply these together" |
+| OSCQuery (https://github.com/Vidvox/OSCQueryProposal) | Per node `FULL_PATH`, `TYPE`, `CONTENTS`; optional `ACCESS` (1 read, 2 write, 3 both), `VALUE`, `RANGE` (min, max, `VALS`), `DESCRIPTION`, `UNIT`, `CLIPMODE`, `TAGS`, `EXTENDED_TYPE`, `CRITICAL`; `LISTEN`/`IGNORE` over WebSocket; `PATH_ADDED`, `PATH_REMOVED`, `PATH_CHANGED`, `PATH_RENAMED` | The attribute set for a self-describing namespace, including that the namespace itself changes at runtime |
+| W3C Web of Things Thing Description 1.1, Recommendation of 5 December 2023 (https://www.w3.org/TR/wot-thing-description11/) | A Thing carries flat maps `properties`, `actions`, `events` keyed by name; a PropertyAffordance has `readOnly`, `writeOnly`, `observable`, `type`, `unit`, `minimum`, `maximum`, `enum`, `default`; an ActionAffordance `input`, `output`, `safe`, `idempotent`, `synchronous`; an EventAffordance `subscription`, `data`, `cancellation`; each interaction has `forms` binding it to a protocol by `href`, `op`, `contentType`; `@context`, `title`, `security`, `securityDefinitions` are mandatory | The three-way split of state you write, actions you invoke and events you subscribe to, which is exactly `set`, `fire` and `event` below; `idempotent` as a declared attribute; JSON Schema data types |
+| MIDI 2.0 Property Exchange, Controller Resources v1.0 (https://amei.or.jp/midistandardcommittee/MIDI2.0/MIDI2.0-DOCS/M2-117-UM_v1-0_Property_Exchange_Controller_Resources.pdf) | Per controller `title`, `ctrlType`, `ctrlIndex`, `channel`, `priority` 1-5, `default`, `transmit`/`recognize` (absolute, relative, both, none), `numSigBits`, `paramPath` (JSON Pointer for grouping), `typeHint` (continuous, momentary, toggle, relative, valueSelect), `ctrlMapId` to an enumeration list, `stepCount`, `minMax` | Widget hint separate from value type; priority for what to show first; enumerations as a linked list; direction declared per control |
+| Faust UI JSON (https://faustdoc.grame.fr/manual/http/) | Groups `{type: vgroup/hgroup/tgroup, label, items}`; controls `{type, label, address, meta, init, min, max, step}`; address derived from the group path | Layout-free grouping that yields the address |
+| Open Stage Control (https://openstagecontrol.ammd.net/docs/widgets/properties-reference/; licence GNU GPLv3 per https://framagit.org/jean-emmanuel/open-stage-control) | Widgets `button, switch, dropdown, menu, input, ..., matrix, keyboard, tab, modal, ..., led, text, xy, multixy, canvas, fader, knob, encoder, range`; each with `address`, `preArgs`, `typeTags`, `decimals`, `target`, `value`, `default`, `linkId`, `bypass` | The widget vocabulary and the binding of a widget to an address; the `matrix` of clones is the grid idiom |
+| TouchOSC (https://hexler.net/touchosc/manual/controls and https://hexler.net/touchosc/manual/script-properties-and-values; commercial, one-time licence per https://hexler.net/touchosc) | Thirteen controls: box, button, label, text, fader, xy, radial, encoder, radar, radio, group, pager, grid; in scripting `x` and `y` are floats 0.0 to 1.0 on button, fader and xy, `x` is an integer 0 to steps-1 on radio, `page` an integer on pager, and `touch` is a boolean that is true while any pointer is on the control; `.tosc` is zlib-compressed XML (third-party account, https://github.com/jacobclarke92/TouchOSC-Script-Injector) | `touch` as a value separate from position; pager and group as the page model; normalised floats mapped at the edge |
+| Ableton Push 2 (https://github.com/Ableton/push-interface/blob/master/doc/AbletonPush2MIDIDisplayInterface.asc) | Pads are notes 36-99; velocity selects a 128-entry palette index; MIDI channel selects animation (0 static, 1-5 one-shot, 6-10 pulsing, 11-15 blinking) | Colour and animation are a layer over the value, chosen by the host, not part of the pad's value |
+| Novation Launchpad Pro MK3 programmer's reference (https://fael-downloads-prod.focusrite.com/customer/prod/s3fs-public/downloads/LPP3_prog_ref_guide_200415.pdf) | Channel 1 static, 2 flashing, 3 pulsing; SysEx colour spec types 0 static, 1 flashing, 2 pulsing, 3 RGB (0-127 each); up to 106 pads in one message | Three visual states are enough for a hardware grid: static (set), flashing (pending or playing), pulsing (selected); batch updates are one message |
+| Elektron Digitakt manual OS 1.51 (https://www.elektron.se/wp-content/uploads/2024/09/Digitakt_User_Manual_ENG_OS1.51_231108.pdf) | LENGTH sets a pattern's, or in per-track mode a track's, step count and total length; with 17 or more steps PAGE toggles between pattern pages; SCALE per pattern or per track from 1/8X to 2X; a trig carries parameter locks, micro timing, retrig and a trig condition (FILL, PRE, NEI, 1ST, X%, A:B) | A step is a record, not a boolean; a page is a view over a longer row; per-row length is legitimate; probability and condition belong on the cell |
+
+What generalises: a control is identified by a stable path; it declares a value type, an access mask, a range (numeric or enumerated), a default, a unit and a widget hint separately from the value type; grouping is a tree independent of layout; the namespace can change at runtime and says so; state, actions and events are three different things; a grid cell is a record with `on` first and room for velocity, probability, note and length; the panel, not the app, decides colour and animation. Nothing in the prior art declares when a write takes effect, and this design needs it because the specification's latency decision says a step tap lands on the next cycle while a pad hit is immediate, and a Substation band change is a process restart.
+
+## The candidate shapes
+
+| Option | Description | For | Against |
+| --- | --- | --- | --- |
+| OSCQuery verbatim | Publish each app's namespace as an OSCQuery tree over HTTP and WebSocket, using its attribute names, and drive values as OSC | Existing attribute set; existing clients could browse it; OSC senders already in all three apps | OSC's nil is a nonstandard type tag that receivers need not recognise, and the apps' own senders avoid it (#1478 records Substation mapping `None` to `0`); OSC has no record type for a cell without a fixed argument list, and no place for `applies`; it pairs two carriers, HTTP for the tree and OSC for values, which `transport-ui` would have to justify against one; OSCQuery is a proposal, not a standard |
+| W3C Thing Description verbatim | Publish each app as a Thing with `properties`, `actions`, `events` and `forms` | A ratified standard; JSON; transport-neutral; JSON Schema types; the property, action and event split matches what the apps need | Interactions are flat maps keyed by name, so grouping into candidate pages needs a naming convention or `@type` semantics on top; no widget hint, no `applies`, no shape for a grid's rows, and a cell has no address of its own; every TD must carry `@context`, `security` and `securityDefinitions`, which v1 has nothing to say about; `forms` bind each interaction to a protocol URI, which duplicates what `transport-ui` and `transport-apps` decide |
+| Widget manifest (Supervisor and TouchOSC shape) | Each app declares a flat list of widgets with layout hints, and the page is the union of them | Simple; Supervisor's client already consumed it | Layout baked into the app breaks the decision that pages are free-form and user-defined; no value model, so state and writes need a second schema |
+| Typed control tree (recommended) | A JSON tree of groups and typed leaves with stable paths, value type, widget hint, access, range, default, unit, `applies`; messages are explicit sets and state deltas on paths; pages bind widgets to paths | Everything the worked examples need in one schema; JSON carries null and records; transport-neutral, so an OSC mapping or a TD export can be added later; borrows OSCQuery's and the TD's names where they fit so the prior art stays readable | A new schema to own and version, mitigated by borrowing vocabulary and by the versioning rules below |
+
+MIDI 2.0 Property Exchange verbatim was excluded: it describes MIDI controllers on a MIDI device carried over SysEx, and the apps are not MIDI devices to the panel; its `typeHint` and `priority` are borrowed instead. The Thing Description is excluded as the schema for the reasons tabled, but this design's leaf attributes use its DataSchema names where they coincide (`unit`, `minimum`/`maximum` as `range`, `enum`, `default`, `readOnly`/`writeOnly` as `access`) and its three affordances are the three verbs below, so a TD exporter is a later addition, not a redesign.
+
+## The declaration schema
+
+Every app publishes one manifest. It is a JSON object; unknown fields anywhere are ignored, following JSON Schema 2020-12's posture that unknown keywords are treated as annotations (https://json-schema.org/draft/2020-12/json-schema-core).
+
+```json
+{
+  "contract": "1.0.0",
+  "app": "subsequence",
+  "app_version": "0.6.5",
+  "instance": "studio-main",
+  "label": "Subsequence",
+  "instruments": [
+    {"id": "drm1", "label": "Vermona DRM1", "device": 0, "channel": 10}
+  ],
+  "controls": [ ... nodes ... ]
+}
+```
+
+`contract` is the version of this schema in semantic-versioning terms: MAJOR for an incompatible change, MINOR for an addition, PATCH for a fix (https://semver.org/spec/v2.0.0.html). `app_version` is the package version and is informational. `instance` is an informational label; v1 addresses one instance per app, paths are rooted at the app name, and the service refuses a second manifest arriving for an app it already holds with reason `duplicate_app`. Routing two instances of one app is a MINOR addition that prefixes paths and page bindings with the instance, and is not designed here.
+
+A node is either a group or a leaf.
+
+```json
+{"id": "kit", "kind": "group", "label": "kit", "instrument": "drm1", "tags": ["drums"], "children": [ ... ]}
+```
+
+```json
+{
+  "id": "swing",
+  "kind": "number",
+  "path": "/subsequence/kit/swing",
+  "label": "Swing",
+  "value": "float",
+  "access": "rw",
+  "range": {"min": 0.0, "max": 1.0, "step": 0.01},
+  "default": 0.0,
+  "unit": "ratio",
+  "hint": "knob",
+  "applies": "next_cycle",
+  "priority": 2,
+  "description": "Delays every second sixteenth"
+}
+```
+
+Fields on a leaf:
+
+| Field | Meaning | Source of the idea |
+| --- | --- | --- |
+| `id` | Path segment: the name exactly as the app knows it (a pattern's `fn.__name__`, a grid row's id, a definitions-file name), case-sensitive and never normalised, so two distinct names never collide; it may not contain the characters OSC forbids in a method name (space, `#`, `*`, `,`, `/`, `?`, `[`, `]`, `{`, `}`). A Python identifier never contains one, so every function name is a legal segment as it stands; the definitions files' `[a-z][a-z0-9_]*` (`subsequence/definitions.py:89`, enforced at `201-207`) is a subset; a user-supplied name that breaks the rule is omitted from the manifest with a warning | OSC address rules |
+| `path` | Full address `/<app>/<group>/.../<id>`; the pattern function name is the group id, so it is stable across live reloads | OSC, Faust address derivation, PE `paramPath` |
+| `kind` | One of `toggle`, `trigger`, `number`, `select`, `grid`, `text`, `meter`, `waveform`, `group`; a `kind` the panel does not know renders as a generic value tile and is never an error | OSCQuery `EXTENDED_TYPE`, Open Stage Control widget types |
+| `value` | `bool`, `int`, `float`, `string`, `enum`, `cell`, `cells`, `series`, `blob_ref`; the composite shapes are defined below | OSC type tags, OSCQuery `TYPE`, TD DataSchema |
+| `access` | `r`, `w`, `rw` | OSCQuery `ACCESS` 1, 2, 3; TD `readOnly`/`writeOnly`; PE `transmit`/`recognize` |
+| `range` | `{min, max, step}` for numbers, `{values: [{id, label}]}` for enums, where an enum `id` is a value and not a path segment so any string is allowed; `{max_len}` for text; `clip` in `none`, `low`, `high`, `both` | OSCQuery `RANGE`, `CLIPMODE`; PE `minMax`, `stepCount`, `CtrlMapList` |
+| `default` | Value after reset | PE `default`, Faust `init`, Open Stage Control `default` |
+| `unit` | `bpm`, `beats`, `steps`, `db`, `hz`, `mhz`, `ms`, `ratio`, `midi7`, `midi14`, `percent` | OSCQuery `UNIT`, TD `unit` |
+| `hint` | Widget hint separate from value: `button`, `pad`, `switch`, `fader`, `knob`, `stepper`, `radio`, `list`, `readout`, `entry`, `bar`, `envelope` | PE `typeHint` |
+| `applies` | `immediate`, `next_cycle`, `restart`; the panel shows a pending state until the matching `changed` arrives when it is not `immediate` | None; needed by the specification's latency decision |
+| `rate_hz` | On `meter` only: the ceiling at which the service forwards telemetry for this leaf; default 4 | Supervisor's dirty-flag throttle at 2 Hz (`supervisor/core.py:32-46, 231-234`) |
+| `priority` | 1 essential to 5 hidden; a page built by hand ignores it, a candidate page is filled from 1 upward | PE `priority` |
+| `gesture` | `{modifier: "hold"}` when a second contact changes meaning, for `multi-touch` to fill in; absent otherwise | Push and Launchpad hold-to-edit idioms |
+| `tags` | Free strings for candidate pages (`drums`, `melodic`, `transport`, `radio`) | OSCQuery `TAGS` |
+| `description` | Human text | OSCQuery `DESCRIPTION`, TD `description` |
+
+A `grid` leaf adds a `shape`: `{rows: [{id, label, note}], cols, page, cell: {fields, v1}}`. `rows` is the grid's own ordered row list as the grid state holds it, which `subsequence-grid` owns; this contract requires only that the state yields an ordered list of row ids. It is not the pattern's `drum_note_map`: that map is a lookup table which the engine's own docstring recommends building as `{**gm_drums.GM_DRUM_MAP, **defs.notes}` (`subsequence/definitions.py:49-51`), so it can hold the whole GM percussion map ahead of the user's voices, and in the shared file the `notes:` section names notes for every instrument. The manifest producer uses the map only to label: a row id that is a name is resolved through `_drum_note_map` to fill `note`, and a row given as a number takes the first name that maps to it. `cols` is the row's step count, `page` how many the panel shows at once; a `number` leaf `/…/cols` with `applies: next_cycle` is how the step count is changed from the panel, if `subsequence-grid` finds the engine can do it. `cell.fields` maps a field name to either a type name as shorthand or an object `{type, range, default}`; `on` is always present, of type `bool`, default `false`. `cell.v1` names the fields the app honours today; the rest are declared future so a page can render them greyed.
+
+The composite value types on the wire: a `cell` is an object holding the declared fields, an absent field meaning its default. A `cells` value is `{"cols": N, "rows": {"<row id>": [c0, c1, ...]}}` where every row array has exactly `cols` entries and an entry is either a `cell` or `null` for a cell at its defaults; this is what `snapshot` and a whole-grid `changed` carry. A `series` is an array of numbers aligned to `shape.rows` in order, `null` for a row with no reading. A `blob_ref` is `{"ref": "<asset path>", ...}` with informational fields beside it.
+
+Sub-paths exist for two kinds only. Under a `grid` leaf, `<leaf>/<row id>` addresses a row and `<leaf>/<row id>/<col>` a cell, `col` zero-based in `0..cols-1` to match `hit_steps` step indices (`pattern_builder.py:687`); a `set` on a row carries a row array that replaces the row, a `set` on a cell carries a partial `cell` merged into it, a `changed` on a cell carries the whole cell after the merge. Under a `meter` leaf, `<leaf>/<row id>` is readable and holds one number. A row id not in `shape.rows`, a column outside the range, or a sub-path under any other kind is `unknown_path`. `snapshot` carries leaf paths only.
+
+A `meter` leaf declares `value: "series"`, `range` in the unit and `rate_hz`; its readings are telemetry and travel in `telemetry` messages that do not bump the app's state version, so a slice-rate emitter such as `channel_snr` (`scanner.py:1899-1908`, every slice on an executor thread) does not churn `ver` or the panel's reconciliation; `snapshot` carries the last known series. A `waveform` leaf declares `value: "blob_ref"` with `format: "envelope_400"` or `"png"` and the panel fetches the referenced asset from the service (the `subsample-substation` point owns how). A `text` leaf declares `value: "string"`, optional `range: {max_len}`, and `hint` `readout` when read-only or `entry` when writable.
+
+Namespace change is part of the contract: `path_added`, `path_removed` and `manifest` messages carry the node or the whole tree, so a pattern registered in a live reload appears and an `unregister()` (`composition.py:3956-4030`) removes its group. This is OSCQuery's `PATH_ADDED`/`PATH_REMOVED` idea and it is what lets a page survive: a page whose binding is currently absent renders an unbound placeholder, and rebinds when the path returns.
+
+## Who produces the manifest
+
+Nothing in Subsequence declares today, so the manifest is produced by the adapter that `transport-apps` places in the engine, and it is generic in the sense #1465 requires: it contains the walk, never a value. It enumerates `composition.running_patterns` (`composition.py:1801-1803`) and emits one group per pattern named by its key, containing a `muted` toggle backed by `mute`/`unmute` (`composition.py:3917-3954`), one leaf per key in `_tweaks` written through `tweak()` and read by `p.param()` (`composition.py:4129-4151`; `pattern_builder.py:264-283`) with `kind` inferred from the current Python value (bool to `toggle`, int or float to `number` without a range, str to `text`, anything else to a read-only `text` of its repr), and a `grid` leaf when the pattern holds grid state as `subsequence-grid` defines it. At composition level it emits `bpm` (`set_bpm`, `composition.py:3824`), read-only `bar`, `section` and `chord` from the same values `live_info()` reports (`composition.py:3868-3915`), and one leaf per `composition.data` key, cast on write as the OSC handler already does (`osc.py:171-194`). Labels, colours, instrument names and voice order come from the composition file and the page, never from the engine, so the practical test in #1465 (would this value be wrong for somebody with different hardware) is passed by construction. For Subsample the adapter reads the loaded map: each assignment becomes a `trigger`, each CC binding a `number` with `midi` from the binding, the `programs:` list a `select`, and the library a `waveform`. For Substation it reads the configuration: `bands:` becomes a `select`, the channel list a `meter`, and recordings arrive as events.
+
+## The message contract
+
+All messages are JSON objects with a `t` field. This is transport-neutral; `transport-ui` chooses the carrier and may compact it.
+
+| `t` | Direction | Fields | Meaning |
+| --- | --- | --- | --- |
+| `hello` | client to service | `contract`, `client`, `page` | Opens; names the contract version the client speaks |
+| `manifest` | service to client | `app`, `manifest` | Full declaration for one app; sent on connect and after any structural change |
+| `snapshot` | service to client | `app`, `ver`, `values: {path: value}` | Every readable leaf; sent after `manifest` and on resync |
+| `set` | client to service | `seq`, `path`, `v` | Explicit new value on a leaf, a grid row or a grid cell, as defined above |
+| `fire` | client to service | `seq`, `path`, `v` | A `trigger` press or release with `{on, vel}`; success is not acknowledged, the sound is the acknowledgement; `seq` exists so a `nack` can name the message that failed |
+| `ack` | service to client | `seq`, `ver`, `path`, `v` | The value as accepted, possibly clipped; `ver` is the app's state version after it |
+| `nack` | service to client | `seq`, `path`, `reason` | Rejected; `reason` in `unknown_path`, `read_only`, `out_of_range`, `bad_type`, `app_absent`, `contract_mismatch` |
+| `changed` | service to client | `app`, `ver`, `path`, `v`, `by` | A state value changed; `by` is `panel`, `algorithm`, `app`, so the duet is visible |
+| `telemetry` | service to client | `app`, `path`, `v`, `at` | A `meter` reading; carries no `ver`; throttled to the leaf's `rate_hz` |
+| `event` | service to client | `app`, `path`, `name`, `data`, `at` | Transient, not state: `step` on a grid, `sample_captured`, `recording_saved`, `bar`, `beat` |
+| `path_added`, `path_removed` | service to client | `app`, `node` or `path` | Namespace change |
+| `ping`, `pong` | both | `at` | Liveness |
+
+The wire verb is an explicit `set`, never a toggle. The specification leaves toggle-versus-set to `state-sync` as a research question and does not decide it; this contract chooses `set` because a repeated or reordered `set` is idempotent, which `transport-ui` asks for, while a toggle verb cannot be made idempotent without carrying a version anyway. A panel that wants toggle behaviour reads its own copy and sends the inverse; if `state-sync` concludes that a server-side toggle is wanted, it is a MINOR addition beside `set`, not a replacement. Every `set` carries a client `seq` and is answered with an `ack` naming the resulting `ver`, so a client can tell a stale echo from a fresh change; `applies` on the leaf tells the panel whether to light the cell at once (`immediate`) or to light it and mark it pending until `changed` confirms (`next_cycle`); and `nack` with `app_absent` is how the surface degrades when an app is down. The exact conflict and pending semantics are `state-sync`'s to finish; this contract gives them `seq`, `ver`, `by` and `applies` to work with.
+
+## Worked examples
+
+Drum grid, one Subsequence pattern named `kit` on the DRM1:
+
+```json
+{"id": "kit", "kind": "group", "label": "kit", "instrument": "drm1", "tags": ["drums"], "children": [
+  {"id": "grid", "kind": "grid", "path": "/subsequence/kit/grid", "value": "cells", "access": "rw", "applies": "next_cycle", "priority": 1,
+   "shape": {"rows": [{"id": "kick", "label": "kick", "note": 36}, {"id": "snare", "label": "snare", "note": 38}, {"id": "hh_closed", "label": "hh_closed", "note": 42}],
+             "cols": 16, "page": 16,
+             "cell": {"fields": {"on": "bool", "vel": {"type": "midi7", "default": 100}, "prob": {"type": "ratio", "default": 1.0}}, "v1": ["on"]}}},
+  {"id": "cols", "kind": "number", "path": "/subsequence/kit/cols", "value": "int", "access": "rw", "range": {"min": 1, "max": 64, "step": 1}, "default": 16, "unit": "steps", "hint": "stepper", "applies": "next_cycle"},
+  {"id": "muted", "kind": "toggle", "path": "/subsequence/kit/muted", "value": "bool", "access": "rw", "default": false, "hint": "switch", "applies": "immediate"}
+]}
+```
+
+Its snapshot entry is `"/subsequence/kit/grid": {"cols": 16, "rows": {"kick": [{"on": true}, null, null, null, {"on": true}, null, ...], "snare": [...], "hh_closed": [...]}}`. A tap on kick step 5: `{"t": "set", "seq": 41, "path": "/subsequence/kit/grid/kick/5", "v": {"on": true}}`; the service answers `{"t": "ack", "seq": 41, "ver": 1207, "path": "/subsequence/kit/grid/kick/5", "v": {"on": true}}` and, when the rebuild has taken it, `{"t": "changed", "app": "subsequence", "ver": 1212, "path": "/subsequence/kit/grid/kick/5", "v": {"on": true}, "by": "panel"}`. An algorithm clearing step 12 in the same cycle arrives as `changed` with `"by": "algorithm"`. The playhead is `{"t": "event", "app": "subsequence", "path": "/subsequence/kit/grid", "name": "step", "data": {"col": 5}, "at": ...}` if `playhead` chooses server push.
+
+Melodic step row, a `bass` pattern on a synth: the same `grid` kind with one row, and the per-field objects carry the ranges.
+
+```json
+{"id": "bass", "kind": "group", "label": "bass", "instrument": "synth1", "tags": ["melodic"], "children": [
+  {"id": "grid", "kind": "grid", "path": "/subsequence/bass/grid", "value": "cells", "access": "rw", "applies": "next_cycle", "priority": 1,
+   "shape": {"rows": [{"id": "bass", "label": "bass"}], "cols": 16, "page": 16,
+             "cell": {"fields": {"on": "bool",
+                                 "note": {"type": "midi7", "range": {"min": 24, "max": 96}, "default": 36},
+                                 "len": {"type": "steps", "range": {"min": 1, "max": 16, "step": 1}, "default": 1},
+                                 "vel": {"type": "midi7", "default": 100}},
+                      "v1": ["on", "note"]}}}
+]}
+```
+
+A set is `{"t": "set", "seq": 57, "path": "/subsequence/bass/grid/bass/0", "v": {"on": true, "note": 43}}` and the row's snapshot is `[{"on": true, "note": 43}, null, null, null, {"on": true, "note": 48, "len": 2}, ...]`; the panel renders a note lane above the on/off row. `note` is a MIDI number in this contract because that is what the engine's steps carry (`web_ui.py:257-263` reads `note.pitch`) and what `drum_note_map` resolves to; a scale-degree lane resolved against the composition's key would be a further field `degree`, and whether Simon wants degrees on the panel is put to him separately.
+
+Pad bank, Subsample channel 10 assignments read from the MIDI map (`midi-map.yaml:7-27`):
+
+```json
+{"id": "pads", "kind": "group", "label": "Pads", "tags": ["sampler"], "children": [
+  {"id": "kicks", "kind": "trigger", "path": "/subsample/pads/kicks", "value": "cell", "access": "w", "hint": "pad", "applies": "immediate", "gesture": {"modifier": "hold"}, "midi": {"channel": 10, "notes": [36, 35]}},
+  {"id": "snares", "kind": "trigger", "path": "/subsample/pads/snares", "value": "cell", "access": "w", "hint": "pad", "applies": "immediate", "midi": {"channel": 10, "notes": [38, 40]}}
+]}
+```
+
+A hit is `{"t": "fire", "seq": 42, "path": "/subsample/pads/kicks", "v": {"on": true, "vel": 110}}`; the `midi` block is what the service uses to send to the virtual port when co-located, and it is present because Subsample triggers only over MIDI.
+
+Fader, a Subsample CC binding `filter_low: { freq: { cc: 74, min: 200, max: 16000 } }` (`README.md:2036`):
+
+```json
+{"id": "filter_freq", "kind": "number", "path": "/subsample/kit/filter_freq", "label": "Filter", "value": "float", "access": "rw", "range": {"min": 200, "max": 16000, "clip": "both"}, "default": 8100, "unit": "hz", "hint": "fader", "applies": "immediate", "midi": {"cc": 74, "channel": 10}}
+```
+
+The service scales `v` to `midi7` at the edge; the panel works in hertz. The `changed` back from Subsample's `cc` event (`player.py:5055`) closes the loop.
+
+Band selector, from Substation's `bands:` (`config.yaml.default:214-300`):
+
+```json
+{"id": "band", "kind": "select", "path": "/substation/band", "label": "Band", "value": "enum", "access": "rw", "range": {"values": [{"id": "pmr", "label": "PMR446"}, {"id": "air_civil_bristol", "label": "Air Bristol"}, {"id": "fire_ground_uhf", "label": "Fire UHF"}]}, "default": "pmr", "hint": "radio", "applies": "restart", "priority": 1}
+```
+
+`applies: restart` is honest about today's Substation: the panel shows the old band as pending until the new process publishes its manifest and `changed`. If `subsample-substation` adds a retune, the leaf changes to `next_cycle` or `immediate` and no page changes.
+
+Kit selector, from Subsample's `programs:` (`midi-map.yaml.default:209-217`), where the enum ids are the program numbers because names may carry spaces and a renamed kit should not move:
+
+```json
+{"id": "program", "kind": "select", "path": "/subsample/program", "label": "Kit", "value": "enum", "access": "rw", "range": {"values": [{"id": "0", "label": "Acoustic Kit"}, {"id": "1", "label": "Electronic Kit"}]}, "default": "0", "hint": "list", "applies": "immediate", "midi": {"program_change": true, "channel": 10}}
+```
+
+The list is fixed for the life of the process, so an edited `programs:` arrives as a fresh `manifest` after restart. A page selector for a synth is not an app leaf: a `grid` with `cols` greater than `page` is paged on the panel, and which page is showing is widget state saved in the page file.
+
+Text, two read-only readouts from what `live_info()` already reports (`composition.py:3868-3915`):
+
+```json
+{"id": "section", "kind": "text", "path": "/subsequence/section", "label": "Section", "value": "string", "access": "r", "hint": "readout", "tags": ["transport"]}
+{"id": "chord", "kind": "text", "path": "/subsequence/chord", "label": "Chord", "value": "string", "access": "r", "hint": "readout", "tags": ["transport"]}
+```
+
+Waveform display, the last captured sample:
+
+```json
+{"id": "last_capture", "kind": "waveform", "path": "/subsample/library/last_capture", "label": "Last capture", "value": "blob_ref", "access": "r", "format": "envelope_400", "hint": "envelope"}
+```
+
+Its value is `{"ref": "assets/subsample/2026-09-02_10-31-04.analysis.json", "duration_s": 1.8, "accent": "#3fb950"}`; a `changed` arrives on `sample_captured`.
+
+Meter, Substation's channels fed from `channel_snr` (`scanner.py:1899-1908`), rows in the scanner's channel order with the original channel index as id:
+
+```json
+{"id": "channels", "kind": "meter", "path": "/substation/channels", "label": "Channels", "value": "series", "access": "r", "range": {"min": -10, "max": 40}, "unit": "db", "hint": "bar", "rate_hz": 4,
+ "shape": {"rows": [{"id": "4", "label": "446.04375"}, {"id": "5", "label": "446.05625"}]}}
+```
+
+Its readings arrive as `{"t": "telemetry", "app": "substation", "path": "/substation/channels", "v": [12.4, 3.1], "at": ...}`.
+
+## How pages are assembled and persisted
+
+A page is a JSON document: `{"page_contract": "1.0.0", "id": "drums", "label": "Drums", "widgets": [{"bind": {"app": "subsequence", "path": "/subsequence/kit/grid"}, "kind": "grid", "x": 0, "y": 0, "w": 12, "h": 6, "style": {"colour": "amber"}, "state": {"page": 0}}, ...]}`. `kind` is recorded so the page still renders sensibly if the app later changes the leaf; `bind` is by path, so renumbering a note in the definitions file changes nothing on the page.
+
+Candidate pages are derived from the declarations by one rule: for each app, one candidate per top-level group, holding the group's leaves in declaration order with priority 1 to 3 visible, 4 behind a "more" control and 5 omitted; groups declaring the same `instrument` merge into one candidate per instrument; and across apps, one candidate per distinct tag holding every leaf that carries it at priority 1 or 2. Candidates are offered when a user adds a page; what is shown is always the saved page.
+
+| Option | For | Against |
+| --- | --- | --- |
+| Assembled and stored on the panel only (`localStorage`, as Supervisor did at `client/app.js:22-52`) | No service involvement | Lost on another browser, on cleared site data and on a Pi reimage; two panels cannot share a page |
+| Config file on the service only, hand-edited | Versionable next to the composition; survives everything | Editing a grid layout by hand is the wrong tool; no drag-to-arrange |
+| Both: edited on the panel, saved to the service as a file, cached in `localStorage` (recommended) | Drag-to-arrange on glass, one authoritative copy any panel loads, a file Simon can put in git | Needs a small save endpoint on the service |
+
+Recommendation: both, with the service file authoritative and the browser cache only for the last-open page. The recommended location is the service's own configuration directory, because a page binds several apps and belongs to none of their compositions; keeping page files beside the composition instead is put to Simon separately.
+
+## Whether the definitions YAML is the right home
+
+The file is a flat mapping of sections, each a flat `name: integer` map with names `[a-z][a-z0-9_]*`; Subsample consumes `notes, cc, channels, programs` (`subsample/definitions.py:43-45`), Subsequence adds `nrpn`, and both ignore unknown top-level sections (`spec_project_definitions_2026-07-17.md:54-63`). The spec's §2 says each section is a flat name to integer mapping with no nesting (`spec:38-39`), and §8 says to extend by adding sections, not by changing existing semantics (`spec:171-180`). The loaders keep YAML order (`subsequence/definitions.py:198-222` iterates `section_raw.items()` into `table`), but the grid row set does not depend on it, because rows are grid state and the map is used only to label them.
+
+| Option | For | Against |
+| --- | --- | --- |
+| Leave it alone; names flow through `drum_note_map` and `cc_name_map`; pages hold display metadata (recommended) | Zero code change in two repositories; the names already reach the running pattern (`web_ui.py:253`) and the manifest producer labels rows from them | Nothing shared beyond names, which is all the first use-case needs |
+| Reserve a nested `superintendent:` section for labels, colours and voice order | One file names everything for three tools | Breaks the §2 flat-integer rule for that section, so §2 and §3 need amending; neither loader validates it, so drift is silent; duplicates what the page file and the grid state hold |
+| Add flat integer sections such as `voice_order:` | Fits the grammar | Colour and label are not integers; a contortion |
+
+Recommendation: leave the file alone for v1 and make two edits to `reviews/spec_project_definitions_2026-07-17.md`: reserve the section name `superintendent` in §3 so no future flat section takes it, and reword §2 from "each section" to "each consumed section" so a reserved non-integer section is not a contradiction. No code changes, because both loaders already skip unknown sections (`subsequence/definitions.py:182-184`; `subsample/definitions.py:262-264`).
+
+## Versioning so an old page survives a new app release
+
+Three independent versions: `contract` on the manifest (schema shape, semver), `app_version` (informational), and `page_contract` on each page file. Rules: a client whose `contract` MAJOR differs from the service's is refused with a message naming both; an app adapter whose manifest `contract` MAJOR differs from the service's is held as absent with reason `contract_mismatch` naming both, so its tiles render unbound rather than wrong; a MINOR difference on either side is fine because unknown fields and unknown `kind`s are ignored or rendered generically; a page binding whose path is absent renders an unbound tile and rebinds on `path_added`; a binding whose leaf `kind` changed renders the new kind and flags the widget for review; paths are derived from function names and definition names, never from indices, so a reload, a renumbering or a new pattern above an old one does not move anything. This is the OSCQuery namespace-change model plus the JSON Schema unknown-keyword posture, and it costs nothing now.
+
+## Recommendation
+
+Adopt the typed control tree with the fields tabled above, borrowing OSCQuery's attribute vocabulary, the Thing Description's property, action and event split, and MIDI 2.0 Property Exchange's `typeHint` and `priority`, and adding `applies` because the apps genuinely differ in when a write lands. Messages are explicit `set` and `fire` on paths with `seq`, answered by `ack` with `ver`, `changed` with `by`, and `telemetry` for meters. Pages are files on the service edited on the panel. The definitions YAML is left as it is with a two-sentence amendment to its spec.
+
+## Not covered
+
+The MIDI 2.0 Property Exchange subscription mechanics were not read because the full specifications are behind MIDI Association membership (https://midi.org/midi-2-0-property-exchange); only the Controller Resources document is public. TouchOSC's `.tosc` internals rest on a third-party account. Routing two instances of one app is deferred with the limitation stated above. A scale-degree field for melodic rows waits on Simon's answer. The licence question for any widget code borrowed from GPLv3 sources is `licence-audit`'s to settle.
+
+## Hardware-gated
+
+Nothing in this point needs the panel. The `gesture` field is declared here; whether a second contact is delivered is `multi-touch` and `ui-host`'s to measure.
+
+## Provenance
+
+Files read on 2026-09-02: `/mnt/dev/Apps/2026-02 Sequencer/subsequence/definitions.py` (40-70, 85-95, 175-235), `composition.py` (1801-1806, 3021-3030, 3824-3830, 3868-3960, 4129-4152, 4720-4740, 4798-4806, 4828-4870), `pattern_builder.py` (196-202, 264-284, 681-722), `osc.py` (7-22, 171-195), `web_ui.py` (244-268), `constants/instruments/gm_drums.py` (44-72); `/mnt/dev/Apps/Subsample/subsample/definitions.py` (40-50, 255-270), `reviews/spec_project_definitions_2026-07-17.md` (36-42, 52-66, 168-182), `README.md` (2028-2052), `midi-map.yaml` (1-30 and the `select`, `process`, `gain` lines), `subsample/data/midi-map.yaml.default` (195-220), `subsample/player.py` (5055); `/mnt/dev/Apps/SDR Scanner/substation/scanner.py` (1893-1912), `config.py` (410-445), `config.yaml.default` (208-232 and the band names to 513), `cli.py` (290-298); `/mnt/dev/Apps/Supervisor/supervisor/core.py` (30-47, 228-236), `supervisor/app/subsample.py` (20-55), `client/app.js` (20-62, 383-395). Subroutine documents #1465, #1478. URLs: https://opensoundcontrol.stanford.edu/spec-1_0.html, https://github.com/Vidvox/OSCQueryProposal, https://www.w3.org/TR/wot-thing-description11/, https://amei.or.jp/midistandardcommittee/MIDI2.0/MIDI2.0-DOCS/M2-117-UM_v1-0_Property_Exchange_Controller_Resources.pdf, https://midi.org/midi-2-0-property-exchange, https://faustdoc.grame.fr/manual/http/, https://openstagecontrol.ammd.net/docs/widgets/properties-reference/, https://framagit.org/jean-emmanuel/open-stage-control, https://hexler.net/touchosc/manual/controls, https://hexler.net/touchosc/manual/script-properties-and-values, https://hexler.net/touchosc, https://github.com/jacobclarke92/TouchOSC-Script-Injector, https://github.com/Ableton/push-interface/blob/master/doc/AbletonPush2MIDIDisplayInterface.asc, https://fael-downloads-prod.focusrite.com/customer/prod/s3fs-public/downloads/LPP3_prog_ref_guide_200415.pdf, https://www.elektron.se/wp-content/uploads/2024/09/Digitakt_User_Manual_ENG_OS1.51_231108.pdf, https://json-schema.org/draft/2020-12/json-schema-core, https://semver.org/spec/v2.0.0.html. PDF text was extracted with pypdf in a venv under the scratchpad (`control-contract/extract.py`, a prototype) and re-read from the extraction for the Digitakt row.
+
+Referred to by (18)
+   #1920               One WebSocket per page carrying JSON envelopes is the browser transport, with a snapshot on connect, absolute sets, and a 2 s client ping whose missing pong is the only way a stalled server gets noticed inside 30 s
+   #1913  in a comment The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them
+   #1924               The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed
+   #1925               Grid sync is absolute sets applied in loop order under one version, confirmed by ack at application and by a per-cycle event carrying the built version, a state word and the realised cells; the algorithm's hand is ephemeral by default and persistent when an edit is meant to last; a cell's face is the server's value and a ring is the human's unconfirmed request
+   #1926               Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers
+   #1927               V1 gestures: a press sets a cell at once, a quick press on a set cell clears it, a 400 ms hold opens a per-cell velocity strip worked by a second finger or the same finger, and a pad is one voice per contact; every two-contact gesture has a one-contact form, so the page never asks whether multi-touch exists and the contract carries effects, not gestures
+   #1928               Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path
+   #1937               Subsample lacks only a control door and a note event: pads are MIDI into its virtual port, which a second client in the same process reaches in 0.24 ms, faders and kits are CC and Program Change with readback only for CC, and every sample already carries a 3.7 KB envelope block that the browser draws in under a millisecond
+   #1938               Substation switches band today only by restarting, but RadioScanner already stops cleanly on a queued sentinel, so a fresh scanner in the same process is a switch of about 40 ms plus the 2 s warm-up on the workstation; a process restart adds about 0.75 s of imports and, on an RTL-SDR with calibration on, about 13.7 s; the panel can show channel states, SNR meters and recordings today, and a recording waveform is a 1 ms envelope the adapter computes from the final WAV
+   #1939               The later pages reach Subsample and Substation through the same adapter and contract with three small additions: pads are fire frames the Subsample adapter turns into MIDI on its own virtual port, waveforms travel inline as a 400-bin envelope value, a records value type carries recording and sample lists, and the band selector is a restart Substation performs itself by stopping its scanner and constructing a fresh one in the same process, so the service owns no process
+   #1944               When two patterns play one instrument, should the panel show two pages or one page with the grids stacked?
+   #1946               Is changing a pattern's step count from the panel a v1 requirement?
+   #1947               On a melodic step row, should a cell's note be a MIDI note number or a scale degree resolved against the composition's key?
+   #1948               Should page files live in the Superintendent service's configuration directory or beside the composition file?
+   #1949               May the shared project-definitions spec be amended to reserve the section name superintendent and to reword its clause two as each consumed section?
+   #1967               Does the per-cycle cycle event replace the control contract's changed-when-the-rebuild-has-taken-it reading?
+   #1973               Should a pad hit always travel as a fire frame through the Subsample adapter, and should the midi block stay in the declarations?
+   #1975               Should Superintendent run as a systemd system unit or as a user unit?
+
+Not linked, but its writing suggests (12)
+   #1913  The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them  (a comment there names this)
+   #1926  Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers  (it names this)
+   #1937  Subsample lacks only a control door and a note event: pads are MIDI into its virtual port, which a second client in the same process reaches in 0.24 ms, faders and kits are CC and Program Change with readback only for CC, and every sample already carries a 3.7 KB envelope block that the browser draws in under a millisecond  (it names this)
+   #1938  Substation switches band today only by restarting, but RadioScanner already stops cleanly on a queued sentinel, so a fresh scanner in the same process is a switch of about 40 ms plus the 2 s warm-up on the workstation; a process restart adds about 0.75 s of imports and, on an RTL-SDR with calibration on, about 13.7 s; the panel can show channel states, SNR meters and recordings today, and a recording waveform is a 1 ms envelope the adapter computes from the final WAV  (it names this)
+   #1944  When two patterns play one instrument, should the panel show two pages or one page with the grids stacked?  (it names this)
+   #1946  Is changing a pattern's step count from the panel a v1 requirement?  (it names this)
+   #1947  On a melodic step row, should a cell's note be a MIDI note number or a scale degree resolved against the composition's key?  (it names this)
+   #1948  Should page files live in the Superintendent service's configuration directory or beside the composition file?  (it names this)
+   #1949  May the shared project-definitions spec be amended to reserve the section name superintendent and to reword its clause two as each consumed section?  (it names this)
+   #1967  Does the per-cycle cycle event replace the control contract's changed-when-the-rebuild-has-taken-it reading?  (it names this)
+   #1973  Should a pad hit always travel as a fire frame through the Subsample adapter, and should the midi block stay in the declarations?  (it names this)
+   #1975  Should Superintendent run as a systemd system unit or as a user unit?  (it names this)
+  Tip: subroutine link 1916 documents 1913 — confirm one
+
+  Tip: subroutine comment 1916 "what happened"

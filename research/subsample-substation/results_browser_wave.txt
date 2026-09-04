@@ -1,0 +1,4 @@
+chromium 151.0.7922.34
+WAV short.wav: 65424 bytes, 2.02 s audio; median over 10: fetch 1.05 ms, decodeAudioData 0.95 ms, envelope 0.10 ms, draw 0.10 ms
+WAV long.wav: 2051872 bytes, 64.10 s audio; median over 10: fetch 6.25 ms, decodeAudioData 8.70 ms, envelope 1.95 ms, draw 0.10 ms
+preview block: 3582 bytes; median over 10: fetch 0.80 ms, base64 decode 0.10 ms, draw 0.05 ms

@@ -1,0 +1,687 @@
+projects/#2018  Superintendent v1 is one co-located Starlette service holding the browser's single JSON WebSocket, three per-app adapter modules that dial it, a typed control tree written by absolute sets, and a step grid in composition.data behind a StepGrid helper; the one open coupling is whether a panel write wakes the clock loop, because the drain rule and the pending look decide together whether the cell lights at once
+  design · active · #first-use-case-design · #research · superintendent · revised 2 times by @claude-super on Thu 3 Sep
+
+Summary: This is the first-use-case design assembled from the sixteen delivered research points of the Superintendent specification, offering Simon a short list and a recommendation for each of the seven decisions the specification named. The recommended shape is one Starlette-on-uvicorn systemd unit co-located with the music apps, serving a vendored buildless Preact page that holds a single same-origin WebSocket carrying JSON envelopes, with each app carrying its own adapter module on a daemon thread that dials the service and speaks the same frame vocabulary; the sequencer's grid is content in `composition.data` behind a new `StepGrid` helper, written by absolute sets applied in loop order, confirmed by an `ack` at application and a per-cycle event carrying the built version and the realised cells, with the playhead extrapolated client-side from per-beat anchors. The panel is drawn as DOM cells with a transform-moved playhead overlay and canvas layers for redrawn content, on a Raspberry Pi 5 kiosk conditional on a frame-time check, with a gesture set in which every two-contact gesture has a one-contact form. Assembly found one coupling the points had not weighed against each other: the adapter's queue-and-drain rule costs the clock nothing but puts the `ack`, and therefore the cell's face, up to one beat behind the finger, which is the requirement the specification's decided table states plainly, so a short list for the thread-to-loop crossing is given here and must be answered together with the pending look. Subsequence needs no change to its clock, its rebuild or its scheduling: the package change is two new modules, four small engine edits and a dependency-floor fix, and four heavier items are named as needing a wave. Fifty-three questions and twenty-six hardware-gated checks are filed as Subroutine items and grouped here by what they block; the three this assembly raised rather than inherited are #2021, #2019 and #2020.
+
+This document assembles the first-use-case design from the sixteen research points delivered against the Superintendent specification. Each of the seven decisions the specification's closing section names gets a short list of at most three options, a trade-off table, and a recommendation with its reason. Simon chooses; nothing here is settled on his behalf. Every figure is from the filed research and carries its own caveats there; every measurement was taken on the development workstation unless the source document says otherwise, and is indicative.
+
+The first use-case is a multi-page hardware-style sequencer controlling one Subsequence composition that plays hardware drum machines and synths over MIDI: a grid of steps by parts, a tap that lights at once and sounds on the next cycle, an algorithm and a human writing the same grid, a cell that shows when it is being played, and pages assembled from what the apps declare.
+
+## How the surface is drawn
+
+### Rendering technique
+
+| | A. DOM cells in a CSS grid, playhead as one overlay moved by `transform`, canvas layers for continuously redrawn content (recommended) | B. Canvas 2D for everything | C. SVG per widget |
+| --- | --- | --- | --- |
+| Incremental cost, 1024 cells, Pi 5-class throttle | 0.5 to 0.7 ms per frame with style and layout | 0.1 to 0.3 ms, the cheapest measured | 0.9 ms |
+| A genuine every-cell change of 1024 cells, Pi 5-class | 8.6 ms, one dropped frame per snapshot; 22.8 ms at Pi 4 class | 3.9 ms of JavaScript, but raster-bound without a GPU (66 of 300 frames dropped) | 10.9 ms, about 25 percent dearer than DOM |
+| Playhead move | 0.007 ms of Paint as a compositor-only `transform`, against 0.31 ms for class toggles | redraw two columns | attribute or transform on a rect |
+| Touch hit-testing, per-contact pointers, labels, focus, ARIA | free | all by hand | free |
+| What the worst case depends on | main-thread speed, which the throttle calibrates | the host's software raster path when acceleration is absent | main-thread speed |
+| Fit for meters and waveform | canvas layer beside the DOM | native | poor for anything redrawn per frame |
+
+WebGL is excluded: it is the cheapest technique with a working GPU and the only one that dropped frames at every throttle without one, and Chromium's acceleration on a Raspberry Pi cannot be relied on.
+
+**Recommended: A.** Cost does not separate the three for the real workload — a column moves per step and a handful of cells change per beat, all under a millisecond per frame at Pi 5 class, and dirty-cell canvas is nominally cheapest. What decides it is that the DOM gives touch hit-testing, per-`pointerId` contacts, labels, focus and ARIA for nothing, that CSS grid places cells without computed coordinates, and that its worst case is bound to main-thread speed rather than to the host's raster path, which no measurement here can calibrate.
+
+Rules that follow from the measurements and are part of the recommendation: never re-render the grid through the virtual DOM per frame (measured at six to seven times the imperative path); move the playhead by `transform` only; redraw canvases on data change, never on every animation frame; apply a snapshot or page switch as one batch and accept a one-frame hitch; give each grid `contain: paint` or its own compositing layer so a scattered edit repaints one grid rather than the page; keep glow effects off cells that change per step.
+
+### Framework
+
+| | Preact + htm, vendored as one standalone module (recommended) | Lit, vendored as one bundle | Vanilla ES modules and Custom Elements |
+| --- | --- | --- | --- |
+| Build step | none | none (pre-built bundles avoid bare specifiers) | none |
+| Size vendored | one file, 13,194 bytes uncompressed | about 5 KB compressed, larger uncompressed | nothing |
+| Fit with pages assembled from declarations | components by hand | a control type maps onto one custom element, which is the Pages decision's own shape | as Lit, with more boilerplate |
+| Precedent | the idiom of both prior codebases, which the brief says to learn from rather than extend | none here | none |
+| Currency | Preact 10.29.8 current; htm 3.1.1 unreleased since 2022 | lit 3.3.3 current | n/a |
+| Licence | MIT and Apache-2.0 | BSD-3 | n/a |
+
+Svelte and Vue are excluded: Svelte needs a Node build, and Vue buildless loses single-file components and offers nothing over Preact at this size.
+
+**Recommended: Preact + htm**, with the grid's hot path written imperatively through refs and class toggles rather than through the virtual DOM. Two rows of the table argue the other way and are weighed rather than dropped. Lit's custom-element-per-control-type is closer to the Pages decision's own shape, and pages assembled from declarations are the product's spine; against that, the mapping this design actually needs is from a `kind` to a render function, which is a dictionary lookup in either framework, and the grid — the one control whose cost was measured — is written imperatively in both, so the structural advantage applies to the cheap widgets and not to the expensive one. htm being unreleased since 2022 is the more real cost: it is a vendored dependency of an AGPL tree that must be able to supply the Corresponding Source, so it is vendored at a pinned version with its source URL and licence recorded beside it (the rule below), it is 700-odd lines of tagged-template parsing with no runtime surface of its own, and the fallback if it ever breaks is Preact's `h()` calls, which is a mechanical rewrite of the templates and touches nothing else. On the strength of that, Lit is the principled equal alternative rather than the loser, and the choice is genuinely Simon's (#1978); if he takes Lit, nothing else in this document moves.
+
+### Widget sources
+
+| | Bespoke widgets on DOM and canvas, borrowing the hardware conventions (recommended) | NexusUI vendored for the non-grid widgets | webaudio-controls for knobs and sliders |
+| --- | --- | --- | --- |
+| Carries the two-contact gestures | yes, by construction | no | no |
+| Matches a flat glass surface | yes | its own look | skeuomorphic knob sprites |
+| Waveform from Subsample's envelope | yes, the data is already the right shape | no consumer for it | no |
+| Licence | ours | MIT stated in `package.json` only, no licence text (#1983) | Apache-2.0, code only; not the CC-BY sample images or the bundled Polymer polyfill |
+
+**Recommended: write the widgets, borrow the conventions.** No library carries the gestures, none matches the look, and Subsample's 400-bin envelope suits none of them directly. For the waveform, serve `render_svg` inline first (zero browser code, proves the data path) and draw the envelope on canvas as the end state, when the widget must follow the theme or share coordinates with the playhead overlay.
+
+The visual language is borrowed from Push, Launchpad, Digitakt and MPC: hue for state and luminance for velocity with a second cue beside brightness; a distinct moving playhead colour as a translucent overlay that preserves the cell underneath; steady for the page being edited and blinking for the page being played; tempo-synced pulsing for pending and armed; one global brightness control; a small palette of one identity colour per instrument plus a handful of state colours; square cells of one size in a fixed grid that pages rather than shrinks; transport and page controls outside the grid in a different shape from cells; at least 3:1 contrast between cell states and 4.5:1 for labels; flashing no faster than one flash per two beats; a light theme beside the dark one from the first version (#1981). At the panel's 0.249 mm pixel pitch, at most 32 steps are shown per grid view and longer patterns page, which is also what the hardware does. The working cell size is **60 px square**, whose arithmetic comes from a retailer specification sheet rather than from use and is exactly what #1998 exists to confirm by hand.
+
+Fonts are Inter with JetBrains Mono for numerals; icons are Lucide. All are vendored with their licence text; the fonts may be subsetted (only a modified IBM Plex may not keep the name "Plex"), and each minified vendored bundle records its upstream version and source URL so the Corresponding Source can be supplied.
+
+**Rests on:** #1930, #1931, #1940, #1923.
+
+## Where the UI is served from, and how the service relates to the apps
+
+### Topology
+
+| | C. One service co-located with the apps, serving the page and holding the browser's single socket (recommended; B is the same software elsewhere) | B. The same service on another host of the apps' network | D behind a reverse proxy. An adapter in each app, nginx or Caddy for one origin, the page aggregates |
+| --- | --- | --- | --- |
+| Browser sockets | one | one | one per app, through one origin |
+| Origins the page touches | one | one | one |
+| CORS on fetches | none | none | none |
+| One app down or restarting | the service reports it offline and retries; the browser socket is unaffected | as C | the page runs a reconnect machine per app; that app's panels blank |
+| Second panel or a laptop | one socket; fan-out and snapshot cache once, in the service | as C | each app fans out to every panel from inside its own process |
+| Where snapshot, fan-out, reconnect, page assembly and mock apps live | once, in one process, one concurrency model | as C | replicated into every app process; page assembly and mocks have nowhere but the browser |
+| Inside the composition process | one outbound link | one outbound link | a listening server whose work grows with the number of panels |
+| Pads to Subsample's virtual MIDI port | not a differentiator: under the adapter-only pad path settled below, the Subsample adapter opens the output inside Subsample's own process, so pads work identically in all three columns | as C | as C |
+| Measured clock cost | median and mean unchanged; a sub-millisecond P99 in two of eighteen loaded runs that two repeats each failed to reproduce; only pinning service and sequencer to one core moved the distribution (P99 2.0 ms) | no CPU shared with the clock at all | socket I/O on the clock loop costs p99 about 1.1 ms; on a daemon thread, nothing measurable |
+| Cost accepted | one more long-running process; a single point of failure for the page | a second machine that fails independently; a LAN hop per message | the proxy is the same single point of failure, plus N reconnect machines in the client |
+
+The pad row is stated as a non-differentiator deliberately: the researcher's version counted it against option B, on the strength of the variant in which the service itself opens a mido output to the virtual port. That variant is excluded below, so the row cannot also be used to rank the topologies. Only if Simon reinstates it (#1973) does co-location earn a pad advantage, and then it is worth about 1 ms against a 3 to 23 ms output buffer.
+
+A static page talking straight to app endpoints is excluded: browsers cannot speak UDP so OSC is not an endpoint, the REPL is loopback TCP, `web_ui.py` is frozen, and the shape becomes the in-app-adapter shape as soon as each app grows a browser-facing server.
+
+**Recommended: C, with B as a deployment option of the same software.** It is the only shape in which every cross-cutting concern is written once in one process with one concurrency model rather than replicated into three, and it keeps what runs inside the composition to a single link whose work does not grow with the number of panels.
+
+**Discovery is recommended with it, not settled by it.** The recommendation is a static URL for panels and registration by the apps: a browser cannot browse mDNS services, `.local` names are unreliable on Windows and in the Chromium snap, and registration adds no listening socket to any app, so neither the port map nor the inherited exposure grows. Which side dials is a filed question (#1950) and remains Simon's; the serving design keeps a `dial:` fallback in the configuration shape for an app that cannot dial out, and mDNS is a later addition nothing in this shape prevents. If Simon reverses the direction, three listening sockets, three bind-failure paths and a static address list in the service come back with it.
+
+### The listen port and the exposure
+
+The specification's port map reserves 9000, 9001 and 9002 (OSC), 5555 (the REPL), 8080 and 8765 (the legacy dashboard) and 9003 and 9004 (the Supervisor adapters), and requires Superintendent not to collide with any of them. The service's own port was left unnamed by every point (the serving design's configuration sketch writes it as a placeholder), so it is chosen here.
+
+| | A. 8090 (recommended) | B. 9005 | C. 80 |
+| --- | --- | --- | --- |
+| Distance from the map | clear of every entry | one digit from the superseded Supervisor adapters | clear |
+| What a person types | `http://<server>:8090/` | `http://<server>:9005/` | `http://<server>/` |
+| Reads as | a web UI, beside the familiar 8080 | the fifth socket in the Supervisor family | the machine's web service |
+| Unit cost | none | none | binding below 1024 as `User=music` needs `AmbientCapabilities=CAP_NET_BIND_SERVICE` |
+| Risk | none known | confusing if either adapter is ever revived | collides with anything else that wants 80 on that box |
+
+**Recommended: 8090**, configurable in one line of the service's YAML so nothing rests on it. The kiosk's URL lives in an autostart file rather than in anyone's fingers, so C's brevity buys little for a capability grant. This is a decision Simon should confirm and is filed as #2020, which carries the IANA registry entry for each candidate — 8090 is assigned as `opsmessaging` and 8085 is unassigned — the best-known de-facto claim on each, and 8085 as the equal alternative.
+
+**The exposure, inherited and created.** Today every network surface in the three apps is opt-in and off by default. Once enabled, the ranking is: Subsequence's OSC receiver on UDP 9000 is the control door — it binds all interfaces by documented intent, and an unauthenticated sender can set tempo, mute or unmute any pattern, and write any `composition.data` key, which is where this design puts the grid; the Supervisor adapters on 9003 and 9004 are the read door, binding all interfaces and serving whole recordings directories with a CORS wildcard; Subsequence's REPL on loopback TCP 5555 is the only code-execution surface; Subsample's OSC receiver on loopback UDP 9002 accepts `/sample/import <path>`, an unauthenticated read of any readable file if it were ever rebound. Substation has no listening socket at all. Superintendent adds exactly one surface: its own listen port on the service, bound to the LAN interface because the browser and the apps both reach it. The apps gain none, because they dial out. Whether the composition on the rig enables OSC, and with which receive host, is #1955; passing `receive_host="127.0.0.1"` is a composition-file setting, not an engine change, because binding all interfaces is documented intent.
+
+### The stack that runs it
+
+| | Starlette on plain uvicorn plus websockets (recommended) | aiohttp | websockets plus a hand-written static handler |
+| --- | --- | --- | --- |
+| Runtime distributions | 7 | 9, five with C extensions | 1, already in the tree |
+| Warm import, peak RSS | 0.071 s, 27 MB | 0.141 s, 35 MB | 0.054 s, 24 MB |
+| Static serving | ETag-aware `StaticFiles` | `web.static` | MIME, ETag, range and traversal by hand |
+| Later HTTP, TLS, auth | ASGI: server and middleware interchangeable | aiohttp's own API | out of scope by the maintainers' own statement |
+| Typing and house-style fit | fully typed, explicit route table | fully typed, explicit routes | plain functions |
+| CPU under a sixteen-client load | 5 to 19 percent of one core | 2 to 5 percent, the lowest | 2 to 14 percent |
+| Fan-out | one bounded queue per client, drained by its own task, is required work | the same | `broadcast()` never awaits, but has no backpressure |
+
+FastAPI and Quart are excluded: FastAPI's pydantic validation and OpenAPI are unused by a WebSocket service and its footprint is the largest of the five; Quart is sixteen packages, its current release needs Python 3.13, and its decorator style pushes module-level state.
+
+**Recommended: Starlette on plain uvicorn.** Starlette and aiohttp are both typed and complete. The CPU column is not close and should not be described as if it were: aiohttp measured 1.9 to 4.7 percent of one core, Starlette on plain uvicorn 9.2 and 18.9 percent in its two sixteen-client runs, and Starlette with the standard extra 4.3 to 5.6 percent — a factor of two to four in the worst comparison. The source attributes its two highest readings to other activity on the workstation, since the broadcast latency in those same runs was also the highest recorded, and none of it reached the clock in any run. Even taken at face value it is under a fifth of one core for sixteen clients, so it decides nothing unless the server is small, which is exactly what #1977 asks. On that footing Starlette wins on ASGI interchangeability for a later TLS or authenticated mode, the ETag-aware static handler, and the route table that reads in the house style; if the answer to #1977 is a small or busy server, aiohttp is the cheaper choice and costs only the ASGI option. Fan-out is one bounded queue per browser client drained by its own task, so a stalled Wi-Fi panel drops frames rather than delaying the others.
+
+Deployment is one systemd unit (system or user, #1975) with `Type=notify` through a ten-line standard-library `sd_notify`, `Restart=on-failure`, `RestartSec=2`, `WatchdogSec`, no `After=` or `Requires=` on the music apps, cheap hardening, stdout to journald, and uvicorn's access log switched off explicitly with `access_log=False` and `log_config=None`. Configuration is one YAML file in the siblings' shape, found via `--config`, then the working directory, then XDG, then `/etc`, naming the service's listen address and port and the apps it expects; each app's side is one line, `superintendent: {enabled: true, url: ...}`, defaulting to loopback so the co-located case needs no edit anywhere. Packaging follows the siblings in every respect but one: setuptools-scm, a PEP 639 `AGPL-3.0-or-later` expression, the static UI and its licence files as package data, and no direct-URL dependency of any kind. The exception is `requires-python`: `>=3.12` is Subsample's floor but above Subsequence's and Substation's `>=3.10`, so it is not sibling precedent. Its grounds are Ubuntu 24.04's own interpreter and the websockets 17 floor of 3.11, and its consequence is that a 22.04 server's system Python is excluded and would need a venv on a newer interpreter, which is #1976.
+
+Development mode runs a real Subsequence with no MIDI device and mocks only Subsample and Substation, because those need an audio device and an SDR; the mocks dial the service exactly as the real adapters do, so the service's own handling of a peer is exercised by a real client rather than by a fake shaped the way the service wished. That is not, on its own, the answer to Supervisor's sharpest lesson, and it should not be presented as one. What failed there was app-side: the real caller passes `player=_player_cell`, a one-element list, and `recorder_processor=None` (`subsample/cli.py:1750-1756`), so the adapter's `hasattr` probes were false forever and voices, queue depth and audio serving were dead in production while thirty-seven tests passed against fixtures that described the interface the adapter wanted. A service-side mock cannot catch that class of defect at all. So the practice carried is app-side and additional: **each app's own suite carries one test that constructs its Superintendent adapter exactly as that app's entry point constructs it** — `subsample/cli.py:1747-1759` and `substation/cli.py:240-252` are where the Supervisor hooks sit today and where the Superintendent hook goes — and asserts `json.dumps` on the real snapshot that adapter produces, which is also the boundary at which numpy scalars are caught (below).
+
+**Rests on:** #1919, #1929, #1922, #1923.
+
+## The protocol between browser and service, and between service and apps
+
+### Browser to service
+
+| | A. One WebSocket per page carrying JSON envelopes (recommended) | B. Server-Sent Events for push plus fetch POST for commands | C. A as above plus an unreliable-unordered WebRTC data channel for pad hits |
+| --- | --- | --- | --- |
+| Connections per page | one | one stream plus a request per command, under a six-per-origin cap on HTTP/1.1 | one plus a peer connection |
+| Command round-trip, loopback | 0.8 to 1 ms median | 3.8 ms | as A |
+| Ordering | one total order per connection | none between the command channel and the stream | ordered channel plus an unordered one |
+| Reconnect | client code: backoff plus `hello` with the version map | free for the stream via `Last-Event-ID`; none needed for commands | client code plus an ICE restart |
+| Liveness | client `ping` every 2 s, 6 s stale timer on inbound frames | the stream needs a heartbeat event; fetch has no timeout of its own | as A |
+| Python side | `websockets`, already a dependency on both sides | any HTTP server | aiortc, with unverified mDNS candidate handling |
+
+WebTransport is excluded for v1: it is HTTPS-only, needs an ECDSA certificate under fourteen days hash-pinned into the page, and has no Python framework integration. It is the right WAN transport later, and the envelope carries over unchanged.
+
+**Recommended: A.** It is the only short-listed option with a single total order per connection, `websockets` is already a dependency on both sides, it measured a quarter of fetch's command cost, and its two weaknesses — no built-in reconnect and no protocol Ping exposed to the page — are about forty lines of client code. Liveness must be client code whichever option is taken: a SIGSTOPped server was invisible to headless Chromium 151 and Firefox 153 for over 30 s on the socket, and a fetch POST to the same stalled server hung until a 30 s client abort, while a killed server took about 0.6 s.
+
+The envelope is small UTF-8 JSON, one object per frame, with `permessage-deflate` off. Client to server: `hello` (contract version, client id, page, the last `ver` per app, and **an optional `token` field ignored in v1**), `set` (`seq`, `path`, absolute `v`), `fire`, `ping`. Server to client: `manifest`, `snapshot` (per app, stamped with `ver`), `ack`, `nack`, `changed` (with `by` and, when `by` is `panel`, `client`), `event`, `telemetry`, `pong`, `app` presence. The token field costs nothing now and is one of the four zero-cost choices that keep a remote mode open — the other three being a single origin for page, socket and media, relative URLs with no CORS wildcard, and the apps on loopback with the service the only network face — and it is the one whose omission would force a protocol change later rather than a check. JSON stays for v1: MessagePack and CBOR are 1.6 to 4.8 times smaller but encode plus decode is microseconds at this scale in both Python and V8. Binary frames are reserved for bulk payloads with a one-byte kind tag.
+
+The lifecycle is fixed: a full `manifest` and `snapshot` on every connect regardless of the version map, because a 128-cell snapshot is under 1 KB and 12 microseconds to encode and always-snapshot has no edge cases; a 2 s client `ping` whose echoed timestamp also gives the playhead its clock offset; a 6 s stale timer reset by any inbound frame; exponential-backoff reconnect from 250 ms to a 5 s cap with jitter; server-side `ping_interval` and `ping_timeout` at 5 s; pending `set` frames keyed by client id and `seq` re-sent after a reconnect's snapshot, while `fire` is never re-sent because a late pad hit is worse than a lost one; a pending `set` unacknowledged for 5 s reverts on the panel. The client suspends its ping while hidden and forces a fresh `hello` on `visibilitychange` and `pageshow`.
+
+### Service to apps
+
+| | A. A per-app adapter module dialling the service over one WebSocket (recommended) | B. The same module over a stdlib TCP socket speaking newline-delimited JSON | C. An embedded WebSocket server in each app, behind a reverse proxy |
+| --- | --- | --- | --- |
+| Codec in the service | one, shared with the browser | two framings and a hand-rolled keepalive | one |
+| Snapshot on connect | `manifest` then `snapshot`, re-sent on every reconnect | as A | on accept |
+| New listening sockets in the apps | none | none | one per app |
+| Keepalive, framing, close | from the library | hand-rolled | from the library |
+| Measured cost to Subsequence's clock at 50 Hz | on the loop p99 1.22 ms; per-message from a thread p99 1.10 ms; queued on the thread and drained at the sequencer's own hooks, p99 0.002 ms against a 0.002 ms baseline | per-message from a thread p99 1.05 ms; with the drain, identical to A because the app-side half is the same code | threaded server p99 0.003 ms, but fan-out and snapshot caches move into every app process |
+| New dependencies | `websockets` as an optional extra in Subsample and Substation; Subsequence's floor rises to 13.0 | none | as A |
+
+OSC over UDP is excluded as the standard shape: it has no connection on which to hang a snapshot, cannot see an absent peer, does not fit a typed declaration, and reusing Subsequence's receiver would put Superintendent behind the LAN-open user OSC door. It stays the user-facing surface it is. MIDI into Subsample's virtual port is a complement carried as a `fire` frame, not an alternative.
+
+**Recommended: A, as one module per package** (`subsequence/superintendent.py`, `subsample/superintendent.py`, `substation/superintendent.py`), each on its own daemon thread with its own loop, opening a single outbound WebSocket, sending `manifest` and `snapshot` on connect, and speaking the browser's frame vocabulary so the service has one codec. It is the only option giving the service one codec, one connection direction and one failure story across all three apps while adding no listening socket to any of them; its measured clock cost with the drain is nil where every per-message shape costs about 1.1 ms at p99; and it is the shape the recommended topology's registration assumed. The cause of that 1.1 ms is CPython's epoll selector rounding every selector timeout up to a whole millisecond, so a mid-sleep wake-up overshoots the clock's 1 ms spin margin (`sequencer.py:465`) — an engine-side lever, not a transport property (#1974).
+
+The app-side rule is part of the shape and differs per app because their concurrency models differ:
+
+- **Subsequence.** Inbound `set` frames go into a bounded queue and are drained on the loop by a `reschedule_pulse` listener, awaited immediately before the rebuild that consumes the grid (`subsequence/sequencer.py:1804`), and by a `beat` listener for patterns not rescheduling this pulse. **When that drain happens is the one open coupling in this design and is short-listed under the grid below**; the transport shape is the same whichever crossing rule is chosen, because both use the adapter's own queue. Verbs that must not wait a beat go through the existing thread-safe paths at the cost of one wake-up each. Outbound frames are built on the loop in a `pattern_reschedule` listener (`sequencer.py:1829`) and appended to one ordered log the link thread drains. Nothing runs in the pulse's own processing.
+- **Subsample.** The module subscribes to `app_events` and the player's events and copies under its own lock; a `fire` becomes note-on and note-off on a mido output the module opens to the process's own virtual port, which keeps the rtmidi callback thread the only MIDI handler (`subsample/player.py:4444-4450`; the lock-ordering rule is written at `player.py:7-29`, whose operative half — "never acquire either while holding any of the others" — is on the last of those lines). It holds the set of pads it has pressed and releases them on link loss, because a `gated` or `loop` voice sounds until a note-off or CC 123.
+- **Substation.** The module registers synchronous handlers for the four recording and state events, which land on the scanner loop by one route or the other, and for the two per-slice events, which run on the executor thread and where it swaps references rather than locking; a band request is marshalled onto the scanner loop with `call_soon_threadsafe`.
+
+**Every adapter sanitises numpy at the JSON boundary.** This is Supervisor's most easily repeated defect and the one this design walks straight back into: Substation's SNR and activity values are `numpy.float64` and `numpy.bool_`, Subsample's preview block is a 400-bin int8 envelope, Substation's recording envelope is computed the same way, and `json.dumps` has never accepted `numpy.bool_`, `numpy.int64` or `numpy.float32` — `numpy.float64` passes only because it subclasses `float`, which is why the failure looks intermittent and why Supervisor's README wrongly blamed a Python release for it. Each adapter sanitises at the source or installs a `json.dumps(default=)` hook, never by sniffing type names, and the constructor test above asserts `json.dumps` on the real snapshot so the boundary is covered by a test rather than by care.
+
+V1 ships three per-app modules pinned by one protocol specification with executable test vectors run by each app's own suite, rather than a fourth shared package; extraction into a package once the three exist and converge is mechanical (#1972).
+
+**Rests on:** #1920, #1926, #1928, #1919, #1923.
+
+## The control declaration and the message contract
+
+| | A. A typed control tree of groups and typed leaves (recommended) | B. W3C Thing Description verbatim | C. OSCQuery verbatim |
+| --- | --- | --- | --- |
+| Covers a drum grid, a melodic row, a pad bank, a fader, a band selector, a waveform, a meter | yes, in one schema | grids have no shape and a cell no address; flat name-keyed maps need a grouping convention | no record type for a cell |
+| Null and records on the wire | JSON carries both | JSON carries both | OSC's nil is a nonstandard tag receivers need not recognise |
+| Says when a write lands | `applies`: `immediate`, `next_cycle`, `restart` | nothing equivalent | nothing equivalent |
+| Widget hint separate from value type | yes | no | partly, through `EXTENDED_TYPE` |
+| Carriers | one, whichever the transport points choose | `forms` bind each interaction to a protocol, duplicating the transport decisions | pairs HTTP for the tree with OSC for values |
+| Mandatory ceremony | none | `@context`, `security`, `securityDefinitions` | none |
+| Standing | new schema to own and version | W3C Recommendation | a proposal |
+
+A widget manifest in Supervisor's or TouchOSC's shape is excluded: it bakes layout into the app, which breaks the decision that pages are free-form and user-defined, and it has no value model. MIDI 2.0 Property Exchange verbatim is excluded because the apps are not MIDI devices to the panel; its `typeHint` and `priority` are borrowed.
+
+**Recommended: A.** It covers every worked example in one schema, JSON carries null and records natively, it is transport-neutral so an OSC mapping or a Thing Description export can be added later without redesign, and it borrows vocabulary from OSCQuery (attributes), the Thing Description (the property, action and event split, DataSchema names) and Property Exchange (`typeHint`, `priority`), adding only `applies`, which nothing in the prior art has and the apps genuinely need: a step tap lands next cycle, a pad hit is immediate, a Substation band change is a restart.
+
+A leaf carries `id` (the name exactly as the app knows it, OSC-legal), `path`, `kind` (`toggle`, `trigger`, `number`, `select`, `grid`, `text`, `meter`, `waveform`, `list`, `group`), `value`, `access`, `range`, `default`, `unit`, `hint`, `applies`, `priority`, `tags`, `description`, and `rate_hz` on meters. A `grid` leaf adds a `shape` with its own ordered row list, `cols`, `page`, and a `cell` schema; grid rows are the grid state's own rows, merely labelled through the pattern's `drum_note_map`. Sub-paths address a row and a cell; a cell is a record with `on` plus declared future fields. Messages are explicit `set` and `fire` on paths with a client `seq`, answered by `ack` with the app's `ver`; there is no toggle verb, because `set` is idempotent and a replayed toggle inverts a cell. Namespace change travels as `path_added` and `path_removed`, so a pattern registered in a live reload appears and an unregistered one leaves a page's tile unbound rather than wrong. Three independent versions — `contract`, `app_version`, `page_contract` — plus ignore-unknowns keep an old page working against a new app release.
+
+**The message-contract half of this decision is short-listed, but the tables live with the grid**, because the options only make sense beside the rebuild model: absolute set against per-cell compare-and-set against multi-value merge, and per-cycle `cycle` event against per-cell build confirmation against `ack` alone, are both tabled under "Conflict policy, confirmation, the algorithm's hand and the pending look" below. Nothing here is settled prose that has not been short-listed somewhere.
+
+This assembly makes six amendments to the contract as filed. Four are additions or harmonisations that reconciling two points requires and that the assembly states flatly; two change what an app may declare or what v1 carries and are therefore Simon's, not the assembly's:
+
+- **Simon's.** `changed` leaves at application rather than at the rebuild, and a new per-cycle `cycle` event is the build confirmation — a revision of the contract's semantics, filed as #1967. And the drum-grid example's `v1` list becomes `["on", "vel"]` with `vel` ranged 1 to 127 rather than 0 to 127, because a velocity of zero is a note-off in MIDI and in the sampler; this fixes what v1 cells carry and should be confirmed rather than assumed.
+- **The assembly's.** `client` is added to `changed` beside `by`. The declared `gesture` field is dropped in favour of optional `levels` on a cell field and an optional velocity mode with a fixed value on a pad trigger. An `envelope` value type, a `list` kind with a `records` value and a `mode` field on `trigger` are added for the later pages. And the stored cell's velocity key, written `v` in the grid design and `vel` in the contract, is harmonised on `vel`: the grid design left the wire name to the contract explicitly, so this is that decision being taken rather than a change to either.
+
+### Where pages live
+
+| | A. Edited on the panel, saved as files on the service, cached in the browser (recommended) | B. Browser `localStorage` only | C. A hand-edited service config file only |
+| --- | --- | --- | --- |
+| Drag-to-arrange on glass | yes | yes | no |
+| Survives another browser, cleared site data, a reimage | yes | no | yes |
+| Two panels share a page | yes | no | yes |
+| Version-controllable beside the composition | yes | no | yes |
+| Cost | a small save endpoint on the service | none | editing a grid layout by hand is the wrong tool |
+
+**Recommended: A**, with the service file authoritative and the browser cache holding only the last-open page. Candidate pages are derived from the declarations by one rule — one candidate per top-level group, groups merged by declared instrument, and one candidate per distinct tag across apps — and offered when a page is added; what is shown is always the saved page. Where the page files sit is Simon's (#1948).
+
+### The shared definitions YAML
+
+Leave the file alone (recommended); the alternatives are a nested `superintendent:` section, which breaks its flat-integer rule and drifts silently because neither loader validates it, or flat integer sections such as `voice_order:`, which is a contortion because colour and label are not integers. Voice names already reach the running pattern through `drum_note_map`, which is all the first use-case needs. Only the spec document is amended, in two sentences: reserve the section name `superintendent` so no future flat section takes it, and reword its clause two to "each consumed section" so a reserved non-integer section is not a contradiction. No code change in either repository (#1949).
+
+**Rests on:** #1916, #1925, #1927, #1939, #1920.
+
+## How the grid lives in Subsequence, and what confirms a tap
+
+The rebuild model settles the shape before any design. Every pattern function is re-run once per cycle by a rebuild that first empties `steps`, `cc_events`, `osc_events` and `raw_note_events` (`subsequence/composition.py:5995-5998`), and `Pattern.steps` is a sparse dict keyed by pulse offset (`subsequence/pattern.py:147`), so the engine never stores a grid: it realises one. The grid is therefore **content the builder reads**, exactly like the literal step lists in today's composition files, and the panel is one more writer of that content. Subsequence stays authoritative because only the rebuild turns content into sound.
+
+### Where the grid state lives
+
+| | A. A `StepGrid` helper object under a Superintendent key in `composition.data` (recommended) | B. A plain dict under the same key | C. Per-pattern tweaks plus a new `p.set_param()` builder verb |
+| --- | --- | --- | --- |
+| Package change | one new helper module; no engine file touched | none | one builder verb, because `p.param()` is read-only today so the algorithm cannot write |
+| Validation of out-of-grid, non-integer and out-of-range writes | at write time, once | none; a step index at or past the grid silently plays in the next cycle's time and a non-integer index places a note between steps | none |
+| Off-loop writes | applies directly when already on the loop, marshals only when not | a dict assignment is atomic, but growing a nested dict while the builder iterates it raises | whole-value replacement sidesteps the race by construction |
+| Version for sync | a monotonic counter, plus `built_ver` and `applied` stamped at build | none | diff of the tweaks |
+| Both hands write through one API | yes | yes | only with the new verb |
+| Survives live reload | yes, seeded get-or-create | yes, same condition | lost on unregister and re-add |
+| Persistence across restart | free: JSON in, JSON out | free | not free |
+| One place for the adapter to find every grid and one schema to declare | yes | no | per pattern |
+
+An engine-native grid object is excluded: the helper gives the same ergonomics with no engine change, and the sugar over it is a two-line wrapper if it is ever wanted.
+
+**Recommended: A.** The storage is identical to B — the same key in `composition.data` (`composition.py:1454`), so a composition can start with a plain dict and migrate — but the four things every composition would otherwise reimplement live once: bounds, type and range validation; the loop-affinity rule; an edit counter for sync; and the mapping from cells to the builder's own verbs. Where the helper sits, and whether its key may be named for its consumer, is Simon's (#1942).
+
+### The cell
+
+| | A. A sparse cell map per row (recommended) | B. Index lists per row | C. Dense parallel arrays per row |
+| --- | --- | --- | --- |
+| Shape | `{"kick": {0: {}, 8: {"vel": 110}}}` | `{"kick": [0, 8]}` | `{"kick": {"on": [...], "vel": [...]}}` |
+| Adding a per-step field | one more key in the cell | needs a parallel structure | one more array per row |
+| Degrades to the simplest form | yes, when every cell is empty | it is that form | no |
+| Step-count change | prune indices past the new count | the same | resize every array |
+| Hardware idiom | Elektron-style per-step locks | Launchpad-style on and off | classic drum-machine row |
+
+**Recommended: A**, with **presence and velocity in v1** — velocity because the accent gesture must have something to write and the builder's sequence verb already takes per-step velocities. The velocity key is `vel`, harmonised with the wire name as the amendment above records. Probability, note, duration, micro-timing nudge and ratchet are reserved keys, each already served by an existing builder verb so none needs engine work, and a `lock` field is reserved for a future per-cell owner.
+
+### When a panel write crosses onto the composition loop
+
+This decision was not put to Simon by any single point, because each of the two points that touch it assumed the other's answer. The grid and state-sync designs assumed the helper marshals each panel write onto the loop promptly and priced the acknowledgement at "a few milliseconds"; the adapter design measured that call at about 1.1 ms at p99 on the clock and moved the crossing into a queue drained at the sequencer's own hooks, at no measurable cost. Both are right about what they measured, and the combination has a consequence neither states: `beat` fires once every 24 pulses (`sequencer.py:1427`, `pulses_per_beat` set from `MIDI_QUARTER_NOTE` = 24 at `sequencer.py:357`) and `reschedule_pulse` once per pattern cycle (`sequencer.py:1804`), so under the drain rule a tap waits **up to one beat** to be applied — and the `ack` that moves the cell's face leaves at application.
+
+| | A. Drain only at the sequencer's own hooks | B. Wake the loop for a grid set, coalescing a burst into one wake-up (recommended) | C. B plus the engine-side selector lever |
+| --- | --- | --- | --- |
+| Tap to `ack`, and therefore to the face | up to one beat: 500 ms at 120 BPM, 1000 ms at 60 BPM, 333 ms at 180 BPM, roughly half that on average | a few milliseconds: the browser hop measured 0.8 to 1 ms loopback plus about 1 ms of wire, then a loopback hop to the adapter and one loop wake-up | as B |
+| Against Nielsen's 0.1 s instantaneous threshold | over it by up to ten times | inside it | inside it |
+| Measured clock cost | p99 0.002 ms against a 0.002 ms baseline | at a realistic 5 Hz tap rate, p99 0.36 to 0.49 ms with a 1.1 ms maximum and 2 to 4 pulses over 1 ms in 1536; at a sustained 50 Hz, p99 1.10 ms and 38 to 57 pulses over 1 ms | p99 0.001 to 0.018 ms for every per-message shape at 50 Hz |
+| Engine change | none | none | the clock's selector or its 1 ms spin margin (`sequencer.py:465`), which is #1974 |
+| Musical effect of the cost | none | a late pulse is late by about 1.1 ms, five percent of a 20.8 ms pulse at 120 BPM; the jitter benchmark's own scale still rates a 2.0 ms P99 as "Good" | none |
+| Coalescing | not applicable | schedule the drain only when one is not already pending, so a burst costs one wake-up rather than one per message — inferred from the finding's own conclusion that the cost is per wake-up and not per message, and **not itself measured** | as B |
+| Tap to sound | unchanged: the cycle, in every column | unchanged | unchanged |
+
+**Recommended: B, with A retained as the automatic fallback** for anything that is not a human's tap — a page-load seed, an algorithm's bulk write, a held paint gesture beyond a rate ceiling — and C named as the lever if the cost on the real headless server turns out worse than the workstation's. The reason is the specification's own decided table: a step tap's transport latency is irrelevant because it is heard on the next cycle by design, *and the cell should light at once*. Under the recommended pending look the face is the server's value, so the `ack` is the face, and a face up to one beat behind the finger fails that requirement outright. What A buys instead is a clock cost that no listener can hear: at a human tap rate it is two to four pulses in 1536 arriving about a millisecond late, against a clock whose mean jitter is about 3 µs, and the rebuild the tap is racing already costs about 105 µs of the same loop.
+
+**This decision and the pending look must be answered together**, and the two coherent pairings are these: B with the ring (the recommendation of both this section and the next, where nothing on a face is ever speculative and the face follows within milliseconds), or A with the optimistic face (where the cell flips locally on the finger and the server's value corrects it up to a beat later, which is what makes A survivable). A with the ring is the combination to avoid, and it is the combination the points as filed would have produced. #1968 should be answered in that light; the crossing rule is filed as #2021, which carries this short list and its figures, adds a measurement at a human tap rate, and settles the coalescing this document names under Not covered.
+
+### Timing, and the composition-file setting it implies
+
+A tap lands in the next cycle only if it is applied before that cycle's rebuild, which fires one `reschedule_lookahead` before the cycle starts (default one beat, `subsequence/pattern.py:105`). Measured offline: tap to cycle start is one lookahead at best and one cycle plus a lookahead at worst. With the default lookahead that bad window is a quarter of a one-bar pattern, so a tap on the cell under the playhead during the last beat is heard again after two cycles instead of one — 4 s instead of 2 s at 120 BPM. The lookahead is therefore a choice, and it is one Simon is asked to accept as a composition-file convention (#1943), so it is short-listed rather than stated.
+
+| | A. `reschedule_lookahead=1/24`, one pulse (recommended) | B. The default, one beat | C. An intermediate, a quarter beat (six pulses) |
+| --- | --- | --- | --- |
+| Window in which a tap waits an extra cycle | one pulse; in practice nothing | a quarter of a one-bar pattern: the last four of sixteen cells under the tap-under-playhead gesture | a sixteenth of it: the last cell |
+| Slack between the rebuild finishing and the cycle it built starting | 20.8 ms at 120 BPM | 500 ms at 120 BPM | 125 ms at 120 BPM |
+| Measured rebuild cost against that slack | 105 µs median for a 16-by-8 grid, half a percent of a pulse; but 736 to 757 µs median and 985 µs maximum for a 64-by-16 grid, which is four percent of a pulse and about five percent of the slack | ample under any grid | ample under any grid |
+| Floor for a step-count change | one step | four sixteenth steps | one step |
+| Engine change | none; a composition-file setting | none | none |
+| Safe against the form and harmony clocks | yes: those use the maximum of one beat and the pattern lookaheads, so a smaller pattern lookahead reads state that has already advanced | yes | yes |
+
+Zero is excluded: it puts the rebuild on the cycle's own first pulse and delays that pulse's downbeat MIDI by the rebuild time.
+
+**Recommended: A**, with the caveat stated rather than buried: the 105 µs figure is a 16-by-8 drum grid on the development workstation, the headless server is slower, and the wall-clock effect of the rebuild on the jitter benchmark was not measured by any point. A composition whose grid patterns are much larger than the first use-case's, or that rebuilds heavier work on the same pulse, has materially less headroom under A than under C, and C keeps almost all of A's benefit. The remaining latency is the cycle itself, which is the instrument's nature and the specification accepts it.
+
+### Conflict policy, confirmation, the algorithm's hand and the pending look
+
+Every write reaches the grid on the composition's asyncio loop — panel writes because the adapter drains them there, algorithm writes because they happen inside the builder — so writes have a total order without any clock, and "last writer" means "applied later on the loop".
+
+| Sub-decision | Short list | Recommended | Reason |
+| --- | --- | --- | --- |
+| Conflict policy | two: loop-order last-writer-wins, and per-cell compare-and-set with a `stale` refusal | **loop-order last-writer-wins** | Absolute sets already remove the hazard compare-and-set protects against, so it buys only a refusal the human overrides by tapping again, and it would turn the reconnect re-send into a stream of refusals. For an instrument the later hand is right by definition, which is the rule Ableton Link chose for tempo. Multi-value merge is excluded rather than short-listed: there is one authority, and a resolution interface on a step sequencer is absurd. |
+| Confirmation carrier | three: a per-cycle `cycle` event carrying `built_ver`, a `state` word, the cycle index, the start pulse and the full realised cell map; a per-cell build confirmation; none, `ack` plus the playhead | **the per-cycle `cycle` event** | Only a complete map shows what will actually sound, covering probability, mute, the energy gate, an ephemeral algorithm's notes and a REPL poke. A per-cell confirmation cannot express gating and never settles a ring under mute, because a muted pattern skips the builder while its confirmation hook still fires. |
+| The algorithm's hand | three: ephemeral contribution beside `apply()`; persistent intent unconstrained; persistent with a one-cycle `touched` yield guard | **ephemeral as the default idiom**, persistent when an edit is meant to last, the guard one call away | Under the ephemeral shape the human's intent is never erased and state stays late-bound; the algorithm's hand still appears on the panel at the rebuild, as ghost and hollow cells in the realised map rather than as changed faces. All three coexist in one composition and the panel draws them without knowing which is in use (#1965). |
+| What a pending tap looks like | three: the face is always the server's value and a ring is the human's unconfirmed request; an optimistic face plus a ring; an optimistic face alone | **face is the server's value, ring is the request**, conditional on the crossing rule above | Nothing drawn on a face is speculative, so every panel agrees on every face; the ring appears on the finger landing and the face follows on `ack`, which is a few milliseconds on a LAN **under the recommended crossing rule and up to one beat without it**. The optimistic face is the right answer if Simon keeps the drain rule, and is the fallback anyway if the ring proves illegible on the panel (#1999) or when a WAN mode arrives (#1968). |
+
+A tap therefore passes three moments and the protocol names all three: **applied** (`ack` to the sender and `changed` to every panel, the instant the helper writes the intent on the loop — a few milliseconds after the finger under the recommended crossing rule, up to one beat under the drain rule), **built** (the `cycle` event, within a pulse of the rebuild and one lookahead before the cycle starts), and **sounding** (the playhead's overlay). `built_ver` is stamped inside the helper's `apply()` and falls back to a version recorded at `reschedule_pulse` when the builder is skipped, because a muted or energy-gated pattern never reaches `apply()` while `pattern_reschedule` still fires. All frames enter one ordered outbound log appended on the loop at the moment of application and drained by the link thread. That log is load-bearing rather than belt-and-braces: `pattern_reschedule` is not awaited but spawned (`sequencer.py:1829`, against the awaited `reschedule_pulse` at `1804`), so a panel write already in the loop's ready queue when the pulse handler runs executes after the rebuild and before the listener, and without the log its `ack` would leave the process ahead of the algorithm's earlier `changed`.
+
+### The playhead
+
+| | B. Anchored client-side extrapolation (recommended) | A. Server-pushed `beat`, highlight on arrival | C. A new per-pulse server event |
+| --- | --- | --- | --- |
+| What travels | the existing `beat` frame plus `pulse`, the wall time taken in the listener, and the current tempo; per-pattern `cycle_start_pulse` and `length_pulses` on snapshot and each reschedule | the existing `beat` frame | 24 to 72 frames per second per client |
+| Engine change | none for v1 | none | one spawned emit, measured free on the clock |
+| Error, wired LAN, computed for presentation time | 5.2 to 23.6 ms behind the MIDI send | 5.5 to 24.1 ms | as A plus pulse quantisation |
+| Error with a 50 to 80 ms Wi-Fi tail | unaffected: a late anchor still says when its pulse happened | up to about 102 ms, past the 45 ms sound-leading detectability threshold | as A |
+| Tempo ramp, Ableton Link, external MIDI clock | works: the anchor is a measured time | drifts within a beat | exact to a pulse |
+| Hidden tab, reload, reconnect | resumes on the next frame, position being a function of absolute time | resumes on the next beat | resumes on the next pulse |
+| Traffic | 1 to 3 frames per second per client | the same | 24 times that |
+
+The legacy dashboard's 100 ms polling is excluded outright: its position error alone is 0.4 to 1.2 steps at 60 to 180 BPM.
+
+**Recommended: B.** It is A with three numbers added to a frame that already exists, and it removes the network from the playhead position entirely, which is the only way a Wi-Fi panel keeps the column inside the detectability threshold. Constraints that come with it: the tempo slope must come from the current BPM or from the interval between anchors and never from the seconds-per-pulse value, which external MIDI clock never updates; the position is computed for the frame's presentation time, not for callback time; the highlight steps rather than slides, because vision is the looser rhythmic sense and a sliding bar shows the frame quantisation itself; and the sounding flash rides the realised view of the coming cycle with a fallback to the intent grid when that frame is late (#1964). The listener that takes the anchor runs 0.06 to 0.37 ms after that pulse's note-on left the sequencer, so its timestamp is the MIDI send time to within half a millisecond. The drum machine's own MIDI-to-sound latency is rig-specific and belongs in the composition file or the panel's settings, never in the engine (#1962).
+
+**Rests on:** #1914, #1915, #1925, #1924, #1926, #1928.
+
+## The v1 gesture set and the panel host
+
+### The accent gesture
+
+| | A. Hold the target cell, choose a level on a velocity strip (recommended) | B. Held cell as an accent modifier: cells tapped while it is held become accented | C. Velocity from where the tap lands inside the cell |
+| --- | --- | --- | --- |
+| Matches the decided wording | in spirit: hold the cell, tap something else | literally | no |
+| Hardware idiom | Push, Push 2, Digitakt, Circuit Tracks, Maschine all do exactly this | none uses a held step as an accent modifier | none at cell level |
+| Levels expressible | any number, declared by the app or four by default | one | two or three |
+| One-contact form | a visible 3 s latch on the held cell, or instantly via the secondary mouse button; a latched accent switch on the page is the same idea for B | a latched accent switch, which is a mode too, and an invisible one unless lit | as is |
+| Re-velocity a set cell | hold it again | not possible | not without clearing first |
+| Where the second finger lands | on a strip anchored beside the grid | on the grid, under the holding hand | n/a |
+| Cost | the hold threshold must be tuned: too short and slow presses open the strip, too long and editing feels sticky | learning cost; one level only | the zones are invisible unless drawn, and they spend the vertical axis a melodic row will want for `note` |
+
+The gesture design's own lettering ran to E; the three honest options are relettered here and nothing is silently dropped — the two omitted from the source's list were a per-row velocity lane and a modifier key, both of which fold into A's strip or B's switch rather than standing as alternatives.
+
+**Recommended: A**, with an optional latched accent switch on the page and the tap acting on press rather than toggling on release. It is at once the hardware idiom (no teaching needed), complete on a single-contact host through a visible timed mode rather than a hidden one, and silent on the wire — hold-and-choose is a `set` of `{on, vel}`, so the contract needs only the v1 velocity amendment and two optional hints. This departs from the specification's decided wording "hold-one-cell-and-tap-another for accents" in that the second tap lands on a strip level rather than on another cell; the literal reading is B and is on the short list for Simon (#1969).
+
+Chords need no recogniser at all: under Pointer Events each contact is its own `pointerId`, so a chord is several pointers down at once wherever the host delivers concurrent contacts. The only gesture needing recognition is the hold, at a 400 ms threshold taken from the shorter of the two platform norms.
+
+The v1 set, every row with a one-contact form so the page never asks whether multi-touch exists: a press on an empty cell sends its `set` the moment the finger lands rather than on release, and the panel draws the pending ring in the same frame, so something changes under the finger inside the 69 ms tapping just-noticeable difference (#1970) — the cell's *face* follows the `ack`, which is why the crossing rule and the pending look above have to be chosen together and why the recommended pair is the one that makes this sentence true of the face as well; a quick press on a set cell clears it on release; a 400 ms hold opens a per-cell velocity strip without clearing the cell, worked by a second finger or, after a visible 3 s latch, by the same finger; cells pressed while the strip is open join the selection so one level edits several; a pad is one voice per contact, down firing on and up firing off, with fixed velocity by default because glass carries no velocity; faders and knobs move any number at once, each capturing its own pointer. Painting along a row is on the list but is Simon's to admit or defer (#1971); a hold-to-lock gesture is reserved (#1966). Capability is observed from the pointers actually delivered rather than asked of the browser's touch-point count, which Firefox has reported wrongly in both directions, and the observation changes nothing but a status glyph.
+
+### The panel host
+
+| | A. A dedicated Raspberry Pi 5 on Pi OS labwc, Chromium kiosk relaunched by a loop in autostart (recommended, conditional) | B. Windows 11 Pro, Edge kiosk under Assigned Access | C. An Ubuntu laptop on GNOME Wayland, Chromium or Firefox kiosk |
+| --- | --- | --- | --- |
+| Concurrent contacts | yes, once labwc's shipped touch mouse emulation is switched off; with it on the browser sees one mouse pointer and multi-touch collapses | yes, no configuration | yes, no configuration |
+| Lockdown | good: no desktop reachable while the browser is up | strongest: above the lock screen, shortcuts blocked, a defined breakout sequence | medium unless a kiosk session replaces the shell |
+| Crash recovery with no keyboard | a shell loop in autostart that resets the browser's crash flags before each launch; the cage variant restarts compositor and browser together | built in, with an auto-logon kiosk account | a user unit with `Restart=always` around the browser |
+| Rendering headroom at 1080p | the open column: a Pi 5 scores about a sixth of a 2020 desktop and a quarter of a 2021 ultrabook on Speedometer | ample | ample |
+| Setup effort and cost | medium; cheapest dedicated box | medium; needs Pro and a dedicated sign-in | low; borrows a machine |
+| Residual system gestures | none known in labwc | edge swipes need the Edge UI policy, three- and four-finger gestures the Touch settings | shell gestures live unless a kiosk session |
+
+A Pi on X11 and a Windows Home machine with a relaunch script are excluded as degraded forms of A and B: fallbacks to fall to, not options to pick. The panel as a second monitor on a Windows desktop is the honest zero-cost variant of B, with no lockdown and a person at the keyboard. The Pi under cage is a variant of A rather than a fourth option, and the Ubuntu Ozone backend is a check on C rather than a choice.
+
+**Recommended: A, conditional on the Pi 5 frame-time check** (60 Hz for the 128-cell first use-case, at worst a steady 30 Hz for a 1024-cell page). It is the only option both dedicated and cheap, so the panel stays plugged in as an instrument; its two known traps each have one documented fix; and the Pi 5 is the weakest host on the list, so a page smooth there is smooth on the others. Until the frame time is measured (#1961, #1996) the evidence does not separate A from C for production, and C is the development host because it needs nothing configured. The condition may also be reopened from the other side: if a real finger on the panel confirms that Chromium delivers touch a frame later than Firefox does, the browser choice, and with it the Chromium kiosk recommendation, is back in play (#1990, #1995).
+
+The panel itself is a 21.5-inch 1920x1080 IPS panel with 10-point projected-capacitive touch over USB HID, glossy anti-fingerprint 7H glass with no anti-glare coating, 225 cd/m² with touch, HDMI and DisplayPort and a two-port USB hub. It needs no driver on Windows, and is expected to bind to Linux's in-tree `hid-multitouch` through that driver's generic multitouch and generic Windows-8 catch-all table entries, though its controller identity is unpublished and iiyama's own Linux statement could not be read (#1957, #1992).
+
+The page-side suppression set is the same on every host and is what makes them interchangeable: `touch-action: none`, `overscroll-behavior: none`, a `contextmenu` preventDefault, `user-select: none`, `cursor: none`, and no focusable text inputs. The Chromium `--disable-pinch` switch no longer exists and is not used. Every asset is vendored and served from the service, so the panel needs only the LAN.
+
+**Rests on:** #1927, #1918, #1917, #1921, #1941.
+
+## The latency budgets accepted for v1
+
+The two cases have thresholds an order of magnitude apart. A step tap's visual acknowledgement has 64 to 69 ms before a typical user notices it. A pad hit has 10 ms with 1 ms of jitter as the musical standard, 20 ms already rated worse than 10 by percussionists, and 24.5 ms as the edge of "Fair" for drums.
+
+| Case | Budget proposed | What it rests on |
+| --- | --- | --- |
+| Step tap, visual acknowledgement of the finger (the pending ring) | one browser frame from event to commit (under 18 ms), so 22 to 42 ms from browser event to glass; the whole path stays inside 69 ms while the panel's own touch-down latency is under about 25 ms with a one-frame browser, or about 13 ms if Chromium's two-frame touch dispatch is real on the panel | measured browser terms plus one vsync and 5 ms of pixel response; the panel's display input lag is a further uncosted hop |
+| Step tap, the cell's face changing | the crossing rule decides it: a few milliseconds on top of the ring's budget under the recommended prompt marshalling, or up to one beat (500 ms at 120 BPM) under the drain rule, in which case the optimistic face is what holds the 69 ms threshold instead | the crossing short list above |
+| Step tap, audible | the cycle, by design: one pulse to one cycle plus a pulse with a one-pulse lookahead | the rebuild model |
+| Pad hit, wired LAN, one-frame browser | browser event to sound 5 to 28 ms, median 9, at 256 frames; finger to sound about 24 ms at the median and 43 ms at the maximum on a stated 15 ms panel allowance | measured page-to-service-to-adapter of 1.0 ms median and 1.2 ms p99; 0.24 ms into Subsample's virtual port; dispatch under 1 ms; the output buffer at one to three periods |
+| Pad hit, service and sampler on different hosts | the same plus about 1 ms | one extra LAN hop |
+| Pad hit, Wi-Fi or WAN | not budgeted; the page shows its measured round-trip so the player can see when pads are out of budget | a 50 to 80 ms Wi-Fi tail |
+| Playhead | 5 to 24 ms behind the MIDI send | the anchored extrapolation above |
+| Band switch | about 2 s plus a device reopen with calibration off; the selector shows pending at once and confirms on the first slice | the same-process scanner restart (#1938) |
+| Clock | Subsequence's jitter unchanged at the median and mean by the service and the adapter, plus whatever the crossing rule costs: nil under the drain rule, a 1.1 ms maximum on two to four pulses in 1536 at a human tap rate under prompt marshalling | the co-located service measurement; the adapter measurements |
+
+The pad budget is the one genuine choice:
+
+| | A. Tight: 128 frames on the sampler host, wired Ethernet only, the browser chosen on latency grounds | B. Moderate: 256 frames, wired Ethernet, either browser (recommended) | C. Defer: no pad budget in v1, the page showing its measured round-trip |
+| --- | --- | --- | --- |
+| Promise | browser event to sound 2 to 19 ms, median 6; finger to sound about 21 ms median on a 15 ms panel allowance | 5 to 28 ms, median 9; about 24 ms median, 43 ms maximum | nothing for pads |
+| Cost | 128 frames sits at the edge the sampler's own documentation warns about, where an xrun is audible; it may reopen the kiosk browser recommendation | about 3 ms of median and 9 ms of worst case against A; the median sits in the "Fair" band rather than "Good" | the pad page is the one place the product competes with hardware, so deferring defers the question rather than answering it |
+| Needs | the panel's touch-down latency measured, the sampler host's printed output latency read, a browser touch check on the panel | the same measurements, but the conclusion moves less when they arrive | nothing |
+
+**Recommended: B, with A as the target once the panel's touch-down latency has been measured**, and C's round-trip readout adopted on the page whichever option is chosen. The buffer is the largest term the design controls, and 256 frames leaves the xrun edge to the sampler host's owner rather than making it a condition of the product; the 3 ms given up is inside the noise of the unmeasured panel term. The transport is not where either budget goes: a grid tap's audible effect is the cycle, the page's own work is 0.1 to 0.3 ms, and the two loopback hops from page to service to adapter are about 1 ms. Whether the 10 ms musical standard is out of reach turns entirely on the panel's own touch-down latency, which needs an acoustic measurement on the hardware (#1989, #1993).
+
+**Rests on:** #1941, #1915, #1924, #1937, #1938, #1939, #1920, #1929.
+
+## The concrete shape of v1
+
+```mermaid
+flowchart LR
+  subgraph PANEL["panel host - a browser and nothing else"]
+    B["Chromium or Firefox, kiosk<br/>DOM cells + transform playhead overlay<br/>canvas for waveform and meters<br/>Preact + htm, vendored, no build step<br/>ring on pointerdown, face from the server"]
+  end
+  subgraph SERVER["apps' network - headless Ubuntu server"]
+    S["Superintendent service<br/>Starlette on uvicorn, one systemd unit<br/>one LAN listen port, 8090 proposed<br/>static page and vendored assets<br/>one bounded queue per browser client<br/>per-app ver, snapshot cache, page files<br/>expected-apps config, mock apps"]
+    Q["Subsequence composition<br/>adapter module on a daemon thread<br/>StepGrid in composition.data<br/>grid sets applied on the loop"]
+    A["Subsample<br/>adapter module on a daemon thread<br/>mido output into its own virtual port"]
+  end
+  subgraph PI["a Raspberry Pi, or the same server"]
+    T["Substation<br/>adapter module on a daemon thread<br/>run_scanner loops over fresh scanners"]
+  end
+  B -->|"HTTP GET: page, assets, page files"| S
+  S -->|"manifest, snapshot, ack, nack, changed, event, telemetry, pong"| B
+  B -->|"one WebSocket, same origin: hello, set, fire, ping"| S
+  Q -->|"dials the service: manifest, snapshot, changed, event"| S
+  S -->|"set, fire, ping"| Q
+  A -->|"dials the service"| S
+  S -->|"fire, set"| A
+  T -->|"dials the service, over the LAN"| S
+  S -->|"set: band"| T
+  A -.->|"note on and off, ALSA, 0.24 ms"| A
+  Q -.->|"MIDI out to the drum machines and synths"| Q
+```
+
+The life of one tap, which is the design's centre, under the recommended crossing rule:
+
+```mermaid
+sequenceDiagram
+  participant F as finger
+  participant P as page
+  participant S as service
+  participant L as adapter link thread
+  participant C as composition loop
+  F->>P: pointerdown on an empty cell
+  P->>P: draw a dim ring at once, no network
+  P->>S: set seq, path, {on: true}
+  S->>L: relay the set
+  L->>L: enqueue, and wake the loop if no drain is pending
+  C->>C: drain the queue, StepGrid applies the intent, ver advances
+  C->>S: ack (seq, ver) and changed (by panel, client)
+  S->>P: ack to the sender, changed to every panel
+  P->>P: face becomes the server's value, ring goes bright
+  Note over C: at the next rebuild the builder runs, apply() stamps built_ver
+  C->>S: cycle event: built_ver, state, cycle, start_pulse, realised cells
+  S->>P: cycle to every panel
+  P->>P: ring clears; face solid, hollow or ghost
+  Note over P: the playhead reaches the column, extrapolated from the last beat anchor
+```
+
+Under the drain rule the two middle steps move: the enqueue waits for the next `reschedule_pulse` or `beat`, up to one beat, and the ring holds the finger alone until then.
+
+The components in prose:
+
+**The panel** runs a browser and nothing else. It loads one page from the service over plain HTTP on a LAN address, opens one same-origin WebSocket derived from `location` so it inherits whatever scheme it was loaded under, and holds no state that matters: a client id and a `seq` counter in page memory, a pending map of unacknowledged sets, the last-open page in browser storage as a cache. It draws grid cells as DOM elements in a CSS grid, moves the playhead as one absolutely positioned overlay by `transform` alone, and puts continuously redrawn content on canvas layers. It computes the playhead's position for each frame's presentation time from the last beat anchor and its own clock offset, and it never waits for a network frame to acknowledge a finger.
+
+**The service** is one Starlette application on uvicorn, one systemd unit, one process, one LAN listen port. It serves the static page and its vendored assets with ETags, holds one WebSocket per browser with a bounded outbound queue drained by that client's own task, holds one WebSocket per app that the apps themselves opened, owns the per-app `ver` and stamps it on what it relays, keeps the manifest and last snapshot per app so a fresh panel needs no app round trip, keeps the (client, seq) idempotency map, stores page files, and knows which apps to expect so an absent one shows as offline rather than unknown. It owns no musical state, no MIDI stack, no process management and no access to the apps' files.
+
+**Each app carries one adapter module**, enabled by configuration or by an opt-in call beside the existing OSC and REPL calls, degrading to a warning when the package or the service is absent. It runs on its own daemon thread with its own loop, dials one address, sends its manifest and snapshot on connect, retries with capped backoff, validates every inbound frame before queueing it, sanitises numpy at the JSON boundary, and never blocks or raises into its host. In Subsequence it also builds outbound frames on the loop in the reschedule listener and appends them to one ordered log the link thread drains, so a panel write that lands between a rebuild and its spawned listener cannot leave the process out of order.
+
+**Failure is contained at every boundary.** The service absent: each app runs exactly as it does today and reconnects when it returns. An app absent: the service reports it and the page greys that section; a command sent in the gap is refused with a reason. The service dead: systemd restarts it, and a loaded page reconnects with backoff and resyncs by snapshot. A bad grid message: refused at the helper's boundary rather than logged every cycle under a misleading message; a bad rebuild costs one pattern one silent cycle and never the clock (`subsequence/sequencer.py:1810-1828`). A stalled panel: its own queue drops frames and the other clients are unaffected. A stalled server: the client's 6 s stale timer closes the socket, because nothing else notices.
+
+## Engine changes proposed for Subsequence
+
+Nothing here touches the clock, the rebuild or the scheduling. Two of the items are new modules that touch no engine file; four are small edits inside engine files; one is a dependency floor. That is the honest scope, and it is what #1465 and #611 make Simon's to judge.
+
+### Already possible, no package change
+
+- The grid as content the builder reads from `composition.data` (`composition.py:1454`), re-read at every rebuild (`composition.py:5995-5998`).
+- An algorithm writing the same structure, or contributing ephemerally beside the helper's apply.
+- Changing the step count from the panel through the builder calling `set_length` and passing the step count per call; measured to take effect at the very next cycle boundary with the events already in the heap untouched (#1946).
+- Snapshot on connect through `live_info()` (`composition.py:3868`) plus the pattern's realised steps read on the loop.
+- Change notification at `pattern_reschedule` (`sequencer.py:1829`), spawned as a task straight after the rebuild, so a listener there sees the algorithm's writes at the moment they take effect; and `reschedule_pulse` (`sequencer.py:1804`), which is awaited, as the commit point and one drain point.
+- Declaring `reschedule_lookahead=1/24` on grid patterns: a composition-file setting (`pattern.py:105`).
+- Marshalling a panel write onto the loop, if the recommended crossing rule is taken: the thread-safe path exists and is what the live reloader and `trigger()` already use; nothing new is needed in the engine for it.
+- Containment for every bad message measured except an out-of-grid or non-integer step index, which the helper must refuse.
+- Row naming through the pattern's drum note map, with the realised view preferring each note's own origin name.
+- The playhead anchor, from the public pulse count, pulses per beat and current tempo read in a `beat` listener.
+- An optional audition of a freshly set cell in the current cycle through the composition's thread-safe one-shot trigger (#1945).
+- Apps reachable only on loopback, by the composition passing a loopback receive host to its OSC call (#1955) — a composition-file setting, not an engine change, because binding all interfaces is documented intent.
+
+### Small: two new modules, four engine edits and a floor
+
+- **`subsequence/helpers/grid.py` with `StepGrid`** — a new module; no engine file touched. It validates at write time, applies directly when already on the loop and marshals only when not, keeps a monotonic version, stamps `built_ver`, `built_cycle` and an applied flag in `apply()`, keeps a `touched` set cleared at apply with a convenience that skips touched cells, takes a `skip` argument for the ephemeral idiom, holds the single ordered outbound log, reserves a `lock` cell field, and maps cells to the builder's own verbs. Its seed is get-or-create so a live reload does not overwrite panel edits. Its placement, and whether its key may be named for its consumer, is #1942.
+- **`subsequence/superintendent.py`**, the adapter module — a new module; no engine file touched. Enabled by an opt-in call in the same pattern as the existing OSC and REPL calls, carrying the walk that builds the manifest and never a rig value.
+- **Engine edit: public read access to what the adapter would otherwise read privately.** `cycle_start_pulse`, the grid, the drum note map, the device and the mirrors in each `live_info()` pattern entry; read-only properties for the muted and energy-gated flags; a maximum-device-latency property (the value exists at `sequencer.py:419`) so the highlight can be offset by it (#1962). **This bullet is wider than the question filed for it.** #1963 asks about three exposures only — the pulse in the beat payload, `cycle_start_pulse` in `live_info()`, and the maximum-device-latency property — of which the first is its own bullet below. The `live_info()` extensions for the grid, the drum note map, the device and the mirrors come from the grid design's small list, and the read-only muted and energy-gated properties come from the state-sync design's revisions. Answering #1963 as filed decides only part of what is proposed here, so either #1963 is widened to the full set or the remainder is put to Simon separately; that is filed as #2019. That spike also narrows the remainder against the code: `device` and `mirrors` are already public attributes of `Pattern` (`pattern.py:132-133`), reachable through the public `Composition.running_patterns` property (`composition.py:1800-1803`); `muted` is already in every `live_info()` pattern entry (`composition.py:3901`); and `cycle_start_pulse` already arrives as the second argument of every `pattern_reschedule` event (`sequencer.py:1829`). The facts with no public route at all are the pattern's grid, its drum note map, the energy-gate flag and the maximum device latency.
+- **Engine edit: the pulse in the `beat` payload** beside the beat-in-bar, which today carries the beat alone (`sequencer.py:1427`); this removes the adapter's inference from the pulse count and the catch-up ambiguity that inference has after a stall.
+- **Engine edit: a runtime grid setter** so the builder's own grid value and the many algorithmic verbs that default to it follow a changed step count, and the display draws the right grid. This is a writer, not a read-only exposure, and is outside #1963's scope entirely.
+- **Engine edit: pattern registered and unregistered events, and a source-reloaded event**, so the namespace-change frames need no polling; until they exist the adapter diffs the running patterns on `bar`.
+- **Dependency floor: raise `websockets` from `>=12.0` to `>=13.0`** (`pyproject.toml:23`), which the legacy dashboard's own import of the new asyncio server already needs and which nothing in the tree satisfies by declaration today. The service pins 14 or later in its own environment.
+- **Candidate, to be checked against the design-intent convention first**: warn once for a step index at or past the grid, or a non-integer index, both of which silently misplace a note today. Negative wrap is documented and stays.
+- **Optional**: a flag recording that a build failed after apply, so a silent cycle can be reported as failed rather than as empty; and a sugar accessor over the helper.
+
+### Needs a wave — four items
+
+- Cutting a cycle already in the event heap, per pattern. Heap entries carry a device and a channel but no pattern identity, so a per-pattern removal needs event tagging, heap surgery and active-note bookkeeping. A purge keyed by device and channel is possible today and is right whenever a pattern owns its channel, which the first use-case does, but wrong when two patterns share one, which this design allows; it is a stopgap, not the answer.
+- Making the grid a first-class runtime property that the display and the algorithmic verbs follow without an explicit setter.
+- A per-pulse or per-step engine event. Measured to cost the clock nothing on the engine side, and it buys nothing over the anchored playhead; it is named so that nobody proposes it again without a reason.
+- Choosing a different asyncio selector, or widening the clock's spin margin (`sequencer.py:465`), if per-message immediacy on the clock loop is ever wanted; measured to remove the millisecond entirely, and an engine change rather than a transport choice (#1974). It is the C column of the crossing short list above, so the recommended shape does not need it and would benefit from it.
+
+### What the two neighbours need, for completeness
+
+Subsample needs a note event beside its single control-change event (`subsample/player.py:5055`, the only event emit in that file), a program event, one trigger declared per note of a multi-note assignment, and its adapter module; nothing else, because its virtual port is already the trigger path (`player.py:4444-4450`) and every sample already carries the envelope the waveform page draws. Substation needs a public stop wrapping the sentinel it already queues cleanly (`substation/scanner.py:941-969`), about a dozen lines looping around the single scanner construction in its runner (`substation/cli.py:150-167`), and its adapter module; that is the whole band switch, and it keeps the link up and the service out of process management (#1938, #1984).
+
+## Where the points disagree, and how this document reconciles them
+
+| Points | The disagreement | Reconciliation adopted here |
+| --- | --- | --- |
+| #1925, #1928 and #1926 | State-sync prices the tap-to-`ack` interval at "a few milliseconds" on the assumption that the helper marshals each panel write onto the loop promptly; the adapter design measures that call at about 1.1 ms p99 on the clock and replaces it with a queue drained at `reschedule_pulse` and `beat`, which no point then re-priced | Neither figure is wrong and the combination was never checked. `beat` fires every 24 pulses, so the drain rule puts the `ack` up to one beat behind the finger — 500 ms at 120 BPM — where state-sync's own reason invokes a 0.1 s threshold. A short list for the crossing is given above and recommends prompt marshalling with coalescing for grid sets, with the drain retained for bulk. It is coupled to #1968, and the two coherent pairings are named. This is the one substantive change this assembly makes to a filed recommendation, and it is filed as #2021 |
+| #1916 and #1925 | The contract's worked example has `ack` at one version and `changed` later, "when the rebuild has taken it"; state-sync emits both at application on the loop with the same version and makes a new per-cycle `cycle` event the build confirmation | #1925 governs. `ack` and `changed` both leave at application; `cycle` carries `built_ver`, a state word, the cycle index, the start pulse and the realised cells; `applies` keeps its meaning of when a write lands, and its pending rule for grids reads "until `cycle` confirms". This is a revision of the contract's semantics, not an addition, and it is put to Simon as #1967 |
+| #1912 and #1927 | The decision table settles the accent gesture as "hold-one-cell-and-tap-another"; multi-touch recommends holding the cell and choosing a level on a strip | Not reconciled by this document, because it is a decided item and only Simon may move it. The recommendation is the strip, the literal reading is on the short list as B, and the question is filed as #1969 |
+| #1916 and #1927 | The contract declares a `gesture` field for multi-touch to fill; multi-touch asks for it to be dropped | Dropped. A hold is what the surface does to any cell with a writable field beyond presence, so the field would repeat what the cell schema already carries. Two optional hints replace it: `levels` under a cell field, and a velocity mode with a fixed value on a pad trigger |
+| #1914 and #1916 | The grid design puts velocity in v1 under the key `v` and says the wire form is the contract's decision; the contract's drum example lists presence alone under the key `vel` | The example is amended to list presence and velocity, ranged 1 to 127, because a velocity of zero is a note-off in MIDI and in the sampler; and the stored key is harmonised on `vel`, which is the decision the grid design deferred rather than a change to it. Fixing what v1 cells carry is Simon's, so it is named in the amendments above rather than assumed |
+| #1914 and #1926 | The helper is described as marshalling every write onto the loop; the finding measures exactly that call at about 1.1 ms p99 on the clock when it arrives per message | The helper applies directly when already on the loop and marshals only when it is not, which is what the existing thread-safe probe does; whether the adapter reaches it promptly or at the sequencer's own hooks is the crossing decision above rather than a property of the helper |
+| #1916, #1928 and #1939 | The contract has the co-located service sending pad MIDI from its `midi` block; the adapter design prefers the Subsample adapter sending it; the later-pages design settles it | Adapter-only for v1. The in-process hop is 0.24 ms, so a direct path saves about 1 ms against a 3 to 23 ms output buffer and would tie pads to co-location. The `midi` block stays in the declaration as documentation of what the adapter sends, not as a service instruction (#1973). The topology table's pad row is restated as a non-differentiator in consequence |
+| #1916 and #1939 | The contract declares a waveform as a reference the panel fetches from the service; the later-pages design carries the envelope inline | Inline. The block is 3.6 KB median and draws in about 0.05 ms, which removes the question of the service reading the apps' files entirely. A file reference is retained for the audio itself and used only by an audition control when the service is configured with the directories (#1982) |
+| #1916 and #1924 | The contract's worked example sketches a server-pushed `step` event for the playhead, conditionally: "if `playhead` chooses server push" | The playhead point chose client-side extrapolation, so the condition is not met and no `step` event exists in v1. What travels instead is the existing `beat` frame with a pulse, a service-clock timestamp and a tempo added, plus the cycle start pulse and length on each reschedule. The contract's sketch is correct as written and simply does not fire |
+| #1921 and #1941 | The host design recommends a Chromium kiosk; the latency finding reproduces a two-frame touch dispatch in Chromium, and not in Firefox, mouse or pen, on all four synthetic injection paths tried | The recommendation stands as filed and is now explicitly conditional on a second measurement as well as the frame-time one. If a real finger reproduces the extra frame it costs 17 ms of both latency and jitter against Firefox on the same host, which is material (#1990, #1995) |
+| #1919 and #1929 | Topology measured a separate service process costing the clock nothing; serving found a sub-millisecond P99 in two of eighteen loaded runs | The honest statement is adopted: co-location costs the clock nothing at the median or mean, and an occasional sub-millisecond P99 that two repeats each failed to reproduce. The one condition that moved the whole distribution was forcing service and sequencer onto one core, which makes core count and affinity the lever (#1977) |
+| #1929 and #1923 | Serving states that because the development mocks dial the service like real adapters, "the tests exercise the real caller"; the Supervisor finding's defect was app-side, in the adapter's constructor arguments as `cli.py` passes them | The mocks test the service and are kept for that. The lesson is answered separately and app-side, by one test per app that constructs the adapter exactly as that app's entry point does, asserting `json.dumps` on the real snapshot |
+| #1931 and #1940 | The rendering design reads the font licence as forbidding subsetting, and treats one component library as uniformly permissive | The licence audit governs: subsetting is permitted and only a modified IBM Plex may not keep the name "Plex"; the component library's Core package is permissive and its Pro tier is proprietary and non-redistributable under the same brand; one version figure is corrected |
+| #1930 and #1931 | The measurements make dirty-cell canvas nominally the cheapest incremental path, while the design recommends the DOM | Not a contradiction and adopted as stated: cost does not decide for the real workload, and the deciders are hit-testing, labels, focus and the calibratable worst case. The measurement is the reason the imperative-hot-path and transform-only-playhead rules are part of the recommendation rather than advice |
+
+## Open questions for Simon, grouped by the decision they block
+
+Fifty-three questions are filed as `needs_input` spikes and are grouped below. **Three of them were raised by this assembly rather than inherited from a point**, and each is filed with the short list its own section above gives: #2021 whether a panel grid set wakes the composition loop for a few-millisecond acknowledgement or waits for the next hook, which must be answered with #1968; #2019 whether #1963 is widened to cover the read-only exposures beyond its three, or the remainder is decided separately; and #2020 which port the service listens on.
+
+**How the surface is drawn** — #1978 Preact plus htm or Lit; #1980 TypeScript; #1981 dark theme by default; #1982 in-browser audition of samples and recordings; #1979 whether the project licence admits a GPL-3.0 file kept as a separate module; #1983 whether a licence field with no licence file is an acceptable grant for vendoring.
+
+**Where the service runs and how it relates to the apps** — #1950 which side dials; #1951 whether a second always-on LAN host is available or wanted; #1952 whether the service will ever share a Raspberry Pi with Substation; #1953 whether a single point of failure for the page is acceptable in exchange for one origin and one socket; #1975 system unit or user unit; #1976 which Ubuntu release the headless server runs and whether a venv on a newer interpreter is acceptable; #1977 how many cores the server has and whether the unit may pin Superintendent away from Subsequence's core; #2020 which port the service listens on and whether 8090 suits.
+
+**The protocols** — #1972 shared adapter package or three per-app modules; #1973 whether a pad hit always travels as a `fire` frame and whether the MIDI block stays in the declarations; #1974 whether a different selector or a widened spin margin is acceptable in Subsequence if per-message immediacy on the clock loop is ever wanted.
+
+**The control declaration and the message contract** — #1949 whether the shared definitions spec may be amended; #1948 whether page files live in the service's configuration directory or beside the composition; #1967 whether the per-cycle event replaces the contract's changed-at-the-rebuild reading; #1947 whether a melodic cell's note is a MIDI number or a scale degree; #1944 whether two patterns on one instrument show as two pages or one page with stacked grids.
+
+**How the grid lives in Subsequence** — #1942 where the helper lives and whether its key may be named for its consumer; #1943 whether a one-pulse lookahead is an acceptable composition-file convention, now with a quarter-beat intermediate on its short list; #1945 whether a freshly set cell is auditioned in the current cycle; #1946 whether changing a pattern's step count from the panel is a v1 requirement; #1963 whether the read-only engine exposures are wanted for v1 or the adapter reads private names, with #2019 asking whether its scope is widened to the whole set; #1965 whether the first use-case's algorithm contributes ephemerally or writes intent, and whether the yield guard is on by default; #1964 what the sounding flash does when a cycle's realised view arrives late; #1968 whether an unconfirmed tap draws a ring or flips the face optimistically, which must be answered with #2021, the crossing question; #1962 where the drum machine's own latency is entered as a visual offset.
+
+**The gesture set and the host** — #1969 which accent gesture v1 uses; #1970 whether a tap acts on press or toggles on release; #1971 whether painting along a row belongs in v1; #1966 whether a hold-to-lock gesture is wanted in v1; #1958 which host the panel lives beside and, if Windows, which edition; #1959 where and at what angle the panel sits, under what lighting, and whether the glossy glass is acceptable there; #1960 whether a Pi host may run the newer Raspberry Pi OS; #1961 whether a Pi 5 is available for the frame-time measurement the recommendation depends on; #1957 what the vendor's two touch PDFs say for Linux and which controller they name; #1956 whether the panel needs Screen Wake Lock or Web MIDI, which plain HTTP on a LAN address cannot give; #1990 whether a confirmed extra Chromium touch frame should outweigh the Chromium kiosk recommendation.
+
+**The latency budgets** — #1987 which pad budget v1 accepts; #1988 whether the budget may assume a tuned buffer on the sampler host and what that host prints for its output latency; #1989 whether the acoustic touch-down and photodiode measurements are worth taking before the budgets are fixed; #1991 whether Wi-Fi is ruled out for the pad page and whether the page shows its measured round-trip.
+
+**Security and a remote mode**, which block nothing in v1 and are named so they are not lost — #1954 whether a remote panel reaches the service over an overlay network or over TLS with authentication, and whether a browser Simon does not administer must ever join; #1955 whether the composition on the rig calls the OSC entry point and with which receive host.
+
+**The later pages**, which the first use-case must not paint into a corner — #1984 whether a Substation change is accepted in this wave so the panel can switch bands with the link kept up; #1985 whether RTL-SDR calibration is disabled or carried across scanner instances in a panel-switched deployment; #1986 whether an in-place retune verb is wanted, and if so before or after the first use-case.
+
+## Hardware-gated checks, grouped by what they gate
+
+Twenty-six checks are filed as tasks tagged hardware-gated. Two variant-specific checks from the host design fold into them rather than standing alone and are named here so they are not lost: whether cage 0.2.0 from trixie starts on the Pi 5's KMS output, receives the panel's touch and exits when Chromium exits, which belongs with #2001; and which Ozone backend the installed Chromium uses on Ubuntu and whether touch is routed through XWayland, which belongs with #1996. One further measurement is added by this assembly and is not filed: whether the coalesced wake-up of the recommended crossing rule costs what the per-message measurement predicts, which folds into #2008.
+
+**The panel and its driver** — gates the host decision and everything drawn on glass: #1992 the touch controller is identified and the driver that binds it on Linux is known; #1997 ten concurrent contacts and full gesture suppression are confirmed on the chosen host; #1998 palm rejection, the hold and latch thresholds and the 60 px cell size are confirmed by hand; #1999 the panel is legible in its intended position, including glare, mounting angle, palette and the pending cell states, which is what decides between the ring and the optimistic face on legibility grounds as the crossing rule decides it on timing grounds; #2000 the panel's behaviour through display standby, wake and USB re-enumeration is known.
+
+**The visual budget and the browser choice** — gates the step-tap acknowledgement budget and, through it, the kiosk browser: #1993 the panel's touch report rate and touch-down latency measured acoustically, the largest unmeasured term in both budgets; #1994 the panel's display input lag and the refresh rate the host actually drives, which come straight off the touch-down allowance; #1995 the input-to-glass path measured with real touch on Chromium, Edge and Firefox; #1996 frame times for the real grid page on the Raspberry Pi with the GPU status recorded, which is the condition the host recommendation carries; #2006 Simon's own judgement of highlight-against-hit alignment at 120 and 180 BPM.
+
+**The kiosk** — gates the host decision: #2001 the kiosk survives a browser kill and locks down its platform's system gestures; #2017 the panel host's browser reaches the service's origin, with the secure-context features settled.
+
+**The network** — gates the transport's timers and the pad budget: #2002 browser-to-service round-trip and end-to-end tap-to-acknowledgement across the real wired and Wi-Fi segments, which needs only a second host that may run Python, and which is the one number the crossing decision would most like to have; #2003 the panel host's Wi-Fi drop and roam behaviour, which sets the stale and pending timers; #2004 the browser-to-service clock offset shown stable over the real paths, on which the playhead rests; #2005 the app-to-service clock offset over the adapter link with the service on a second host; #2011 one stalled Wi-Fi panel shown not to delay the other clients, which is what the per-client queue exists for.
+
+**The server and the clock** — gates the topology and serving recommendations: #2007 Subsequence's clock jitter re-measured beside the running service on the headless server, with a composition loaded and a real MIDI port open; #2008 the adapter's on-loop cost re-measured there with the transport actually chosen, and with whichever crossing rule Simon takes; #2009 the helper's on-loop apply confirmed against the real helper; #2010 the systemd unit installed and its notify, restart and watchdog behaviour confirmed.
+
+**The pad path** — gates the pad latency budget: #2012 the pad path measured on the real sampler host, from the printed output latency to finger-to-sound end to end; #2013 network MIDI latency across the real LAN, only if the service is ever deployed off the sampler's host.
+
+**The later pages** — gates nothing in the first use-case: #2014 the band-switch wall clock on the live devices; #2015 whether each device accepts a retune while its asynchronous read is running; #2016 the adapter's envelope cost on a Raspberry Pi.
+
+## Not covered
+
+- **The tap-to-`ack` figure over a real path.** The crossing decision above is argued from a workstation measurement of the clock cost and from the beat interval, both of which are exact, but the end-to-end figure a player would feel — finger to face across the real LAN, with the service and the composition on the headless server — needs a second host and is #2002. Nothing here waits on it: the drain rule's one-beat bound is arithmetic, not measurement.
+- **The coalesced wake-up, as this document described it.** Scheduling one drain per burst rather than one per message was inferred here from the finding's own conclusion that the cost is per wake-up of the clock loop and not per message. Measured while filing #2021, that inference is half right: a pending flag that schedules a drain only when none is outstanding saves nothing, because the loop services the drain in microseconds and the flag is clear again before the next message arrives, so the loop wake-up count equalled the message count in every arm. What saves wake-ups is batching at the socket read — the link thread queues every frame the socket has buffered and crosses once — which was then measured over two paired passes: bursts of eight cells five times a second cost 89 loop wake-ups for 712 messages and left no pulse over 1 ms in 768 in either pass, against 712 wake-ups and five late pulses per-message. The per-message cost at a human tap rate left no pulse over 1 ms in 1536 on the workstation anyway. The figures are on #2021, and the real-server version is still #2008.
+- **A builder that raised after calling apply.** It is indistinguishable in the `cycle` event from a builder that placed nothing; naming the cause needs the optional build-failed flag above.
+
+## What remains out of scope
+
+The specification's own exclusions stand: nothing is built beyond measurement prototypes, the legacy dashboard is untouched, the composition wave's refusals are not reopened, security hardening is out for v1, and nothing specific to Simon's particular drum machines and synths appears anywhere but his composition file.
+
+Persistence of grid state across a Subsequence restart falls out for free and is therefore noted rather than designed: the grid is JSON-able content under one key, so a composition file can seed it get-or-create from a literal or a sidecar and the adapter can dump it.
+
+The following are deferred by the research, named here so nothing is silently dropped and nothing is proposed again without a reason: an unreliable side-channel for pad hits, which buys nothing on a wired LAN and costs signalling and connection setup; WebTransport, until a remote mode with HTTPS exists, at which point the envelope carries over unchanged; a binary codec, which saves bytes and no measurable time at this scale; a replay ring buffer for resync, which the version in the opening frame already allows and which no client would change to use; a per-cell lock and the gesture that would arm it, reserved as a cell field so the wire shape does not move when it arrives; a fixed-offset pad path, which would roughly double a 6 ms median to remove about 2 ms of jitter and only becomes attractive if the panel confirms the extra Chromium frame; Substation's in-place retune, which saves only the device reopen and the calibration; a shared adapter package, until the three modules exist and converge; page arrangement by a vendored layout library, which returns only if pages are arranged on the panel rather than declared; mDNS discovery, which no browser can consume and which nothing in the recommended shape prevents adding later; routing two instances of one app; a scale-degree lane for melodic rows; velocity in the realised map; and an OSCQuery or Thing Description export of the manifest, which the contract's transport-neutrality leaves open.
+
+Two widget sources are excluded on licence rather than merit and are prior art only: both are GPL-3.0 and can sit beside this work as separate modules but cannot be relicensed, which the decision that borrowed material be redistributable under the project licence does not admit as worded (#1979).
+
+Links
+  Documents   #2019  Is #1963 widened to the whole read-only exposure set, or is the remainder decided separately?
+  Documents   #2020  Which port does the Superintendent service listen on, and does 8090 suit?
+  Documents   #2021  Does a panel grid set wake the composition loop for a few-millisecond acknowledgement, or wait for the next reschedule_pulse or beat drain?
+  Relates to  #2023  The assembly's three unfiled questions are filed as #2021, #2019 and #2020, and checking them changed all three: the crossing short list gains an off-loop column and loses its coalescing, the widening is three private names not six, and 8085 is Bamboo's own default
+
+Referred to by (5)
+   #2021               Does a panel grid set wake the composition loop for a few-millisecond acknowledgement, or wait for the next reschedule_pulse or beat drain?
+   #2019               Is #1963 widened to the whole read-only exposure set, or is the remainder decided separately?
+   #2020               Which port does the Superintendent service listen on, and does 8090 suit?
+   #2023               The assembly's three unfiled questions are filed as #2021, #2019 and #2020, and checking them changed all three: the crossing short list gains an off-loop column and loses its coalescing, the widening is three private names not six, and 8085 is Bamboo's own default
+   #2025               Neither the recommended pending flag nor batching at the socket read coalesces anything at a rate a hand produces, so a held paint gesture costs the full per-message price of 26 to 48 late pulses in 1536; read-batching is what turns a burst into one crossing, twelve for ten bursts of 128 against the flag's 87; and the crossing itself is a fifth of a millisecond against the drain rule's measured 243 to 251 ms
+
+Not linked, but its writing suggests (84)
+    #611  All three layers of this stack share one maintainer, so changes can be coordinated rather than worked around  (this names it)
+   #1915  A grid tap is heard after one to two cycles depending on when it is applied relative to the rebuild: the reschedule lookahead sets the spread, a one-pulse lookahead shrinks the double-length window to one pulse at a measured cost of about 0.1 ms per rebuild  (this names it)
+   #1917  The iiyama T2252MSC-B2 is a 10-point PCAP USB HID panel, driverless on Windows and expected to bind to Linux hid-multitouch through its generic multitouch catch-alls; its controller identity and iiyama's own Linux statement are unverified  (this names it)
+   #1918  Pointer Events under touch-action none deliver concurrent contacts in Chromium and Firefox on Windows and on Wayland; Raspberry Pi OS delivers them only with labwc mouse emulation off, X11 Firefox only with MOZ_USE_XINPUT2, and Edge does not exist for Linux on Arm  (this names it)
+   #1922  Superintendent inherits no LAN-open surface by default — once enabled, Subsequence's OSC receiver is the control door and the Supervisor adapters the read door — and a remote mode later is an overlay network or TLS with authentication at the service, kept open by four choices that cost nothing now  (this names it)
+   #1923  Supervisor's adapter, throttling, snapshot, swap, sanitising, allowlist and mock shapes are worth carrying with their caveats; its push-only protocol, per-app client sockets, CDN loads, bare wire envelope and fake-shaped tests are not; the uncommitted files hold one lesson  (this names it)
+   #1926  Every adapter that wakes Subsequence's clock loop per message costs about 1 ms at p99 whatever the transport, a queue drained at the sequencer's own hooks costs nothing, and the cause is asyncio's epoll millisecond rounding; Subsample admits only locked reads and MIDI in, Substation only sync handlers on the events its emitter delivers  (this names it)
+   #1930  Incremental grid updates cost under 1 ms per frame in every technique at a Pi 5-class throttle, a genuine every-cell change costs 8.6 ms in the DOM against a raster-bound 3.9 ms on canvas, and WebGL is fastest with a GPU and slowest without one  (this names it)
+   #1937  Subsample lacks only a control door and a note event: pads are MIDI into its virtual port, which a second client in the same process reaches in 0.24 ms, faders and kits are CC and Program Change with readback only for CC, and every sample already carries a 3.7 KB envelope block that the browser draws in under a millisecond  (this names it)
+   #1938  Substation switches band today only by restarting, but RadioScanner already stops cleanly on a queued sentinel, so a fresh scanner in the same process is a switch of about 40 ms plus the 2 s warm-up on the workstation; a process restart adds about 0.75 s of imports and, on an RTL-SDR with calibration on, about 13.7 s; the panel can show channel states, SNR meters and recordings today, and a recording waveform is a 1 ms envelope the adapter computes from the final WAV  (this names it)
+   #1940  Every short-listed library, font and icon set is AGPL-3.0-compatible and vendorable with its notice kept; the licence exclusions are the two GPL-3.0 widget sources and Web Awesome's proprietary Pro tier, and NexusUI, Interface.js and Faust UI carry a licence field with no licence text  (this names it)
+   #1941  A step tap's visual acknowledgement costs one to two browser frames plus a vsync, 22 to 42 ms from browser event to glass before the panel's own touch-down latency, which must stay under about 25 ms to hold the 69 ms tapping threshold; a pad hit costs 2 to 19 ms from browser event to sound at 128 frames on a wired LAN, so finger to sound is about 24 ms at 256 frames on a 15 ms panel allowance, and whether the 10 ms musical standard is out of reach turns on that one unmeasured term  (this names it)
+   #1942  Should the StepGrid helper live in subsequence/helpers/grid.py as Superintendent's, or in a core module as a generic musical utility, and may its composition.data key be named for the consumer?  (this names it)
+   #1943  Is a reschedule_lookahead of one pulse on grid patterns an acceptable composition-file convention?  (this names it)
+   #1944  When two patterns play one instrument, should the panel show two pages or one page with the grids stacked?  (this names it)
+   #1945  Should a freshly set cell be auditioned in the current cycle through composition.trigger(), or only heard when its cycle comes round?  (this names it)
+   #1946  Is changing a pattern's step count from the panel a v1 requirement?  (this names it)
+   #1947  On a melodic step row, should a cell's note be a MIDI note number or a scale degree resolved against the composition's key?  (this names it)
+   #1948  Should page files live in the Superintendent service's configuration directory or beside the composition file?  (this names it)
+   #1949  May the shared project-definitions spec be amended to reserve the section name superintendent and to reword its clause two as each consumed section?  (this names it)
+   #1950  Should the apps dial the Superintendent service, or should the service dial the apps?  (this names it)
+   #1951  Is a second always-on LAN host available or wanted for the Superintendent service, or must it be co-located with the apps?  (this names it)
+   #1952  Is the Superintendent service ever expected to share a Raspberry Pi with Substation, or will it always run on the x86 server?  (this names it)
+   #1953  Is a single point of failure for the page acceptable in exchange for one origin and one socket?  (this names it)
+   #1954  Should a remote panel reach the service over an overlay network or over TLS with authentication at the service, and must a browser you do not administer ever be able to join?  (this names it)
+   #1955  Does the composition running on the rig call composition.osc(), and if so with which receive_host?  (this names it)
+   #1956  Should the v1 panel keep the screen awake with Screen Wake Lock or speak Web MIDI from the browser?  (this names it)
+   #1957  What do iiyama's two touch PDFs and the vendor datasheet say for Linux, and which touch controller do they name?  (this names it)
+   #1958  Which host will the panel live beside: a dedicated Raspberry Pi 5, the Windows desktop as a second monitor, or a laptop, and if Windows is it Pro or Home?  (this names it)
+   #1959  Where and at what angle will the panel sit, under what lighting, and is the glossy anti-fingerprint glass acceptable there?  (this names it)
+   #1960  If the panel host is a Pi, may it run Raspberry Pi OS Trixie rather than Bookworm?  (this names it)
+   #1961  Is a Raspberry Pi 5 available for the frame-time measurement the panel-host recommendation depends on?  (this names it)
+   #1962  Should the drum machine's own MIDI-to-sound latency be entered as a visual offset in the panel's settings or in the composition file?  (this names it)
+   #1963  Are the three read-only engine exposures wanted for v1, or should the first adapter read Subsequence's private names?  (this names it)
+   #1964  When a cycle's realised view arrives late, should the sounding flash fall back to the intent grid or show no flash?  (this names it)
+   #1965  Should the first use-case's algorithm contribute ephemerally or write intent persistently through the helper, and should the touched yield guard be on by default?  (this names it)
+   #1966  Is a hold-to-lock gesture wanted in v1, or left reserved?  (this names it)
+   #1967  Does the per-cycle cycle event replace the control contract's changed-when-the-rebuild-has-taken-it reading?  (this names it)
+   #1968  Should an unconfirmed tap draw a ring over the server's face, or flip the face optimistically and revert on refusal?  (this names it)
+   #1969  Which accent gesture does v1 use: hold the cell and choose a level, hold a cell and tap others, or velocity from where the tap lands?  (this names it)
+   #1970  Should a tap act on press, or toggle on release?  (this names it)
+   #1971  Does painting along a row belong in v1?  (this names it)
+   #1972  Should the adapter's connect loop, backoff and envelope codec start as a shared package or as three per-app modules?  (this names it)
+   #1973  Should a pad hit always travel as a fire frame through the Subsample adapter, and should the midi block stay in the declarations?  (this names it)
+   #1974  If per-message immediacy on the clock loop is ever wanted, is a SelectSelector loop or a widened spin margin acceptable in Subsequence?  (this names it)
+   #1975  Should Superintendent run as a systemd system unit or as a user unit?  (this names it)
+   #1976  Which Ubuntu release does the headless server run, and is a venv on a newer interpreter acceptable if it is 22.04?  (this names it)
+   #1977  How many cores does the headless server have, and may the unit pin Superintendent away from Subsequence's core?  (this names it)
+   #1978  Preact plus htm, or Lit, for the client?  (this names it)
+   #1979  Does redistributable under the project licence admit a GPL-3.0 file kept as a separate module in the tree?  (this names it)
+   #1980  Is TypeScript wanted for the client?  (this names it)
+   #1981  Dark theme by default with a light theme available, or light by default?  (this names it)
+   #1982  Is in-browser audition of samples and recordings wanted on the surface?  (this names it)
+   #1983  Is a package.json licence field with no LICENSE file an acceptable grant for vendoring NexusUI?  (this names it)
+   #1984  Do you accept a Substation change in this wave so the panel can switch bands with the link kept up?  (this names it)
+   #1985  In a deployment switched from the panel, should RTL-SDR calibration be disabled or carried across scanner instances?  (this names it)
+   #1986  Do you want an in-place retune verb on RadioScanner, and if so before or after the first use-case?  (this names it)
+   #1987  Which pad budget does v1 accept: 128 frames on wired Ethernet with the browser chosen on latency grounds, 256 frames with either browser, or no pad budget in v1?  (this names it)
+   #1988  May the pad budget assume Subsample's buffer_frames tuned to 128 or 256 on the sampler host, and what does that host print for PortAudio output latency?  (this names it)
+   #1989  Is it worth taking the acoustic touch-down and photodiode measurements on the panel before the v1 latency budgets are fixed?  (this names it)
+   #1990  If real touch confirms Chromium delivers pointerdown a frame later than Firefox, should that outweigh the Chromium kiosk recommendation?  (this names it)
+   #1991  Is Wi-Fi ruled out for the pad page, and should the page show the transport's measured round-trip?  (this names it)
+   #1992  The panel's touch controller is identified and the driver that binds it on Linux is known  (this names it)
+   #1993  The panel's touch report rate and touch-down latency are measured acoustically  (this names it)
+   #1994  The panel's display input lag and the refresh rate the host drives it at are measured  (this names it)
+   #1995  The panel host's browser input-to-glass path is measured with real touch on Chromium, Edge and Firefox  (this names it)
+   #1996  Frame times for the real grid page on the Raspberry Pi are measured with the GPU status recorded  (this names it)
+   #1997  Ten concurrent contacts and full gesture suppression are confirmed on the chosen panel host  (this names it)
+   #1998  Palm rejection, the hold and latch thresholds and the 60 px cell size are confirmed by hand on the panel  (this names it)
+   #1999  The panel is legible in its intended position: glare, mounting angle, palette and the pending cell states  (this names it)
+   #2000  The panel's behaviour through display standby, wake and USB re-enumeration is known  (this names it)
+   #2001  The kiosk on the chosen host survives a browser kill and locks down its platform's system gestures  (this names it)
+   #2002  Browser-to-service round-trip and end-to-end tap-to-ack are measured across the real wired and Wi-Fi segments  (this names it)
+   #2003  The panel host's Wi-Fi drop and roam behaviour is known and the stale and pending timers are set from it  (this names it)
+   #2004  The browser-to-service clock offset estimate is shown stable over the real wired and Wi-Fi paths  (this names it)
+   #2005  The app-to-service clock offset over the adapter link is measured with the service on a second host  (this names it)
+   #2006  Simon has judged highlight-against-hit alignment on the panel at 120 and 180 BPM  (this names it)
+   #2007  Subsequence's clock jitter is re-measured beside the running service on the headless server  (this names it)
+   #2008  The adapter's on-loop cost is re-measured on the headless server with the transport actually chosen  (this names it)
+   #2009  The StepGrid helper's on-loop apply is confirmed against the real helper  (this names it)
+   #2010  The systemd unit is installed on the server and its notify, restart and watchdog behaviour confirmed  (this names it)
+   #2011  One stalled Wi-Fi panel is shown not to delay the other clients  (this names it)
+   #2017  The panel host's browser is confirmed to reach the service's origin, with the secure-context features settled  (this names it)
+   #2025  Neither the recommended pending flag nor batching at the socket read coalesces anything at a rate a hand produces, so a held paint gesture costs the full per-message price of 26 to 48 late pulses in 1536; read-batching is what turns a burst into one crossing, twelve for ten bursts of 128 against the flag's 87; and the crossing itself is a fifth of a millisecond against the drain rule's measured 243 to 251 ms  (it names this)
+  Tip: subroutine link 2018 documents 611 — confirm one
+
+What happened
+  2026-09-03  @claude-super  Filed the three questions this document raised itself and amended the body to name them: #2021 the thread-to-loop crossing rule, #2019 the scope of the read-only engine exposures, #2020 the listen port. Each carries this document's short list, its figures and its citations, is linked to this document and to the ones it rests on, and sits in needs_input beside the other fifty, so the question list is now complete.
+
+Nine sentences changed, which is every one that said these were unfiled: the summary, the port recommendation, the crossing short list's closing paragraph, the engine-change bullet on the exposures, the disagreements table row, the question list's opening paragraph, the serving and grid groups in that list, and the Not covered section.
+
+Two of the three came back different from checking them.
+
+The Not covered bullet on the coalesced wake-up is rewritten rather than deleted. It said the coalescing was inferred and unmeasured; it is measured now on the same workstation, and the inference is half right. A pending flag that schedules a drain only when none is outstanding saved nothing — the loop wake-up count equalled the message count in every arm, because the loop services the drain in microseconds and the flag is clear again before the next message arrives. What collapses a burst is batching at the socket read. The recommendation is unaffected: at a human tap rate (one cell every 200 ms) the per-message crossing left no pulse over 1 ms in 1536 with a p99 of 0.168 ms, so option B is affordable on the per-message figure alone. The 50 Hz rows reproduced this document's cited p99 of about 1.1 ms and the drained rows reproduced the p99 of 0.002 ms.
+
+The engine-change bullet on the exposures gained the check it was missing. `device` and `mirrors` are already public attributes of `Pattern` (`pattern.py:132-133`) reachable through the public `Composition.running_patterns` property (`composition.py:1800-1803`); `muted` is already in every `live_info()` pattern entry (`composition.py:3901`); and `cycle_start_pulse` already arrives with every `pattern_reschedule` event (`sequencer.py:1829`). So the widened set is three facts with no public route — the pattern's grid, its drum note map and the energy-gate flag — plus the maximum device latency, not six new exposures. #2019 recommends putting that corrected set as the one question.
+
+Nothing else in the document moved.
+  2026-09-03  @claude-super  Verification of the three questions this document raised and filed found two things in the body that the corrected spikes now disagree with, so read them with #2021 and #2020 beside them.
+
+The crossing short list's middle column is still labelled "Wake the loop for a grid set, coalescing a burst into one wake-up (recommended)". The coalescing is measured now and does not happen: a pending flag that schedules a drain only when none is outstanding left the loop wake-up count equal to the message count in every arm, across two blocks on the real `Sequencer`, because the loop services the drain in microseconds. What collapses a burst is batching at the socket read (89 crossings for 712 messages, no pulse over 1 ms in 768, three paired passes). The recommendation is unaffected but its ground changes: the column is affordable on the per-message figure for an isolated tap (p99 0.168 ms, no late pulse in 1536), not for a burst, where per-message crossing cost 3 to 7 late pulses per 768 in every run and once 3.73 ms. #2021 also gains a column this document did not weigh: the link thread replacing the value on its own thread and never crossing, which measured indistinguishable from its paired baseline with zero wake-ups, at the price of #1925's single-writer invariant.
+
+The port section's alternative needs one correction: 8085 is Bamboo's default listen port, so "if the server already hosts anything in the Atlassian family" points at the family it was meant to escape. Both candidates carry an Atlassian default (Confluence 8090, Bamboo 8085); neither is likely on a headless music server, and what decides is which ports that machine has bound. RFC 6335 also does not sanction using a User Port without an assignment — that permission is the Dynamic range's — so the registry is a tie-break, not a licence. #2020 carries both corrections.
+
+The exposure bullet's line numbers for the three private names were off by one and are corrected on #2019 (`composition.py:5970` for `_default_grid`, `5967` for `_drum_note_map`, `5976` for `_energy_gated`), and `cycle_start_pulse` stays in that question because at connect the only route to it is the private attribute the sequencer writes at `sequencer.py:1795`.
+
+  Tip: subroutine comment projects/2018 "what happened"

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Superintendent gesture probe (prototype)</title>
+<style>
+	html, body { margin: 0; height: 100%; background: #111; color: #ddd; font: 14px system-ui, sans-serif;
+		touch-action: none; overscroll-behavior: none; user-select: none; -webkit-user-select: none; cursor: none; }
+	#wrap { display: grid; grid-template-columns: 1fr 360px; height: 100%; }
+	#left { display: flex; flex-direction: column; padding: 12px; gap: 12px; }
+	#grid { display: grid; grid-template-columns: 80px repeat(16, 1fr); grid-auto-rows: 1fr; gap: 4px; flex: 1; }
+	.rowlabel { display: flex; align-items: center; color: #999; font-size: 12px; }
+	.cell { background: #2a2a2a; border-radius: 6px; position: relative; }
+	.cell.on { background: #d99a1a; }
+	.cell.accent { background: #ff5e1a; }
+	.cell.soft { background: #8a6a1a; }
+	.cell.sel { outline: 3px solid #5cf; outline-offset: -3px; }
+	.cell.play { box-shadow: inset 0 0 0 4px #fff; }
+	#strip { display: none; gap: 8px; height: 64px; }
+	#strip.open { display: flex; }
+	.level { flex: 1; display: flex; align-items: center; justify-content: center; background: #345; border-radius: 6px; font-size: 20px; }
+	#pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; height: 180px; }
+	.pad { background: #253; border-radius: 8px; display: flex; align-items: flex-end; justify-content: center; padding: 6px; }
+	.pad.down { background: #4c8; }
+	#right { background: #1a1a1a; padding: 12px; overflow: auto; font: 12px ui-monospace, monospace; }
+	#right h2 { font-size: 13px; margin: 8px 0 4px; color: #9cf; }
+	#log { white-space: pre-wrap; }
+	.bad { color: #f66; } .good { color: #6f6; }
+</style>
+</head>
+<body>
+<div id="wrap">
+	<div id="left">
+		<div id="grid"></div>
+		<div id="strip"></div>
+		<div id="pads"></div>
+	</div>
+	<div id="right">
+		<h2>Capability (observed)</h2><div id="cap"></div>
+		<h2>Host checks</h2><div id="checks"></div>
+		<h2>Actions</h2><div id="log"></div>
+	</div>
+</div>
+<script src="gesture.js"></script>
+<script>
+"use strict";
+// Research prototype: exercises gesture.js against real pointer events and records
+// the hardware-gated checks named in the multi-touch design document.
+const ROWS = ["kick", "snare", "hh_closed", "hh_open", "clap", "tom_lo", "tom_hi", "ride"];
+const COLS = 16;
+const state = new Map();   // "row:col" -> vel (present = on)
+const gridEl = document.getElementById("grid"), stripEl = document.getElementById("strip"), padsEl = document.getElementById("pads");
+const logEl = document.getElementById("log"), capEl = document.getElementById("cap"), checksEl = document.getElementById("checks");
+const G = window.Gestures;
+const grid = new G.GridGestures({isOn: c => state.has(c.row + ":" + c.col)});
+const pads = new G.PadGestures({padVelocityMode: "vertical"});
+const checks = {contextmenuFired: 0, pointercancel: 0, pinchScaleChanged: false, selectionLeak: false, maxTouchPoints: navigator.maxTouchPoints,
+	coarse: matchMedia("(pointer: coarse)").matches, anyCoarse: matchMedia("(any-pointer: coarse)").matches, hoverNone: matchMedia("(hover: none)").matches};
+let lines = [];
+function log (s) { lines.push(s); if (lines.length > 40) lines.shift(); logEl.textContent = lines.join("\n"); }
+
+// Build the grid.
+for (const r of ROWS) {
+	const l = document.createElement("div"); l.className = "rowlabel"; l.textContent = r; gridEl.appendChild(l);
+	for (let c = 0; c < COLS; c++) { const d = document.createElement("div"); d.className = "cell"; d.dataset.row = r; d.dataset.col = c; gridEl.appendChild(d); }
+}
+for (const v of G.DEFAULTS.levels) { const d = document.createElement("div"); d.className = "level"; d.dataset.level = v; d.textContent = v; stripEl.appendChild(d); }
+for (const p of ["kicks", "snares", "hats", "perc"]) { const d = document.createElement("div"); d.className = "pad"; d.dataset.pad = p; d.textContent = p; padsEl.appendChild(d); }
+
+function cellEl (row, col) { return gridEl.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`); }
+function paintCell (row, col) {
+	const el = cellEl(row, col); const v = state.get(row + ":" + col);
+	el.classList.toggle("on", v !== undefined && v >= 90 && v < 120);
+	el.classList.toggle("accent", v !== undefined && v >= 120);
+	el.classList.toggle("soft", v !== undefined && v < 90);
+}
+function setSel (cells) { gridEl.querySelectorAll(".cell.sel").forEach(e => e.classList.remove("sel")); for (const c of cells) cellEl(c.row, c.col).classList.add("sel"); }
+
+function targetOf (ev) {
+	// Hit-test by coordinates rather than event.target so a finger that lands on cell A and
+	// slides to cell B is seen at B even though implicit capture keeps A as the target.
+	const el = document.elementFromPoint(ev.clientX, ev.clientY);
+	if (!el) return {kind: "outside"};
+	if (el.classList.contains("cell")) return {kind: "cell", cell: {row: el.dataset.row, col: Number(el.dataset.col)}};
+	if (el.classList.contains("level")) return {kind: "level", value: Number(el.dataset.level)};
+	if (el.classList.contains("pad")) { const r = el.getBoundingClientRect(); return {kind: "pad", pad: el.dataset.pad, yFrac: (ev.clientY - r.top) / r.height, el}; }
+	return {kind: "outside"};
+}
+function apply (actions) {
+	for (const a of actions) {
+		switch (a.type) {
+			case "set": { const k = a.cell.row + ":" + a.cell.col; if (a.on) state.set(k, G.DEFAULTS.defaultVel); else state.delete(k); paintCell(a.cell.row, a.cell.col); break; }
+			case "paint": { const k = a.cell.row + ":" + a.cell.col; if (a.on) state.set(k, G.DEFAULTS.defaultVel); else state.delete(k); paintCell(a.cell.row, a.cell.col); break; }
+			case "editOpen": case "editSelect": stripEl.classList.add("open"); setSel(a.cells); break;
+			case "editApply": for (const c of a.cells) { state.set(c.row + ":" + c.col, a.value); paintCell(c.row, c.col); } break;
+			case "editClose": stripEl.classList.remove("open"); setSel([]); break;
+			case "fire": { const el = padsEl.querySelector(`.pad[data-pad="${a.pad}"]`); el.classList.toggle("down", a.on); break; }
+		}
+		log(`${performance.now().toFixed(0)} ${a.type}${a.on !== undefined && a.cell ? (a.on ? " on" : " off") : ""} ${a.cell ? a.cell.row + ":" + a.cell.col : ""}${a.cells ? a.cells.length + " cells" : ""}${a.value !== undefined ? " vel=" + a.value : ""}${a.pad ? a.pad + (a.on ? " on vel=" + a.vel : " off") : ""}`);
+	}
+}
+const padPointers = new Set();
+document.addEventListener("pointerdown", ev => {
+	ev.preventDefault();
+	const t = targetOf(ev);
+	if (t.kind === "pad") { padPointers.add(ev.pointerId); apply(pads.down(ev.pointerId, ev.pointerType, t.pad, t.yFrac, ev.timeStamp)); }
+	else apply(grid.down(ev.pointerId, ev.pointerType, t, ev.clientX, ev.clientY, ev.timeStamp, ev.button));
+	showCap();
+});
+document.addEventListener("pointermove", ev => {
+	if (padPointers.has(ev.pointerId)) return;
+	apply(grid.move(ev.pointerId, targetOf(ev), ev.clientX, ev.clientY, ev.timeStamp));
+});
+function lift (ev, cancelled) {
+	if (padPointers.has(ev.pointerId)) { padPointers.delete(ev.pointerId); apply(pads.up(ev.pointerId, ev.timeStamp)); }
+	else apply(cancelled ? grid.cancel(ev.pointerId, ev.timeStamp) : grid.up(ev.pointerId, ev.timeStamp));
+	showCap();
+}
+document.addEventListener("pointerup", ev => lift(ev, false));
+document.addEventListener("pointercancel", ev => { checks.pointercancel++; log("POINTERCANCEL " + ev.pointerType); lift(ev, true); });
+document.addEventListener("contextmenu", ev => { ev.preventDefault(); checks.contextmenuFired++; log("contextmenu (suppressed)"); showCap(); });
+if (window.visualViewport) visualViewport.addEventListener("resize", () => { if (Math.abs(visualViewport.scale - 1) > 0.01) checks.pinchScaleChanged = true; showCap(); });
+document.addEventListener("selectionchange", () => { if (String(document.getSelection()).length) checks.selectionLeak = true; });
+setInterval(() => { apply(grid.tick(performance.now())); }, 50);
+
+function showCap () {
+	const c = grid.cap, p = pads.cap;
+	const peak = Math.max(c.peakConcurrentTouch, p.peakConcurrentTouch);
+	const st = peak >= 2 ? "confirmed" : (peak === 1 ? "single" : (c.seenTypes.has("mouse") || p.seenTypes.has("mouse") ? "mouse" : "unknown"));
+	capEl.innerHTML = `state: <b class="${st === "confirmed" ? "good" : ""}">${st}</b><br>peak concurrent non-mouse contacts: ${peak}<br>pointer types seen: ${[...new Set([...c.seenTypes, ...p.seenTypes])].join(", ") || "-"}<br>navigator.maxTouchPoints: ${checks.maxTouchPoints} (advisory)<br>(pointer: coarse) ${checks.coarse}, (any-pointer: coarse) ${checks.anyCoarse}, (hover: none) ${checks.hoverNone}`;
+	checksEl.innerHTML = `contextmenu on long-press: ${checks.contextmenuFired} fired (suppressed)<br>pointercancel under touch-action none: <span class="${checks.pointercancel ? "bad" : "good"}">${checks.pointercancel}</span><br>pinch changed visualViewport.scale: <span class="${checks.pinchScaleChanged ? "bad" : "good"}">${checks.pinchScaleChanged}</span><br>text selection leaked: <span class="${checks.selectionLeak ? "bad" : "good"}">${checks.selectionLeak}</span><br>UA: ${navigator.userAgent}`;
+}
+showCap();
+log("ready. press an empty cell = set at once; quick press on a set cell = clear on release; hold 400 ms (or right button) = edit strip; hold + second finger on a level = accent; drag along a row = paint; pads: chords, velocity by height.");
+</script>
+</body>
+</html>

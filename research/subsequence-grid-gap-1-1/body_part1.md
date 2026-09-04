@@ -1,0 +1,30 @@
+**Question.** What does a real grid-bearing pattern rebuilding on Subsequence's composition loop do to the timing of the music, and at which grid size does a one-pulse reschedule lookahead stop having headroom?
+
+This is the orphan named in #1915 ("Wall-clock effect of the rebuild on `benchmarks/clock_jitter.py`'s figure ... was not measured"), repeated in #1914, and stated plainly in #2018 ("the wall-clock effect of the rebuild on the jitter benchmark was not measured by any point"). #1929 measured the co-located service against the stock benchmark, which drives a bare `Sequencer` with no patterns; #1926's second measurement block scheduled a real `Pattern` but an empty one, so no rebuild work had ever been on the loop while the jitter log was running.
+
+The benchmark's figure turned out to be the wrong yardstick on its own, so this document reports three quantities and keeps them apart: what `clock_jitter.py` measures, what it measures on the pulses that carry a rebuild, and how late the rebuild pulse's own MIDI leaves the sequencer.
+
+## What the jitter benchmark can and cannot see
+
+`benchmarks/clock_jitter.py` passes a list to the sequencer as `_jitter_log` and reports its percentiles (`clock_jitter.py:36-82`). The sequencer appends to that list in exactly one place: after a pulse has been dispatched, after the loop has slept to the *next* pulse's instant, as `time.perf_counter() - next_pulse_time` (`sequencer.py:1567`, inside the non-render branch of `_run_loop_internal_clock`). It is **wake-up lateness for the pulse about to be processed**, not dispatch lateness for the pulse just processed.
+
+Two consequences follow, and both matter here.
+
+- **Work that fits inside a pulse interval is invisible to it by construction.** A rebuild that costs 6 ms at the head of a 20.833 ms pulse simply leaves a 14.8 ms sleep instead of a 20.8 ms one, and the next wake-up is exactly on time. The figure only moves when the work overruns the interval. Reading an unmoved benchmark figure as "the rebuild costs the music nothing" is reading the absence of an overrun as the absence of a delay.
+- **Its percentiles are pooled over pulses that mostly contain no rebuild.** A four-beat pattern rebuilds sixteen times in a 16-bar run of 1536 pulses. The p95 covers 77 pulses and the p99 fifteen, so neither can be moved by sixteen samples however late they are.
+
+So the benchmark answers "does a grid rebuild disturb the clock's own cadence" — and the answer is no. It does not answer "does a grid rebuild delay notes", which is the question the lookahead decision actually turns on. That one needed a second measurement.
+
+## How it was measured
+
+**The clock figure**, by `clock_jitter.py`'s own method as #1926's harness drives it: the real `subsequence.sequencer.Sequencer` with a `_jitter_log`, 16 bars at 120 BPM (1536 pulses of 20.833 ms), spin-wait on, and `output_device_name` set to a name that matches nothing, which `select_output_device` turns into a logged `(None, None)` with no port opened (`midi_utils.py:334-377`; the no-match branch is at 372-377). No audio or MIDI device was opened and nothing was written under `/mnt/dev`.
+
+The difference from every earlier run is the pattern. A real `Composition` is constructed, a real `@composition.pattern` decorator declares the grid pattern with its `drum_note_map` and its `reschedule_lookahead`, and `_build_pattern_from_pending` produces the same `_DecoratorPattern` that `Composition._run()` would (`composition.py:5838-5845`); the pattern is then handed to the composition's own sequencer with `schedule_pattern_repeating` (`sequencer.py:1123-1150`). The builder reads a StepGrid-shaped sparse cell map out of `composition.data` — row name to `{step index: {"v": velocity}}`, the v1 cell schema of #1914 — and calls `p.sequence(indices, voice, velocities=..., grid=n)` once per row (`pattern_builder.py:1195-1254`), with `p.set_length(steps * SIXTEENTH)` first. So the loop pays the whole per-cycle cost: `_DecoratorPattern.on_reschedule()` re-running the builder (`composition.py:6118-6124`) and `Sequencer.schedule_pattern()` turning every placed note into a `note_on` and a `note_off` on the event heap (`sequencer.py:957-1050`).
+
+**The dispatch figure**, by wrapping `Sequencer._dispatch_with_compensation` in the same harness and comparing the wall clock of each pulse's first send with `start_time + pulse * seconds_per_pulse`, recording which message types were dispatched on each pulse. With one output device the compensation offset is zero (`_send_offset_seconds`, `sequencer.py:1948-1967`) so the send is synchronous and the timestamp is the send.
+
+Three grid shapes, each at three lookaheads: 16 by 8 with 64 notes (every other step of every row), 16 by 8 full with 128 notes, and 64 by 16 with 512 notes; `reschedule_lookahead` of 1/24 beat (one pulse), 1/4 beat (six pulses) and the default 1 beat. A 16-step sixteenth-note pattern is four beats long and rebuilds sixteen times in a 16-bar run; a 64-step one is sixteen beats long, so the big grid was run for 32 or 64 bars.
+
+**The workstation is shared with other work**, and a first pass was spoiled by a background test suite that took the load average from 0.3 to 8.4 mid-matrix. Every clock-figure row below is therefore paired: a baseline run of the same length was taken immediately before each grid run, and each pair waited for the one-minute load average to fall below 1.2 first. Loads at the start of every accepted run were between 0.29 and 1.14. The harness's own baseline reproduces the stock benchmark exactly (stock at 120 BPM in the same session: median 0.002 ms, p95 0.002 ms, p99 0.015 ms, maximum 0.048 ms).
+
+Machine: the development workstation, Intel Core i7-9700K, 8 cores, Ubuntu on kernel 6.8.0-138, Python 3.12.3 in `~/venvs/subsequence-cookbook`, working tree at `v0.6.6-2-g95c14a7`. `intel_pstate` is in **active mode with HWP**, `scaling_driver` `intel_pstate`, governor `powersave`, `energy_performance_preference` `balance_performance`, range 800 to 4900 MHz, turbo enabled. Indicative only; the headless server is a different and slower machine.

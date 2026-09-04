@@ -1,0 +1,70 @@
+#1922  Superintendent inherits no LAN-open surface by default — once enabled, Subsequence's OSC receiver is the control door and the Supervisor adapters the read door — and a remote mode later is an overlay network or TLS with authentication at the service, kept open by four choices that cost nothing now
+  finding · active · #research · #security-later · superintendent
+
+Summary: On the working trees of 2026-09-02 every network surface in the three apps is opt-in. Once enabled, two bind all interfaces: Subsequence's OSC receiver on UDP 9000, which sets tempo, mutes patterns and writes any `composition.data` key unauthenticated, and the Supervisor adapters on 9003 and 9004, which serve whole recordings directories with a CORS wildcard. A remote mode later is an overlay network with no Superintendent change, or TLS and authentication at the service with the apps reachable only from it; four choices keep both open at no cost now. Plain `http://` on a LAN address is not a secure context, so Wake Lock or Web MIDI in the browser needs TLS or Chromium's insecure-origin flag.
+
+**Question.** What exposure does Superintendent inherit from the three apps and Supervisor, what would a remote panel need later, and which choices in the other points would make that hard?
+
+## Exposure per app, as the code stands on 2026-09-02
+
+Every row is off until a composition file or a config turns it on: no composition under the working trees calls `composition.osc()`; Subsample's `osc.enabled` and `supervisor.enabled` and Substation's `supervisor.enabled` default to False (`subsample/config.py:526`, `:564`; `substation/config.py:597`); Substation's OSC sender is imported by nothing (`osc_sender.py:16-17`). Whether the composition on Simon's rig enables OSC is his to answer.
+
+| Surface | Bind once enabled | A sender can | Sender check |
+| --- | --- | --- | --- |
+| Subsequence OSC receive, UDP 9000, `composition.osc()` | `0.0.0.0` by default, documented as deliberate for LAN controllers (`subsequence/osc.py:49`, `composition.py:3771`, `:3783-3786`) | set tempo via `/bpm` (`osc.py:144`); silence any pattern via `/mute/*` or `/unmute/*` (`:158`, `:169`); write `composition.data` via `/data/<key> <value>`, creating an absent key and replacing a non-numeric value wholesale (`:171-194`) | none; the dispatcher matches on address alone (`osc.py:68-71`, `:82-86`) |
+| Subsequence live REPL, TCP 5555, `composition.live()` | `127.0.0.1` hard-coded (`live_server.py:56`) | `eval` or `exec` any Python in the process (`:145`, `:156`) | none; any local process has code execution (`composition.py:3453-3458`) |
+| Subsequence legacy web_ui, TCP 8080 and 8765 | `127.0.0.1` by default; `0.0.0.0` is an explicit argument (`web_ui.py:41`, `composition.py:2951`) | read full composition state; inbound frames ignored | none |
+| Subsample OSC receive, UDP 9002, `osc.enabled` and `osc.receive_enabled` | `127.0.0.1` by default (`subsample/config.py:543`, `subsample/osc.py:141-145`) | `/sample/import <path>`: analyse any readable file and load it into the running library (`cli.py:2053-2100`) | none; the docstring calls it an unauthenticated remote file read if rebound (`osc.py:133-138`) |
+| Substation package | no listening socket; OSC sender unwired (`osc_sender.py:16-17`) | nothing inbound | n/a |
+| Supervisor adapters, TCP 9003 and 9004, `supervisor.enabled` (Subsample `cli.py:1747-1759`; Substation `cli.py:224-227`, `:240-252`) | `0.0.0.0` hard-coded (`supervisor/core.py:62-67`) | read state, inbound discarded (`core.py:191-192`); `GET /audio/<path>` reads the whole recordings directory of either app (`app/subsample.py:74-76`, `app/substation.py:56-58`) behind a realpath guard (`core.py:150-152`) with `Access-Control-Allow-Origin: *` (`:165`); `serve.py:21` binds all interfaces on 8000 | none |
+
+Ranked: OSC is the control door, the adapters the read door, the REPL the only code-execution surface and on loopback. Superintendent's own exposure is whatever its service and app-side adapters bind, so `transport-apps` sets it.
+
+## What a remote panel would need later
+
+| Shape | Gives | Costs | Fit |
+| --- | --- | --- | --- |
+| Overlay network: WireGuard, or Tailscale with Headscale as coordination server | Peers identified by public key, NAT traversal (https://www.wireguard.com/quickstart/); no Superintendent change; WireGuard GPLv2, Tailscale client BSD-3 (https://github.com/tailscale/tailscale), Headscale BSD-3 (https://github.com/juanfont/headscale) | A client on every panel host; Tailscale's hosted coordination server is closed source (https://tailscale.com/opensource/) | Every remote browser is Simon's own device |
+| TLS and authentication at the service, apps reachable only from it | Any browser joins with a URL and a credential; Caddy issues public certificates automatically, self-signed for internal names, and proxies WebSockets (https://caddyserver.com/docs/automatic-https, https://caddyserver.com/docs/caddyfile/directives/reverse_proxy); `websockets.serve` takes `ssl` and an `origins` allow-list (https://websockets.readthedocs.io/en/stable/reference/asyncio/server.html) | A public DNS name and open 80/443, or a private CA on every panel host; the browser cannot set WebSocket headers, so the credential is the first message, the library's recommended option (https://websockets.readthedocs.io/en/stable/topics/authentication.html); the service must firewall the apps | A browser Simon does not administer |
+
+## Choices in the other points that would make remote mode hard, avoidable now at no cost
+
+- **Single origin.** Page, WebSocket and audio or waveform files from one host and port (`topology`, `serving`). A WebSocket handshake is a fetch with `ws` rewritten to `http` (https://websockets.spec.whatwg.org/), and Mixed Content blocks a fetch from an `https:` document to a non-trustworthy URL unless its destination is image, audio or video (https://w3c.github.io/webappsec-mixed-content/#should-block-fetch); Chromium enforces it in `MixedContentChecker::IsWebSocketAllowed` (https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/renderer/core/loader/mixed_content_checker.cc). Each extra origin is one more TLS endpoint and origin check later; that is the cost of Supervisor's socket per app plus `serve.py` on its own port. Chrome's Local Network Access, which replaced the paused Private Network Access in Chrome 142, limits the permission to secure contexts (https://developer.chrome.com/blog/local-network-access), so a public page talking straight to LAN apps is closed in any remote future.
+- **Relative URLs and no CORS.** Derive the socket URL from `location`; never write `Access-Control-Allow-Origin: *` or a hard-coded `ws://localhost:` as Supervisor did (`client/app.js:10-14`). Reserve the `origins` allow-list from the start.
+- **A handshake with room for a credential.** The first frame of the `transport-ui` envelope is a `hello` with protocol version and an optional token field, ignored in v1; authentication later is a check, not a protocol change.
+- **Apps on loopback, or an interface the service names; the service is the only network face.** Superintendent must not depend on `receive_host="0.0.0.0"`. That default is documented intent (`composition.py:3783-3786`), so per #613 it is not a bug to fix: the composition file passes `receive_host="127.0.0.1"` when the service is co-located, and per #611 anything the app side then needs is a change to make, outside the engine per #1465. While the receiver is on `0.0.0.0`, `/data/<key> 1` from any LAN host replaces whatever a grid keeps at `composition.data[key]` (`osc.py:171-194`; the handler reads `parts[2]`, so nested paths are unreachable but the top-level key is not); on loopback the path is reachable only by local processes, the trust the REPL already grants, and `composition.data` stands as the canonical write path the specification names. Serve waveforms and recordings from an allow-list of service-owned directories, as Supervisor did, never from client-supplied paths as `/sample/import` does.
+
+## Where security touches v1
+
+Only loopback, `localhost` and `https` or `wss` origins are potentially trustworthy; `http://192.168.x.x` is not (https://w3c.github.io/webappsec-secure-contexts/). Pointer Events and Fullscreen work there; Screen Wake Lock and Web MIDI do not (https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts/features_restricted_to_secure_contexts). If `ui-host` wants either, the routes are TLS as above or, on a kiosk Simon administers, Chromium's `--unsafely-treat-insecure-origin-as-secure="http://<service>"` flag or its `chrome://flags` entry, which treats that origin as secure for the session (https://www.chromium.org/Home/chromium-security/deprecating-powerful-features-on-insecure-origins/); Firefox's `dom.securecontext.allowlist` takes comma-separated hostnames for `http` and `ws` URLs (https://bugzilla.mozilla.org/show_bug.cgi?id=1744006, https://hg-edge.mozilla.org/integration/autoland/raw-file/7e67994f6a657c63f1b049f89437e937fcb8c4ae/dom/security/nsMixedContentBlocker.cpp). The flag covers the Pi and the Windows desktop; the random laptop needs TLS.
+
+## Not covered
+
+Whether the composition on Simon's rig calls `composition.osc()` and with what `receive_host`; the rig is a headless server this workstation cannot inspect, and no composition in the trees does. No threat model beyond the private LAN, by the brief.
+
+## Hardware-gated
+
+A private CA or the insecure-origin flag on a Raspberry Pi kiosk, and Chromium there accepting `wss://` to a LAN name, need the panel host.
+
+## Provenance
+
+Files read on 2026-09-02: `subsequence/osc.py` (40-200), `live_server.py` (50-160), `web_ui.py` (35-50), `composition.py` (2945-2975, 3440-3470, 3765-3800); `subsample/osc.py` (30-45, 125-150), `config.py` (514-570), `cli.py` (1459-1470, 1735-1770, 2050-2116); `substation/osc_sender.py` (1-40), `cli.py` (220-260), `config.py` (560-600); `supervisor/core.py` (55-70, 140-200), `app/subsample.py` (65-85), `app/substation.py` (50-65), `serve.py`, `client/app.js` (1-20). Subroutine: #1465, #1461, #1464, #613, #611, #1478, #384, #397. URLs as cited inline; Chrome's Private Network Access post (https://developer.chrome.com/blog/private-network-access-update) now reads "The PNA rollout is on hold" and is superseded by the Local Network Access post cited above.
+
+Referred to by (7)
+   #1913  in a comment The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them
+   #1928               Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path
+   #1950               Should the apps dial the Superintendent service, or should the service dial the apps?
+   #1954               Should a remote panel reach the service over an overlay network or over TLS with authentication at the service, and must a browser you do not administer ever be able to join?
+   #1955               Does the composition running on the rig call composition.osc(), and if so with which receive_host?
+   #1956               Should the v1 panel keep the screen awake with Screen Wake Lock or speak Web MIDI from the browser?
+   #2017               The panel host's browser is confirmed to reach the service's origin, with the secure-context features settled
+
+Not linked, but its writing suggests (5)
+    #384  Fitting a sample to a beat count needs a duration anchor, not a tempo ratio  (this names it)
+   #1461  The compositional-structure wave was ratified 2026-06-10 and shipped in v0.6.0 — its 22 decisions still govern the API  (this names it)
+   #1465  The module is the engine; anything specific to one studio or one piece belongs in the user's composition file  (this names it)
+   #1478  The channel_state event is emitted after demodulation so the CTCSS/DCS tone rides on the activation itself  (this names it)
+   #1928  Each app carries its own adapter module on a daemon thread that dials the service over one WebSocket and speaks the browser's frame vocabulary; inbound sets queue and land at the sequencer's own hooks, OSC stays the user door and MIDI the pad path  (it names this)
+  Tip: subroutine link 384 documents 1922 — confirm one
+
+  Tip: subroutine comment 1922 "what happened"

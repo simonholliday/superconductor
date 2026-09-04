@@ -1,0 +1,76 @@
+2026-09-03 16:13:16,346 INFO Initialized scanner for band 'probe_a'
+2026-09-03 16:13:16,347 INFO Frequency range: 446.00625 - 446.19375 MHz
+2026-09-03 16:13:16,347 INFO Number of channels: 16
+2026-09-03 16:13:16,347 INFO Center frequency: 446.10000 MHz
+2026-09-03 16:13:16,347 INFO Required bandwidth: 0.21050 MHz (inc. 6.2kHz edge margin)
+2026-09-03 16:13:16,347 INFO Sample rate: 1.024 MHz
+2026-09-03 16:13:16,347 INFO SNR threshold: 4.5 dB ON / 1.5 dB OFF (hysteresis)
+2026-09-03 16:13:16,347 INFO SDR Gain: 36.0
+2026-09-03 16:13:16,347 INFO SDR Device: file (index 0)
+2026-09-03 16:13:16,347 INFO Modulation: NFM
+2026-09-03 16:13:16,347 INFO Recording: ENABLED (16000 Hz mono WAV to /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/audio)
+2026-09-03 16:13:16,347 INFO Starting scan...
+2026-09-03 16:13:16,347 INFO Setting up SDR device...
+2026-09-03 16:13:16,347 INFO IQ file: /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/iq_probe_fm3.wav — 1.024 MHz, 8192000 frames (8s / 0.0h), center 446.100000 MHz
+2026-09-03 16:13:16,347 INFO SDR device configured successfully
+2026-09-03 16:13:16,348 INFO Noise estimation regions: 17 gaps, 1024 bins total
+2026-09-03 16:13:16,349 INFO FFT size: 32768 bins, frequency resolution: 31.2 Hz
+2026-09-03 16:13:16,349 INFO Welch segments: 8, samples per slice: 262144
+2026-09-03 16:13:16,349 INFO DC spike exclusion: 7 bins around center
+2026-09-03 16:13:16,350 INFO Started async SDR streaming
+2026-09-03 16:13:16,350 INFO Time slice: 200 ms (262144 samples)
+2026-09-03 16:13:16,445 INFO IQ file playback complete
+2026-09-03 16:13:16,474 INFO Noise floor warmup complete (1.0 dB). Detection enabled.
+2026-09-03 16:13:16,980 INFO Cancelled async SDR streaming
+2026-09-03 16:13:16,980 INFO SDR device closed
+2026-09-03 16:13:16,981 INFO Initialized scanner for band 'probe_b'
+2026-09-03 16:13:16,981 INFO Frequency range: 446.00625 - 446.09375 MHz
+2026-09-03 16:13:16,981 INFO Number of channels: 8
+2026-09-03 16:13:16,981 INFO Center frequency: 446.05000 MHz
+2026-09-03 16:13:16,981 INFO Required bandwidth: 0.11050 MHz (inc. 6.2kHz edge margin)
+2026-09-03 16:13:16,981 INFO Sample rate: 1.024 MHz
+2026-09-03 16:13:16,981 INFO SNR threshold: 4.5 dB ON / 1.5 dB OFF (hysteresis)
+2026-09-03 16:13:16,981 INFO SDR Gain: 36.0
+2026-09-03 16:13:16,981 INFO SDR Device: file (index 0)
+2026-09-03 16:13:16,981 INFO Modulation: NFM
+2026-09-03 16:13:16,981 INFO Recording: ENABLED (16000 Hz mono WAV to /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/audio)
+2026-09-03 16:13:16,981 INFO Starting scan...
+2026-09-03 16:13:16,981 INFO Setting up SDR device...
+2026-09-03 16:13:16,981 INFO IQ file: /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/iq_probe_fm3.wav — 1.024 MHz, 8192000 frames (8s / 0.0h), center 446.100000 MHz
+2026-09-03 16:13:16,981 INFO Using device center frequency: 446.100000 MHz (band midpoint: 446.050000 MHz)
+2026-09-03 16:13:16,981 INFO SDR device configured successfully
+2026-09-03 16:13:16,982 INFO Noise estimation regions: 9 gaps, 512 bins total
+2026-09-03 16:13:16,983 INFO FFT size: 32768 bins, frequency resolution: 31.2 Hz
+2026-09-03 16:13:16,983 INFO Welch segments: 8, samples per slice: 262144
+2026-09-03 16:13:16,983 INFO DC spike exclusion: 7 bins around center
+2026-09-03 16:13:16,983 INFO Started async SDR streaming
+2026-09-03 16:13:16,983 INFO Time slice: 200 ms (262144 samples)
+2026-09-03 16:13:17,075 INFO IQ file playback complete
+2026-09-03 16:13:17,101 INFO Noise floor warmup complete (0.8 dB). Detection enabled.
+2026-09-03 16:13:17,304 INFO Cancelled async SDR streaming
+2026-09-03 16:13:17,304 INFO SDR device closed
+2026-09-03 16:13:17,304 INFO Initialized scanner for band 'probe_a'
+2026-09-03 16:13:17,305 INFO Frequency range: 446.00625 - 446.19375 MHz
+2026-09-03 16:13:17,305 INFO Number of channels: 16
+2026-09-03 16:13:17,305 INFO Center frequency: 446.10000 MHz
+2026-09-03 16:13:17,305 INFO Required bandwidth: 0.21050 MHz (inc. 6.2kHz edge margin)
+2026-09-03 16:13:17,305 INFO Sample rate: 1.024 MHz
+2026-09-03 16:13:17,305 INFO SNR threshold: 4.5 dB ON / 1.5 dB OFF (hysteresis)
+2026-09-03 16:13:17,305 INFO SDR Gain: 36.0
+2026-09-03 16:13:17,305 INFO SDR Device: file (index 0)
+2026-09-03 16:13:17,305 INFO Modulation: NFM
+2026-09-03 16:13:17,305 INFO Recording: ENABLED (16000 Hz mono WAV to /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/audio)
+2026-09-03 16:13:17,305 INFO Starting scan...
+2026-09-03 16:13:17,305 INFO Setting up SDR device...
+2026-09-03 16:13:17,305 INFO IQ file: /tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/subsample-substation/restart/iq_probe_fm3.wav — 1.024 MHz, 8192000 frames (8s / 0.0h), center 446.100000 MHz
+2026-09-03 16:13:17,305 INFO SDR device configured successfully
+2026-09-03 16:13:17,306 INFO Noise estimation regions: 17 gaps, 1024 bins total
+2026-09-03 16:13:17,307 INFO FFT size: 32768 bins, frequency resolution: 31.2 Hz
+2026-09-03 16:13:17,307 INFO Welch segments: 8, samples per slice: 262144
+2026-09-03 16:13:17,307 INFO DC spike exclusion: 7 bins around center
+2026-09-03 16:13:17,307 INFO Started async SDR streaming
+2026-09-03 16:13:17,307 INFO Time slice: 200 ms (262144 samples)
+2026-09-03 16:13:17,396 INFO IQ file playback complete
+2026-09-03 16:13:17,423 INFO Noise floor warmup complete (1.0 dB). Detection enabled.
+2026-09-03 16:13:17,930 INFO Cancelled async SDR streaming
+2026-09-03 16:13:17,930 INFO SDR device closed

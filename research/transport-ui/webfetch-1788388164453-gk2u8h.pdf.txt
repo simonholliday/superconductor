@@ -1,0 +1,609 @@
+Publication date: 14 September 2023 
+UK home broadband 
+performance 
+The performance of fixed-line broadband 
+delivered to UK residential customers 
+Welsh translation available 
+ 
+ 
+Classification: HIGHLY SENSITIVE 
+Contents 
+Section 
+Overview .................................................................................................................................... 3 
+Download speeds ....................................................................................................................... 7 
+Download speeds: network slowdown .................................................................................... 11 
+Upload speeds .......................................................................................................................... 14 
+Netflix streaming and disconnections ..................................................................................... 15 
+Broadband package comparisons ............................................................................................ 18 
+Geographic comparisons ......................................................................................................... 23 
+ 
+ 
+Overview 
+Ofcom’s Communications Market Report 2023 shows that 86% of UK households take fixed 
+broadband. Increased homeworking, and the widespread use of bandwidth-heavy services such as 
+video streaming, mean that most people require reliable and high-quality broadband.  
+This report summarises our research to understand broadband performance. It is based on two main 
+sources of data: data collected by SamKnows from volunteers who connect a hardware monitoring 
+unit to their broadband router; and data provided to Ofcom by the UK’s four largest broadband 
+providers. 
+What we have found – in brief 
+Service take-up 
+Superfast products accounted for 93% of all home broadband lines. The share of residential 
+broadband connections that were superfast products (those with an advertised speed of 30 Mbit/s 
+or higher) increased from 91% to 93% in the year to March 2023, while 11% of lines were ultrafast 
+products with advertised speeds of at least 300 Mbit/s. 
+Connection speeds 
+Average residential download speeds have continued to increase. The median average download 
+speed of UK home broadband connections was 69.4 Mbit/s in March 2023, a 10.1 Mbit/s (17%) 
+increase year-on-year, as people upgraded to higher-bandwidth services.  
+Three per cent of lines had an average 24-hour actual download speed of less than 10 Mbit/s in 
+2023, down from 4% in 2022. This is the minimum download speed required for a decent broadband 
+connection. Less than 1% of lines had an advertised download speed under 10 Mbit/s. 
+The gap between average urban and rural speeds has narrowed. There was a 26% difference 
+between average urban (70.3 Mbit/s) and rural (56.0 Mbit/s) download speeds during the 8-10pm 
+peak-time period, down from 58% in 2022.  
+There was a large increase in median average upload speeds, rising to 18.4 Mbit/s in March 2023. 
+This was a year-on-year increase of 7.8 Mbit/s (73%). 
+Many ADSL2+ users will experience a considerable performance improvement if they upgrade to 
+FTTC. Average download speeds for basic (36-38 Mbit/s) FTTC services were around three times 
+those of ADSL2+ services, while upload speeds were more than eight times those of ADSL2+.  
+Cable and full-fibre services recorded the highest average speeds. The fastest median average 24-
+hour download speed was recorded by Virgin Media’s 1.13 Gbit/s cable package (1,137 Mbit/s), 
+while Gigaclear’s 300 Mbit/s full-fibre service had the highest average upload speed (337 Mbit/s). 
+Performance varies by package and technology, but broadband services using the same wholesale 
+input tend to perform similarly. While people can achieve improved performance through switching 
+technology or speed tier, we found few differences between comparable services offered by 
+providers such as BT, EE, Plusnet, Sky and TalkTalk, which use the same Openreach wholesale inputs. 
+Network slowdown 
+Across all connections, 8-10pm peak-time download speeds averaged 95% of maximum speeds. 
+ADSL2+ connections suffered the highest proportional slowdown during busy periods, with peak-
+time download speeds averaging 92% of average maximum speeds in March 2023.  
+ 
+4 
+Dashboard 
+ 
+  
+
+ 
+5 
+Notes on the data included in this report 
+Our methodology measures the performance delivered by an internet service provider to the 
+customer’s router. 
+However, the connection experienced on devices in the home’s connection will vary, as it is 
+impacted by additional factors not captured in our research. These include Wi-Fi performance, the 
+quality of any in-home wiring, in-home congestion when a number of devices are using the 
+broadband connection, device limitations and the performance of servers delivering content over 
+the connection. We have published advice on our website on how broadband users can improve 
+their Wi-Fi experience, along with a broadband availability checker. 
+Further analysis of results from our March 2023 testing, including broadband provider package 
+comparisons covering other aspects of broadband performance that help determine the overall 
+user-experience, can be found in the interactive dashboard that accompanies this report. 
+There are other ways to measure the performance of broadband connections. Our Connected 
+Nations reports i nclude analysis of broadband speeds based on information on the ‘sync speed’ or 
+‘configured speed’ of active broadband lines, which is provided to Ofcom by broadband providers. 
+This approach measures the maximum achievable connection speed between the broadband 
+provider’s access network and the customer’s premises, which is not affected by network slowdown 
+and is usually higher than the ‘end-to-end’ actual line speed measurements we present here. 
+This is Ofcom’s last planned Home Broadband Performance report. We continue to believe there is 
+value in making information regarding the performance of UK broadband connections available to 
+consumers and stakeholders, and we are exploring the use of alternative data sources to do this. 
+Embedded panel tests 
+One limitation of our hardware-based measurement methodology is that we can only include a 
+broadband package when we have enough volunteer panellists using it, and so it can be difficult to 
+include packages with lower take-up, including those using newer technologies such as full fibre. To 
+try to address this, we requested ‘embedded’ data from the UK’s four biggest broadband providers 
+and this report includes analysis of this information.  
+BT and Virgin Media have SamKnows test firmware embedded into some of their customers’ 
+routers, and Sky and TalkTalk have similar tests provided by ASSIA Inc. in some of their routers. 
+These broadband providers have given Ofcom access to anonymised March 2023 test data for 
+upload speeds, download speeds and latency from a selection of these customers. 
+Ofcom benchmarking has confirmed that running the tests on a broadband provider’s router rather 
+than on one of SamKnows’ ‘Whitebox’ measurement units has little influence on the recorded 
+measurements. However, there are some differences which mean that like-for-like comparison is 
+not always possible, and we have noted where we have used ‘embedded’ test data captured by 
+broadband providers’ routers. 
+Most SamKnows Whitebox measurement units are connected to the panellist’s broadband router 
+using Gigabit Ethernet. Gigabit Ethernet can transmit data at a speed of 1 Gbit/s but packet 
+overheads mean that the maximum speed at which data can be transferred over a Gigabit Ethernet 
+interface is approximately 940 Mbit/s. This limits the maximum connection speed that can be 
+accurately measured over Gigabit Ethernet to around 940 Mbit/s. Due to this limitation, we have 
+been unable to include download speed data captured by SamKnows’ Whiteboxes relating to 1.13 
+ 
+6 
+Gbit/s cable services in this report and have instead used embedded test data provided to Ofcom by 
+Virgin Media. 
+Mean and median averages 
+We focus on median averages (the middle value when a dataset is ordered from lowest to highest) 
+rather than mean averages (calculated by adding all values in a dataset and then dividing by the 
+number of values in that set) in our reports when analysing connection performance. However, the 
+interactive dashboard that accompanies this report shows median and mean averages where 
+available (and appropriate). 
+Median averages more accurately reflect the experience of consumers, as average performance is 
+not distorted by a comparatively small number of very fast, or very slow, connections. This approach 
+is in line with the Advertising Standards Authority (ASA) and the Committee of Advertising Practice 
+(CAP)’s guidance on broadband speed claims and provides information that is more easily 
+comparable to the speed claims that broadband providers make in their advertising. 
+Figure 1 below shows the cumulative distribution of average 24-hour download speeds in March 
+2023. The median average actual download speed (69.4 Mbit/s) is less than half the mean average 
+speed (139.1 Mbit/s), as the mean is affected by a small share of lines with extremely high download 
+speeds. We expect that the difference between the median and mean averages will continue to 
+widen until the point when less than half of home broadband connections are provided using 
+copper-based technologies, at which point it will start to narrow. 
+Figure 1: Cumulative distribution of download speeds: March 2023 
+ 
+Source: Ofcom, using data provided by SamKnows
+
+ 
+7 
+Download speeds 
+Introduction 
+Download speeds are important as they determine the time it takes for information to be 
+delivered to a user’s device. Higher download speeds make a particular difference when 
+downloading large files, such as games, films, or apps, or when streaming high-resolution video 
+content. In this section we look at average UK download speeds and differences in download 
+speeds between urban and rural areas of the UK. 
+Median average download speeds increased by 10.1 
+Mbit/s since 2022  
+The median average 24-hour actual download speed recorded across UK residential fixed broadband 
+connections was 69.4 Mbit/s in March 2023, a 10.1 Mbit/s (17%) increase compared to March 2022. 
+This was mainly driven by people upgrading to superfast, ultrafast and gigabit broadband services, 
+rather than improvements in the performance of individual broadband packages. According to 
+Ofcom’s Connected Nations update: Summer 2023, 75% of UK homes had availability of gigabit-
+capable broadband networks by May 2023, including 52% of homes where full-fibre services were 
+available.  
+Cable connections had the biggest increase in their median average download speed across 
+technologies in the year to March 2023, rising by 71.3 Mbit/s (36%) to 270.6 Mbit/s. While 
+considerable, this was lower than the 88.1 Mbit/s (79%) increase recorded in 2022. 
+The average download speed delivered by fibre-to-the-cabinet (FTTC) connections increased by 5.6 
+Mbit/s (11%) year-on-year to 55.7 Mbit/s. This was partly because of growth in take-up of G.fast 
+services, which can offer advertised connection speeds that are more than double those of the very 
+high-speed digital subscriber line (VDSL) technology used for most FTTC connections. Full-fibre 
+connections recorded a median average download speed of 149.2 Mbit/s, an increase of 1.9 Mbit/s 
+(1%) during the year. Asymmetric digital subscriber line (ADSL) standard broadband connections had 
+the lowest average download speeds across all the technologies (11.7 Mbit/s) and average 
+download speeds for these services fell by 0.8 Mbit/s (7%) in the year to March 2023. 
+The average download speed of standard broadband products with an advertised speed greater 
+than 10 Mbit/s and less than 30 Mbit/s decreased by 1.1 Mbit/s (9%) to 11.7 Mbit/s in the year to 
+March 2023. Conversely, average download speeds for superfast, ultrafast and gigabit broadband 
+products (those packages with an advertised speed of at least 30 Mbit/s) increased year-on-year, up 
+by 7.4 Mbit/s (12%) to 70.7 Mbit/s. 
+ 
+8 
+Figure 2: Median average actual broadband download speeds: 2019 to 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [A] in the Sources Annex . 
+Notes: The chart bars show that there is a 95% probability that the median average actual speed for all 
+customers (i.e. not just the customer panellists within our sample) falls within the ranges shown; data labels 
+show the median average values; ADSL comprises ADSL1 and ADSL2+.  
+Ninety-three per cent of residential broadband lines 
+were superfast products in March 2023 
+The proportion of home broadband lines that were superfast products (those with an advertised 
+download speed of at least 30 Mbit/s) increased from 91% to 93% in the year to March 2023. The 
+share of lines with an advertised download speed of 100 Mbit/s or higher also increased year on 
+year from 26% to 33%, while the share of lines with advertised download speeds greater than 300 
+Mbit/s increased by four percentage points (pp) to 11%. This indicates that UK home broadband 
+users are continuing to upgrade to faster connections. 
+The increasing take-up of faster advertised broadband services is demonstrated by an increase in the 
+actual download speeds delivered. The proportion of lines receiving a 24-hour average download 
+speed of at least 30 Mbit/s was 88% in March 2023, up from 83% in March 2022, while the 
+proportion receiving an average actual 24-hour download speed of at least 300 Mbit/s increased by 
+3pp to 10%. 
+Three per cent of lines had an average 24-hour actual speed less than 10 Mbit/s, the minimum 
+download speed of a decent broadband connection, as defined by the Government for the 
+broadband universal service obligation. However, less than 1% of lines had an advertised speed of 
+less than 10 Mbit/s.  
+Most lines experiencing actual download speeds of less than 10 Mbit/s will be ADSL connections 
+experiencing poor performance. Since March 2020, people who cannot receive a broadband 
+connection with a download speed of 10 Mbit/s and an upload speed of 1 Mbit/s have had the right 
+to request an upgraded connection under the broadband universal service obligation. 
+  
+
+ 
+9 
+Figure 3: Distribution of UK residential broadband lines, by advertised and 24-hour average actual 
+speeds: 2019 to 2023 
+ 
+Source: Ofcom / operators and Ofcom, using data provided by SamKnows; see note [B] in the Sources Annex . 
+Average rural ADSL2+ download speeds are less than 
+half those in urban areas 
+One feature of the technologies used to deliver ADSL and FTTC broadband is that connection speeds 
+slow due to signal loss (attenuation) in the copper over which data travels. 
+ADSL broadband is delivered over copper all the way from the local telephone exchange to the 
+user’s premises, meaning the actual broadband speeds the user receives depends on how far away 
+their premises is from the local telephone exchange. Urban ADSL lines tend to be shorter than those 
+in rural areas (due to greater population density) and urban ADSL lines therefore tend to perform 
+better than those in rural areas. Unlike ADSL, FTTC broadband is delivered using fibre optic cables 
+from the local telephone exchange to the street cabinet, with copper being used to the user’s 
+premises from there. This means there is generally a smaller variation in the length of copper line 
+used to deliver FTTC compared to ADSL and therefore a smaller difference in performance for FTTC 
+relative to ADSL connections.  
+Our data shows that the median average 24-hour download speed for ADSL2+ connections (which 
+make up almost all ADSL lines) in urban areas was 14.5 Mbit/s in March 2023, more than double the 
+6.0 Mbit/s average in rural areas. Median average urban and rural 24-hour FTTC download speeds 
+were 55.4 Mbit/s and 50.7 Mbit/s respectively in March 2023, however, there were no statistically 
+significant differences between these speeds, or between the average urban and rural FTTC 
+download speeds in any of the time periods that we looked at. 
+Average rural FTTC download speeds in March 2023 were over eight times faster than average rural 
+ADSL2+ download speeds, suggesting that most rural ADSL users who migrate to an FTTC service will 
+receive a significantly improved user experience. 
+
+ 
+10 
+Figure 4: Median average ADSL2+ and FTTC download speeds, by rurality: March 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [C] in the Sources Annex . 
+Notes: The chart bars show that there is a 95% probability that the median average actual speed for all 
+customers (i.e. not just the customer panellists within our sample) falls within the ranges shown; data labels 
+show the median average values 
+The gap between rural and urban download speeds has 
+narrowed 
+In March 2023 there was a 14.3 Mbit/s (26%) difference between the median average peak-time 
+download speeds in urban (70.3 Mbit/s) and rural (56.0 Mbit/s) areas of the UK. This was less than 
+the 22.7 Mbit/s (58% difference) in March 2022.  
+There was a 10pp difference between the proportion of urban (88%) and rural (78%) lines with an 
+average evening peak-time speed of 30 Mbit/s or higher in March 2023. This was lower than the 
+19pp difference found in March 2022. The 7pp difference between the March 2023 proportions of 
+urban (1%) and rural (8%) lines with an average 8-10pm peak-time actual download speed of less 
+than 10 Mbit/s was also considerably lower than the 13pp difference recorded in March 2022. 
+Figure 5: Distribution of average 8-10pm peak-time home broadband download speeds, by 
+rurality: 2021 to 2023 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [D] in the Sources Annex . 
+ 
+
+ 
+11 
+Download speeds: network slowdown 
+Introduction 
+Average download speeds can slow when broadband networks are busy. This is known as network 
+congestion or contention. In this section we consider how network congestion affects download 
+speeds throughout the day. 
+Download speeds slow at peak time due to network 
+congestion 
+Across all connections, the average 8-10pm peak-time download speed (67.7 Mbit/s) was 95% of the 
+71.0 Mbit/s average maximum speed, up from 94% in March 2022. Similarly, the average daily 
+minimum speed (63.3 Mbit/s) was 89% of the average maximum speed, up from 87% in March 2022. 
+Network slowdown was more apparent in the recorded speeds of slower connections than in the 
+recorded speeds of faster ones. Our research shows that lines with an advertised download speed of 
+above 10 Mbit/s and less than 30 Mbit/s (which are mainly ADSL2+ lines) had average peak-time 
+speeds that were 92% of average maximum speeds. This compared to 95% for lines with advertised 
+speeds of 30 Mbit/s or higher but less than 300 Mbit/s and 96% for ultrafast products with an 
+advertised speed of 300 Mbit/s or more. 
+Figure 6: Median average UK broadband download speeds, by time of day: March 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [A] in the Sources Annex .  
+The effect of network congestion during busy periods 
+is lowest for full-fibre lines 
+Home broadband connections do not always provide their maximum or advertised speed for two 
+main reasons: 
+• Actual speeds tend to slow for all connection types when broadband providers’ networks are 
+busy. The variation in speeds at peak-time (8-10pm) is often higher in cable connections due to 
+network congestion occurring nearer to the customer, making it harder for cable operators to 
+add the additional network capacity required to reduce the effects of congestion. 
+
+ 
+12 
+• For copper-based technologies such as ADSL, VDSL and G.fast, the maximum speed that a line 
+can support is dependent on the length and quality of the copper line from the end-user’s home 
+to the local exchange (for ADSL) or street cabinet (for VDSL and G.fast). Speeds can also be 
+influenced by interference issues and due to these factors, the lines to some premises will never 
+support the service’s advertised speed. However, under Ofcom’s Residential Voluntary Code of 
+Practice on Better Broadband Speeds, broadband providers signed up to the code m ust provide 
+an estimate of the speed that the line can support before purchase. 
+Median average peak-time download speeds averaged between 94.7% and 96.3% of average 
+maximum download speeds for 36-38 Mbit/s, 50 Mbit/s, 61 Mbit/s and 63-67 Mbit/s FTTC services 
+in March 2023. Among 132 Mbit/s, 264 Mbit/s, 362 Mbit/s, 516 Mbit/s and 1.13 Gbit/s cable 
+services, average 8-10pm peak-time download speeds were between 94.2% and 97.9% of maximum 
+speeds.  
+For 66-74 Mbit/s, 145-160 Mbit/s, 300-330 Mbit/s and 900-1,000 Mbit/s full fibre broadband 
+services, average 8-10pm peak-time speeds ranged between 97.6% and 99.3% of their average 
+maximum download speeds. Peak-time download speeds averaged 92.0% of maximum speeds for 
+ADSL2+ lines. 
+Figure 7: Variations in download speeds, by time of day: March 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [E] in the Sources Annex . 
+Note: Data for 1.13 Gbit/s cable connections is taken from embedded test data, as outlined on page 5 of this 
+report. While these measurements are valid, caution should be taken when comparing the performance of 
+these connections to those of other package types.  
+Figure 8 below gives an indication of how speeds may typically slow down on an individual line in 
+peak periods. Unlike Figure 7 above, the values below are calculated as the median average of the 
+ratios of minimum over maximum speeds for each individual panellist in a package category.1 The 
+median average minimum speed was over 85% of their respective average maximum speed for all 
+line types included in our analysis. Full-fibre services with an advertised speed of 66-74 Mbit/s had 
+ 
+1 The data shown in Figure 8 are not comparable to those that would be derived from Figure 7 above. The 
+values in Figure 7 show the median average minimum speed for each connection type as a proportion of the 
+median average maximum speed for that connection type. This represents the variation in performance across 
+the package category overall, but does not necessarily show the difference between minimum and maximum 
+speeds that an individual line can expect to achieve. 
+
+ 
+13 
+the highest median average minimum speed as a proportion of their average maximum speed across 
+the line types included in our analysis, at 97%. 
+Figure 8: Median minimum speed as proportion of maximum: March 2023 (%) 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [F] in the Sources Annex .  
+Notes: We use the advertised speed in this calculation where the average maximum speed is higher than the 
+advertised speed to ensure than performance above what the customer might expect does not  result in a 
+package type appearing to perform less well in this analysis. The chart bars show that there is a 95% 
+probability that the median average actual speed for all customers (i.e. not just the customer panellists in our 
+sample) will fall within the ranges shown; data labels show the median average values; data for 1.13 Gbit/s 
+cable connections is taken from embedded test data, as outlined on page 5 of this report. While these 
+measurements are valid, caution should be taken when comparing the performance of these connections to 
+those of other package types. 
+ 
+
+ 
+14 
+Upload speeds 
+Introduction 
+Upload speeds are important for real-time video communication services, online gaming and 
+uploading or sharing files.  
+There has been a steep increase in median average 
+upload speeds 
+The median average upload speed of UK residential home broadband services increased by 7.8 
+Mbit/s (73%) to 18.4 Mbit/s in the 12 months to March 2023. This was driven by increasing take-up 
+of services with higher advertised download speeds, which typically also offer higher upload speeds. 
+Figure 9: Median average UK fixed broadband upload speeds (Mbit/s): 2019 to 2023 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [G] in the Sources Annex . 
+
+ 
+15 
+Netflix streaming and disconnections 
+Introduction 
+Streaming video content requires a reliable connection, and higher broadband speeds allow for a 
+better user-experience with less buffering and playback problems when streaming high-resolution 
+video content. Disconnections can be inconvenient as users cannot undertake online activities 
+when their internet service loses connection. 
+Most broadband connections enable reliable streaming 
+of Netflix content in ultra-high definition 
+Streaming video content is one of the most bandwidth heavy activities that people use their home 
+broadband connections for, and our Media Nations 2023 report found that 66% of homes used a 
+subscription video-on-demand (SVoD) service in Q1 2023 with a similar proportion using 
+broadcasters’ video-on-demand services such as BBC iPlayer and ITVX. We measured the 
+performance of broadband connections when streaming content from Netflix, the UK’s most popular 
+SVoD service, which was used by 59% of UK homes in Q1 2023. 
+Figure 10 below shows the proportion of Netflix video streams that could be reliably delivered in the 
+most commonly available resolutions – ultra-high definition (UHD), high definition (HD) and standard 
+definition (SD) – for each connection type. These proportions are based on when one piece of 
+content is being streamed from Netflix over a broadband connection: the streaming user-experience 
+may diminish when multiple people are streaming content over the same broadband connection at 
+the same time. While all Netflix customers can stream HD content, UHD resolution is only available 
+to people subscribing to Netflix’s Premium plan and not all content is available in higher resolutions. 
+Our Netflix streaming tests are run in such a way that these limitations do not impact the results 
+(and all tests can record a successful UHD stream result if the connection is sufficient to support 
+one).  
+Over the 24-hour period, 73% of Netflix videos on ADSL2+ connections were reliably delivered at 
+UHD resolution in March 2023, up from 69% in March 2022. Twenty-two per cent of Netflix videos 
+over ADSL2+ connections were reliably delivered in HD, with a further 4% in SD. ADSL2+ connections 
+may therefore be sufficient to satisfy the current broadband needs of smaller households. Netflix 
+content was reliably streamed in UHD on nearly all superfast fibre and cable connections (those with 
+an advertised speed of at least 30 Mbit/s), both over the peak-time and 24-hour period. 
+ 
+16 
+Figure 10: Proportion of Netflix videos reliably delivered at the given video quality, over 24 hours 
+and at peak times, by technology: March 2023 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [H] in the Sources Annex .  
+More frequent disconnections on ADSL2+ than other 
+technologies 
+To look at how often disconnections occur on broadband services, we analysed the average daily 
+number of disconnections of 30 seconds or longer. However, not all the disconnections recorded in 
+Figure 11 are caused by network issues: for example, a panellist restarting their router or network 
+maintenance or upgrades undertaken by broadband providers during quiet hours would be 
+observed as disconnections by our tests. 
+In March 2023, 516 Mbit/s cable connections had the highest proportion of lines without any 
+disconnections of 30 seconds or longer out of the package types included in our analysis (27%). 
+ADSL2+ panellists typically experienced disconnections more often than cable or fibre panellists and 
+had the highest proportion of lines with an average of more than two daily disconnections of 30 
+seconds or longer in March 2023 (at 19%, more than double the 9% recorded in March 2022). This 
+was also more than four times higher than any of the other connection types included in our 
+analysis. 
+Some home broadband services offer cellular back-up, whereby the router switches to a mobile 
+connection if the fixed broadband network is unavailable. In the event of a disconnection, there 
+would be little or no interruption for users who have a home broadband service that comes with a 
+cellular back-up. 
+
+ 
+17 
+Figure 11: Distribution of average daily disconnections of 30 seconds or longer: March 2023 
+ 
+Source: Ofcom, using data provided by SamKnows; see note [I] in the Sources Annex . 
+Note: In some cases, testing may record scheduled maintenance as being a disconnection event. 
+ 
+
+ 
+18 
+Broadband package comparisons  
+Introduction 
+In this section we look at average upload speeds, download speeds and latency for several popular 
+superfast and ultrafast broadband packages.  
+As average speeds increase, connection speed has less influence on performance and other 
+metrics such as latency (responsiveness) and packet loss (when data fails to reach its destination) 
+become more important. The interactive dashboard that accompanies this technical report 
+provides package comparison analysis over a wider range of metrics, along with tables that 
+indicate whether any apparent differences in performance are statistically significant or not. 
+Virgin Media’s 1.13 Gbit/s cable service recorded the 
+highest average download speed of the packages 
+included in our analysis 
+To compare performance among popular broadband packages, we have used both data from the 
+SamKnows Whitebox panel and embedded test data collected from some broadband providers. 
+Embedded test data was used to supplement data from the SamKnows Whitebox panel where there 
+were insufficient panellists, or where the Whitebox measurements did not fully capture the 
+performance of a package. Packages which are highlighted grey in the charts throughout this section 
+are those where the data source is wholly taken from embedded test data collected by the 
+broadband provider, as outlined on page 5 of this report. While these measurements are valid, 
+caution should be exercised when comparing the performance of these packages to that of others. 
+The highest median and mean average 24-hour download speeds among the packages included in 
+our March 2023 analysis was recorded by Virgin Media’s 1.13 Gbit/s cable service, at 1,137.1 Mbit/s 
+and 1,123.9 Mbit/s respectively. This shows that while half of Virgin Media’s 1.13 Gbit/s cable users 
+received a download speed of 1,137.1 Mbit/s (the median average) or more, the lower mean 
+average shows that the distribution of speeds was skewed towards lower-speed lines, as was the 
+case for all line types except ADSL2+ connections. 
+The ‘Performance variation (ISP)’ section of the interactive dashboard that accompanies this report 
+explores consistency in download speed user-experience in greater detail.  
+ 
+19 
+Figure 12: Average 24-hour download speeds, by broadband package: March 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows and ISP-provided embedded test data; see note [J] in the 
+Sources Annex. 
+Notes: Many other broadband packages are available, some of which may match or better the performance of 
+those included in the analysis above; the chart bars show that there is a 95% probability that the median 
+average actual speed for all customers (i.e. not just the customer panellists in our sample) falls within the 
+ranges shown; grey bars indicate that the data for a package has been wholly derived from provider embedded 
+data, as outlined on page 5 of this report. While these measurements are valid, caution should be taken when 
+comparing the performance of these connections to those of other packages. 
+The highest average upload speed was recorded by 
+Gigaclear’s 300 Mbit/s full-fibre service 
+Figure 13 below shows our finding that Gigaclear’s 300 Mbit/s full-fibre service had the highest 
+median and mean average upload speeds among the packages included in our analysis, at 336.5 
+Mbit/s and 313.7 Mbit/s respectively. This is a symmetrical service which offers the same advertised 
+upload and download speeds. 
+
+ 
+20 
+On average, people with an ADSL2+ broadband connection who upgraded to a 36-38 Mbit/s FTTC 
+service would benefit from an eight-fold increase in upload speeds, along with their download speed 
+trebling. 
+Figure 13: Average 24-hour upload speeds, by broadband package: March 2023 (Mbit/s) 
+ 
+Source: Ofcom, using data provided by SamKnows and ISP -provided embedded test data; see note [J] in the 
+Sources Annex. 
+Notes: Many other broadband packages are available, some of which may match or better the performance of 
+those included in the analysis above; the chart bars show that there is a 95% probability that the median 
+average actual speed for all customers (i.e. not just the customer panellists in our sample) falls within the 
+ranges shown; grey bars indicate that the data for a package has been wholly derived from provider embedded 
+data, as outlined on page 5 of this report. While these measurements are valid, caution should be taken when 
+comparing the performance of these connections to those of other packages.  
+Full-fibre packages had the lowest connection delay 
+Latency (responsiveness) is the time it takes for a packet of data to travel to a third-party server 
+and back. Low latency will make web browsing more responsive and greatly improve the 
+
+ 
+21 
+performance of some real-time activities such as video-calling and online gaming. Most online 
+activities require a response time of less than 100ms to provide a good user-experience, while 
+some online gaming apps require a response time of less than 50ms. 
+Full-fibre packages had the lowest median average 24-hour latency values of the packages analysed, 
+recording latency values ranging from 4.9ms to 7.3ms. FTTC packages generally had slightly lower 
+median average 24-hour latency values relative to cable, with FTTC’s highest (worst) median latency 
+(12.5ms for TalkTalk’s 67 Mbit/s package) matching the lowest (best) cable latency recorded of the 
+packages included (12.5ms for Virgin Media’s 516 Mbit/s cable package). 
+The highest (worst) latency values recorded across the technologies tested were found in ADSL2+ 
+connections, but these only averaged around 24ms, a level at which it was still unlikely to negatively 
+affect the user experience for most use cases. 
+Figure 14: Average 24-hour latency, by broadband package: March 2023 (ms, lower is better) 
+ 
+Source: Ofcom, using data provided by SamKnows and ISP -provided embedded test data; see note [J] in the 
+Sources Annex. 
+Notes: Many other broadband packages are available, some of which may match or better the performance of 
+those included in the analysis above; the chart bars show that there is a 95% probability that the median 
+average actual speed for all customers (i.e. not just the customer panellists in our sample) falls within the 
+
+ 
+22 
+ranges shown; grey bars indicate that the data for a package has been wholly derived from provider embedded 
+data, as outlined on page 5 of this report. While these measurements are valid, caution should be taken when 
+comparing the performance of these connections to those of other packages.  
+  
+ 
+23 
+Geographic comparisons  
+Introduction 
+For the second year running, we have requested ‘embedded’ test data from some broadband 
+providers for our analysis. Broadband providers can run performance tests like those run by 
+SamKnows’ Whitebox measurement units from their broadband routers. This allows broadband 
+providers to monitor network performance and help ensure that accurate connection speed 
+information is provided to customers buying broadband services under the Residential Voluntary 
+Codes of Practice on Better Broadband Speeds. 
+This section includes some of our initial analysis of ‘embedded’ test data provided to Ofcom by BT, 
+Virgin Media, Sky and TalkTalk. Further analysis of this data can be found in the interactive 
+dashboard t hat accompanies this technical report.  
+Notes on our analysis of performance variation across 
+the UK nations and English regions 
+BT and Virgin Media have SamKnows tests embedded into some of their customers’ broadband 
+routers, while Sky and TalkTalk run similar tests through another provider, ASSIA Inc., in some of 
+their routers. We requested embedded test data from these broadband providers covering metrics 
+of upload speed, download speed and latency test data and, across the four ISPs, analysed data from 
+around 564,000 panellists with embedded testing activated. All data was anonymised, and no 
+individual users could be identified. 
+The sample from each broadband provider included performance data relating to customers 
+distributed across the UK and covered all services offered (although the samples were small for 
+some packages). However, these samples are not designed to be representative of package take-up 
+in each UK nation and English region and therefore it is not possible to draw conclusions regarding 
+overall (average) performance in different parts of the UK. Having undertaken benchmarking of 
+SamKnows and ASSIA test results against SamKnows’ Whitebox measurements, we found that while 
+the results were broadly consistent and typically very similar (i.e. within a few per cent) there were 
+some differences that mean that like-for-like ISP package comparisons are not possible at this stage. 
+We have used this embedded test data from broadband providers to look at how different 
+broadband packages/package types perform across the UK nations and English regions. The 
+limitations noted above, and the fact that we have analysed the data as received from the four 
+broadband providers and have not weighted it to account for differing customer base sizes, mean 
+that the analysis in this section is only indicative. Nonetheless, the analysis does allow us to draw 
+conclusions regarding geographic performance variations. 
+We have looked at the performance of higher-speed services using the most frequently used 
+broadband technologies in the UK: 
+ 
+• second-generation ADSL (ADSL2+) services; 
+• higher-tier (63-67 Mbit/s) VDSL-based FTTC services;  
+• 300-330 Mbit/s full-fibre services; and  
+• 1.13 Gbit/s cable services.  
+ 
+24 
+We used embedded test data recorded during the 8-10pm peak-time period, as not all the 
+broadband providers we received embedded test data from run tests throughout the day. These 
+results may differ from those highlighted elsewhere in the report, due to the reasons noted above, 
+and the data being taken from a different source. Our results are calculated using test data collected 
+from a minimum of 50 units for each package type in each UK nation/English region. 
+The interactive dashboard that accompanies this report covers the performance of other package 
+types. 
+Regional variations were greatest for ADSL2+ services 
+Across the UK nations and English regions, median average peak-time download speeds for ADSL2+ 
+broadband services ranged from 8.6 Mbit/s in the West Midlands to 11.4 Mbit/s in the East of 
+England region. The 32% difference between the highest and lowest average download speeds 
+recorded was larger than that found for 63-67 Mbit/s FTTC services, where there was a 6% 
+difference between the 69.8 Mbit/s lowest recorded average peak-time download speed (in the 
+North-East of England) and the 73.8 Mbit/s highest recorded speed (in Northern Ireland). The 
+smaller variation in FTTC speeds is because of the copper line over which data travels is shorter in 
+length than over ADSL connections. 
+Full-fibre services with advertised speeds of 300-330 Mbit/s recorded download speeds ranging from 
+303.1 Mbit/s in the East of England to 305.2 Mbit/s in Northern Ireland and had the smallest 
+regional variation of less than 1%. For 1.13 Gbit/s cable services, average download speeds were 
+lowest in the South-West of England at 1,116.7 Mbit/s and highest in London at 1,131.6 Mbit/s, a 
+difference of just over 1%.  
+ 
+25 
+Figure 15: Average 8-10pm peak-time download speeds for selected package types, by UK nation 
+and English region: March 2023 (Mbit/s) 
+  
+ 
+Source: Ofcom, using ISP-provided embedded test data. 
+Notes: Figures are indicative only; data not available for 300-330 Mbit/s full-fibre connections in the North East 
+of England due to insufficient sample size. 
+
+ 
+26 
+The East of England had the highest average upload 
+speeds for 300-330 Mbit/s full fibre services 
+Out of the four package types included in our analysis, 1.13 Gbit/s cable services recorded the 
+highest 8-10pm peak-time upload speeds, ranging from 52.1 Mbit/s in London to 52.3 Mbit/s in the 
+North-West of England. Average speeds for 300-330 Mbit/s full fibre services ranged from 50.5 
+Mbit/s in the North West of England to 51.6 Mbit/s in the East of England. For 63-67 Mbit/s FTTC 
+connections, there was a difference of less than 1% between the lowest and highest recorded 
+average 8-10pm upload speeds. ADSL2+ packages had upload speeds markedly lower relative to the 
+other package types and the greatest regional variation between the lowest and highest recorded 
+average 8-10pm upload speed (7%).  
+Figure 16: Average 8-10pm peak-time upload speeds for selected package types, by UK nation and 
+English region: March 2023 (Mbit/s) 
+  
+
+ 
+27 
+ 
+ 
+Source: Ofcom, using ISP-provided embedded test data  
+Notes: Figures are indicative only; data not available for 300-330 Mbit/s full-fibre connections in the North East 
+of England due to insufficient sample size. 

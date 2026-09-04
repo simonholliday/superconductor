@@ -1,0 +1,86 @@
+projects/#1917  The iiyama T2252MSC-B2 is a 10-point PCAP USB HID panel, driverless on Windows and expected to bind to Linux hid-multitouch through its generic multitouch catch-alls; its controller identity and iiyama's own Linux statement are unverified
+  finding · active · #research · #ui-host · superintendent
+
+Summary: The T2252MSC-B2 is a 21.5-inch 1920x1080 IPS panel with 10-point projected-capacitive touch over USB HID, 225 cd/m² with touch, glossy anti-fingerprint 7H glass (no anti-glare), HDMI and DisplayPort, a two-port USB 3.2 hub, tilt -5° to +90°, VESA 100. Windows 10 and 11 need no driver because Windows-8-class HID digitizers report multi-touch natively; the Linux in-tree driver hid-multitouch ends its device table with two catch-alls (generic multitouch and generic Windows-8 multitouch) that match any vendor and product, so a HID multitouch digitizer is expected to get multi-touch on a stock kernel, Raspberry Pi OS included, without a vendor driver. That expectation is not yet a fact for this panel: the controller identity is unpublished, iiyama's own OS-support PDFs are CAPTCHA-gated from this workstation, and the only sibling evidence is a vendor table listing Linux as mouse-only. Nothing in the three apps or Supervisor handles touch. This workstation is headless with no browser, so a probe page was written as the instrument for the panel host; the controller ID, standby behaviour, flat mounting and glare are hardware-gated. This is the panel finding for the `ui-host` point of #1912.
+
+**Question.** What does the iiyama ProLite T2252MSC-B2 deliver as a touch panel, and what does the host need to drive it?
+
+## Vendor specification
+
+Source: the iiyama datasheet PDF dated 18.05.2026 (https://iiyama.com/pdf/Product/1113/en.pdf), cross-checked against a reseller copy dated 05.01.2024 (https://www.thebarcodewarehouse.co.uk/Documents/Iiyama/Iiyama-ProLite-T2252MSC-B2-Datasheet.pdf) and the UK distributor page (https://www.iiyama-monitors.co.uk/products/monitors/t2252msc-b2). The iiyama.com HTML product page, the user manual and the touch-driver PDFs sit behind a Cloudflare challenge and return a "Just a moment..." page from this workstation; the datasheet PDF does not.
+
+| Item | Datasheet value (quoted) |
+| --- | --- |
+| Diagonal, panel | 21.5" (54.5 cm), IPS, edge-to-edge glass, bezel "black, matte" |
+| Resolution, pitch | 1920 x 1080, pixel pitch 0.249 mm, viewable area 478.6 x 260 mm |
+| Brightness | "Panel brightness 250 cd/m²", "Brightness 225 cd/m² with touch", light transmittance 90% |
+| Contrast, response | 1000:1 static, 5 ms GTG |
+| Viewing angle | 178°/178° (2024 sheet; the 2026 sheet lists the same as half-angles 89°/89°) |
+| Touch technology | "projective capacitive", "Touch points 10 (HID, only with supported OS)", "Touch method stylus, finger, glove", "Touch interface USB", "Palm rejection yes", gloved hand to 2 mm |
+| Glass | "Anti-fingerprint coating", "Glass hardness 7H" (no anti-glare coating on the -B2) |
+| Supported OS | "All iiyama monitors are Plug & Play and compatible with Windows and Linux. For details regarding the supported OS for the touch models, please refer to the driver instruction file available in the downloads section." |
+| Inputs | HDMI x1, DisplayPort x1, mini-jack out, speakers 2 x 1 W, HDCP |
+| USB | "USB HUB x2 (USB 3.2 Gen 1 (5Gbps, 5V, 900mA))"; a USB cable is in the box for the touch upstream |
+| Stand | "Tilt angle 90° up; 5° down" (a review states "tilt adjustment ranging from -5° to +90°", https://www.displayratings.com/en/reviews/iiyama-prolite-t2252msc-b2-57399); VESA 100 x 100 |
+| Mechanical | 493.5 x 361.5 x 239.5 mm with stand, 4.5 kg, internal PSU, 11 W typical, 1.5 W standby |
+| OSD | Joystick control; OSD offers a "touch switch" item; Kensington slot |
+| IP rating | none stated on any source read |
+
+The -B2AG sibling adds an anti-glare coating at the cost of brightness ("215 cd/m² with touch") and its page says the AG coating "helps to avoid issues with reflections and external light sources" (https://www.iiyama-monitors.co.uk/products/monitors/t2252msc-b2ag). The -B2 therefore has glossy, anti-fingerprint glass; the one review read lists "reflective screen in bright environments" as a drawback (displayratings, above). For flat or near-flat use under studio lighting, reflections of luminaires are to be expected and the mounting angle matters; this is hardware-gated below.
+
+## Touch on the host: what the standards say
+
+The panel presents as a USB HID touch digitizer (the datasheet's "HID" qualifier). Windows has required multi-touch digitizers to expose a HID touch-screen top-level collection with Contact Identifier and Contact Count Maximum since Windows 8 (https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/supporting-usages-in-multitouch-digitizer-drivers-win8), so on Windows 10 and 11 no vendor driver is needed for 10-contact reporting.
+
+On Linux the in-tree driver `hid-multitouch` ("HID multitouch panels") ends its device table with two catch-alls that match any vendor and any product: `/* Generic MT device */ { HID_DEVICE(HID_BUS_ANY, HID_GROUP_MULTITOUCH, HID_ANY_ID, HID_ANY_ID) }` (lines 2721 to 2722 of the copy of https://raw.githubusercontent.com/torvalds/linux/master/drivers/hid/hid-multitouch.c downloaded 2026-09-02) and `/* Generic Win 8 certified MT device */ { .driver_data = MT_CLS_WIN_8, HID_DEVICE(HID_BUS_ANY, HID_GROUP_MULTITOUCH_WIN_8, HID_ANY_ID, HID_ANY_ID) }` (lines 2724 to 2727). Before them sit explicit eGalax/EETI entries under `USB_VENDOR_ID_DWAV` (lines 2331 to 2397, the last a Windows-8-group entry for the C002 controller with class `MT_CLS_EGALAX_P80H84`). The group is assigned from the report descriptor, not from a vendor table, so a HID multitouch digitizer binds to hid-multitouch whether or not it carries the Windows 8 certification; the expectation of multi-touch on a stock kernel, Raspberry Pi OS included, rests on the panel being a HID multitouch digitizer, which the datasheet states, and not on the unverified Windows-8 certification.
+
+What iiyama itself claims for Linux is not confirmed here: the "driver instruction" and "touch drivers and supported operating systems" PDFs (https://iiyama.com/f/c87911c87d4c6cebd419a12133163b29_driver-instruction-eeti-02-2021.pdf and https://iiyama.com/f/556fb7cb911577a64334d2b676ddf31e_texx03-touch-drivers-supported-operating-systems.pdf) are Cloudflare-challenge pages from this workstation. For a sibling model (T2735MSC-B2) a forum reader of iiyama's documentation reported Linux support listed as "Default mouse (click, drag, double-click and right-click)" only, with the vendor driver x86-only (https://forums.raspberrypi.com/viewtopic.php?t=243524), while that model enumerated on a Raspberry Pi as `ID 0543:2e53 ViewSonic Corp.` (https://forums.raspberrypi.com/viewtopic.php?t=248204). Vendor claims for Linux are conservative; the kernel's generic class decides in practice. Which controller the T2252MSC-B2 carries (EETI, ILITEK, ViewSonic or other), and whether its descriptor lands it in the multitouch group, is not published on any source read and is the first hardware check.
+
+## What is not in the apps today
+
+Nothing in the three apps or Supervisor handles touch. Supervisor's client has a viewport meta tag (`/mnt/dev/Apps/Supervisor/client/index.html:5`), Google Fonts links (`client/index.html:7-9`), `onClick` handlers (`client/app.js:399`, `:403`, `:422`, `:435`, `:461`, `:462`; `client/components/audio-player.js:49`) and `cursor: pointer` styling (`client/style.css:70`, `:101`, `:169`, `:220`, `:276`; inline at `client/app.js:435` and `client/components/audio-player.js:50`); those are the only matches for "touch" or "pointer" outside the vendored Gridstack (`client/lib/gridstack-all.js`, `client/lib/gridstack.min.css`), so there is no pointer-event, touch-event or `touch-action` code. Subsequence's legacy dashboard, served by `web_ui.py:81` (the assets directory) and `:96-98` (index.html with the WebSocket port substituted), has the same viewport meta (`subsequence/assets/web/index.html:6`), a `pointer-events: none` layering rule (`:143`) and no input handlers. Every occurrence of "touch" in Subsample and Substation is prose or a variable name: `subsample/trim.py:11`, `subsample/player.py:21`, `subsample/recorder.py:621`, `subsample/transform.py:1071`, `subsample/library.py:572`, `subsample/query.py:1725-1726`; `substation/cli.py:79`, `substation/recording.py:393`, `substation/scanner.py:1467`.
+
+## Measurement environment and the probe page
+
+This workstation (hpz2g4, Ubuntu kernel 6.8.0-138, i7-9700K) is headless (`XDG_SESSION_TYPE=tty`), has no browser installed and no input devices beyond USB root hubs, so nothing about touch delivery or rendering can be measured on it. The instrument for the panel host is `/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/ui-host/touch-probe.html` (a prototype, not product code). Opened full-screen on the panel host it logs `navigator.maxTouchPoints`, every `pointerdown`, `pointerup` and `pointercancel` with `pointerId`, `pointerType`, `isPrimary`, the peak number of concurrent contacts, whether `contextmenu` fires on long-press, whether pinch leaks past `touch-action: none` (via `visualViewport.scale`), whether text selection leaks, and the requestAnimationFrame frame time while repainting a 1024-cell canvas. It applies the full page-side suppression set (`touch-action: none`, `overscroll-behavior: none`, `user-select: none`, `cursor: none`, `contextmenu` preventDefault) so a leak it reports is a host leak.
+
+## Hardware-gated
+
+- `lsusb` vendor:product of the touch controller and `dmesg` showing which driver binds (`hid-multitouch` versus `usbhid` mouse emulation); `libinput list-devices` capability line and `evtest` slot count (expect 10).
+- Whether the panel still reports touch while the display is in standby and whether a touch wakes the host.
+- The physical meaning of "90° up": whether the stand lets the glass lie face-up flat, or VESA mounting is needed for a flat surface.
+- Reflection of studio luminaires at the intended angle; whether an anti-glare film is wanted on the glossy -B2.
+- Palm rejection quality with a resting hand during two-finger gestures.
+- The panel's touch report rate (from `evtest` timestamps), for the `latency` point.
+
+## Not covered
+
+- iiyama's own per-OS touch support table and driver instruction for this model: the two PDFs, the product page and the manual are Cloudflare-challenge pages from this workstation (the saved copies under the scratchpad are 5.8 KB "Just a moment..." pages). The request to obtain them is on the needs_input task for this point, not here.
+- The controller identity: not published on any source read; first hardware check above.
+
+## Provenance
+
+Files read: `/mnt/dev/Apps/Supervisor/client/index.html`, `client/app.js`, `client/style.css`, `client/components/audio-player.js`; `/mnt/dev/Apps/2026-02 Sequencer/subsequence/web_ui.py`, `subsequence/assets/web/index.html`; grep of `/mnt/dev/Apps/Subsample/subsample/` and `/mnt/dev/Apps/SDR Scanner/substation/` for "touch"; downloaded `hid-multitouch.c`, `iiyama-1113-en.pdf`, `barcode-datasheet.pdf`, `touch-probe.html` under the scratchpad `ui-host/` directory. URLs: https://iiyama.com/pdf/Product/1113/en.pdf, https://www.thebarcodewarehouse.co.uk/Documents/Iiyama/Iiyama-ProLite-T2252MSC-B2-Datasheet.pdf, https://www.iiyama-monitors.co.uk/products/monitors/t2252msc-b2, https://www.iiyama-monitors.co.uk/products/monitors/t2252msc-b2ag, https://www.displayratings.com/en/reviews/iiyama-prolite-t2252msc-b2-57399, https://raw.githubusercontent.com/torvalds/linux/master/drivers/hid/hid-multitouch.c, https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/supporting-usages-in-multitouch-digitizer-drivers-win8, https://forums.raspberrypi.com/viewtopic.php?t=243524, https://forums.raspberrypi.com/viewtopic.php?t=248204.
+
+Referred to by (12)
+   #1913  in a comment The sixteen research points of #1912 are delivered as verified documents and the first-use-case design is assembled from them
+   #1924               The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed
+   #1927               V1 gestures: a press sets a cell at once, a quick press on a set cell clears it, a 400 ms hold opens a per-cell velocity strip worked by a second finger or the same finger, and a pad is one voice per contact; every two-contact gesture has a one-contact form, so the page never asks whether multi-touch exists and the contract carries effects, not gestures
+   #1941               A step tap's visual acknowledgement costs one to two browser frames plus a vsync, 22 to 42 ms from browser event to glass before the panel's own touch-down latency, which must stay under about 25 ms to hold the 69 ms tapping threshold; a pad hit costs 2 to 19 ms from browser event to sound at 128 frames on a wired LAN, so finger to sound is about 24 ms at 256 frames on a 15 ms panel allowance, and whether the 10 ms musical standard is out of reach turns on that one unmeasured term
+   #1957               What do iiyama's two touch PDFs and the vendor datasheet say for Linux, and which touch controller do they name?
+   #1959               Where and at what angle will the panel sit, under what lighting, and is the glossy anti-fingerprint glass acceptable there?
+   #1992               The panel's touch controller is identified and the driver that binds it on Linux is known
+   #1998               Palm rejection, the hold and latch thresholds and the 60 px cell size are confirmed by hand on the panel
+   #1999               The panel is legible in its intended position: glare, mounting angle, palette and the pending cell states
+   #2000               The panel's behaviour through display standby, wake and USB re-enumeration is known
+   #2018               Superintendent v1 is one co-located Starlette service holding the browser's single JSON WebSocket, three per-app adapter modules that dial it, a typed control tree written by absolute sets, and a step grid in composition.data behind a StepGrid helper; the one open coupling is whether a panel write wakes the clock loop, because the drain rule and the pending look decide together whether the cell lights at once
+   #2025               Neither the recommended pending flag nor batching at the socket read coalesces anything at a rate a hand produces, so a held paint gesture costs the full per-message price of 26 to 48 late pulses in 1536; read-batching is what turns a burst into one crossing, twelve for ten bursts of 128 against the flag's 87; and the crossing itself is a fifth of a millisecond against the drain rule's measured 243 to 251 ms
+
+Not linked, but its writing suggests (4)
+   #1912  Superintendent research specification: sixteen points to settle before the touchscreen sequencer is designed  (this names it)
+   #1924  The playing cell is lit by the browser extrapolating between per-beat anchors (pulse, service time, tempo) carried on the existing beat event, with the clock offset from the transport's ping/pong and the position computed for the frame's presentation time; the estimated budget is 5 to 24 ms behind the MIDI send on a wired LAN, the 60 Hz frame is the largest term, and no per-pulse engine event is needed  (it names this)
+   #1927  V1 gestures: a press sets a cell at once, a quick press on a set cell clears it, a 400 ms hold opens a per-cell velocity strip worked by a second finger or the same finger, and a pad is one voice per contact; every two-contact gesture has a one-contact form, so the page never asks whether multi-touch exists and the contract carries effects, not gestures  (it names this)
+   #2018  Superintendent v1 is one co-located Starlette service holding the browser's single JSON WebSocket, three per-app adapter modules that dial it, a typed control tree written by absolute sets, and a step grid in composition.data behind a StepGrid helper; the one open coupling is whether a panel write wakes the clock loop, because the drain rule and the pending look decide together whether the cell lights at once  (it names this)
+  Tip: subroutine link 1912 documents 1917 — confirm one
+
+  Tip: subroutine comment projects/1917 "what happened"

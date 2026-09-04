@@ -1,0 +1,60 @@
+== measured table, run 2 (run 1) : min / median / p95 / p99 / max
+-- chromium/touch  offset run2 +0.0876 ms, run1 +0.0435 ms; rAF 16.70 median 16.80 max
+   input_to_handler   run2   0.50  16.60  17.90  18.20  18.20  | run1   0.50   5.05  17.90  18.10  18.20
+   handler_to_class   run2   0.00   0.00   0.10   0.10   0.10  | run1   0.00   0.00   0.10   0.10   0.10
+   class_to_send      run2   0.00   0.10   0.20   0.20   0.30  | run1   0.00   0.10   0.20   0.20   0.30
+   handler_to_raf     run2  15.00  15.80  16.50  16.80  16.90  | run1  15.10  16.00  16.50  16.80  16.80
+   raf_to_commit      run2   0.10   0.60   0.80   0.80   0.90  | run1   0.10   0.60   0.80   0.80   0.90
+   input_to_commit    run2  17.10  32.90  34.21  34.40  34.50  | run1  17.30  21.70  34.10  34.30  34.40
+   send_to_service    run2   0.06   0.46   0.59   0.62   0.81  | run1   0.09   0.49   0.63   0.68   0.71
+   service_to_adapter run2   0.12   0.55   0.62   0.64   0.80  | run1   0.13   0.52   0.63   0.69   1.14
+   send_to_adapter    run2   0.25   1.03   1.17   1.24   1.37  | run1   0.24   1.01   1.22   1.28   1.63
+-- chromium/mouse  offset run2 -0.0503 ms, run1 +0.0781 ms; rAF 16.70 median 16.80 max
+   input_to_handler   run2   0.00   0.50   0.70   0.80   0.90  | run1   0.10   0.50   0.60   0.80   1.00
+   handler_to_class   run2   0.00   0.00   0.10   0.10   0.10  | run1   0.00   0.00   0.10   0.10   0.10
+   class_to_send      run2   0.00   0.10   0.20   0.20   0.20  | run1   0.00   0.10   0.20   0.20   0.20
+   handler_to_raf     run2   0.40   8.00  15.71  16.30  16.40  | run1   0.20   7.85  15.50  16.00  16.20
+   raf_to_commit      run2   0.20   1.20   1.31   1.40   1.60  | run1   0.20   1.20   1.31   1.40  17.30
+   input_to_commit    run2   0.90   9.60  16.80  18.00  18.20  | run1   0.80   9.10  16.80  17.51  18.40
+   send_to_service    run2   0.07   0.45   0.58   0.62   2.31  | run1   0.04   0.42   0.55   0.57   0.58
+   service_to_adapter run2   0.13   0.52   0.60   0.62   1.70  | run1   0.12   0.53   0.61   0.64   1.76
+   send_to_adapter    run2   0.22   0.99   1.14   1.22   2.88  | run1   0.18   0.98   1.10   1.16   2.32
+-- firefox/touch  offset run2 +0.7195 ms, run1 +0.5601 ms; rAF 16.52 median 17.46 max
+   input_to_handler   run2   0.00   0.00   1.00   1.01   2.00  | run1   0.00   0.00   1.00   1.00   1.00
+   handler_to_class   run2   0.00   0.00   0.00   1.00   1.00  | run1   0.00   0.00   0.00   1.00   1.00
+   class_to_send      run2   0.00   0.00   0.00   1.00   1.00  | run1   0.00   0.00   0.00   1.00   1.00
+   handler_to_raf     run2   0.00   8.00  16.00  16.01  17.00  | run1   0.00  11.00  16.00  17.00  17.00
+   raf_to_commit      run2   0.00   1.00   1.00   2.00   3.00  | run1   0.00   1.00   1.00   2.00   2.00
+   input_to_commit    run2   0.00   9.00  17.00  18.00  20.00  | run1   0.00  12.00  17.00  18.00  18.00
+   send_to_service    run2  -0.99   0.00   0.77   1.06   1.19  | run1  -0.88   0.18   0.90   1.13   1.20
+   service_to_adapter run2   0.12   0.50   0.56   0.58   0.60  | run1   0.12   0.51   0.56   0.58   0.58
+   send_to_adapter    run2  -0.80   0.41   1.26   1.58   1.70  | run1  -0.75   0.59   1.40   1.67   1.71
+-- firefox/mouse  offset run2 +1.2427 ms, run1 +1.2192 ms; rAF 16.52 median 17.50 max
+   input_to_handler   run2   0.00   1.00   2.00   2.00   3.00  | run1   0.00   1.00   2.00   2.00   3.00
+   handler_to_class   run2   0.00   0.00   0.00   1.00   1.00  | run1   0.00   0.00   0.00   1.00   1.00
+   class_to_send      run2   0.00   0.00   0.00   1.00   1.00  | run1   0.00   0.00   1.00   1.00   1.00
+   handler_to_raf     run2  10.00  14.00  17.00  17.00  17.00  | run1  12.00  14.00  17.00  17.00  18.00
+   raf_to_commit      run2   0.00   1.00   2.00   2.00   2.00  | run1   0.00   1.00   2.00   2.00   2.00
+   input_to_commit    run2  11.00  16.00  17.00  18.00  18.00  | run1  14.00  16.00  18.00  18.00  18.00
+   send_to_service    run2  -0.63   0.48   1.11   1.40   1.57  | run1  -1.08   0.09   0.73   0.87   1.01
+   service_to_adapter run2   0.13   0.53   0.59   0.63   0.65  | run1   0.12   0.53   0.58   0.61   1.10
+   send_to_adapter    run2  -0.43   0.82   1.69   2.03   2.14  | run1  -0.92   0.50   1.28   1.43   1.59
+
+== tap to glass (browser event -> lit pixel); panel display input lag NOT carried
+  chromium/touch: commit 17.1 / 32.9 / 34.5 | glass 38.8 / 54.6 / 56.2 | + panel touch-down 0..35 38.8 / 54.6 / 91.2 | + panel touch-down 15 53.8 / 69.6 / 71.2
+  chromium/mouse: commit 0.9 / 9.6 / 18.2 | glass 22.6 / 31.3 / 39.9 | + panel touch-down 0..35 22.6 / 31.3 / 74.9 | + panel touch-down 15 37.6 / 46.3 / 54.9
+  firefox/touch: commit 0.0 / 9.0 / 20.0 | glass 21.7 / 30.7 / 41.7 | + panel touch-down 0..35 21.7 / 30.7 / 76.7 | + panel touch-down 15 36.7 / 45.7 / 56.7
+
+== pad hit: browser event -> DAC, and finger -> sound with a stated panel allowance
+  chromium/touch: event -> send 0.5 / 16.7 / 18.6; software to mixer, one host 0.8 / 19.0 / 22.9
+      128 frames: one host 3.5 / 21.9 / 31.6 | + browser LAN hop 4.0 / 22.9 / 33.4 | + sampler off-host, second hop 4.5 / 23.9 / 35.2 | finger to sound at panel 15 19.0 / 37.9 / 48.4 | at panel 0..35 4.0 / 22.9 / 68.4
+      256 frames: one host 6.1 / 24.8 / 40.3 | + browser LAN hop 6.6 / 25.8 / 42.1 | + sampler off-host, second hop 7.1 / 26.8 / 43.9 | finger to sound at panel 15 21.6 / 40.8 / 57.1 | at panel 0..35 6.6 / 25.8 / 77.1
+      512 frames: one host 11.5 / 30.6 / 57.7 | + browser LAN hop 12.0 / 31.6 / 59.5 | + sampler off-host, second hop 12.5 / 32.6 / 61.3 | finger to sound at panel 15 27.0 / 46.6 / 74.5 | at panel 0..35 12.0 / 31.6 / 94.5
+  chromium/mouse: event -> send 0.0 / 0.6 / 1.2; software to mixer, one host 0.3 / 2.8 / 7.0
+      128 frames: one host 3.0 / 5.7 / 15.7 | + browser LAN hop 3.5 / 6.7 / 17.5 | + sampler off-host, second hop 4.0 / 7.7 / 19.3 | finger to sound at panel 15 18.5 / 21.7 / 32.5 | at panel 0..35 3.5 / 6.7 / 52.5
+      256 frames: one host 5.6 / 8.6 / 24.4 | + browser LAN hop 6.1 / 9.6 / 26.2 | + sampler off-host, second hop 6.6 / 10.6 / 28.0 | finger to sound at panel 15 21.1 / 24.6 / 41.2 | at panel 0..35 6.1 / 9.6 / 61.2
+      512 frames: one host 11.0 / 14.4 / 41.8 | + browser LAN hop 11.5 / 15.4 / 43.6 | + sampler off-host, second hop 12.0 / 16.4 / 45.4 | finger to sound at panel 15 26.5 / 30.4 / 58.6 | at panel 0..35 11.5 / 15.4 / 78.6
+  firefox/touch: event -> send 0.0 / 0.0 / 4.0; software to mixer, one host -0.8 / 1.6 / 8.6
+      128 frames: one host 1.9 / 4.5 / 17.3 | + browser LAN hop 2.4 / 5.5 / 19.1 | + sampler off-host, second hop 2.9 / 6.5 / 20.9 | finger to sound at panel 15 17.4 / 20.5 / 34.1 | at panel 0..35 2.4 / 5.5 / 54.1
+      256 frames: one host 4.5 / 7.4 / 26.0 | + browser LAN hop 5.0 / 8.4 / 27.8 | + sampler off-host, second hop 5.5 / 9.4 / 29.6 | finger to sound at panel 15 20.0 / 23.4 / 42.8 | at panel 0..35 5.0 / 8.4 / 62.8
+      512 frames: one host 9.9 / 13.2 / 43.4 | + browser LAN hop 10.4 / 14.2 / 45.2 | + sampler off-host, second hop 10.9 / 15.2 / 47.0 | finger to sound at panel 15 25.4 / 29.2 / 60.2 | at panel 0..35 10.4 / 14.2 / 80.2

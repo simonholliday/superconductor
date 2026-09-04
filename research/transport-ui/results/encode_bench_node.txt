@@ -1,0 +1,20 @@
+
+snapshot 16x8 (128 cells)
+  json        951 bytes  encode     7.6 us  decode     3.9 us
+  msgpack     300 bytes  encode     4.1 us  decode     4.6 us
+  cbor-x      291 bytes  encode     3.1 us  decode     3.9 us
+
+snapshot 64x16 (1024 cells)
+  json       6156 bytes  encode    38.1 us  decode    13.9 us
+  msgpack    1286 bytes  encode     9.4 us  decode    15.9 us
+  cbor-x     1274 bytes  encode    15.8 us  decode    16.5 us
+
+toggle delta
+  json         63 bytes  encode     1.1 us  decode     0.9 us
+  msgpack      39 bytes  encode     1.6 us  decode     1.0 us
+  cbor-x       41 bytes  encode     1.6 us  decode     0.6 us
+
+beat/playhead
+  json         75 bytes  encode     1.1 us  decode     0.8 us
+  msgpack      47 bytes  encode     1.2 us  decode     0.9 us
+  cbor-x       50 bytes  encode     0.8 us  decode     0.7 us

@@ -1,0 +1,20 @@
+ok  press on an empty cell sets it at once, from pointerdown; release adds nothing (touch)
+ok  quick press on a set cell clears it on release
+ok  mouse works the same (pointerId 1 as Chromium, 0 as Firefox)
+ok  hold on a set cell opens the strip and does not clear; release latches; level applies and closes (single contact form)
+ok  hold on an empty cell sets it on press and then opens the strip for it (set and edit in one gesture)
+ok  secondary mouse button on a cell opens the strip at once without setting or clearing
+ok  latched strip expires after latchMs with no action
+ok  hold-and-tap with two fingers: held cell edited, second finger picks a level, strip stays until the hold lifts
+ok  multi-hold: cells touched while the strip is open join the selection (no set, no clear) and one level edits all
+ok  single-contact multi-select: hold, lift, tap more cells (they select, not set or clear), pick level
+ok  tap outside closes a latched strip; ignored while a finger still holds
+ok  drag from a set cell paints clear along the row, first cell cleared when the drag is recognised, nothing on release
+ok  drag from an empty cell paints set along the row; the first cell was set on press and is not repeated
+ok  slow press that moves beyond slop before holdMs is a paint, not a hold
+ok  pointercancel discards the contact: a set already sent on press stands, a pending clear is dropped
+ok  pads: each contact is a voice; chords are concurrent fires; fixed velocity
+ok  pads: vertical velocity mode maps top to 127 and bottom to 1
+ok  capability observer: mouse only, then one touch, then two
+18 tests passed
+run 2026-09-03T06:58:13Z node v18.19.1

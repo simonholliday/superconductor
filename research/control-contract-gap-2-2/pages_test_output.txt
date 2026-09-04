@@ -1,0 +1,46 @@
+/tmp/claude-1000/-home-si/243c6ca9-504c-48de-a06d-eefc5c35da94/scratchpad/control-contract-gap-2-2/pages_test.py:4: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  import starlette.testclient
+ok   create returns 201 with an ETag
+ok   create broadcasts page_changed op=created carrying the client
+ok   a second create of the same id is 412
+ok   read returns the document and the same ETag
+ok   a matching If-None-Match read is 304
+ok   list returns both pages in order order
+ok   a save with no If-Match is refused 428
+ok   an If-Match save of a page that does not exist is 404
+ok   a save with the current ETag succeeds 200
+ok   the ETag changed with the content
+ok   a successful save broadcasts page_changed op=saved with the new ETag
+ok   the second panel's stale save is refused 412
+ok   the 412 body carries the current ETag so the panel can reload
+ok   the loser's content did not land
+ok   a refused save broadcasts nothing
+ok   re-saving identical bytes yields the same ETag
+ok   the page id '..' is answered 404
+ok   the page id '../etc/passwd' is answered 404
+ok   the page id 'Drums' is answered 400
+ok   the page id 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is answered 400
+ok   the page id '.hidden' is answered 400
+ok   the page id 'drums.json' is answered 400
+ok   a body whose id differs from the path is refused 400
+ok   a non-JSON body is refused 400
+ok   a body over the limit is refused 413
+ok   a reorder with every current ETag succeeds
+ok   the strip is in the requested order
+ok   a reorder broadcasts one pages_reordered frame naming the whole strip
+ok   a reorder with a stale ETag is refused 412 naming the stale pages
+ok   a refused reorder moved nothing
+ok   a refused reorder broadcasts nothing
+ok   a reorder with no ETag at all is refused 428
+ok   a page whose id is 'order' is still readable past the reorder route
+ok   and it is deletable, because no page route accepts POST and the reorder route accepts nothing else
+ok   a delete with no If-Match is refused 428
+ok   a delete with the current ETag is 204
+ok   the deleted page is gone
+ok   a delete broadcasts page_changed op=deleted with a null ETag, so a second panel's page bar is not stale
+ok   a corrupt page file is listed with an error
+ok   a file whose name breaks the id rule is listed with error bad_id rather than vanishing
+ok   pages with no usable order sort after those that declare one
+ok   no temporary file is left in the page directory
+
+42 passed, 0 failed

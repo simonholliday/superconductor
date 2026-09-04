@@ -1,0 +1,29 @@
+UA: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36
+== A playwright touchscreen.tap  (has_touch=True, pointerType=['touch'], n=100)
+   input_to_handler     n=100 min   0.60 med   5.20 p95  17.90 max  18.40
+   handler_to_raf       n=100 min  15.20 med  15.90 p95  16.60 max  16.90
+   input_to_commit      n=100 min  17.30 med  21.85 p95  34.40 max  34.70
+== B CDP dispatchTouchEvent start, 30ms, end  (has_touch=True, pointerType=['touch'], n=100)
+   input_to_handler     n=100 min   0.80 med   5.10 p95  18.00 max  18.20
+   handler_to_raf       n=100 min  15.30 med  16.15 p95  16.60 max  16.70
+   input_to_commit      n=100 min  17.30 med  21.90 p95  35.10 max  35.30
+== C CDP dispatchTouchEvent start+end back to back  (has_touch=True, pointerType=['touch'], n=100)
+   input_to_handler     n=100 min   2.10 med  16.10 p95  16.80 max  17.70
+   handler_to_raf       n=100 min  15.00 med  15.90 p95  16.50 max  16.70
+   input_to_commit      n=100 min  19.10 med  32.90 p95  33.60 max  34.60
+== D CDP emulateTouchFromMouseEvent  (has_touch=True, pointerType=['touch'], n=100)
+   input_to_handler     n=100 min   0.90 med   9.40 p95  17.40 max  18.30
+   handler_to_raf       n=100 min  15.00 med  15.90 p95  16.50 max  16.70
+   input_to_commit      n=100 min  17.80 med  26.55 p95  34.10 max  34.90
+== E playwright mouse.click, has_touch=True  (has_touch=True, pointerType=['mouse'], n=100)
+   input_to_handler     n=100 min   0.10 med   0.45 p95   0.60 max   0.90
+   handler_to_raf       n=100 min   0.50 med   8.45 p95  15.50 max  16.30
+   input_to_commit      n=100 min   1.10 med   9.85 p95  17.10 max  18.00
+== F playwright mouse.click, has_touch=False  (has_touch=False, pointerType=['mouse'], n=100)
+   input_to_handler     n=100 min   0.00 med   0.45 p95   0.70 max   0.80
+   handler_to_raf       n=100 min   0.40 med   7.90 p95  16.00 max  16.50
+   input_to_commit      n=100 min   1.30 med   9.60 p95  17.30 max  18.30
+== G CDP mouse with pointerType pen  (has_touch=False, pointerType=['pen'], n=100)
+   input_to_handler     n=100 min   0.10 med   0.40 p95   0.60 max   0.60
+   handler_to_raf       n=100 min   0.20 med  10.85 p95  16.20 max  16.60
+   input_to_commit      n=100 min   0.80 med  12.10 p95  17.90 max  21.60

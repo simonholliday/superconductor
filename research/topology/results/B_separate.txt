@@ -1,0 +1,16 @@
+
+Clock Jitter Benchmark— 32 bars at 120 BPM (spin-wait ON)
+──────────────────────────────────────────────────────────────
+  Pulses measured : 3072
+  Pulse interval  : 20.833 ms  (24 PPQN)
+──────────────────────────────────────────────────────────────
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.001 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.002 ms
+  Max jitter      :    0.013 ms
+  Clock drift     :   +0.001 ms  (non-accumulating)
+──────────────────────────────────────────────────────────────
+  Rating          : Excellent  (sub-100 μs — tight hardware-class timing)
+

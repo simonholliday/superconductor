@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>latency harness</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; touch-action: none; }
+  #pad { position: absolute; left: 200px; top: 200px; width: 400px; height: 400px; background: #333; }
+  #pad.lit { background: #f5a623; }
+  #grid { position: absolute; left: 700px; top: 100px; display: grid; grid-template-columns: repeat(16, 40px); gap: 4px; }
+  .cell { width: 40px; height: 40px; background: #222; }
+  .cell.on { background: #3fb950; }
+</style>
+<div id="pad"></div>
+<div id="grid"></div>
+<script>
+// Research prototype for the latency point of Superintendent, not house style.
+// Measures, inside the page: input timestamp -> pointerdown handler -> class
+// change -> next rAF -> post-rAF task (approximate commit), and stamps the
+// WebSocket frame with the page's wall clock so the Python side can measure
+// the hop.
+const grid = document.getElementById('grid');
+for (let i = 0; i < 128; i++) { const c = document.createElement('div'); c.className = 'cell'; grid.appendChild(c); }
+const cells = grid.children;
+const pad = document.getElementById('pad');
+const ws = new WebSocket('ws://' + location.host + '/ws');
+let seq = 0;
+const pendingPings = new Map();
+const offsets = [];       // server_at - (at + rtt/2)
+const rtts = [];
+window.records = [];
+window.wsOpen = false;
+ws.onopen = () => { window.wsOpen = true; };
+ws.onmessage = (ev) => {
+  const m = JSON.parse(ev.data);
+  if (m.t === 'pong') {
+    const now = performance.timeOrigin + performance.now();
+    const rtt = now - m.at;
+    rtts.push(rtt);
+    offsets.push({ rtt, off: m.server_at - (m.at + rtt / 2) });
+  }
+};
+function wall() { return performance.timeOrigin + performance.now(); }
+window.ping = () => { ws.send(JSON.stringify({ t: 'ping', at: wall() })); };
+window.offsetEstimate = () => {
+  // Min-RTT sample, as #1924's design does.
+  if (!offsets.length) return null;
+  let best = offsets[0];
+  for (const o of offsets) if (o.rtt < best.rtt) best = o;
+  return { off: best.off, rtt: best.rtt, n: offsets.length };
+};
+
+function handle(e, kind) {
+  const tHandler = performance.now();
+  const tInput = e.timeStamp;   // DOMHighResTimeStamp, same base as performance.now()
+  const s = ++seq;
+  // Visual acknowledgement first, exactly as the panel would do it.
+  if (kind === 'pad') pad.classList.add('lit'); else cells[s % 128].classList.toggle('on');
+  const tClass = performance.now();
+  const frame = { t: 'fire', seq: s, path: '/subsample/pads/kick', v: { on: true, vel: 110 }, at: performance.timeOrigin + tClass };
+  ws.send(JSON.stringify(frame));
+  const tSend = performance.now();
+  const rec = { seq: s, kind, tInput, tHandler, tClass, tSend, tRaf: null, tRafInterval: null, tCommit: null, pointerType: e.pointerType };
+  window.records.push(rec);
+  requestAnimationFrame((ts) => {
+    rec.tRaf = performance.now();
+    rec.tRafTs = ts;
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => { rec.tCommit = performance.now(); };
+    ch.port2.postMessage(0);
+  });
+}
+pad.addEventListener('pointerdown', (e) => handle(e, 'pad'));
+pad.addEventListener('pointerup', () => { pad.classList.remove('lit'); });
+grid.addEventListener('pointerdown', (e) => handle(e, 'cell'));
+
+// rAF cadence, sampled continuously.
+window.rafIntervals = [];
+let last = null;
+function tick(ts) { if (last !== null) window.rafIntervals.push(ts - last); last = ts; requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
+</script>

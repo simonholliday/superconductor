@@ -1,0 +1,1 @@
+{"selector": "epoll", "rate": 50.0, "spin_ms": 1.0, "pulses": 936, "mean_us": 145.0, "p99_us": 1229.6, "max_us": 1547.8, "over_1ms": 41, "over_1ms_with_msg_in_sleep": 41, "sleep_overshoot_us_with_msg": {"n": 935, "p50": 824.7, "p99": 2228.7, "max": 2546.7}, "sleep_overshoot_us_no_msg": {"n": 1, "p50": 718.5, "p99": 718.5, "max": 718.5}, "handled": 981}

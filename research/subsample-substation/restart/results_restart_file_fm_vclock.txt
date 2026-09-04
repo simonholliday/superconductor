@@ -1,0 +1,21 @@
+interpreter+imports (numpy, substation.scanner, substation.config): 656 ms (perf_counter from script top; interpreter start itself is outside)
+[probe_a] RadioScanner.__init__: 0.4 ms
+[probe_a] scan() -> first _process_samples (device open, _setup_sdr, FFT params, first slice): 19.7 ms
+[probe_a] scan() -> warm-up complete (10 slices, file device at full speed): 140.1 ms
+[probe_a] _process_samples: n=32 mean 9.7 ms max 15.3 ms
+[probe_a] switch requested -> scan() returned (drain, cancel read, _cleanup_sdr incl. recordings): 21.5 ms
+[probe_a] events: {}
+[probe_b] RadioScanner.__init__: 0.2 ms
+[probe_b] scan() -> first _process_samples (device open, _setup_sdr, FFT params, first slice): 16.8 ms
+[probe_b] scan() -> warm-up complete (10 slices, file device at full speed): 129.2 ms
+[probe_b] _process_samples: n=32 mean 9.4 ms max 10.8 ms
+[probe_b] switch requested -> scan() returned (drain, cancel read, _cleanup_sdr incl. recordings): 20.8 ms
+[probe_b] events: {}
+[probe_b] previous switch requested -> this first slice: 38.6 ms; -> this warm-up complete: 151.0 ms
+[probe_a] RadioScanner.__init__: 0.2 ms
+[probe_a] scan() -> first _process_samples (device open, _setup_sdr, FFT params, first slice): 16.4 ms
+[probe_a] scan() -> warm-up complete (10 slices, file device at full speed): 129.5 ms
+[probe_a] _process_samples: n=32 mean 9.5 ms max 11.9 ms
+[probe_a] switch requested -> scan() returned (drain, cancel read, _cleanup_sdr incl. recordings): 21.3 ms
+[probe_a] events: {}
+[probe_a] previous switch requested -> this first slice: 37.5 ms; -> this warm-up complete: 150.6 ms

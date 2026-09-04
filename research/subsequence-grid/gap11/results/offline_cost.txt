@@ -1,0 +1,13 @@
+shape            verb        cadence   notes  rebuild us (med/p95/max)   schedule_pattern us (med/p95/max)
+16x8 half        hit_steps   tight       64      112.1    115.1    157.0       151.4    154.9    216.2
+16x8 half        hit_steps   32 ms       64      145.8    185.0    197.1       166.6    205.9    247.5
+16x8 half        sequence    tight       64      125.1    139.9    225.0       151.7    183.4    231.4
+16x8 half        sequence    32 ms       64      160.1    218.8    247.2       166.6    233.1    257.6
+16x8 full        hit_steps   tight      128      202.0    233.4    281.9       269.0    300.1    367.2
+16x8 full        hit_steps   32 ms      128      238.0    273.6    296.9       287.6    337.5    353.5
+16x8 full        sequence    tight      128      219.5    244.9    287.0       272.0    308.7   1012.3
+16x8 full        sequence    32 ms      128      265.2    325.9    337.2       294.0    331.4    349.2
+64x16 half       hit_steps   tight      512      769.6    809.1    901.5      1278.9   1367.7   6444.5
+64x16 half       hit_steps   32 ms      512      819.9    861.4    888.8      1325.8   1424.0   6079.1
+64x16 half       sequence    tight      512      843.2    882.2    984.7      1315.8   1400.2   7251.5
+64x16 half       sequence    32 ms      512      907.4    974.4   1062.6      1347.0   1456.9   6328.0

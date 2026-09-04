@@ -1,0 +1,68 @@
+== A. baseline, nothing else running
+  Pulse interval  : 20.833 ms  (24 PPQN)
+──────────────────────────────────────────────────────────────
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.001 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.003 ms
+  Max jitter      :    0.015 ms
+  Clock drift     :   +0.001 ms  (non-accumulating)
+──────────────────────────────────────────────────────────────
+  Rating          : Excellent  (sub-100 μs — tight hardware-class timing)
+
+== B. separate-process service + 4 clients + static fetch loop, same host, free scheduling
+  Pulse interval  : 20.833 ms  (24 PPQN)
+──────────────────────────────────────────────────────────────
+  Mean jitter     :    0.001 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.001 ms
+  P95 jitter      :    0.002 ms
+  P99 jitter      :    0.002 ms
+  Max jitter      :    0.013 ms
+  Clock drift     :   +0.001 ms  (non-accumulating)
+──────────────────────────────────────────────────────────────
+  Rating          : Excellent  (sub-100 μs — tight hardware-class timing)
+
+service: clients=4 taps=2332
+clients: frames=4704 fetches=1127
+== C. same as B but service, clients and sequencer all pinned to one core (taskset -c 2)
+  Pulse interval  : 20.833 ms  (24 PPQN)
+──────────────────────────────────────────────────────────────
+  Mean jitter     :    0.028 ms
+  Median jitter   :    0.001 ms
+  Std deviation   :    0.145 ms
+  P95 jitter      :    0.121 ms
+  P99 jitter      :    0.717 ms
+  Max jitter      :    2.112 ms
+  Clock drift     :   -0.001 ms  (non-accumulating)
+──────────────────────────────────────────────────────────────
+  Rating          : Excellent  (sub-100 μs — tight hardware-class timing)
+
+service: clients=4 taps=2328
+clients: frames=4700 fetches=1120
+== D. in-process WebSocket server on the sequencer's loop, 4 clients tapping, 20 Hz broadcast
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+in-process ws server, 32 bars at 120 BPM, clients broadcast at 20 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.097 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.239 ms
+  P95 jitter      :    0.661 ms
+  P99 jitter      :    1.119 ms
+  Max jitter      :    1.552 ms
+  clients at end  : 0
+clients: frames=4679 fetches=0
+== E. in-process, 60 Hz broadcast, 4 clients
+ERROR:subsequence.midi_utils:MIDI output device 'NO-SUCH-DEVICE-XYZ' not found. Available devices: ['Midi Through:Midi Through Port-0 14:0']
+in-process ws server, 32 bars at 120 BPM, clients broadcast at 60 Hz
+  Pulses measured : 3072
+  Mean jitter     :    0.132 ms
+  Median jitter   :    0.002 ms
+  Std deviation   :    0.281 ms
+  P95 jitter      :    0.815 ms
+  P99 jitter      :    1.184 ms
+  Max jitter      :    1.584 ms
+  clients at end  : 0
+clients: frames=13360 fetches=0
+done

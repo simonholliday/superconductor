@@ -1,0 +1,1 @@
+{"scenario": "osc-loop", "pulses": 936, "mean_us": 14.3, "p50_us": 0.4, "p99_us": 520.6, "max_us": 1189.5, "over_1ms": 5, "inbound_handled": 100, "sender": "osc", "sent": 100}

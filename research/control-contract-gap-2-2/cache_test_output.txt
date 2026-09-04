@@ -1,0 +1,23 @@
+ok   a cold boot with no service and no cache shows nothing and says so
+ok   a cold boot with a reachable service loads and caches the document
+ok   a warm boot with an unreachable service draws the cached page rather than a blank panel
+ok   a warm boot with unsaved work and no service says the work is unsaved
+ok   a 304 confirms the cache without redrawing anything
+ok   a 200 on a clean cache replaces the cached document and its ETag
+ok   a 200 on unsaved work is a conflict, and the local arrangement is not discarded
+ok   a 404 on a clean cache drops it and opens the picker
+ok   a 404 on unsaved work turns the save into a create
+ok   a save built on a cached copy carries If-Match with the cached ETag
+ok   a save with no ETag at all is a create, never an unconditional write
+ok   no save the panel can build is unconditional, so 428 is unreachable from the panel
+ok   a 200 clears the dirty flag and adopts the new ETag
+ok   a 412 keeps the work, marks it unsaved and remembers their ETag
+ok   an unsent save keeps the work and marks it unsaved
+ok   keep-mine re-sends the same document against the ETag the 412 named
+ok   a page_changed for a known page updates its ETag with no refetch
+ok   a delete on another panel removes the page from the bar
+ok   a create on another panel is the one frame that costs a listing refetch
+ok   a reorder frame reorders the bar in place with no refetch
+ok   a reorder naming a page the bar has never seen forces a refetch
+
+21 passed, 0 failed

@@ -1,0 +1,60 @@
+
+=== 60 BPM: 16th step 250.0 ms, pulse 41.7 ms
+
+A: server-pushed beat + in-beat extrapolation (steps 2-4 inherit the beat's arrival error)
+  server beat listener after MIDI send                       fixed          0.1      0.4
+  WebSocket one-way, wired LAN                               jitter         0.4      2.0
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total, wired LAN                                                          5.5     24.1   as % of step: 2% .. 10%
+  total, Wi-Fi tail                                                                102.1
+
+B: anchored extrapolation (server time on each beat, offset from ping/pong): network jitter drops out
+  server timestamp taken in listener (after MIDI send)       fixed          0.1      0.4
+  clock offset estimate error                                slow           0.1      1.5
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total                                                                     5.2     23.6   as % of step: 2% .. 9%
+  drift between anchors if tempo changes unannounced: 1 BPM at 60 over one beat = 16.4 ms
+  C: per-pulse push would add 24 frames/beat = 24 msg/s per client and quantise to 41.7 ms; same budget as A minus in-beat extrapolation error, which is zero at fixed tempo anyway
+  legacy web_ui 100 ms tick: position error uniform 0..100 ms = 0.4 steps at this tempo
+
+=== 120 BPM: 16th step 125.0 ms, pulse 20.8 ms
+
+A: server-pushed beat + in-beat extrapolation (steps 2-4 inherit the beat's arrival error)
+  server beat listener after MIDI send                       fixed          0.1      0.4
+  WebSocket one-way, wired LAN                               jitter         0.4      2.0
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total, wired LAN                                                          5.5     24.1   as % of step: 4% .. 19%
+  total, Wi-Fi tail                                                                102.1
+
+B: anchored extrapolation (server time on each beat, offset from ping/pong): network jitter drops out
+  server timestamp taken in listener (after MIDI send)       fixed          0.1      0.4
+  clock offset estimate error                                slow           0.1      1.5
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total                                                                     5.2     23.6   as % of step: 4% .. 19%
+  drift between anchors if tempo changes unannounced: 1 BPM at 120 over one beat = 4.1 ms
+  C: per-pulse push would add 24 frames/beat = 48 msg/s per client and quantise to 20.8 ms; same budget as A minus in-beat extrapolation error, which is zero at fixed tempo anyway
+  legacy web_ui 100 ms tick: position error uniform 0..100 ms = 0.8 steps at this tempo
+
+=== 180 BPM: 16th step 83.3 ms, pulse 13.9 ms
+
+A: server-pushed beat + in-beat extrapolation (steps 2-4 inherit the beat's arrival error)
+  server beat listener after MIDI send                       fixed          0.1      0.4
+  WebSocket one-way, wired LAN                               jitter         0.4      2.0
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total, wired LAN                                                          5.5     24.1   as % of step: 7% .. 29%
+  total, Wi-Fi tail                                                                102.1
+
+B: anchored extrapolation (server time on each beat, offset from ping/pong): network jitter drops out
+  server timestamp taken in listener (after MIDI send)       fixed          0.1      0.4
+  clock offset estimate error                                slow           0.1      1.5
+  frame quantisation (60 Hz)                                 jitter         0.0     16.7
+  panel pixel response                                       fixed          5.0      5.0
+  total                                                                     5.2     23.6   as % of step: 6% .. 28%
+  drift between anchors if tempo changes unannounced: 1 BPM at 180 over one beat = 1.8 ms
+  C: per-pulse push would add 24 frames/beat = 72 msg/s per client and quantise to 13.9 ms; same budget as A minus in-beat extrapolation error, which is zero at fixed tempo anyway
+  legacy web_ui 100 ms tick: position error uniform 0..100 ms = 1.2 steps at this tempo

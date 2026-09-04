@@ -1,0 +1,68 @@
+
+=== H1 same cell, same cycle: panel on at 95 (before rebuild), algorithm clears inside the builder
+  cycle_start=  96 rebuilt_at=95 confirmed_at=97 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 192 rebuilt_at=191 confirmed_at=193 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 288 rebuilt_at=287 confirmed_at=289 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 384 rebuilt_at=383 confirmed_at=384 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  changed frames: [(1, 'kick/4', True, 'panel', 95), (2, 'kick/4', False, 'algorithm', 95)]
+
+=== H2 same, algorithm leaves a cell the panel touched this cycle alone
+  cycle_start=  96 rebuilt_at=95 confirmed_at=97 ver=1 intent={'kick': [0, 4, 8], 'snare': [4, 12]} realised={'kick': [0, 4, 8], 'snare': [4, 12]}
+  cycle_start= 192 rebuilt_at=191 confirmed_at=193 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 288 rebuilt_at=287 confirmed_at=289 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 384 rebuilt_at=383 confirmed_at=384 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  changed frames: [(1, 'kick/4', True, 'panel', 95), (2, 'kick/4', False, 'algorithm', 191)]
+
+=== H3 two panels, one cell, one cycle: A on at 120, B off at 144
+  cycle_start=  96 rebuilt_at=95 confirmed_at=97 ver=0 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 192 rebuilt_at=191 confirmed_at=193 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 288 rebuilt_at=287 confirmed_at=289 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 384 rebuilt_at=383 confirmed_at=384 ver=2 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  changed frames: [(1, 'clap/2', True, 'panel:A', 120), (2, 'clap/2', False, 'panel:B', 144)]
+
+=== H4 pending duration, lookahead 1 pulse, 4-beat cycle (96 pulses), set applied at offset x of cycle 192
+  x(pulses)  set_at  confirmed_at  pending_pulses  pending_beats  ms@120
+    0    192    289    97   4.04    2021
+    8    200    289    89   3.71    1854
+   16    208    289    81   3.38    1688
+   24    216    289    73   3.04    1521
+   32    224    289    65   2.71    1354
+   40    232    289    57   2.38    1188
+   48    240    289    49   2.04    1021
+   56    248    289    41   1.71     854
+   64    256    289    33   1.38     688
+   72    264    289    25   1.04     521
+   80    272    289    17   0.71     354
+   88    280    289     9   0.38     188
+   94    286    289     3   0.12      62
+   95    287    289     2   0.08      42
+
+=== H4 pending duration, lookahead 1 beat, 4-beat cycle (96 pulses), set applied at offset x of cycle 192
+  x(pulses)  set_at  confirmed_at  pending_pulses  pending_beats  ms@120
+    0    192    266    74   3.08    1542
+    8    200    266    66   2.75    1375
+   16    208    266    58   2.42    1208
+   24    216    266    50   2.08    1042
+   32    224    266    42   1.75     875
+   40    232    266    34   1.42     708
+   48    240    266    26   1.08     542
+   56    248    266    18   0.75     375
+   64    256    266    10   0.42     208
+   72    264    266     2   0.08      42
+   80    272    362    90   3.75    1875
+   88    280    362    82   3.42    1708
+   94    286    362    76   3.17    1583
+   95    287    362    75   3.12    1562
+
+=== H5 snapshot at pulse 180 (rebuild for cycle 192 fired at 168; set applied at 172)
+  snapshot: {'intent': {'kick': [0, 8], 'snare': [4, 12], 'clap': [3]}, 'realised_next_cycle': {'kick': [0, 8], 'snare': [4, 12]}, 'ver': 1}
+
+=== H5 run log
+  cycle_start=  96 rebuilt_at=72 confirmed_at=74 ver=0 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 192 rebuilt_at=168 confirmed_at=170 ver=0 intent={'kick': [0, 8], 'snare': [4, 12]} realised={'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 288 rebuilt_at=264 confirmed_at=266 ver=1 intent={'kick': [0, 8], 'snare': [4, 12], 'clap': [3]} realised={'clap': [3], 'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 384 rebuilt_at=360 confirmed_at=362 ver=1 intent={'kick': [0, 8], 'snare': [4, 12], 'clap': [3]} realised={'clap': [3], 'kick': [0, 8], 'snare': [4, 12]}
+  cycle_start= 480 rebuilt_at=456 confirmed_at=458 ver=1 intent={'kick': [0, 8], 'snare': [4, 12], 'clap': [3]} realised={'clap': [3], 'kick': [0, 8], 'snare': [4, 12]}
+  changed frames: [(1, 'clap/3', True, 'panel', 172)]
+
+=== H6 idempotency: first ack ver=1, replayed same (client, seq) ack ver=1, other client same value ver=1, frames=1

@@ -1,0 +1,1 @@
+{"scenario": "ws-thread-drain", "pulses": 936, "mean_us": 0.4, "p50_us": 0.4, "p99_us": 0.8, "max_us": 13.7, "over_1ms": 0, "inbound_handled": 8814, "sender": "ws", "sent": 8907, "broadcasts_received": 199}

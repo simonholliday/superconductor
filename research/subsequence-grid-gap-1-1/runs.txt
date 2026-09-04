@@ -1,0 +1,10 @@
+Verification runs, 2026-09-03, workstation, ~/venvs/subsequence-cookbook, tree v0.6.6-2-g95c14a7.
+dispatch_lateness.py wraps Sequencer._dispatch_with_compensation and compares the wall clock of
+each pulse's first send with start_time + pulse * seconds_per_pulse.  16 bars, 120 BPM, no port.
+
+16x8, 64 notes, lookahead 1/24 : jitter log med 0.0018 p99 0.020 max 0.836 over1ms 0 | block med 0.85 max 1.97 ms | dispatch lateness on rebuild pulses: NO EVENTS on those pulses | other pulses med 0.073 ms
+16x8, 64 notes, lookahead 1/4  : jitter log med 0.0010 p99 0.425 max 2.214 over1ms 3 | block med 1.88 max 2.00 ms | on rebuild pulses med 2.007 p95 2.157 (10 of 17 near 2 ms) | other med 0.036
+16x8, 64 notes, lookahead 1    : jitter log med 0.0019 p99 0.122 max 0.943 over1ms 0 | block med 1.85 max 1.97 ms | on rebuild pulses med 2.005 p95 2.142 max 2.142 (n=17) | other med 0.074
+16x8 full, 128 notes, la 1     : jitter log med 0.0018 p99 0.109 max 0.460 over1ms 0 | block med 1.33 max 3.19 ms | on rebuild pulses med 1.373 p95 3.359 max 3.359 | other med 0.077
+64x16, 512 notes, la 1, 32 bars: jitter log med 0.0010 p99 0.082 max 0.607 over1ms 0 | block med 6.31 max 6.49 ms | on rebuild pulses med 6.410 p95 6.611 max 6.611 (n=8) | other med 0.035
+64x16, 512 notes, la 1/24, 32b : jitter log med 0.0017 p99 0.058 max 0.548 over1ms 0 | block med 5.30 p95 12.69 ms | on rebuild pulses: NO EVENTS | other med 0.039

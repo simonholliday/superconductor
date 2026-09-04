@@ -1,0 +1,25 @@
+127.0.0.1 - - [03/Sep/2026 07:03:38] "GET /bench2.html HTTP/1.1" 200 -
+127.0.0.1 - - [03/Sep/2026 07:03:38] "GET /vendor/standalone.module.js HTTP/1.1" 200 -
+127.0.0.1 - - [03/Sep/2026 07:03:38] code 404, message File not found
+127.0.0.1 - - [03/Sep/2026 07:03:38] "GET /favicon.ico HTTP/1.1" 404 -
+{'label': 'gpu', 'webgl_renderer': 'ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1660/PCIe/SSE2, OpenGL ES 3.2)', 'ua': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36'}
+     gpu rate 1.0             dom_same  toggle4  js+sl mean   0.722 p50   0.90 p95   1.20 max   1.30 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0           dom_invert   invert  js+sl mean   2.195 p50   2.30 p95   3.20 max   3.40 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0         dom_snapshot     half  js+sl mean   1.320 p50   1.30 p95   1.90 max   2.10 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0        dom_inc_class  toggle4  js+sl mean   0.430 p50   0.50 p95   0.80 max   0.90 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0      dom_inc_overlay  toggle4  js+sl mean   0.306 p50   0.30 p95   0.60 max   0.70 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 1.0           svg_invert   invert  js+sl mean   2.498 p50   2.50 p95   4.00 max   7.30 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 1.0         svg_snapshot     half  js+sl mean   1.682 p50   1.60 p95   2.40 max   6.00 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0        canvas_invert   invert  js+sl mean   1.343 p50   1.40 p95   2.30 max   3.60 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0           canvas_inc  toggle4  js+sl mean   0.168 p50   0.20 p95   0.40 max   0.40 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 1.0          preact_full  toggle4  js+sl mean   2.244 p50   2.50 p95   4.20 max   5.40 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 6.0             dom_same  toggle4  js+sl mean   1.040 p50   1.10 p95   1.70 max   2.60 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 6.0           dom_invert   invert  js+sl mean   8.165 p50   8.10 p95   9.20 max  10.90 ms | interval mean  16.83 p95  16.80 max  33.40 | long 3
+     gpu rate 6.0         dom_snapshot     half  js+sl mean   4.781 p50   4.80 p95   5.60 max   6.40 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 6.0        dom_inc_class  toggle4  js+sl mean   0.536 p50   0.50 p95   1.30 max   1.80 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 6.0      dom_inc_overlay  toggle4  js+sl mean   0.330 p50   0.20 p95   1.00 max   1.90 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 6.0           svg_invert   invert  js+sl mean  10.200 p50  10.10 p95  12.10 max  13.50 ms | interval mean  16.89 p95  16.80 max  33.40 | long 4
+     gpu rate 6.0         svg_snapshot     half  js+sl mean   6.664 p50   6.60 p95   7.80 max   9.10 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 6.0        canvas_invert   invert  js+sl mean   3.481 p50   3.50 p95   4.10 max   4.90 ms | interval mean  16.67 p95  16.80 max  16.80 | long 0
+     gpu rate 6.0           canvas_inc  toggle4  js+sl mean   0.123 p50   0.10 p95   0.50 max   1.40 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0
+     gpu rate 6.0          preact_full  toggle4  js+sl mean   2.756 p50   2.80 p95   3.70 max   4.60 ms | interval mean  16.67 p95  16.70 max  16.80 | long 0

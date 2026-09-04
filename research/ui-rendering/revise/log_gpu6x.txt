@@ -1,0 +1,28 @@
+{'label': 'gpu6x', 'throttle': 6.0, 'webgl_renderer': 'ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1660/PCIe/SSE2, OpenGL ES 3.2)', 'ua': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36'}
+     gpu6x    dom   128  incremental  js mean   0.028 p95   0.100 max   0.900 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    dom   128  incremental  js+style+layout mean   0.187 p95   0.700 max   1.900 ms
+     gpu6x    dom   128         full  js mean   0.045 p95   0.200 max   1.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    dom   128         full  js+style+layout mean   0.187 p95   0.600 max   1.400 ms
+     gpu6x    dom  1024  incremental  js mean   0.064 p95   0.300 max   1.000 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    dom  1024  incremental  js+style+layout mean   0.505 p95   1.200 max   1.600 ms
+     gpu6x    dom  1024         full  js mean   0.344 p95   0.900 max   1.500 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x    dom  1024         full  js+style+layout mean   1.077 p95   1.700 max   2.900 ms
+     gpu6x    svg   128  incremental  js mean   0.032 p95   0.100 max   1.300 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x    svg   128  incremental  js+style+layout mean   0.198 p95   0.700 max   1.400 ms
+     gpu6x    svg   128         full  js mean   0.085 p95   0.400 max   1.100 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x    svg   128         full  js+style+layout mean   0.295 p95   1.000 max   1.600 ms
+     gpu6x    svg  1024  incremental  js mean   0.113 p95   0.500 max   1.500 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    svg  1024  incremental  js+style+layout mean   0.801 p95   1.600 max   2.100 ms
+     gpu6x    svg  1024         full  js mean   1.389 p95   2.000 max   2.600 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    svg  1024         full  js+style+layout mean   2.233 p95   3.000 max   3.600 ms
+     gpu6x canvas   128  incremental  js mean   0.068 p95   0.300 max   1.200 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x canvas   128         full  js mean   0.426 p95   1.200 max   1.700 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x canvas  1024  incremental  js mean   0.184 p95   0.700 max   1.600 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x canvas  1024         full  js mean   4.526 p95   5.400 max   5.900 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x  webgl   128  incremental  js mean   0.026 p95   0.100 max   1.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x  webgl   128         full  js mean   0.027 p95   0.200 max   0.800 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x  webgl  1024  incremental  js mean   0.022 p95   0.100 max   0.600 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x  webgl  1024         full  js mean   0.054 p95   0.200 max   1.300 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
+     gpu6x    svg                 waveform-400bin-1920x256  js mean   1.114 p95   1.700 max   2.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x canvas                 waveform-400bin-1920x256  js mean   0.055 p95   0.300 max   1.400 ms | interval mean  16.67 p95  16.80 max  16.80 ms | long 0
+     gpu6x      -     mixed-page-512cells-8faders-waveform  js mean   0.903 p95   1.600 max   2.500 ms | interval mean  16.67 p95  16.70 max  16.80 ms | long 0
