@@ -169,6 +169,23 @@ class FakeApp:
 
 
 @pytest.fixture(scope="session")
+def browser_name () -> str:
+	"""Firefox, which is the browser this is for.
+
+	pytest-playwright offers Chromium by default, and the panel is a Firefox
+	panel — chosen on Simon's preference and supported by the measurement, which
+	found Firefox's touch path delivering `pointerdown` and input-to-commit
+	faster than Chromium's on this class of hardware (#1941).  Testing the one
+	we do not ship against would be testing the wrong thing.
+
+	Overridden here rather than left to `--browser` so that plain `pytest` does
+	the right thing, which is what anybody will type.
+	"""
+
+	return "firefox"
+
+
+@pytest.fixture(scope="session")
 def service_url () -> typing.Iterator[str]:
 	"""A real service, on a real port, for the whole session."""
 

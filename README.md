@@ -288,6 +288,16 @@ pytest
 mypy superintendent
 ```
 
+The suite includes tests that drive the page in a real Firefox, so it needs the
+browser's own dependencies once:
+
+```
+playwright install-deps firefox
+```
+
+Firefox rather than all three browsers — it is a third of the packages, and it
+is the browser this is built for. No `sudo` was needed here.
+
 The page is plain ES modules with no build step: Preact and htm are vendored
 under `superintendent/client/vendor/`, with their licences recorded there. Edit
 the files and reload the browser.

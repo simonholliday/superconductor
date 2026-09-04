@@ -5,6 +5,7 @@ only half of the system that had no tests, while the equivalent Python logic was
 covered and correct. Each test below is one of those bugs, or the shape of one.
 """
 
+import re
 import typing
 
 import pytest
@@ -69,7 +70,7 @@ def test_the_face_follows_the_app (panel: typing.Any, fake_app: conftest.FakeApp
 	fake_app.confirm("grid/snare/2", True, by="panel", client=asked["client"], seq=asked["seq"])
 
 	playwright_api.expect(panel.locator(conftest.cell("grid/snare/2"))).to_have_class(
-		lambda value: "on" in value, timeout=5_000)
+		re.compile(r"\bon\b"), timeout=5_000)
 
 
 def test_a_transport_field_moves_the_transport_not_the_grid (
@@ -125,6 +126,10 @@ def test_the_cell_size_is_a_setting_and_not_a_constant (panel: typing.Any) -> No
 	panel.locator(".sizes .choices button", has_text="Compact").click()
 
 	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
+
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
 
 	after = panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"]
 
@@ -213,7 +218,7 @@ def test_two_grids_sharing_a_row_name_do_not_share_its_cells (
 	fake_app.confirm("second/kick/5", True, by="app")
 
 	playwright_api.expect(panel.locator(conftest.cell("second/kick/5"))).to_have_class(
-		lambda value: "on" in value, timeout=5_000)
+		re.compile(r"\bon\b"), timeout=5_000)
 
 	assert "on" not in (panel.locator(conftest.cell("grid/kick/5")).get_attribute("class") or "")
 
@@ -236,8 +241,11 @@ def test_a_page_larger_than_the_glass_can_be_pushed_around (panel: typing.Any) -
 
 	assert action(conftest.cell("grid/kick/0")) == "none", "a swipe here has already changed the music"
 
+	# `touch-action` is not inherited, so a surface that says nothing computes to
+	# `auto` — which permits panning. What matters is that it is not `none`, which
+	# is the only value that refuses.
 	for surface in (".grid-wrap", ".part-title", ".row-label"):
-		assert "pan" in action(surface), f"{surface} is not a control and should take hold of the page"
+		assert action(surface) != "none", f"{surface} is not a control and should take hold of the page"
 
 	assert "pinch" not in action("body"), "pinch zoom is still the browser claiming a musician's gesture"
 
@@ -407,10 +415,36 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	moved = block.bounding_box()
 	assert moved["y"] > before["y"]
 
+	# Leaving is what saves, deliberately: once rather than on every nudge, so a
+	# drag in progress is never half-kept (#2075). A reload before this would
+	# find nothing, and should.
+	panel.locator(".bar .arrange").click()
+	playwright_api.expect(panel.locator(".grid-wrap.arranging")).to_have_count(0, timeout=5_000)
+
 	panel.reload()
 	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
 
 	assert abs(panel.locator('.part[data-part="grid"]').bounding_box()["y"] - moved["y"]) < 2
+
+
+def _settled (panel: typing.Any) -> None:
+	"""Wait until the cell size has stopped moving.
+
+	The fit runs in an effect and again whenever a ResizeObserver fires, so a
+	measurement taken the instant a page is drawn is a measurement of an
+	intermediate layout. Every geometric test here was failing on that and not
+	on anything the page was doing wrong.
+	"""
+
+	panel.wait_for_function(
+		"""() => {
+			const now = getComputedStyle(document.documentElement).getPropertyValue('--cell');
+			const settled = window.__settled === now;
+			window.__settled = now;
+			return settled;
+		}""",
+		timeout=5_000, polling=100)
 
 
 def _open_the_bass (panel: typing.Any) -> None:
@@ -418,6 +452,7 @@ def _open_the_bass (panel: typing.Any) -> None:
 
 	panel.locator(".pages button", has_text="Bass").click()
 	panel.wait_for_selector(".grid.notes", timeout=5_000)
+	_settled(panel)
 
 
 def test_a_note_is_drawn_as_a_bar_reaching_across_the_steps_it_lasts (
@@ -426,11 +461,18 @@ def test_a_note_is_drawn_as_a_bar_reaching_across_the_steps_it_lasts (
 
 	_open_the_bass(panel)
 
-	cell = panel.locator(conftest.cell("bass/C2/0")).bounding_box()
-	note = panel.locator('.cell[data-path="bass/C2/0"] .note').bounding_box()
+	# Both widths in one reading: taken separately, a re-fit between them would
+	# compare a note drawn at one cell size against a cell measured at another.
+	drawn = panel.evaluate("""() => {
+		const cell = document.querySelector('.cell[data-path="bass/C2/0"]');
+		return {
+			cell: cell.getBoundingClientRect().width,
+			note: cell.querySelector('.note').getBoundingClientRect().width,
+		};
+	}""")
 
-	assert note["width"] > cell["width"], "a two-step note reaches past its own cell"
-	assert round(note["width"]) == round(cell["width"] * 2 + 4), "exactly two steps and the gap between"
+	assert drawn["note"] > drawn["cell"], "a two-step note reaches past its own cell"
+	assert round(drawn["note"]) == round(drawn["cell"] * 2 + 4), "exactly two steps and the gap between"
 
 
 def test_pressing_an_empty_cell_places_a_note (
@@ -506,13 +548,20 @@ def test_a_tall_pattern_shows_a_window_that_scrolls_within_its_block (
 
 	_open_the_bass(panel)
 
-	scroller = panel.locator('.part[data-part="bass"] .scroller')
+	panel.wait_for_function(
+		"""() => {
+			const el = document.querySelector('.part[data-part="bass"] .scroller');
+			return el && el.scrollHeight > el.clientHeight;
+		}""",
+		timeout=5_000)
 
-	overflow = panel.eval_on_selector(
-		'.part[data-part="bass"] .scroller', "el => el.scrollHeight - el.clientHeight")
+	seen = panel.evaluate("""() => {
+		const el = document.querySelector('.part[data-part="bass"] .scroller');
+		return { overflow: el.scrollHeight - el.clientHeight, top: el.scrollTop };
+	}""")
 
-	assert overflow > 0, "three rows do not fit in a window of two"
-	assert scroller.evaluate("el => el.scrollTop > 0"), "opened at the bottom, where a bass line lives"
+	assert seen["overflow"] > 0, "three rows do not fit in a window of two"
+	assert seen["top"] > 0, "opened at the bottom, where a bass line lives"
 
 
 def test_the_velocity_lane_does_not_scroll_with_the_pitches (panel: typing.Any) -> None:
@@ -559,7 +608,11 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	assert drums["justify"] == pitched["justify"] == "flex-end"
 	assert drums["size"] == pitched["size"]
 	assert drums["colour"] == pitched["colour"]
-	assert drums["rail"] and pitched["rail"], "both carry the mark that says push the view from here"
+	# A block with a window carries the strip instead, which is the same idea
+	# drawn once rather than twice — so what has to agree is that each part
+	# offers exactly one mark saying the view can be pushed from here.
+	assert drums["rail"], "a block with no window carries the rail on its labels"
+	assert not pitched["rail"], "a block with one carries the strip instead"
 
 
 def test_a_window_shows_how_much_of_itself_you_are_seeing (panel: typing.Any) -> None:
@@ -592,11 +645,17 @@ def test_the_scroll_mark_is_not_painted_over_by_the_row_labels (panel: typing.An
 
 	_open_the_bass(panel)
 
-	stacking = panel.eval_on_selector_all(
-		'.part[data-part="bass"] .window .track, .part[data-part="bass"] .row-label',
+	# Asked for separately: a single selector returns document order, and the
+	# labels come before the track, so the first result was never the mark.
+	mark = panel.eval_on_selector(
+		'.part[data-part="bass"] .window .track',
+		"el => Number(getComputedStyle(el).zIndex) || 0")
+
+	labels = panel.eval_on_selector_all(
+		'.part[data-part="bass"] .row-label',
 		"els => els.map(el => Number(getComputedStyle(el).zIndex) || 0)")
 
-	assert stacking[0] > max(stacking[1:]), "the mark sits above every label"
+	assert mark > max(labels), "the mark sits above every label"
 
 
 def test_the_playhead_cannot_widen_the_page_as_it_wraps (panel: typing.Any) -> None:
@@ -622,6 +681,12 @@ def test_a_part_that_fits_draws_no_scroll_mark (panel: typing.Any) -> None:
 
 def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any) -> None:
 	"""A person learns a cell once. Two designs of it would be two to learn."""
+
+	# Both pages fit to their own contents, so a cell's corner radius — which
+	# scales with the cell — is only comparable once the size is pinned.
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Tested").click()
+	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
 
 	def cell_shape (selector: str) -> dict:
 		return panel.eval_on_selector(selector, """el => {

@@ -1393,7 +1393,16 @@ function Panel () {
 	const layout = { ...defaults, ...keptPlaces, ...(arranged.placed || {}) };
 
 	/* Drawn back to front. A name that has been moved sits after every name
-	   that has not, and later moves sit after earlier ones. */
+	   that has not, and later moves sit after earlier ones.
+	
+	   This is a stacking order and not a drawing order, which is the whole
+	   point: the blocks are rendered in the order the app declared them and
+	   never rearranged in the document, because moving a node releases the
+	   pointer capture a drag depends on. Raising a block therefore changes one
+	   number on it rather than its place among its siblings. Touch survived the
+	   old way — a touch pointer is captured implicitly — and a mouse did not,
+	   so a drag with a mouse died after its first pixel whenever the block was
+	   not already on top. */
 	const order = (arranged.order && arranged.order.length)
 		? arranged.order
 		: kept.map((one) => one.name);
@@ -1466,9 +1475,9 @@ function Panel () {
 			<${Build} service=${service} stale=${stale} />
 		</div>
 		<div class=${`grid-wrap ${up ? "" : "absent"} ${arranging ? "arranging" : ""}`} ref=${size.wrap}>
-			${stacked.map((name, index) => html`
+			${gridNames.map((name) => html`
 				<${Part} key=${name} name=${name} title=${controls[name].title}
-					at=${layout[name]} cell=${size.cell} depth=${index}
+					at=${layout[name]} cell=${size.cell} depth=${stacked.indexOf(name)}
 					arranging=${arranging}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}>

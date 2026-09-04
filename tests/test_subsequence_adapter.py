@@ -1,5 +1,7 @@
 """The Subsequence side: what a tap does to the grid, on the composition's loop."""
 
+import asyncio
+import threading
 import typing
 
 import pytest
@@ -181,23 +183,53 @@ def test_an_address_naming_no_control_here_is_dropped_rather_than_refused () -> 
 	assert sent == []
 
 
-async def test_the_first_beat_is_where_the_clock_loop_is_found () -> None:
+def _on_a_loop (work: typing.Callable[[], None]) -> None:
+	"""Run something inside a running event loop, on a thread of its own.
+
+	Which is what the composition's clock is — a loop on a thread that is not
+	this one — so this is the honest arrangement as well as the workable one.
+	It has to be a separate thread because by the time these run, the browser
+	the page tests opened is holding a loop on this one, and a second cannot be
+	started inside it.
+	"""
+
+	def run () -> None:
+		asyncio.run(_as_coroutine(work))
+
+	thread = threading.Thread(target=run)
+	thread.start()
+	thread.join(timeout=5)
+
+	assert not thread.is_alive(), "the work never finished"
+
+
+async def _as_coroutine (work: typing.Callable[[], None]) -> None:
+	"""Give *work* a running loop to find with asyncio.get_running_loop()."""
+
+	work()
+
+
+def test_the_first_beat_is_where_the_clock_loop_is_found () -> None:
 	"""Public events reach the loop, so no private name has to be read."""
 
 	link, sent = _link()
-	link._on_beat(0)
+
+	_on_a_loop(lambda: link._on_beat(0))
 
 	assert link._clock_loop is not None
 	assert sent[0]["name"] == "beat"
 
 
-async def test_a_beat_carries_what_the_playhead_needs_to_place_itself () -> None:
+def test_a_beat_carries_what_the_playhead_needs_to_place_itself () -> None:
 	"""The gap between two beats is what the highlight moves across."""
 
 	link, sent = _link()
 
-	link._on_beat(0)
-	link._on_beat(1)
+	def two_beats () -> None:
+		link._on_beat(0)
+		link._on_beat(1)
+
+	_on_a_loop(two_beats)
 
 	assert sent[0]["interval"] is None
 	assert sent[1]["interval"] is not None
