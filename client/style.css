@@ -1,0 +1,119 @@
+/* The surface is read at two very different angles — upright like a monitor and
+   flat like a table — so contrast is kept high and nothing depends on a hue
+   that shifts when the panel is tilted away from you. */
+
+:root {
+	--ground: #101114;
+	--panel: #17191e;
+	--edge: #2a2e37;
+	--ink: #e8eaee;
+	--ink-quiet: #878d99;
+	--on: #f0b429;
+	--on-edge: #ffd166;
+	--ring: #4dabf7;
+	--playhead: rgba(255, 255, 255, 0.09);
+	--accent-beat: #21252d;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+	margin: 0;
+	height: 100%;
+	background: var(--ground);
+	color: var(--ink);
+	font: 500 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+	/* Every gesture on the glass is ours. Without this the browser claims
+	   pans and pinches before the page ever sees the contact. */
+	touch-action: none;
+	overscroll-behavior: none;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+#panel { height: 100%; display: flex; flex-direction: column; }
+
+.bar {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.6rem 0.9rem;
+	border-bottom: 1px solid var(--edge);
+	color: var(--ink-quiet);
+	font-size: 0.85rem;
+}
+
+.bar .title { color: var(--ink); font-weight: 600; font-size: 1rem; }
+.bar .spacer { flex: 1; }
+
+.lamp { display: inline-flex; align-items: center; gap: 0.4rem; }
+.lamp::before {
+	content: "";
+	width: 0.6rem; height: 0.6rem;
+	border-radius: 50%;
+	background: #d64545;
+}
+.lamp.up::before { background: #51cf66; }
+
+.grid-wrap { flex: 1; position: relative; overflow: auto; padding: 0.5rem; }
+
+.grid {
+	display: grid;
+	gap: 4px;
+	position: relative;
+	min-width: min-content;
+}
+
+.row-label {
+	display: flex;
+	align-items: center;
+	padding-right: 0.6rem;
+	color: var(--ink-quiet);
+	font-size: 0.8rem;
+	white-space: nowrap;
+}
+
+.cell {
+	position: relative;
+	min-width: 44px;
+	min-height: 44px;
+	border-radius: 7px;
+	background: var(--panel);
+	border: 1px solid var(--edge);
+}
+
+/* Every fourth step is grouped, so a bar is countable without reading numbers. */
+.cell.downbeat { background: var(--accent-beat); }
+
+.cell.on {
+	background: var(--on);
+	border-color: var(--on-edge);
+}
+
+/* The ring is the request, never the value: the face below it is always what
+   the sequencer actually holds. It clears when the change is confirmed. */
+.cell.pending::after {
+	content: "";
+	position: absolute;
+	inset: 5px;
+	border-radius: 4px;
+	border: 3px solid var(--ring);
+}
+
+.playhead {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	background: var(--playhead);
+	border-left: 2px solid rgba(255, 255, 255, 0.35);
+	pointer-events: none;
+	will-change: transform;
+}
+
+.notice {
+	padding: 2rem;
+	color: var(--ink-quiet);
+	text-align: center;
+}
