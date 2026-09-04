@@ -107,6 +107,14 @@ away. Beneath the grid is a velocity lane, one bar to a step, aligned with the
 grid above so a column is the same moment in both; drag a bar up or down to set
 how hard that note is struck.
 
+Rows are drawn in the order they are declared, so a pitched part lists its
+highest note first and a rising line rises. A part that declares `visible_rows`
+shows a window onto a pattern taller than itself — two octaves is twenty-five
+rows, and a block tall enough for all of them crowds everything else off the
+page. Only the pitches scroll: the velocity lane and the playhead stay put,
+because a column is a moment in time and scrolling up and down does not change
+the time.
+
 A part declared `mono` holds one note to a step, and placing a second takes the
 first away. That is enforced by the application rather than left to the
 instrument: a monophonic synth handed two notes at once chooses between them by

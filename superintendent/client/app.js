@@ -246,12 +246,34 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
  * away. Resizing a note that is already there means drawing it again, which is
  * the first thing to revisit once this has been played.
  */
-function NoteGrid ({ control, name, rows, steps, notes, cell, pending, failed, onSet }) {
+function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows,
+                    pending, failed, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 	};
 
 	const drawing = useRef(null);
+	const seen = useRef(null);
+
+	/* A window onto a pattern taller than the block showing it. Two octaves is
+	 * twenty-five rows against a drum machine's ten, and a block tall enough to
+	 * hold all of it crowds everything else off the page.
+	 *
+	 * Only the pitches scroll. The velocity lane and the playhead are siblings
+	 * of this, not children, so they stay put — a playhead marks a moment in
+	 * time, and scrolling up and down does not change the time.
+	 *
+	 * Left unpositioned on purpose: the playhead measures its offset against
+	 * the block's body, and a positioned scroller would put itself in between. */
+	useEffect(() => {
+		/* Opened at the bottom, which on a grid drawn high to low is the lowest
+		   notes — where a bass line lives. */
+		if (seen.current) seen.current.scrollTop = seen.current.scrollHeight;
+	}, [windowRows, rows.length]);
+
+	const held = windowRows && windowRows < rows.length
+		? { maxHeight: `${windowRows * (cell + GAP)}px`, overflowY: "auto" }
+		: null;
 
 	const pitch = cell + GAP;
 
@@ -285,6 +307,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, pending, failed, o
 	};
 
 	return html`
+		<div class="scroller" ref=${seen} style=${held}>
 		<div class="grid notes" style=${style}>
 			${rows.map((row) => html`
 				<div class="row-label" key=${`label-${row}`}>${row}</div>
@@ -309,6 +332,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, pending, failed, o
 							}}></div>`}</div>`;
 				})}
 			`)}
+		</div>
 		</div>`;
 }
 
@@ -1148,7 +1172,8 @@ function Panel () {
 	   them, which is what the fit has to solve for rather than the rows alone. */
 	const blocks = gridNames.map((name) => ({
 		name,
-		rows: controls[name].rows.length + (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
+		rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
+			+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
 		steps: controls[name].steps }));
 
 	const pageId = page ? page.id : "";
@@ -1275,6 +1300,7 @@ function Panel () {
 							<${NoteGrid} name=${name} control=${controls[name]}
 								rows=${controls[name].rows} steps=${controls[name].steps}
 								notes=${(state[appName] || {})[name] || {}} cell=${size.cell}
+								window=${controls[name].visible_rows}
 								pending=${pending} failed=${failed} onSet=${request} />
 							<${VelocityLane} name=${name} rows=${controls[name].rows}
 								steps=${controls[name].steps} cell=${size.cell}

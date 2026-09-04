@@ -24,7 +24,8 @@ import superintendent.service
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums"},
 	"second": {"type": "step_grid", "rows": ["kick"], "steps": 8, "beats": 2},
-	"bass": {"type": "note_grid", "rows": ["C2", "C#2", "D2"], "steps": 8, "beats": 2,
+	"bass": {"type": "note_grid", "rows": ["D2", "C#2", "C2"], "steps": 8, "beats": 2,
+	         "visible_rows": 2,
 	         "mono": True, "default_length": 1, "default_velocity": 100,
 	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},

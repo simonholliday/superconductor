@@ -213,6 +213,7 @@ class NoteGrid (Control):
 		mono: bool = False,
 		default_length: int = 1,
 		default_velocity: int = 100,
+		visible_rows: int | None = None,
 	) -> None:
 		"""Describe the pattern to offer over a dict the composition keeps."""
 
@@ -226,6 +227,16 @@ class NoteGrid (Control):
 		self.mono = mono
 		self.default_length = default_length
 		self.default_velocity = default_velocity
+		self.visible_rows = visible_rows
+		"""How many rows to show at once, if fewer than there are.
+
+		A pitched pattern is tall — two octaves is twenty-five rows against a
+		drum machine's ten — and a block tall enough to hold all of it crowds
+		everything else off the page.  Showing a window onto it, which scrolls
+		within the block, keeps the block small on the lattice without shortening
+		the instrument.
+		"""
+
 		self.link: "AppLink | None" = None
 
 	def attach (self, link: "AppLink") -> None:
@@ -241,6 +252,9 @@ class NoteGrid (Control):
 			"mono": self.mono,
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
 			"max_length": self.steps, "velocity_range": [1, 127]}
+
+		if self.visible_rows is not None:
+			declared["visible_rows"] = self.visible_rows
 
 		if self.title is not None:
 			declared["title"] = self.title

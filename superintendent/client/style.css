@@ -135,6 +135,11 @@ html, body {
    between any two cells — so a block of ten rows is exactly eleven cells. */
 .part-body { position: relative; padding-top: var(--gap); }
 
+/* The window onto a pattern taller than its block. Scrolled from the row
+   labels and the gutters, as the page itself is — a swipe starting on a cell
+   is placing a note, not moving the view (#2073). */
+.scroller { overscroll-behavior: contain; }
+
 .grid {
 	display: grid;
 	gap: var(--gap);

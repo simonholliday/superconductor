@@ -485,3 +485,41 @@ def test_the_lane_does_nothing_where_there_is_no_note (
 	panel.mouse.up()
 
 	assert not any(frame.get("path", "").startswith("bass/") for frame in fake_app.sets)
+
+
+def test_a_pitch_grid_is_drawn_high_note_first (panel: typing.Any) -> None:
+	"""So a rising line rises. The order is the composition's — a declared row
+	list is drawn in the order it is given — and this is the pitched case of it."""
+
+	_open_the_bass(panel)
+
+	high = panel.locator(conftest.cell("bass/D2/0")).bounding_box()
+	low = panel.locator(conftest.cell("bass/C2/0")).bounding_box()
+
+	assert high["y"] < low["y"], "the higher note sits above the lower one"
+
+
+def test_a_tall_pattern_shows_a_window_that_scrolls_within_its_block (
+	panel: typing.Any) -> None:
+	"""Two octaves is twenty-five rows against a drum machine's ten, and a block
+	tall enough for all of it crowds everything else off the page."""
+
+	_open_the_bass(panel)
+
+	scroller = panel.locator('.part[data-part="bass"] .scroller')
+
+	overflow = panel.eval_on_selector(
+		'.part[data-part="bass"] .scroller', "el => el.scrollHeight - el.clientHeight")
+
+	assert overflow > 0, "three rows do not fit in a window of two"
+	assert scroller.evaluate("el => el.scrollTop > 0"), "opened at the bottom, where a bass line lives"
+
+
+def test_the_velocity_lane_does_not_scroll_with_the_pitches (panel: typing.Any) -> None:
+	"""It is a sibling of the pitches, not a child: a column is a moment in time,
+	and scrolling up and down does not change the time."""
+
+	_open_the_bass(panel)
+
+	assert panel.locator('.part[data-part="bass"] .scroller .lane').count() == 0
+	assert panel.locator('.part[data-part="bass"] .lane').count() == 1

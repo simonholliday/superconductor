@@ -76,20 +76,29 @@ BEATS = int(STEPS * STEP_DURATION)
 BASS_CHANNEL = 6
 """The channel the Moog Minitaur is set to receive on."""
 
-BASS_ROWS = [midi_notes.note_to_name(note)
-             for note in range(midi_notes.name_to_note("C2"), midi_notes.name_to_note("C4") + 1)]
-"""Two chromatic octaves, C2 to C4, one row per semitone.
+BASS_RANGE = [midi_notes.note_to_name(note)
+              for note in range(midi_notes.name_to_note("C1"), midi_notes.name_to_note("C3") + 1)]
+"""Two chromatic octaves, C1 to C3, in the order music is written in.
 
 Chromatic rather than a scale because no key is being imposed on the instrument
 by this file, and one row per pitch rather than twelve pitch classes because
 position is then pitch: the line is read as a shape, and an octave leap looks
-like one.  Well inside the Minitaur's range, which stops at note 72 (#2081).
+like one.  Low, because this is a bass — and well inside the Minitaur's range,
+which stops at note 72 (#2081).
 
 This list is the whole of the decision.  A different range, or only the notes of
 a scale, is an edit here and nothing else anywhere.
 """
 
-BASS_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in BASS_ROWS}
+BASS_ROWS = list(reversed(BASS_RANGE))
+"""The same notes in the order they are drawn, which is top to bottom.
+
+A declared row list is drawn in the order it is given — the drum grid's kick is
+first because it is meant to be at the top.  For pitches that means the highest
+note first, so the grid reads the way a stave does and a rising line rises.
+"""
+
+BASS_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in BASS_RANGE}
 """Row names to MIDI notes, which is the same mechanism the drum map is.
 
 Subsequence resolves a string pitch through whatever map the pattern was given,
@@ -213,7 +222,8 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
-			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY),
+			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
+			visible_rows=12),
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
