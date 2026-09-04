@@ -196,8 +196,36 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
  * worked out here, so the highlight moves smoothly instead of hopping four
  * times a bar. It is moved by transform alone, which keeps it off the layout
  * path — the grid itself is never re-laid-out to animate it. */
-function Playhead ({ anchor, steps, beats }) {
+function Playhead ({ anchor, steps, beats, paused }) {
 	const bar = useRef(null);
+
+	/* How long the clock has been held, and since when.
+	 *
+	 * A held transport sends no beats, so extrapolation would run on without
+	 * anything to correct it: the highlight would drift up to a whole beat
+	 * forward, stop at the clamp, and snap back when play resumed. Holding the
+	 * clock has to hold this too. The moment the pause is confirmed is where
+	 * the sequencer stopped, so that is where the highlight stays, and the time
+	 * spent held is subtracted afterwards so resuming continues rather than
+	 * jumps. The next beat clears the sum and makes it exact again. */
+	const heldSince = useRef(null);
+	const held = useRef(0);
+
+	useEffect(() => {
+		if (paused) {
+			if (heldSince.current === null) heldSince.current = performance.now();
+			return;
+		}
+
+		if (heldSince.current !== null) {
+			held.current += performance.now() - heldSince.current;
+			heldSince.current = null;
+		}
+	}, [paused]);
+
+	/* A beat is a fresh reading of where the sequencer actually is, so whatever
+	   was being carried to correct for a hold has just been made irrelevant. */
+	useEffect(() => { held.current = 0; }, [anchor]);
 
 	useEffect(() => {
 		if (!anchor || !bar.current) return;
@@ -210,7 +238,8 @@ function Playhead ({ anchor, steps, beats }) {
 			const second = grid && grid.children[2];
 
 			if (first && anchor.interval) {
-				const elapsed = (performance.now() - anchor.at) / 1000;
+				const reading = heldSince.current === null ? performance.now() : heldSince.current;
+				const elapsed = Math.max(0, reading - anchor.at - held.current) / 1000;
 				const beatNow = anchor.beat + Math.min(elapsed / anchor.interval, 1);
 				const step = (beatNow * (steps / beats)) % steps;
 
@@ -670,7 +699,8 @@ function Panel () {
 		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
 			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
 				cells=${cells} pending=${pending} failed=${failed} onTap=${request} />
-			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4} />`}
+			${up && html`<${Playhead} anchor=${anchor} steps=${control.steps} beats=${control.beats || 4}
+				paused=${transportFields.paused === true} />`}
 		</div>`;
 }
 

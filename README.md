@@ -52,7 +52,15 @@ The service starts with no configuration at all. A YAML file passed with
 host: 0.0.0.0    # the interface to listen on
 port: 8090       # anything you like; this one is clear of the ports the
                  # neighbouring applications use
+page: grid       # which page to serve
 ```
+
+**It listens on every interface by default**, because the usual arrangement has
+the panel on a different machine from the service. That is a default chosen for
+a use, not a recommendation about your network: there is no authentication in
+front of it, so anyone who can reach the port can change your music. Set `host`
+to `127.0.0.1` if the browser is on the same machine, and keep it off any
+network you do not trust.
 
 The page shows nothing until an application dials in and declares something,
 which is the expected state on a fresh start rather than a fault.
@@ -110,6 +118,71 @@ which row, and it is the file you would copy and change for your own rig.
 The adapter imports nothing from the application it serves — it is written
 against whatever object it is handed. That is deliberate, and it is what keeps
 this package free of any dependency on a particular piece of music software.
+
+## Keeping it running
+
+None of this is required. Superintendent is an ordinary process: start it from a
+terminal, from your window manager's autostart, from a `tmux` session, or from
+whatever you already use. It needs no supervisor, and it does not need systemd
+to exist.
+
+If you do want it supervised and you have systemd, there are two shapes and the
+difference is real. A **system unit** starts at boot with nobody logged in,
+which is what you want on a machine that boots into being a studio. A **user
+unit** needs no root and shares your own environment and files, which suits a
+machine that is also somebody's desktop — but it starts only when you log in
+unless you enable lingering.
+
+Both of these have placeholders in capitals. They will not start until you have
+replaced them, which is deliberate: a unit file that half-works with someone
+else's paths in it is worse than one that refuses.
+
+A system unit, at `/etc/systemd/system/superintendent.service`:
+
+```ini
+[Unit]
+Description=Superintendent control surface
+After=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_WITH_YOUR_USERNAME
+ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superintendent
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```
+sudo systemctl enable --now superintendent
+```
+
+A user unit, at `~/.config/systemd/user/superintendent.service`:
+
+```ini
+[Unit]
+Description=Superintendent control surface
+
+[Service]
+Type=simple
+ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superintendent
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+```
+
+```
+systemctl --user enable --now superintendent
+loginctl enable-linger $USER      # only if it should run before you log in
+```
+
+Order never matters. The applications dial the service on a backoff and the
+panel reconnects on its own, so any of the three can be started, stopped or
+restarted without the others being told.
 
 ## Development
 
