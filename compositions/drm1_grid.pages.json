@@ -13,13 +13,13 @@
 	],
 	"kit": [
 		{
-			"name": "grid",
-			"x": 1,
+			"name": "bass",
+			"x": 21,
 			"y": 1
 		},
 		{
-			"name": "bass",
-			"x": 25,
+			"name": "grid",
+			"x": 1,
 			"y": 1
 		}
 	],

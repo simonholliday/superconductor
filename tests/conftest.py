@@ -28,6 +28,11 @@ CONTROLS: dict[str, typing.Any] = {
 	         "visible_rows": 2,
 	         "mono": True, "default_length": 1, "default_velocity": 100,
 	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
+	"moog": {"type": "params", "title": "Moog",
+	         "fields": [
+	             {"name": "glide", "kind": "switch", "label": "Glide"},
+	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127, "step": 1},
+	         ]},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.
@@ -42,6 +47,7 @@ PAGES: list[dict[str, typing.Any]] = [
 	{"id": "all", "title": "All", "parts": ["grid", "second"]},
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
 	{"id": "bass", "title": "Bass", "parts": ["bass"]},
+	{"id": "moog", "title": "Moog", "parts": ["moog"]},
 ]
 """Two views over the same two grids, one of which carries both.
 
@@ -128,6 +134,7 @@ class FakeApp:
 			"subsequence", CONTROLS,
 			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
 			 "bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
+			 "moog": {"glide": False, "rate": 24},
 			 "transport": {"paused": False, "bpm": 120.0}},
 			self.version, pages)
 
