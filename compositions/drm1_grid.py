@@ -151,8 +151,24 @@ link = superintendent.subsequence_adapter.AppLink(
 			data_key="layer", name="layer", title="DRM1 — pattern 2"),
 		superintendent.subsequence_adapter.Transport(composition),
 	],
+	pages=[
+		superintendent.subsequence_adapter.Page(
+			"both", parts=["grid", "layer"], title="Both"),
+		superintendent.subsequence_adapter.Page(
+			"pattern_1", parts=["grid"], title="Pattern 1"),
+		superintendent.subsequence_adapter.Page(
+			"pattern_2", parts=["layer"], title="Pattern 2"),
+	],
 	url=SERVICE_URL,
 )
+"""Three views over the same two patterns.
+
+Each pattern appears on two of them — once beside the other and once with the
+whole panel to itself — which is the case worth having: see how they play
+together, then take one on its own to work on it closely.  Nothing keeps the
+two views of a pattern in step, because nothing has to: both draw the grid the
+composition holds.
+"""
 
 
 if __name__ == "__main__":

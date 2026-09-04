@@ -352,3 +352,46 @@ html, body {
 	white-space: nowrap;
 	touch-action: none;
 }
+
+/* Moving between pages. Drawn like the grid's own cells, because a hand that
+   has learned to tap a row of those has already learned this — and sized for a
+   finger regardless of how small the cells themselves are set. */
+.pages { display: flex; align-items: center; gap: 0.3rem; }
+
+.pages button {
+	min-height: 44px;
+	min-width: 44px;
+	padding: 0 0.8rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	touch-action: none;
+}
+
+/* The page you are on is filled rather than outlined, the way a held transport
+   is: it is a state you are in, not an action you can take. */
+.pages button.here {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: #1a1206;
+	font-weight: 600;
+}
+
+.pages .which {
+	min-width: 7rem;
+	text-align: center;
+	color: var(--ink);
+	font-size: 0.85rem;
+	white-space: nowrap;
+}
+
+.pages .which i {
+	font-style: normal;
+	color: var(--ink-quiet);
+	font-variant-numeric: tabular-nums;
+	margin-left: 0.4rem;
+}

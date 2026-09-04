@@ -166,3 +166,40 @@ def test_a_refusal_for_a_panel_that_has_gone_troubles_nobody () -> None:
 		app.send_json(superintendent.protocol.nack("subsequence", "grid/kick/0", "nobody", 1, "gone"))
 
 		app.send_json(superintendent.protocol.event("subsequence", "beat", beat=0))
+
+
+def test_a_page_set_reaches_the_panel_with_the_app_that_owns_it () -> None:
+	"""A composition owns its pages (#2075). The service carries them and reads
+	no file of its own, so what arrives is exactly what was declared."""
+
+	pages = [{"id": "both", "title": "Both", "parts": ["grid"]}]
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare(
+			"subsequence", CONTROLS, {"grid": {"kick": [0]}}, 1, pages))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+
+			manifest = _read_until(panel, "manifest")
+
+	assert manifest["pages"] == [{"id": "both", "title": "Both", "parts": ["grid"], "app": "subsequence"}]
+
+
+def test_an_app_that_declares_no_pages_says_so_rather_than_nothing () -> None:
+	"""Which is what keeps a panel written for pages working against a
+	composition that has never heard of them."""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 1))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", None))
+
+			manifest = _read_until(panel, "manifest")
+
+	assert manifest["pages"] == []

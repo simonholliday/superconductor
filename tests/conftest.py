@@ -34,6 +34,17 @@ them, and did until cells were addressed by their whole path.  One grid carries
 a title and one does not, so both halves of that are drawn every run.
 """
 
+PAGES: list[dict[str, typing.Any]] = [
+	{"id": "all", "title": "All", "parts": ["grid", "second"]},
+	{"id": "drums", "title": "Drums", "parts": ["grid"]},
+]
+"""Two views over the same two grids, one of which carries both.
+
+The first is what a panel opens on, so everything declared is on the glass
+unless a test goes looking for the other one.  ``grid`` appears on both, which
+is the case #2075 says needs no synchronising.
+"""
+
 
 def _free_port () -> int:
 	"""Take a port the operating system says is free."""
@@ -86,7 +97,7 @@ class FakeApp:
 					"subsequence", CONTROLS,
 					{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
 					 "transport": {"paused": False, "bpm": 120.0}},
-					self.version)))
+					self.version, PAGES)))
 
 			self._ready.set()
 

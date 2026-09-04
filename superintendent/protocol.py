@@ -14,11 +14,13 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.1.0"
+CONTRACT_VERSION = "1.2.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
-does not know — so the minor number, not the major one.
+does not know — so the minor number, not the major one.  1.2.0 adds ``pages`` to
+``declare`` and to ``manifest``: an app that sends none, and a panel that reads
+none, both behave exactly as they did.
 """
 
 Frame = dict[str, typing.Any]
@@ -52,8 +54,13 @@ def decode (raw: str | bytes) -> Frame:
 	return typing.cast(Frame, parsed)
 
 
-def hello (client: str, page: str, versions: dict[str, int] | None = None) -> Frame:
+def hello (client: str, page: str | None, versions: dict[str, int] | None = None) -> Frame:
 	"""The panel introducing itself, with the version it last saw for each app.
+
+	``page`` is the page this panel is showing, or null when it has not chosen
+	one — a panel that has never been set, or whose browser cannot remember.
+	Nothing is served differently for it; it is there so a service can say which
+	panel is looking at what.
 
 	``token`` is carried and ignored.  It costs nothing now and its absence
 	would force a protocol change the day the panel is reached from off the
@@ -70,8 +77,15 @@ def hello (client: str, page: str, versions: dict[str, int] | None = None) -> Fr
 	}
 
 
-def declare (app: str, controls: Frame, state: Frame, version: int) -> Frame:
-	"""An app introducing itself and saying what it can be controlled by."""
+def declare (app: str, controls: Frame, state: Frame, version: int,
+             pages: list[Frame] | None = None) -> Frame:
+	"""An app introducing itself and saying what it can be controlled by.
+
+	``pages`` is how a composition offers several views over those controls
+	(#2075).  It is optional in both directions: an app with nothing to say
+	about arrangement sends none, and a panel then shows everything declared,
+	which is what every panel did before pages existed.
+	"""
 
 	return {
 		"t": "declare",
@@ -80,17 +94,25 @@ def declare (app: str, controls: Frame, state: Frame, version: int) -> Frame:
 		"controls": controls,
 		"state": state,
 		"ver": version,
+		"pages": pages or [],
 	}
 
 
-def manifest (apps: dict[str, Frame], page: Frame) -> Frame:
+def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = None) -> Frame:
 	"""What the panel should draw: every dialled-in app and the controls it offers.
 
 	Sent again whenever an app arrives or goes, so a panel that was already
-	open when an app started still learns what it can now reach.
+	open when an app started still learns what it can now reach — and so a page
+	set arrives on a panel that was open before its composition started.
+
+	``pages`` is every page every connected app declared, each carrying the app
+	that declared it.  The service assembles the list and owns none of it: a
+	page set belongs to the composition that sent it, and is never read from
+	disk here (#2075).
 	"""
 
-	return {"t": "manifest", "contract": CONTRACT_VERSION, "apps": apps, "page": page}
+	return {"t": "manifest", "contract": CONTRACT_VERSION, "apps": apps,
+	        "page": page, "pages": pages or []}
 
 
 def service (version: str | None, build: str | None) -> Frame:

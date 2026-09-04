@@ -29,6 +29,32 @@ const clientId = `panel-${Math.random().toString(36).slice(2, 10)}`;
  * rather than claiming to match (#2056). */
 const pageBuild = new URL(import.meta.url).searchParams.get("v");
 
+/* Which page this panel is showing, and where that choice is kept.
+ *
+ * A composition offers several views over its own controls and every panel
+ * loads the same URL, so the choice belongs to the panel rather than to the
+ * service (#2075). Kept in this browser's storage, which is what lets each
+ * performer pick their own without accounts, a login or a user model — and
+ * what returns a player to their own page after a reload rather than to
+ * somebody else's default, which matters most in the middle of a set.
+ *
+ * A `?page=` in the address wins, so a performer's tablet can be pointed once
+ * and left alone. */
+const PAGE_KEY = "superintendent.page";
+const PAGE_BUTTONS = 6;
+
+function askedForPage () {
+	return new URL(location.href).searchParams.get("page");
+}
+
+function rememberedPage () {
+	try {
+		return askedForPage() || localStorage.getItem(PAGE_KEY);
+	} catch (error) {
+		return askedForPage();
+	}
+}
+
 /* The sizes a cell can be, and where the choice is kept.
  *
  * None of these is the right one. A target that suits one pair of hands is
@@ -87,7 +113,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.1.0", client: clientId, page: "grid", ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.2.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -132,7 +158,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.1.0", client: clientId, page: "grid", ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.2.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -327,6 +353,42 @@ function Transport ({ control, name, fields, up, onSet }) {
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(1); }}>+1</button>
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(5); }}>+5</button>
 			</div>
+		</div>`;
+}
+
+/* Moving between the pages a composition offers.
+ *
+ * A row of buttons, one per page, drawn the way a step grid's own cells are —
+ * Simon's suggestion, and it is right: a panel that has taught a hand to tap
+ * cells in a row has already taught it this. Beyond a few pages a row stops
+ * being readable at a glance, so it gives way to previous and next with the
+ * place shown, which is the same navigation at a size that still fits.
+ *
+ * Nothing is drawn for a composition that offers one page or none. A control
+ * with one choice is furniture. */
+function Pages ({ pages, current, onChoose }) {
+	if (pages.length < 2) return null;
+
+	const at = Math.max(0, pages.findIndex((page) => page.id === current));
+	const step = (by) => onChoose(pages[(at + by + pages.length) % pages.length].id);
+
+	if (pages.length > PAGE_BUTTONS) {
+		return html`
+			<div class="pages">
+				<button onPointerDown=${(e) => { e.preventDefault(); step(-1); }}>‹</button>
+				<span class="which">${pages[at].title}<i>${at + 1}/${pages.length}</i></span>
+				<button onPointerDown=${(e) => { e.preventDefault(); step(1); }}>›</button>
+			</div>`;
+	}
+
+	return html`
+		<div class="pages">
+			${pages.map((page) => html`
+				<button
+					key=${page.id}
+					class=${page.id === pages[at].id ? "here" : ""}
+					onPointerDown=${(e) => { e.preventDefault(); onChoose(page.id); }}
+				>${page.title}</button>`)}
 		</div>`;
 }
 
@@ -533,6 +595,8 @@ function Panel () {
 	const [failed, setFailed] = useState(new Set());
 	const [notice, setNotice] = useState(null);
 	const [service, setService] = useState(null);
+	const [pages, setPages] = useState([]);
+	const [chosen, setChosen] = useState(rememberedPage);
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -574,6 +638,7 @@ function Panel () {
 					 * than take the page down with it. */
 					const listed = frame.apps || {};
 					setApps((was) => ({ ...was, ...listed }));
+					setPages(frame.pages || []);
 					setPresent((was) => {
 						const now = {};
 						for (const name of new Set([...Object.keys(was), ...Object.keys(listed)])) {
@@ -681,6 +746,17 @@ function Panel () {
 		};
 	}, [drop, flashFailure]);
 
+	const choosePage = useCallback((id) => {
+		setChosen(id);
+
+		try {
+			localStorage.setItem(PAGE_KEY, id);
+		} catch (error) {
+			/* A panel that cannot remember still works; it opens on the first
+			   page every time. */
+		}
+	}, []);
+
 	const request = useCallback((path, value) => {
 		const app = Object.keys(apps)[0];
 		if (!app || !link.current) return;
@@ -705,11 +781,25 @@ function Panel () {
 	   driving one instrument belong on one page as stacked blocks, which is
 	   what Simon settled in #1944 — and a page that showed only the first of
 	   them would be quietly wrong rather than obviously incomplete. */
-	const gridNames = Object.keys(controls).filter((name) => controls[name].type === "step_grid");
+	const declaredGrids = Object.keys(controls).filter((name) => controls[name].type === "step_grid");
+
+	/* Which page is showing. A remembered choice for a page that is no longer
+	   offered falls back to the first without being forgotten: a composition
+	   restarted with one pattern missing should not cost a performer the page
+	   they had set, once it comes back. */
+	const page = pages.find((one) => one.id === chosen) || pages[0] || null;
+
+	/* A page names the parts it carries, so a part on two pages appears on
+	   both and needs nothing to keep them together — each draws the app's own
+	   state (#2046). An app that declared no pages shows everything, which is
+	   what every panel did before pages existed. */
+	const gridNames = page
+		? declaredGrids.filter((name) => (page.parts || []).includes(name))
+		: declaredGrids;
 
 	/* Asked for before the page can return early, because a hook must be. What
-	   has to fit is every row of every block down, and the widest block across.
-	   With nothing declared these are zero and nothing is fitted. */
+	   has to fit is every row of every visible block down, and the widest
+	   across. With nothing showing these are zero and nothing is fitted. */
 	const size = useCellSize(
 		gridNames.reduce((total, name) => total + controls[name].rows.length, 0),
 		gridNames.reduce((widest, name) => Math.max(widest, controls[name].steps), 0),
@@ -723,7 +813,7 @@ function Panel () {
 	const transportName = Object.keys(controls).find((name) => controls[name].type === "transport");
 	const transportFields = transportName ? (state[appName] || {})[transportName] || {} : {};
 
-	if (!gridNames.length) {
+	if (!declaredGrids.length) {
 		return html`
 			<div class="bar">
 				<span class="spacer"></span>
@@ -742,6 +832,7 @@ function Panel () {
 			${transportName && html`
 				<${Transport} control=${controls[transportName]} name=${transportName}
 					fields=${transportFields} up=${up} onSet=${request} />`}
+			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<span class="spacer"></span>
 			${notice && html`<span class="warn">${notice}</span>`}
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}

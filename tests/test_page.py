@@ -240,3 +240,50 @@ def test_a_page_larger_than_the_glass_can_be_pushed_around (panel: typing.Any) -
 		assert "pan" in action(surface), f"{surface} is not a control and should take hold of the page"
 
 	assert "pinch" not in action("body"), "pinch zoom is still the browser claiming a musician's gesture"
+
+
+def test_a_page_shows_only_the_parts_it_carries (panel: typing.Any) -> None:
+	"""A page is a view over some of what an app offers, not all of it (#2075)."""
+
+	assert panel.locator(".part").count() == 2, "the first page carries both grids"
+
+	panel.locator(".pages button", has_text="Drums").click()
+
+	playwright_api.expect(panel.locator(".part")).to_have_count(1, timeout=5_000)
+	assert panel.locator('.part[data-part="grid"]').count() == 1
+
+
+def test_the_page_a_panel_is_on_survives_a_reload (panel: typing.Any) -> None:
+	"""In performance a reload must return a player to their own page, not to
+	whichever one the composition happened to declare first."""
+
+	panel.locator(".pages button", has_text="Drums").click()
+	playwright_api.expect(panel.locator(".part")).to_have_count(1, timeout=5_000)
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert panel.locator(".part").count() == 1
+
+
+def test_a_page_named_in_the_address_is_the_one_that_opens (
+	panel: typing.Any, service_url: str) -> None:
+	"""So a performer's tablet can be pointed once and left alone, with no code."""
+
+	panel.goto(f"{service_url}/?page=drums")
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert panel.locator(".part").count() == 1
+
+
+def test_a_remembered_page_that_is_no_longer_offered_is_not_forgotten (
+	panel: typing.Any, service_url: str) -> None:
+	"""A composition restarted without one pattern should not cost a performer
+	the page they had set, once it comes back."""
+
+	panel.evaluate("() => localStorage.setItem('superintendent.page', 'a-page-that-went-away')")
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert panel.locator(".part").count() == 2, "falls back to the first page"
+	assert panel.evaluate("() => localStorage.getItem('superintendent.page')") == "a-page-that-went-away"

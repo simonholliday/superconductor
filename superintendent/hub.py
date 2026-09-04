@@ -32,6 +32,13 @@ class AppLink:
 	controls: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 	state: dict[str, typing.Any] = dataclasses.field(default_factory=dict)
 	version: int = 0
+	pages: list[dict[str, typing.Any]] = dataclasses.field(default_factory=list)
+	"""The views this app offers over its own controls, in the order it gave them.
+
+	Held and passed on, never interpreted.  A page set belongs to the
+	composition that declared it; the service assembles the list and reads no
+	file of its own (#2075).
+	"""
 
 
 @dataclasses.dataclass
@@ -62,7 +69,7 @@ class Hub:
 
 		self.panels.append(panel)
 
-		await panel.send(superintendent.protocol.manifest(self._declarations(), self.page))
+		await panel.send(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
 
 		for app in self.apps.values():
 			await panel.send(superintendent.protocol.snapshot(app.name, app.state, app.version))
@@ -87,7 +94,7 @@ class Hub:
 
 		self.apps[app.name] = app
 
-		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page))
+		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
 		await self.to_panels(superintendent.protocol.app_presence(app.name, True))
 		await self.to_panels(superintendent.protocol.snapshot(app.name, app.state, app.version))
 
@@ -98,7 +105,7 @@ class Hub:
 
 		self.apps.pop(name, None)
 
-		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page))
+		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
 		await self.to_panels(superintendent.protocol.app_presence(name, False))
 
 		LOG.info("app %r disconnected", name)
@@ -107,6 +114,17 @@ class Hub:
 		"""What every connected app says it can be controlled by."""
 
 		return {name: app.controls for name, app in sorted(self.apps.items())}
+
+	def _pages (self) -> list[dict[str, typing.Any]]:
+		"""Every page every connected app declared, each naming its own app.
+
+		In the order the apps declared them, so a composition decides what its
+		panel opens on rather than the service deciding by sorting.
+		"""
+
+		return [{**page, "app": name}
+		        for name, app in sorted(self.apps.items())
+		        for page in app.pages]
 
 	async def to_panels (self, frame: superintendent.protocol.Frame) -> None:
 		"""Send one frame to every panel, surviving any that has gone quiet.

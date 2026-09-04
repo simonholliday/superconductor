@@ -160,6 +160,7 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 					controls=dict(frame.get("controls") or {}),
 					state=dict(frame.get("state") or {}),
 					version=int(frame.get("ver", 0)),
+					pages=list(frame.get("pages") or []),
 				)
 				await hub.app_declared(app)
 

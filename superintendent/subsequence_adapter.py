@@ -345,6 +345,32 @@ class Transport (Control):
 		return True
 
 
+class Page:
+	"""One view over some of an app's controls, offered as part of a set.
+
+	A composition owns its page set (#2075): several pages served at one URL,
+	each naming the parts it carries, navigated from the panel's header. A part
+	may appear on more than one page and needs no synchronising to do it —
+	every widget draws the app's own state, so two views of one control cannot
+	disagree.
+
+	Offering no pages at all is a complete answer: a panel then shows every
+	control declared, which is what it did before pages existed.
+	"""
+
+	def __init__ (self, page_id: str, parts: collections.abc.Sequence[str], title: str | None = None) -> None:
+		"""Name a view and say which declared controls appear on it."""
+
+		self.page_id = page_id
+		self.parts = list(parts)
+		self.title = title
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""What a panel needs in order to offer this page and draw it."""
+
+		return {"id": self.page_id, "title": self.title or self.page_id, "parts": self.parts}
+
+
 class AppLink:
 	"""One app's socket to the service, and the controls it offers over it."""
 
@@ -354,6 +380,7 @@ class AppLink:
 		controls: collections.abc.Sequence[Control],
 		app_name: str = "subsequence",
 		url: str = DEFAULT_URL,
+		pages: collections.abc.Sequence[Page] | None = None,
 	) -> None:
 		"""Describe what to offer, without connecting anything yet."""
 
@@ -361,6 +388,7 @@ class AppLink:
 		self.controls = {control.name: control for control in controls}
 		self.app_name = app_name
 		self.url = url
+		self.pages = list(pages or [])
 
 		self.version = 0
 
@@ -534,6 +562,7 @@ class AppLink:
 			{name: control.declaration() for name, control in self.controls.items()},
 			{name: control.snapshot() for name, control in self.controls.items()},
 			self.version,
+			[page.declaration() for page in self.pages],
 		))
 
 	async def _serve (self, socket: typing.Any) -> None:
