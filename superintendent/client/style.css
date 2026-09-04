@@ -163,10 +163,11 @@ html, body {
  * dark. This is a mark we draw and therefore one that is always there. */
 .window { position: relative; }
 
-/* The strip you push. Wide enough for a finger, and textured so it looks like
-   something a finger would get purchase on rather than a line to read. Simon's
-   suggestion, and the right one: the mark was reporting where you were without
-   ever saying it was the thing to touch. */
+/* The strip you push. Wide enough for a finger, which is what it needed: the
+   mark was reporting where you were without ever saying it was a thing to
+   touch. A dot texture was tried and removed — it rendered on a desktop and
+   not on the panel, so it was decoration in one place and nothing in the
+   other. Polishing this is parked; it works. */
 .window .track {
 	position: absolute;
 	top: 0;
@@ -174,9 +175,7 @@ html, body {
 	left: 0;
 	width: 22px;
 	border-radius: 4px;
-	background-color: rgba(255, 255, 255, 0.04);
-	background-image: radial-gradient(circle, var(--ink-quiet) 0.6px, transparent 0.7px);
-	background-size: 6px 6px;
+	background: rgba(255, 255, 255, 0.04);
 	touch-action: none;
 	cursor: grab;
 
