@@ -163,3 +163,35 @@ def test_by_default_the_grid_is_measured_against_this_viewport (panel: typing.An
 		}""")
 
 	assert overflow == [0, 0], "a fitted grid should not need scrolling"
+
+
+def test_the_page_says_what_it_is_running (panel: typing.Any) -> None:
+	"""Simon's ask: something on the glass that answers "is this the latest"."""
+
+	playwright_api.expect(panel.locator(".bar .build")).to_be_visible(timeout=5_000)
+
+
+def test_a_page_left_behind_by_the_service_says_so_and_offers_the_way_back (
+	panel: typing.Any, service_url: str) -> None:
+	"""The confusion this feature exists to end.
+
+	The service is made newer than the loaded page by changing a client file,
+	which is exactly what happens during development. The panel finds out on its
+	next hello, which a `pageshow` provokes without a reload — a reload would
+	fetch the new page and there would be nothing left to detect.
+	"""
+
+	import superintendent.service
+
+	marker = superintendent.service.CLIENT_DIR / ".build-changed-by-a-test"
+
+	try:
+		marker.write_text("any content at all changes the hash")
+
+		panel.evaluate("() => window.dispatchEvent(new Event('pageshow'))")
+
+		playwright_api.expect(panel.locator(".bar .reload")).to_be_visible(timeout=5_000)
+		playwright_api.expect(panel.locator(".bar .build")).to_have_count(0)
+
+	finally:
+		marker.unlink(missing_ok=True)

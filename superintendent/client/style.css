@@ -271,3 +271,27 @@ html, body {
 }
 
 .sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: 0.75rem; }
+
+/* What is running. Quiet by design — it is provenance, not a control, and it
+   earns its place in the bar only by costing no glass at all. */
+.bar .build {
+	color: var(--ink-quiet);
+	font-size: 0.72rem;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* Except when the page is behind the service, when it becomes the most useful
+   thing on the bar and is sized to be tapped rather than read. */
+.bar .reload {
+	min-height: 44px;
+	padding: 0 0.9rem;
+	border-radius: 8px;
+	border: 1px solid #ffa94d;
+	background: transparent;
+	color: #ffa94d;
+	font: inherit;
+	font-size: 0.85rem;
+	white-space: nowrap;
+	touch-action: none;
+}

@@ -21,6 +21,7 @@ import starlette.routing
 import starlette.staticfiles
 import starlette.websockets
 
+import superintendent.build
 import superintendent.config
 import superintendent.hub
 import superintendent.protocol
@@ -43,14 +44,29 @@ def build (config: superintendent.config.Config) -> starlette.applications.Starl
 	hub = superintendent.hub.Hub(page={"name": config.page})
 
 	async def index (request: starlette.requests.Request) -> starlette.responses.Response:
-		"""Serve the page itself."""
+		"""Serve the page itself, with its assets stamped by the build they are.
+
+		Two decisions about caching live here, and they are deliberate (#2056).
+		The page is never stored: it is a few hundred bytes whose only job is to
+		name the files that matter, so caching it saves nothing and can only
+		make it lie about them. Those files keep a content hash in their URL, so
+		a browser holding an old copy cannot serve it in place of a new one —
+		the URL it was cached under no longer exists.
+		"""
 
 		page = CLIENT_DIR / "index.html"
 
 		if not page.exists():
 			return starlette.responses.PlainTextResponse(f"No page to serve: {page} is missing.", status_code=500)
 
-		return starlette.responses.FileResponse(page)
+		markup = page.read_text(encoding="utf-8")
+		build = superintendent.build.client_build(CLIENT_DIR)
+
+		if build is not None:
+			for asset in ("/client/style.css", "/client/app.js"):
+				markup = markup.replace(f'"{asset}"', f'"{asset}?v={build}"')
+
+		return starlette.responses.HTMLResponse(markup, headers={"Cache-Control": "no-store"})
 
 	async def panel_socket (websocket: starlette.websockets.WebSocket) -> None:
 		"""Hold one browser's socket for as long as the browser is there."""
@@ -93,6 +109,14 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 			if kind == "hello":
 				panel = superintendent.hub.PanelLink(
 					client=str(frame.get("client", "panel")), send=_sender(websocket))
+
+				# Said before anything else, and said again on every hello, so a
+				# panel that reconnects to a restarted service learns at once
+				# whether the page it is still running has been left behind.
+				await panel.send(superintendent.protocol.service(
+					superintendent.build.version(),
+					superintendent.build.client_build(CLIENT_DIR)))
+
 				await hub.panel_joined(panel)
 
 			elif panel is None:

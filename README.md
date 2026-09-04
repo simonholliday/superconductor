@@ -57,6 +57,12 @@ port: 8090       # anything you like; this one is clear of the ports the
 The page shows nothing until an application dials in and declares something,
 which is the expected state on a fresh start rather than a fault.
 
+The corner of the bar shows the version and the build the page was made from.
+If the service has newer files than the browser loaded — which happens whenever
+you change something while a panel is left open — that readout becomes a button
+saying so, and tapping it loads the new page. It never reloads on its own:
+somebody may be playing.
+
 ## Sizing the grid to your hands
 
 The **size** button on the page sets how big a grid cell is. It starts on *fit

@@ -14,8 +14,12 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.0.0"
-"""Bumped when a frame changes shape.  Both ends send it and neither guesses."""
+CONTRACT_VERSION = "1.1.0"
+"""Bumped when a frame changes shape.  Both ends send it and neither guesses.
+
+1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
+does not know — so the minor number, not the major one.
+"""
 
 Frame = dict[str, typing.Any]
 
@@ -87,6 +91,21 @@ def manifest (apps: dict[str, Frame], page: Frame) -> Frame:
 	"""
 
 	return {"t": "manifest", "contract": CONTRACT_VERSION, "apps": apps, "page": page}
+
+
+def service (version: str | None, build: str | None) -> Frame:
+	"""Which Superintendent the panel has reached, sent whenever it says hello.
+
+	The panel compares ``build`` against the one stamped on the page it is
+	actually running.  A difference means the service has newer files than the
+	browser loaded, which no other signal on the glass would reveal (#2056).
+
+	Both fields may be null.  A version that could not be derived and a client
+	directory that is not there are both real states, and saying so is better
+	than sending a number that means neither.
+	"""
+
+	return {"t": "service", "contract": CONTRACT_VERSION, "version": version, "build": build}
 
 
 def snapshot (app: str, state: Frame, version: int) -> Frame:

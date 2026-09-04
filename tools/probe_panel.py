@@ -9,7 +9,7 @@ import websockets.asyncio.client
 
 async def main () -> None:
 	async with websockets.asyncio.client.connect("ws://127.0.0.1:8090/ws/panel") as ws:
-		await ws.send(json.dumps({"t": "hello", "contract": "1.0.0", "client": "fake-panel",
+		await ws.send(json.dumps({"t": "hello", "contract": "1.1.0", "client": "fake-panel",
 		                          "page": "grid", "ver": {}, "token": None}))
 
 		seen: list[dict] = []

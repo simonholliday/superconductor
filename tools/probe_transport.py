@@ -55,7 +55,7 @@ async def await_change (ws, path, value, limit=5.0):
 
 async def main ():
 	async with websockets.asyncio.client.connect(URL) as ws:
-		await ws.send(json.dumps({"t": "hello", "contract": "1.0.0", "client": "transport-test",
+		await ws.send(json.dumps({"t": "hello", "contract": "1.1.0", "client": "transport-test",
 		                          "page": "grid", "ver": {}, "token": None}))
 
 		greeting = []

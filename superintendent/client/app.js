@@ -21,6 +21,14 @@ const PENDING_EXPIRES = 5000;
 
 const clientId = `panel-${Math.random().toString(36).slice(2, 10)}`;
 
+/* Which page this browser is actually running.
+ *
+ * The service stamps the build into the script's own URL, which is the only
+ * place a module can read its own identity from without being told it. A page
+ * served by something that does not stamp it has none, and then says nothing
+ * rather than claiming to match (#2056). */
+const pageBuild = new URL(import.meta.url).searchParams.get("v");
+
 /* The sizes a cell can be, and where the choice is kept.
  *
  * None of these is the right one. A target that suits one pair of hands is
@@ -78,7 +86,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.0.0", client: clientId, page: "grid", ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.1.0", client: clientId, page: "grid", ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -123,7 +131,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.0.0", client: clientId, page: "grid", ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.1.0", client: clientId, page: "grid", ver: {}, token: null });
 			return;
 		}
 
@@ -273,6 +281,31 @@ function Transport ({ control, name, fields, up, onSet }) {
 		</div>`;
 }
 
+/* What is running, and whether it is the latest.
+ *
+ * The version answers "which release is this", and comes from the package
+ * metadata, which is written when the package is installed rather than when it
+ * runs — so on a source tree that has moved on it names the install and not the
+ * files. The build is a hash of the page as it is on disk now, so it is the one
+ * that can tell this browser it is behind. Both are shown, because the first is
+ * what a person quotes and the second is what is true.
+ *
+ * A stale page is never reloaded automatically. Someone may be playing. */
+function Build ({ service, stale }) {
+	if (!service) return null;
+
+	if (stale) {
+		return html`
+			<button class="reload" onPointerDown=${(event) => { event.preventDefault(); location.reload(); }}>
+				newer page available — tap to load it
+			</button>`;
+	}
+
+	const name = service.version ? `v${service.version}` : "unversioned";
+
+	return html`<span class="build">${name}${service.build && html` · ${service.build}`}</span>`;
+}
+
 /* ------------------------------------------------------------------ */
 /* How big a cell is                                                   */
 /* ------------------------------------------------------------------ */
@@ -419,6 +452,7 @@ function Panel () {
 	const [pending, setPending] = useState(new Map());
 	const [failed, setFailed] = useState(new Set());
 	const [notice, setNotice] = useState(null);
+	const [service, setService] = useState(null);
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -529,6 +563,10 @@ function Panel () {
 					break;
 				}
 
+				case "service":
+					setService({ version: frame.version, build: frame.build });
+					break;
+
 				case "ack":
 					break;
 
@@ -590,10 +628,17 @@ function Panel () {
 	const declared = controlName ? controls[controlName] : null;
 	const size = useCellSize(declared ? declared.rows.length : 0, declared ? declared.steps : 0);
 
+	/* Both halves have to be known before they can disagree: a page served
+	   without a stamp, or a service too old to send one, is not evidence of
+	   anything and must not raise a warning it cannot justify. */
+	const stale = Boolean(service && service.build && pageBuild && service.build !== pageBuild);
+
 	if (!controlName) {
 		return html`
-			<div class="bar"><span class="spacer"></span>
+			<div class="bar">
+				<span class="spacer"></span>
 				<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
+				<${Build} service=${service} stale=${stale} />
 			</div>
 			<div class="notice">
 				${status === "up"
@@ -620,6 +665,7 @@ function Panel () {
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>
+			<${Build} service=${service} stale=${stale} />
 		</div>
 		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
 			<${Grid} control=${controlName} rows=${control.rows} steps=${control.steps}
