@@ -67,6 +67,7 @@ class FakeApp:
 
 		self.url = url
 		self.sets: list[superintendent.protocol.Frame] = []
+		self.arrangements: dict[str, list[dict[str, typing.Any]]] = {}
 		self.version = 1
 
 		self._loop: asyncio.AbstractEventLoop | None = None
@@ -92,12 +93,7 @@ class FakeApp:
 		async with websockets.asyncio.client.connect(self.url) as socket_:
 			self._socket = socket_
 
-			await socket_.send(superintendent.protocol.encode(
-				superintendent.protocol.declare(
-					"subsequence", CONTROLS,
-					{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
-					 "transport": {"paused": False, "bpm": 120.0}},
-					self.version, PAGES)))
+			await socket_.send(superintendent.protocol.encode(self._declaration()))
 
 			self._ready.set()
 
@@ -106,6 +102,28 @@ class FakeApp:
 
 				if frame["t"] == "set":
 					self.sets.append(frame)
+
+				elif frame["t"] == "arrange":
+					self.arrangements[str(frame.get("page"))] = list(frame.get("parts") or [])
+
+					await socket_.send(superintendent.protocol.encode(self._declaration()))
+
+	def _declaration (self) -> superintendent.protocol.Frame:
+		"""What this app offers, including any arrangement it has been given.
+
+		Re-sent after an arrangement is kept, which is how a page set stays
+		shared: what one panel arranged, every panel sees.
+		"""
+
+		pages = [{**page, **({"layout": self.arrangements[page["id"]]}
+		                     if page["id"] in self.arrangements else {})}
+		         for page in PAGES]
+
+		return superintendent.protocol.declare(
+			"subsequence", CONTROLS,
+			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
+			 "transport": {"paused": False, "bpm": 120.0}},
+			self.version, pages)
 
 	def send (self, frame: superintendent.protocol.Frame) -> None:
 		"""Put one frame on the wire from the app's side."""

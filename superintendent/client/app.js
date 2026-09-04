@@ -43,26 +43,6 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
 const PAGE_KEY = "superintendent.page";
 const PAGE_BUTTONS = 6;
 
-/* Where an arrangement is kept until it can be sent to the composition that
-   owns the page (#2077). This is the interim: a layout belongs in a file
-   beside the piece, not in one browser, and this key goes when that lands. */
-const LAYOUT_KEY = "superintendent.layout";
-
-function readLayouts () {
-	try {
-		return JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
-	} catch (error) {
-		return {};
-	}
-}
-
-function writeLayouts (layouts) {
-	try {
-		localStorage.setItem(LAYOUT_KEY, JSON.stringify(layouts));
-	} catch (error) {
-		/* A panel that cannot remember still arranges; it just starts over. */
-	}
-}
 
 function askedForPage () {
 	return new URL(location.href).searchParams.get("page");
@@ -140,7 +120,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.2.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.3.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -185,7 +165,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.2.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.3.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -206,6 +186,14 @@ class Link {
 	set (app, path, value) {
 		const seq = ++this.seq;
 		return this.send({ t: "set", app, path, v: value, seq }) ? seq : null;
+	}
+
+	/* A page's whole arrangement, handed back to the app that owns the page.
+	 * Positions in lattice cells and no sizes, in the order the parts are
+	 * stacked — so the last entry is the one on top (#2078). */
+	arrange (app, page, parts) {
+		const seq = ++this.seq;
+		return this.send({ t: "arrange", app, page, parts, client: clientId, seq }) ? seq : null;
 	}
 }
 
@@ -763,7 +751,7 @@ function Panel () {
 	const [pages, setPages] = useState([]);
 	const [chosen, setChosen] = useState(rememberedPage);
 	const [arranging, setArranging] = useState(false);
-	const [layouts, setLayouts] = useState(readLayouts);
+	const [moved, setMoved] = useState({});
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -968,25 +956,21 @@ function Panel () {
 		name, rows: controls[name].rows.length, steps: controls[name].steps }));
 
 	const pageId = page ? page.id : "";
-	const arranged = layouts[pageId] || {};
+	const arranged = moved[pageId] || {};
 
 	/* Move and raise are the same write with one difference, so they are one
 	   function: a drag says where, a tap from the inventory says only that this
 	   block should be on top. Either way the block goes to the end of the
 	   order, which is what "the last one moved is on top" means. */
 	const rearrange = useCallback((name, at) => {
-		setLayouts((was) => {
+		setMoved((was) => {
 			const forPage = was[pageId] || {};
 			const order = [...(forPage.order || []).filter((one) => one !== name), name];
 			const placed = at
 				? { ...(forPage.placed || {}), [name]: at }
 				: forPage.placed || {};
 
-			const next = { ...was, [pageId]: { placed, order } };
-
-			writeLayouts(next);
-
-			return next;
+			return { ...was, [pageId]: { placed, order } };
 		});
 	}, [pageId]);
 
@@ -1001,13 +985,24 @@ function Panel () {
 		() => autoPlace(blocks, acrossAtTestedSize()),
 		[pageId, blocks.map((block) => block.name).join(",")]);
 
-	const layout = { ...defaults, ...(arranged.placed || {}) };
+	/* Three layers, in order of authority. Where the panel would put a part
+	   that nobody has placed; then the arrangement the composition is keeping,
+	   which is the shared one every panel sees; then anything moved here since,
+	   which is what the finger is doing right now. */
+	const kept = (page && page.layout) || [];
+	const keptPlaces = Object.fromEntries(kept.map((one) => [one.name, { x: one.x, y: one.y }]));
+
+	const layout = { ...defaults, ...keptPlaces, ...(arranged.placed || {}) };
 
 	/* Drawn back to front. A name that has been moved sits after every name
 	   that has not, and later moves sit after earlier ones. */
+	const order = (arranged.order && arranged.order.length)
+		? arranged.order
+		: kept.map((one) => one.name);
+
 	const stacked = [
-		...gridNames.filter((name) => !(arranged.order || []).includes(name)),
-		...(arranged.order || []).filter((name) => gridNames.includes(name)),
+		...gridNames.filter((name) => !order.includes(name)),
+		...order.filter((name) => gridNames.includes(name)),
 	];
 
 	/* Asked for before the page can return early, because a hook must be. It is
@@ -1045,7 +1040,19 @@ function Panel () {
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<button
 				class=${`arrange ${arranging ? "latched" : ""}`}
-				onPointerDown=${(event) => { event.preventDefault(); setArranging(!arranging); }}
+				onPointerDown=${(event) => {
+					event.preventDefault();
+
+					/* Sent on the way out rather than while dragging, so a drag
+					 * in progress is never half-saved, and so an accidental
+					 * nudge is one write rather than twenty (#2075). */
+					if (arranging && appName && link.current) {
+						link.current.arrange(appName, pageId, stacked.map((name) => ({
+							name, x: layout[name].x, y: layout[name].y })));
+					}
+
+					setArranging(!arranging);
+				}}
 			>${arranging ? "DONE" : "ARRANGE"}</button>
 			${arranging && html`
 				<${Inventory} names=${stacked} titles=${Object.fromEntries(

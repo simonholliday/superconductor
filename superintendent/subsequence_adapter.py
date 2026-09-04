@@ -21,7 +21,9 @@ Subroutine #1972 and is still open.
 
 import asyncio
 import collections.abc
+import json
 import logging
+import pathlib
 import threading
 import time
 import typing
@@ -345,6 +347,65 @@ class Transport (Control):
 		return True
 
 
+class PageStore:
+	"""Where a composition keeps the arrangements made on its pages.
+
+	A data file beside the composition, not inside it (#2075).  The composition
+	is Python and there is no safe round trip from a dragged block back into
+	source; a file next to it still travels with the piece in git, which is the
+	point of the composition owning its pages, while keeping what changes at
+	runtime apart from what a person edits by hand.
+
+	The service never sees this path.  An arrangement arrives over the socket
+	and is written here by the app that declared the page, which is what lets a
+	composition on another machine work without this package learning anything
+	about anybody's disk.
+	"""
+
+	def __init__ (self, path: pathlib.Path) -> None:
+		"""Keep arrangements in this file, creating it when one is first made."""
+
+		self.path = pathlib.Path(path)
+
+	def load (self) -> dict[str, list[dict[str, typing.Any]]]:
+		"""Every arrangement kept so far, by page.
+
+		A missing file is an empty answer rather than an error: a piece nobody
+		has arranged yet is the ordinary case.  A file that cannot be read is
+		reported and then treated the same way, because losing the arrangement
+		is better than refusing to start the music.
+		"""
+
+		if not self.path.exists():
+			return {}
+
+		try:
+			held = json.loads(self.path.read_text(encoding="utf-8"))
+
+		except (OSError, ValueError):
+			LOG.warning("could not read %s; starting with no arrangement", self.path, exc_info=True)
+
+			return {}
+
+		return held if isinstance(held, dict) else {}
+
+	def save (self, page_id: str, parts: list[dict[str, typing.Any]]) -> None:
+		"""Keep one page's arrangement, leaving every other page as it was.
+
+		Written to a neighbouring file and moved into place, so an interruption
+		mid-write leaves the previous arrangement intact rather than half of a
+		new one.
+		"""
+
+		held = self.load()
+		held[page_id] = parts
+
+		spare = self.path.with_suffix(self.path.suffix + ".part")
+
+		spare.write_text(json.dumps(held, indent="\t") + "\n", encoding="utf-8")
+		spare.replace(self.path)
+
+
 class Page:
 	"""One view over some of an app's controls, offered as part of a set.
 
@@ -372,10 +433,21 @@ class Page:
 		self.parts = list(parts)
 		self.title = title
 
-	def declaration (self) -> dict[str, typing.Any]:
-		"""What a panel needs in order to offer this page and draw it."""
+	def declaration (self, layout: list[dict[str, typing.Any]] | None = None) -> dict[str, typing.Any]:
+		"""What a panel needs in order to offer this page and draw it.
 
-		return {"id": self.page_id, "title": self.title or self.page_id, "parts": self.parts}
+		``layout`` is the arrangement somebody has already made, if there is
+		one.  Absent, the panel places the parts itself, left to right and then
+		down, until somebody moves them (#2078).
+		"""
+
+		declared: dict[str, typing.Any] = {
+			"id": self.page_id, "title": self.title or self.page_id, "parts": self.parts}
+
+		if layout:
+			declared["layout"] = layout
+
+		return declared
 
 
 class AppLink:
@@ -388,6 +460,7 @@ class AppLink:
 		app_name: str = "subsequence",
 		url: str = DEFAULT_URL,
 		pages: collections.abc.Sequence[Page] | None = None,
+		page_store: PageStore | None = None,
 	) -> None:
 		"""Describe what to offer, without connecting anything yet."""
 
@@ -396,6 +469,7 @@ class AppLink:
 		self.app_name = app_name
 		self.url = url
 		self.pages = list(pages or [])
+		self.page_store = page_store
 
 		self.version = 0
 
@@ -564,12 +638,14 @@ class AppLink:
 	async def _declare (self) -> None:
 		"""Say what this app offers and what it currently holds."""
 
+		kept = self.page_store.load() if self.page_store is not None else {}
+
 		await self._send(superintendent.protocol.declare(
 			self.app_name,
 			{name: control.declaration() for name, control in self.controls.items()},
 			{name: control.snapshot() for name, control in self.controls.items()},
 			self.version,
-			[page.declaration() for page in self.pages],
+			[page.declaration(kept.get(page.page_id)) for page in self.pages],
 		))
 
 	async def _serve (self, socket: typing.Any) -> None:
@@ -585,6 +661,47 @@ class AppLink:
 
 			if frame["t"] == "set":
 				self._cross(frame)
+
+			elif frame["t"] == "arrange":
+				await self._keep_arrangement(frame)
+
+	async def _keep_arrangement (self, frame: superintendent.protocol.Frame) -> None:
+		"""Write a page's arrangement down, and tell every panel it landed.
+
+		Handled on the link thread and never crossed onto the clock loop: this
+		writes a file, and a file write has no business on the path that
+		generates MIDI timing.  It touches nothing the composition is playing.
+
+		A composition that keeps no page file refuses rather than pretending.
+		The panel then says so and the person knows their arrangement is only in
+		front of them, which is better than finding out at the next reload.
+		"""
+
+		page_id = str(frame.get("page", ""))
+		parts = list(frame.get("parts") or [])
+
+		if self.page_store is None:
+			await self._send(superintendent.protocol.nack(
+				self.app_name, page_id, str(frame.get("client", "")),
+				int(frame.get("seq", 0)), "this composition keeps no page file to save into"))
+			return
+
+		try:
+			self.page_store.save(page_id, parts)
+
+		except OSError as error:
+			LOG.warning("could not save the arrangement of %r", page_id, exc_info=True)
+
+			await self._send(superintendent.protocol.nack(
+				self.app_name, page_id, str(frame.get("client", "")),
+				int(frame.get("seq", 0)), f"the arrangement could not be written: {error.strerror}"))
+			return
+
+		LOG.info("kept the arrangement of page %r", page_id)
+
+		# Declaring again is how every panel learns: a page set is shared, so
+		# an arrangement made on one panel belongs on the others too.
+		await self._declare()
 
 	def _cross (self, frame: superintendent.protocol.Frame) -> None:
 		"""Hand one request to the clock loop, the only place it may land.

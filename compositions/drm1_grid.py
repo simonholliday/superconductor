@@ -14,6 +14,7 @@ each holding the steps that sound.  The pattern builder reads it and the panel
 writes it.  Nothing in the Subsequence package is changed to make this work.
 """
 
+import pathlib
 import typing
 
 import subsequence
@@ -159,9 +160,18 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Page(
 			"pattern_2", parts=["layer"], title="Pattern 2"),
 	],
+	page_store=superintendent.subsequence_adapter.PageStore(
+		pathlib.Path(__file__).with_suffix(".pages.json")),
 	url=SERVICE_URL,
 )
-"""Three views over the same two patterns.
+"""Three views over the same two patterns, and where their arrangement is kept.
+
+The arrangement file sits beside this one and is written by the adapter when
+somebody leaves arrange mode on the panel.  It is data rather than code because
+there is no safe way to write a dragged block back into a Python file, and it is
+beside the composition rather than inside the service because a page set belongs
+to the piece that declared it (Subroutine #2075).
+
 
 Each pattern appears on two of them — once beside the other, side by side on a
 wide panel, and once with the whole glass to itself — which is the case worth having: see how they play

@@ -203,3 +203,44 @@ def test_an_app_that_declares_no_pages_says_so_rather_than_nothing () -> None:
 			manifest = _read_until(panel, "manifest")
 
 	assert manifest["pages"] == []
+
+
+def test_an_arrangement_is_carried_to_the_app_that_owns_the_page () -> None:
+	"""The service holds no page files and writes nothing (#2075): a page set
+	belongs to the composition that declared it, so the composition decides."""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare(
+			"subsequence", CONTROLS, {}, 1, [{"id": "both", "title": "Both", "parts": ["grid"]}]))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+			_read_until(panel, "manifest")
+
+			panel.send_json(superintendent.protocol.arrange(
+				"subsequence", "both", [{"name": "grid", "x": 3, "y": 1}], "panel-1", 7))
+
+			carried = _read_until(app, "arrange")
+
+	assert carried["page"] == "both"
+	assert carried["parts"] == [{"name": "grid", "x": 3, "y": 1}]
+	assert carried["seq"] == 7
+
+
+def test_an_arrangement_for_an_app_that_is_gone_is_refused_with_a_reason () -> None:
+	"""So the person is told their layout was not kept, rather than finding out
+	at the next reload."""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/panel") as panel:
+		panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+
+		panel.send_json(superintendent.protocol.arrange(
+			"nobody", "both", [{"name": "grid", "x": 0, "y": 0}], "panel-1", 1))
+
+		refusal = _read_until(panel, "nack")
+
+	assert "not connected" in refusal["reason"]

@@ -113,6 +113,26 @@ a name brings that block back to the top.
 Tap **DONE** to leave. Outside the latch every touch is a control again, which
 is what stops a stray finger rearranging a page mid-performance.
 
+Leaving is also when the arrangement is saved — once, rather than on every
+nudge — and it is saved to the application that declared the page, not to your
+browser. For a composition using `PageStore` that means a file beside the
+composition itself, so a piece and the way you look at it travel together:
+
+```python
+link = superintendent.subsequence_adapter.AppLink(
+    composition,
+    controls=[...],
+    pages=[...],
+    page_store=superintendent.subsequence_adapter.PageStore(
+        pathlib.Path(__file__).with_suffix(".pages.json")),
+)
+```
+
+Leave `page_store` out and arranging still works — it simply is not kept, and
+the panel says so rather than letting you find out at the next reload. Because
+the arrangement belongs to the application rather than to one browser, a second
+panel sees it too.
+
 ## Connecting an application
 
 `superintendent/subsequence_adapter.py` is the worked example. A composition

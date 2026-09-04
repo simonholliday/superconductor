@@ -14,13 +14,14 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.2.0"
+CONTRACT_VERSION = "1.3.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
 does not know — so the minor number, not the major one.  1.2.0 adds ``pages`` to
 ``declare`` and to ``manifest``: an app that sends none, and a panel that reads
-none, both behave exactly as they did.
+none, both behave exactly as they did.  1.3.0 adds ``arrange``, which an app
+that cannot save one answers with a ``nack`` like any other refusal.
 """
 
 Frame = dict[str, typing.Any]
@@ -113,6 +114,24 @@ def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = N
 
 	return {"t": "manifest", "contract": CONTRACT_VERSION, "apps": apps,
 	        "page": page, "pages": pages or []}
+
+
+def arrange (app: str, page: str, parts: list[Frame], client: str, seq: int) -> Frame:
+	"""A panel handing back a page's arrangement for the app to keep.
+
+	``parts`` is every part on that page as ``{name, x, y}``, in the order they
+	are stacked — first drawn to last drawn, so the last entry is the one on
+	top.  Positions are in lattice cells and no size is sent: a part's footprint
+	follows its contents at whatever size the panel is drawn at, and a layout
+	that carried pixels would be one person's screen imposed on another's
+	(#2078).
+
+	Sent when arranging is left rather than while it is going on, so a drag in
+	progress is never half-saved (#2075).
+	"""
+
+	return {"t": "arrange", "app": app, "page": page, "parts": parts,
+	        "client": client, "seq": seq}
 
 
 def service (version: str | None, build: str | None) -> Frame:

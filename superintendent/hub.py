@@ -142,6 +142,26 @@ class Hub:
 				LOG.warning("panel %s could not be written to; dropping it", panel.client, exc_info=True)
 				self.panel_left(panel)
 
+	async def arrange_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
+		"""Pass a page's arrangement to the app that declared the page.
+
+		Handled exactly as a tap is, and for the same reason: the app is the
+		authority.  A page set belongs to the composition that sent it, so the
+		composition is what decides whether an arrangement can be kept and where
+		it goes.  The service holds no page files and writes nothing (#2075).
+		"""
+
+		name = frame.get("app")
+		app = self.apps.get(name) if isinstance(name, str) else None
+
+		if app is None:
+			await panel.send(superintendent.protocol.nack(
+				str(name), str(frame.get("page", "")), panel.client,
+				int(frame.get("seq", 0)), f"{name!r} is not connected"))
+			return
+
+		await app.send(frame)
+
 	async def set_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
 		"""Pass a panel's tap to the app that owns the control it names.
 
