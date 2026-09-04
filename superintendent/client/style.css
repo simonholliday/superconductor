@@ -163,15 +163,22 @@ html, body {
  * dark. This is a mark we draw and therefore one that is always there. */
 .window { position: relative; }
 
+/* The strip you push. Wide enough for a finger, and textured so it looks like
+   something a finger would get purchase on rather than a line to read. Simon's
+   suggestion, and the right one: the mark was reporting where you were without
+   ever saying it was the thing to touch. */
 .window .track {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: 1px;
-	width: 5px;
-	border-radius: 3px;
-	background: rgba(255, 255, 255, 0.05);
-	pointer-events: none;
+	left: 0;
+	width: 22px;
+	border-radius: 4px;
+	background-color: rgba(255, 255, 255, 0.04);
+	background-image: radial-gradient(circle, var(--ink-quiet) 0.6px, transparent 0.7px);
+	background-size: 6px 6px;
+	touch-action: none;
+	cursor: grab;
 
 	/* Above the row labels, which are sticky and opaque and were painting over
 	   it — leaving the mark visible only in the gaps between rows, as a column
@@ -185,17 +192,23 @@ html, body {
    the bar says how much of it there is and where you are in it. */
 .window .track i {
 	position: absolute;
-	left: 0;
-	right: 0;
+	left: 4px;
+	right: 4px;
 	display: block;
 	border-radius: 3px;
-	background: var(--ink-quiet);
+	background: var(--ink);
+	opacity: 0.75;
 }
 
-.window.windowed .row-label {
-	background-image: radial-gradient(circle at 3px 50%,
-		var(--ink-quiet) 0 1.5px, transparent 1.6px);
-}
+/* The strip carries the texture where there is one, so a label under it would
+   only be drawing the same idea twice. */
+.window.windowed .row-label { background-image: none; }
+
+/* One scrollbar, and it is ours. The browser's own is a second bar on a
+   desktop and an overlay that fades on a touch panel — neither of which is a
+   thing to take hold of. */
+.scroller { scrollbar-width: none; }
+.scroller::-webkit-scrollbar { display: none; }
 
 .grid {
 	display: grid;

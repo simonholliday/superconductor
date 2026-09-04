@@ -241,6 +241,37 @@ function Window ({ rows, visible, cell, children }) {
 		measure();
 	}, [windowed, rows, cell, measure]);
 
+	/* The strip is the thing you take hold of, not just the thing that reports.
+	 * A finger landing anywhere on it brings that part of the pattern to the
+	 * middle of the window, and keeps following while it moves. */
+	const pushing = useRef(null);
+
+	const push = (event) => {
+		const box = seen.current;
+
+		if (!box) return;
+
+		const strip = event.currentTarget.getBoundingClientRect();
+		const part = (event.clientY - strip.top) / strip.height;
+
+		box.scrollTop = part * box.scrollHeight - box.clientHeight / 2;
+	};
+
+	const take = (event) => {
+		event.preventDefault();
+		event.currentTarget.setPointerCapture(event.pointerId);
+		pushing.current = event.pointerId;
+		push(event);
+	};
+
+	const carry = (event) => {
+		if (pushing.current === event.pointerId) push(event);
+	};
+
+	const drop = (event) => {
+		if (pushing.current === event.pointerId) pushing.current = null;
+	};
+
 	return html`
 		<div class=${`window ${windowed ? "windowed" : ""}`}>
 			<div
@@ -251,7 +282,13 @@ function Window ({ rows, visible, cell, children }) {
 			>${children}</div>
 
 			${windowed && html`
-				<div class="track">
+				<div
+					class="track"
+					onPointerDown=${take}
+					onPointerMove=${carry}
+					onPointerUp=${drop}
+					onPointerCancel=${drop}
+				>
 					<i style=${{
 						top: `${view.from * 100}%`,
 						height: `${Math.max(8, view.span * 100)}%`,

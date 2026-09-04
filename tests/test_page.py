@@ -638,3 +638,39 @@ def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any
 	drums = cell_shape(conftest.cell("grid/snare/1"))
 
 	assert drums == pitched
+
+
+def test_the_scroll_strip_is_the_thing_you_take_hold_of (panel: typing.Any) -> None:
+	"""It reported where you were without ever saying it was the thing to touch,
+	so Simon had to drag the empty space beside it. Pressing it now brings that
+	part of the pattern into the middle of the window."""
+
+	_open_the_bass(panel)
+
+	scroller = '.part[data-part="bass"] .scroller'
+	strip = panel.locator('.part[data-part="bass"] .window .track')
+
+	assert panel.eval_on_selector(
+		'.part[data-part="bass"] .window .track',
+		"el => getComputedStyle(el).pointerEvents") != "none", "the strip answers a finger"
+
+	before = panel.eval_on_selector(scroller, "el => el.scrollTop")
+
+	box = strip.bounding_box()
+	panel.mouse.move(box["x"] + box["width"] / 2, box["y"] + 4)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	assert panel.eval_on_selector(scroller, "el => el.scrollTop") < before, (
+		"pressing near the top of the strip moves the window up")
+
+
+def test_only_one_scrollbar_and_it_is_ours (panel: typing.Any) -> None:
+	"""The browser's own is a second bar on a desktop and an overlay that fades
+	on a touch panel — neither of which is a thing to take hold of."""
+
+	_open_the_bass(panel)
+
+	assert panel.eval_on_selector(
+		'.part[data-part="bass"] .scroller',
+		"el => getComputedStyle(el).scrollbarWidth") == "none"
