@@ -202,7 +202,38 @@ class Link {
 /* The grid                                                            */
 /* ------------------------------------------------------------------ */
 
-function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
+/* A window onto a control taller than the block showing it.
+ *
+ * Shared by every kind of grid on purpose. Two octaves is twenty-five rows
+ * against a drum machine's ten, so pitched patterns need it first — but a drum
+ * machine with forty voices needs exactly the same thing, and two
+ * implementations of it would be two chances to behave differently.
+ *
+ * Only what is inside scrolls. A velocity lane and a playhead are siblings of
+ * this rather than children, so they stay where they are: a column is a moment
+ * in time, and scrolling up and down does not change the time.
+ *
+ * Left unpositioned deliberately — the playhead measures its offset against the
+ * block's body, and a positioned scroller would put itself in between. */
+function Window ({ rows, visible, cell, children }) {
+	const seen = useRef(null);
+	const windowed = Boolean(visible && visible < rows);
+
+	useEffect(() => {
+		/* Opened at the bottom, which on a grid drawn high to low is the lowest
+		   notes — where a bass line lives. */
+		if (windowed && seen.current) seen.current.scrollTop = seen.current.scrollHeight;
+	}, [windowed, rows]);
+
+	return html`
+		<div
+			class=${`scroller ${windowed ? "windowed" : ""}`}
+			ref=${seen}
+			style=${windowed ? { maxHeight: `${visible * (cell + GAP)}px`, overflowY: "auto" } : null}
+		>${children}</div>`;
+}
+
+function Grid ({ control, rows, steps, cells, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -212,6 +243,7 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 	};
 
 	return html`
+		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
 			${rows.map((row) => html`
 				<div class="row-label" key=${`label-${row}`}>${row.replace(/_/g, " ")}</div>
@@ -230,7 +262,8 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 						></div>`;
 				})}
 			`)}
-		</div>`;
+		</div>
+		<//>`;
 }
 
 /* A pitched pattern: one row per note, and a cell that is a note.
@@ -253,27 +286,6 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 	};
 
 	const drawing = useRef(null);
-	const seen = useRef(null);
-
-	/* A window onto a pattern taller than the block showing it. Two octaves is
-	 * twenty-five rows against a drum machine's ten, and a block tall enough to
-	 * hold all of it crowds everything else off the page.
-	 *
-	 * Only the pitches scroll. The velocity lane and the playhead are siblings
-	 * of this, not children, so they stay put — a playhead marks a moment in
-	 * time, and scrolling up and down does not change the time.
-	 *
-	 * Left unpositioned on purpose: the playhead measures its offset against
-	 * the block's body, and a positioned scroller would put itself in between. */
-	useEffect(() => {
-		/* Opened at the bottom, which on a grid drawn high to low is the lowest
-		   notes — where a bass line lives. */
-		if (seen.current) seen.current.scrollTop = seen.current.scrollHeight;
-	}, [windowRows, rows.length]);
-
-	const held = windowRows && windowRows < rows.length
-		? { maxHeight: `${windowRows * (cell + GAP)}px`, overflowY: "auto" }
-		: null;
 
 	const pitch = cell + GAP;
 
@@ -307,7 +319,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 	};
 
 	return html`
-		<div class="scroller" ref=${seen} style=${held}>
+		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell}>
 		<div class="grid notes" style=${style}>
 			${rows.map((row) => html`
 				<div class="row-label" key=${`label-${row}`}>${row}</div>
@@ -333,7 +345,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 				})}
 			`)}
 		</div>
-		</div>`;
+		<//>`;
 }
 
 /* How hard each note is struck.
@@ -1309,6 +1321,7 @@ function Panel () {
 						: html`
 							<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
 								cells=${(state[appName] || {})[name] || {}}
+								visible=${controls[name].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
 					${up && html`<${Playhead} anchor=${anchor} steps=${controls[name].steps}
 						beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}

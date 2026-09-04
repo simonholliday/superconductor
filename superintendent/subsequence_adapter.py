@@ -119,6 +119,7 @@ class StepGrid (Control):
 		data_key: str = "grid",
 		name: str = "grid",
 		title: str | None = None,
+		visible_rows: int | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps."""
 
@@ -129,12 +130,23 @@ class StepGrid (Control):
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.visible_rows = visible_rows
+		"""How many rows to show at once, if fewer than there are.
+
+		The same window a pitched pattern has, offered here for the same reason
+		rather than a different one: a drum machine with forty voices is as tall
+		a block as two octaves, and one mechanism serving both is one place for
+		it to behave a certain way.
+		"""
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Rows, width, how long one time round takes, and what to call it."""
 
 		declared: dict[str, typing.Any] = {
 			"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats}
+
+		if self.visible_rows is not None:
+			declared["visible_rows"] = self.visible_rows
 
 		if self.title is not None:
 			declared["title"] = self.title

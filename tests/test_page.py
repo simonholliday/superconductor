@@ -523,3 +523,60 @@ def test_the_velocity_lane_does_not_scroll_with_the_pitches (panel: typing.Any) 
 
 	assert panel.locator('.part[data-part="bass"] .scroller .lane').count() == 0
 	assert panel.locator('.part[data-part="bass"] .lane').count() == 1
+
+
+def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) -> None:
+	"""One rule for every kind, until something needs the exception.
+
+	There are two instrument designs on the glass now and there will be more, so
+	this asserts they agree rather than trusting them to.
+	"""
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector(".grid .cell", timeout=5_000)
+
+	def label (part: str) -> dict:
+		return panel.eval_on_selector(
+			f'.part[data-part="{part}"] .row-label',
+			"""el => {
+				const seen = getComputedStyle(el);
+				return {
+					justify: seen.justifyContent,
+					size: seen.fontSize,
+					colour: seen.color,
+					rail: seen.backgroundImage !== "none",
+				};
+			}""")
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector(".grid.notes", timeout=5_000)
+	pitched = label("bass")
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector(".grid .cell", timeout=5_000)
+	drums = label("grid")
+
+	assert drums["justify"] == pitched["justify"] == "flex-end"
+	assert drums["size"] == pitched["size"]
+	assert drums["colour"] == pitched["colour"]
+	assert drums["rail"] and pitched["rail"], "both carry the mark that says push the view from here"
+
+
+def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any) -> None:
+	"""A person learns a cell once. Two designs of it would be two to learn."""
+
+	def cell_shape (selector: str) -> dict:
+		return panel.eval_on_selector(selector, """el => {
+			const seen = getComputedStyle(el);
+			return { radius: seen.borderRadius, border: seen.borderWidth };
+		}""")
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector(".grid.notes", timeout=5_000)
+	pitched = cell_shape(conftest.cell("bass/C2/1"))
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector(".grid .cell", timeout=5_000)
+	drums = cell_shape(conftest.cell("grid/snare/1"))
+
+	assert drums == pitched

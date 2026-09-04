@@ -140,6 +140,23 @@ html, body {
    is placing a note, not moving the view (#2073). */
 .scroller { overscroll-behavior: contain; }
 
+/* A window says so three ways, because Simon found the drag surface by
+   experiment and that is one way too few: a scrollbar that is always there, a
+   shadow at the edges saying there is more behind them, and the rail down the
+   labels drawn in a colour you notice. */
+.scroller.windowed {
+	scrollbar-width: thin;
+	scrollbar-color: var(--edge) transparent;
+	box-shadow:
+		inset 0 10px 10px -10px rgba(0, 0, 0, 0.9),
+		inset 0 -10px 10px -10px rgba(0, 0, 0, 0.9);
+}
+
+.scroller.windowed .row-label {
+	background-image: radial-gradient(circle at 3px 50%,
+		var(--ink-quiet) 0 1.5px, transparent 1.6px);
+}
+
 .grid {
 	display: grid;
 	gap: var(--gap);
@@ -152,6 +169,12 @@ html, body {
 .row-label {
 	display: flex;
 	align-items: center;
+
+	/* Right-aligned, always, whatever the control. A label sits beside the
+	   cells it names, so the eye travels the shortest way from the name to the
+	   thing named — and one rule for every kind is worth more than a rule for
+	   each, until something needs the exception. */
+	justify-content: flex-end;
 	padding-right: 0.6rem;
 
 	/* Held against the left edge while the grid scrolls under it. A grid wider
@@ -168,6 +191,14 @@ html, body {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+
+	/* The rail. Every label carries the same mark at its left edge, so stacked
+	   they draw one dotted line down the column — the convention for "this is
+	   not a control; push the view from here". A cell never carries it, because
+	   a finger landing on a cell is playing rather than looking. */
+	background-image: radial-gradient(circle at 3px 50%,
+		var(--edge) 0 1.5px, transparent 1.6px);
+	background-repeat: no-repeat;
 }
 
 .cell {
@@ -499,12 +530,9 @@ html, body {
 	pointer-events: none;
 }
 
-/* The label is a note name and wants reading, so it keeps its own size longer
-   than a drum voice does and is set in figures that line up. */
-.grid.notes .row-label {
-	font-variant-numeric: tabular-nums;
-	justify-content: flex-end;
-}
+/* A note name is read as much as a drum voice is, and wants its figures to line
+   up. Everything else about it is the one label rule. */
+.grid.notes .row-label { font-variant-numeric: tabular-nums; }
 
 /* How hard each note is struck. One bar to a step, aligned with the grid above
    so a column is a moment in both. */
@@ -515,12 +543,7 @@ html, body {
 	position: relative;
 }
 
-.lane .row-label {
-	position: static;
-	background: none;
-	justify-content: flex-end;
-	font-size: min(0.7rem, calc(var(--cell) * 0.38));
-}
+.lane .row-label { position: static; }
 
 .lane .bar {
 	position: relative;
