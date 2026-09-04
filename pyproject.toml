@@ -24,6 +24,10 @@ dev = [
 	"pytest-asyncio>=0.23",
 	"httpx>=0.27",
 	"types-PyYAML",
+	# Drives the page in a real browser. The browser itself is a separate
+	# download ("playwright install firefox") and needs system libraries the
+	# page tests skip cleanly without.
+	"pytest-playwright>=0.5",
 ]
 
 [project.scripts]

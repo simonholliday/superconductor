@@ -1,0 +1,183 @@
+"""Fixtures for the tests that drive the page in a real browser.
+
+The page is the half of Superintendent that a person actually touches, and the
+only way to test it honestly is to run it: serve it, connect something that
+behaves like an app, and drive the glass. These fixtures provide the first two.
+"""
+
+import asyncio
+import contextlib
+import socket
+import threading
+import time
+import typing
+
+import pytest
+import uvicorn
+import websockets.asyncio.client
+
+import superintendent.config
+import superintendent.protocol
+import superintendent.service
+
+
+CONTROLS: dict[str, typing.Any] = {
+	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2},
+	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
+}
+"""A small declaration: enough shapes to draw, few enough cells to read."""
+
+
+def _free_port () -> int:
+	"""Take a port the operating system says is free."""
+
+	with contextlib.closing(socket.socket()) as probe:
+		probe.bind(("127.0.0.1", 0))
+
+		return int(probe.getsockname()[1])
+
+
+class FakeApp:
+	"""Stands in for a music app: declares controls and answers what the panel asks.
+
+	It speaks the real protocol over a real socket, so the page under test cannot
+	tell it from Subsequence.
+	"""
+
+	def __init__ (self, url: str) -> None:
+		"""Connect on a thread of its own and wait until the socket is up."""
+
+		self.url = url
+		self.sets: list[superintendent.protocol.Frame] = []
+		self.version = 1
+
+		self._loop: asyncio.AbstractEventLoop | None = None
+		self._socket: typing.Any = None
+		self._ready = threading.Event()
+
+		self._thread = threading.Thread(target=self._run, daemon=True)
+		self._thread.start()
+
+		if not self._ready.wait(10.0):
+			raise RuntimeError("the stand-in app never connected")
+
+	def _run (self) -> None:
+		"""Own a loop on this thread and hold the socket open."""
+
+		self._loop = asyncio.new_event_loop()
+		asyncio.set_event_loop(self._loop)
+		self._loop.run_until_complete(self._serve())
+
+	async def _serve (self) -> None:
+		"""Declare, then keep whatever the service sends."""
+
+		async with websockets.asyncio.client.connect(self.url) as socket_:
+			self._socket = socket_
+
+			await socket_.send(superintendent.protocol.encode(
+				superintendent.protocol.declare(
+					"subsequence", CONTROLS,
+					{"grid": {"kick": [0, 4], "snare": []}, "transport": {"paused": False, "bpm": 120.0}},
+					self.version)))
+
+			self._ready.set()
+
+			async for raw in socket_:
+				frame = superintendent.protocol.decode(raw)
+
+				if frame["t"] == "set":
+					self.sets.append(frame)
+
+	def send (self, frame: superintendent.protocol.Frame) -> None:
+		"""Put one frame on the wire from the app's side."""
+
+		assert self._loop is not None and self._socket is not None
+
+		asyncio.run_coroutine_threadsafe(
+			self._socket.send(superintendent.protocol.encode(frame)), self._loop).result(5.0)
+
+	def confirm (self, path: str, value: typing.Any, by: str = "panel",
+	             client: str | None = None, seq: int | None = None) -> None:
+		"""Report a change as applied, the way an app confirms a tap."""
+
+		self.version += 1
+		self.send(superintendent.protocol.changed(
+			"subsequence", path, value, self.version, by=by, client=client, seq=seq))
+
+	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
+		"""Refuse a request, the way an app that cannot do it does."""
+
+		self.send(superintendent.protocol.nack("subsequence", path, client, seq, reason))
+
+	def await_set (self, path: str, limit: float = 5.0) -> superintendent.protocol.Frame:
+		"""Wait for the panel to ask for a path, and return what it asked."""
+
+		deadline = time.monotonic() + limit
+
+		while time.monotonic() < deadline:
+			for frame in list(self.sets):
+				if frame.get("path") == path:
+					return frame
+
+			time.sleep(0.02)
+
+		raise AssertionError(f"the panel never asked for {path!r}; it asked for "
+		                     f"{[f.get('path') for f in self.sets]}")
+
+
+@pytest.fixture(scope="session")
+def service_url () -> typing.Iterator[str]:
+	"""A real service, on a real port, for the whole session."""
+
+	port = _free_port()
+	config = superintendent.config.Config(host="127.0.0.1", port=port)
+
+	server = uvicorn.Server(uvicorn.Config(
+		superintendent.service.build(config), host="127.0.0.1", port=port, log_level="error"))
+
+	thread = threading.Thread(target=server.run, daemon=True)
+	thread.start()
+
+	deadline = time.monotonic() + 10.0
+
+	while not server.started and time.monotonic() < deadline:
+		time.sleep(0.05)
+
+	if not server.started:
+		raise RuntimeError("the service never started")
+
+	yield f"http://127.0.0.1:{port}"
+
+	server.should_exit = True
+	thread.join(timeout=5.0)
+
+
+@pytest.fixture
+def fake_app (service_url: str) -> typing.Iterator[FakeApp]:
+	"""An app dialled in to that service, declaring a grid and a transport."""
+
+	app = FakeApp(service_url.replace("http://", "ws://") + "/ws/app")
+
+	yield app
+
+
+@pytest.fixture
+def panel (page: typing.Any, service_url: str, fake_app: FakeApp) -> typing.Any:
+	"""The page, loaded in a browser, with an app already connected to it.
+
+	Waits for the grid to be drawn, so a test starts from the state a person
+	would be looking at rather than from a blank page.
+	"""
+
+	page.goto(service_url)
+	page.wait_for_selector(".cell", timeout=10_000)
+
+	return page
+
+
+def cell (path: str) -> str:
+	"""The selector for one cell, addressed the way the protocol addresses it."""
+
+	_, row, step = path.split("/")
+
+	return f'.grid .cell[data-path="{row}/{step}"]'

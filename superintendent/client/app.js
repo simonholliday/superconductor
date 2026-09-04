@@ -140,6 +140,7 @@ function Grid ({ control, rows, steps, cells, pending, failed, onTap }) {
 					return html`
 						<div
 							key=${path}
+							data-path=${`${row}/${step}`}
 							class=${["cell", on ? "on" : "", pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
