@@ -225,3 +225,18 @@ def test_a_part_is_titled_by_the_app_or_by_its_address (panel: typing.Any) -> No
 
 	assert panel.locator('.part[data-part="grid"] .part-title').inner_text().strip().lower() == "drums"
 	assert panel.locator('.part[data-part="second"] .part-title').inner_text().strip().lower() == "second"
+
+
+def test_a_page_larger_than_the_glass_can_be_pushed_around (panel: typing.Any) -> None:
+	"""#2073: every cell is a control and a tap acts on the finger landing, so a
+	swipe may scroll from anywhere except a cell — and must not scroll from one."""
+
+	def action (selector: str) -> str:
+		return panel.eval_on_selector(selector, "el => getComputedStyle(el).touchAction")
+
+	assert action(conftest.cell("grid/kick/0")) == "none", "a swipe here has already changed the music"
+
+	for surface in (".grid-wrap", ".part-title", ".row-label"):
+		assert "pan" in action(surface), f"{surface} is not a control and should take hold of the page"
+
+	assert "pinch" not in action("body"), "pinch zoom is still the browser claiming a musician's gesture"

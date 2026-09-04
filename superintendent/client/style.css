@@ -27,6 +27,7 @@
 	   with its text and the text grew with the cell, the cell would depend on
 	   itself and the layout would never settle. */
 	--label: clamp(3.5rem, 6vw, 7.5rem);
+	--part: #14161a;
 }
 
 * { box-sizing: border-box; }
@@ -38,9 +39,19 @@ html, body {
 	color: var(--ink);
 	font: 500 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
-	/* Every gesture on the glass is ours. Without this the browser claims
-	   pans and pinches before the page ever sees the contact. */
-	touch-action: none;
+	/* Pinch and double-tap zoom are still the browser's to claim and are still
+	   refused here; panning is not, and used to be refused with them.
+
+	   A page can now be larger than the glass — the cell size is a setting, and
+	   a big one overflows on purpose — so a swipe has to be able to scroll. It
+	   cannot be a swipe that starts on a cell: a tap acts on the finger landing
+	   (#2046), so that gesture has already switched the step before it has
+	   moved. Cells therefore keep `touch-action: none` and everything else does
+	   not, which makes every surface that is not a control a place to take hold
+	   of the page — the gutters, the space between blocks, a block's title bar,
+	   and the row labels down the left, which are always there whatever else is
+	   on the glass. One finger or two, no mode, no gesture to learn (#2073). */
+	touch-action: pan-x pan-y;
 	overscroll-behavior: none;
 	-webkit-user-select: none;
 	user-select: none;
@@ -86,7 +97,7 @@ html, body {
  * The title is what makes several instruments on one screen legible rather
  * than a wall of cells (#2071), and it is also the only surface on a block
  * that is not a control — which is what a hand needs to take hold of one. */
-.part { border: 1px solid var(--edge); border-radius: 10px; background: #14161a; }
+.part { border: 1px solid var(--edge); border-radius: 10px; background: var(--part); }
 
 .part-title {
 	padding: 0.35rem 0.7rem;
@@ -117,6 +128,16 @@ html, body {
 	display: flex;
 	align-items: center;
 	padding-right: 0.6rem;
+
+	/* Held against the left edge while the grid scrolls under it. A grid wider
+	   than the glass is now ordinary — 32 steps at a comfortable size does not
+	   fit a small panel — and a row you cannot name is a row you cannot use.
+	   Above the playhead deliberately: the label is what you are reading when
+	   the highlight passes it. */
+	position: sticky;
+	left: 0;
+	z-index: 1;
+	background: var(--part);
 	color: var(--ink-quiet);
 	font-size: min(0.8rem, calc(var(--cell) * 0.42));
 	white-space: nowrap;
@@ -126,6 +147,11 @@ html, body {
 
 .cell {
 	position: relative;
+
+	/* The one surface a swipe must not scroll from, because a swipe starting
+	   here has already changed the music. */
+	touch-action: none;
+
 	border-radius: max(3px, calc(var(--cell) * 0.16));
 	background: var(--panel);
 	border: 1px solid var(--edge);
