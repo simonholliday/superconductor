@@ -105,6 +105,38 @@ Subsequence resolves a string pitch through whatever map the pattern was given,
 and nothing about that map has to be about drums.
 """
 
+MINITAUR_CC = {
+	"glide": 65,
+	"glide_rate": 5,
+	"glide_type": 92,
+	"legato_glide": 83,
+	"note_sync": 81,
+	"filter_velocity": 89,
+	"volume_velocity": 90,
+	"key_priority": 91,
+}
+"""Which control change each panel setting is wired to.
+
+Taken from the Minitaur's own manual and written up as Subroutine #2081.  It
+lives here rather than in the Superintendent package because it is a fact about
+an instrument, and that package is not allowed to know one — a panel draws a
+switch and this file decides what the switch does.
+
+Every one of these except ``glide`` and ``glide_rate`` is a parameter the
+Minitaur has no knob for at all, which is what makes them worth a panel: they
+are otherwise reachable only through the editor software.
+"""
+
+MINITAUR_BANDS = {
+	"glide_type": {"lcr": 0, "lct": 64, "exp": 110},
+	"key_priority": {"low": 0, "high": 64, "last": 110},
+}
+"""Where in each band to sit for a choice, since the Minitaur reads ranges.
+
+The middle of the band rather than its edge, so a value that drifts by one does
+not become a different setting.
+"""
+
 BASS_VELOCITY = 100
 BASS_LENGTH = 1
 """What a note is when it is first placed: one step long, at a middling weight.
@@ -136,6 +168,40 @@ composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
 composition.data["layer"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
+
+def _cc_value (name: str, value: typing.Any) -> int:
+	"""What number the Minitaur wants for a setting the panel expressed in words."""
+
+	if name in MINITAUR_BANDS:
+		return MINITAUR_BANDS[name][value]
+
+	if isinstance(value, bool):
+		return 127 if value else 0
+
+	return int(value)
+
+
+def send_setting (name: str, value: typing.Any) -> None:
+	"""Send one setting to the instrument as soon as the clock will carry it.
+
+	``trigger`` with ``quantize=0`` puts a one-shot pattern at the current pulse
+	rather than at the next cycle, so a switch takes effect within a pulse —
+	about 21 ms at 120 BPM — instead of waiting up to a bar for the pattern to
+	be rebuilt.  It is also the only public way into Subsequence's clock from
+	another thread, and it takes the send lock that a direct write to the port
+	would not.
+
+	A setting moved before the composition is playing is kept in
+	``composition.data`` but not sent, because there is no clock yet to send it
+	on.
+	"""
+
+	control = MINITAUR_CC[name]
+	amount = _cc_value(name, value)
+
+	composition.trigger(
+		lambda p, control=control, amount=amount: p.cc(control, amount),
+		channel=BASS_CHANNEL, beats=1 / 24, quantize=0)
 """A second pattern over the same drum machine, empty until somebody fills it.
 
 Two patterns driving one instrument belong on one page as stacked blocks rather
@@ -224,6 +290,30 @@ link = superintendent.subsequence_adapter.AppLink(
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 			visible_rows=12),
+		superintendent.subsequence_adapter.Params(
+			composition,
+			parameters=[
+				superintendent.subsequence_adapter.Parameter(
+					"glide", "switch", label="Glide"),
+				superintendent.subsequence_adapter.Parameter(
+					"glide_rate", "number", label="Glide rate", default=24),
+				superintendent.subsequence_adapter.Parameter(
+					"glide_type", "choice", label="Glide type", default="lcr",
+					options=[("lcr", "LCR"), ("lct", "LCT"), ("exp", "EXP")]),
+				superintendent.subsequence_adapter.Parameter(
+					"legato_glide", "switch", label="Legato glide only"),
+				superintendent.subsequence_adapter.Parameter(
+					"note_sync", "switch", label="Note sync"),
+				superintendent.subsequence_adapter.Parameter(
+					"filter_velocity", "number", label="Velocity to filter", default=64),
+				superintendent.subsequence_adapter.Parameter(
+					"volume_velocity", "number", label="Velocity to volume", default=64),
+				superintendent.subsequence_adapter.Parameter(
+					"key_priority", "choice", label="Note priority", default="last",
+					options=[("low", "Low"), ("high", "High"), ("last", "Last")]),
+			],
+			data_key="minitaur", name="minitaur", title="Minitaur — settings",
+			on_change=send_setting),
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -237,6 +327,8 @@ link = superintendent.subsequence_adapter.AppLink(
 			"bass", parts=["bass"], title="Bass"),
 		superintendent.subsequence_adapter.Page(
 			"kit", parts=["grid", "bass"], title="Drums + bass"),
+		superintendent.subsequence_adapter.Page(
+			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),

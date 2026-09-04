@@ -365,6 +365,162 @@ class NoteGrid (Control):
 				self.link.report(f"{self.name}/{row}/{step}", False)
 
 
+class Parameter:
+	"""One setting of an instrument, in one of the three shapes a panel can draw.
+
+	Carries no MIDI.  What a switch is wired to is the composition's business,
+	which is the same rule the rows of a grid follow (#1465).
+	"""
+
+	def __init__ (
+		self,
+		name: str,
+		kind: str,
+		label: str | None = None,
+		minimum: float = 0,
+		maximum: float = 127,
+		step: float = 1,
+		options: collections.abc.Sequence[tuple[str, str]] | None = None,
+		default: typing.Any = None,
+	) -> None:
+		"""Describe one setting: what it is called, what shape it is, what it may be."""
+
+		self.name = name
+		self.kind = kind
+		self.label = label
+		self.minimum = minimum
+		self.maximum = maximum
+		self.step = step
+		self.options = list(options or [])
+		self.default = default
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""What a panel needs in order to draw this and to know what it may ask."""
+
+		declared: dict[str, typing.Any] = {
+			"name": self.name, "kind": self.kind, "label": self.label or self.name}
+
+		if self.kind == "number":
+			declared.update({"min": self.minimum, "max": self.maximum, "step": self.step})
+
+		elif self.kind == "choice":
+			declared["options"] = [{"value": value, "label": label} for value, label in self.options]
+
+		return declared
+
+	def opening (self) -> typing.Any:
+		"""What it holds before anybody has touched it."""
+
+		if self.default is not None:
+			return self.default
+
+		if self.kind == "switch":
+			return False
+
+		if self.kind == "choice":
+			return self.options[0][0] if self.options else None
+
+		return self.minimum
+
+
+class Params (Control):
+	"""The settings of one instrument, held in a dict the composition keeps.
+
+	Every other control here writes into ``composition.data`` and lets the
+	composition decide what that means.  This does the same, and then calls a
+	function the composition supplied — which is where a MIDI control change
+	gets sent, if that is what the setting is.  Nothing in this package learns
+	a control-change number, and nothing in it has to.
+	"""
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		parameters: collections.abc.Sequence[Parameter],
+		data_key: str = "settings",
+		name: str = "settings",
+		title: str | None = None,
+		on_change: collections.abc.Callable[[str, typing.Any], None] | None = None,
+	) -> None:
+		"""Describe the settings to offer, and how the composition hears about one."""
+
+		self.composition = composition
+		self.parameters = {parameter.name: parameter for parameter in parameters}
+		self.data_key = data_key
+		self.name = name
+		self.title = title
+		self.on_change = on_change
+
+		held = composition.data.setdefault(data_key, {})
+
+		for parameter in self.parameters.values():
+			held.setdefault(parameter.name, parameter.opening())
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""Every setting, in the order the composition offered them."""
+
+		declared: dict[str, typing.Any] = {
+			"type": "params",
+			"fields": [parameter.declaration() for parameter in self.parameters.values()]}
+
+		if self.title is not None:
+			declared["title"] = self.title
+
+		return declared
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""What every setting holds at the moment."""
+
+		return dict(self.composition.data.get(self.data_key) or {})
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Write one setting, and tell the composition it moved."""
+
+		if len(rest) != 1:
+			raise Refused("that does not name a setting")
+
+		parameter = self.parameters.get(rest[0])
+
+		if parameter is None:
+			raise Refused(f"this instrument has no setting called {rest[0]}")
+
+		wanted = self._checked(parameter, value)
+		held = self.composition.data.setdefault(self.data_key, {})
+
+		if held.get(parameter.name) == wanted:
+			return False
+
+		held[parameter.name] = wanted
+
+		if self.on_change is not None:
+			self.on_change(parameter.name, wanted)
+
+		return True
+
+	def _checked (self, parameter: Parameter, value: typing.Any) -> typing.Any:
+		"""Refuse anything this setting could not hold, with a reason."""
+
+		if parameter.kind == "switch":
+			if not isinstance(value, bool):
+				raise Refused(f"{parameter.name} is a switch")
+
+			return value
+
+		if parameter.kind == "choice":
+			if value not in [option for option, _ in parameter.options]:
+				raise Refused(f"{parameter.name} has no option called {value}")
+
+			return value
+
+		if isinstance(value, bool) or not isinstance(value, (int, float)):
+			raise Refused(f"{parameter.name} is a number")
+
+		if not parameter.minimum <= value <= parameter.maximum:
+			raise Refused(f"{parameter.name} is between {parameter.minimum} and {parameter.maximum}")
+
+		return value
+
+
 class Transport (Control):
 	"""Whether the composition is playing, and at what tempo.
 

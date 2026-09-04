@@ -31,6 +31,22 @@ once, are the app's business as they are for every other kind.
 """
 
 
+PARAMS = "params"
+"""Named settings of an instrument: a switch, a number, a choice of names.
+
+The three shapes an instrument's parameters come in, which between them cover
+every control-change message a Moog Minitaur answers to (#2081) and, very
+likely, most other instruments.
+
+Deliberately carrying no MIDI in it at all.  A panel draws a switch; whether
+that switch is control-change 65 on channel 6 is the composition's business and
+never this package's, which is the same rule the rows of a grid follow.
+"""
+
+PARAMETER_KINDS = ("switch", "number", "choice")
+"""What a parameter can be, and so what a panel knows how to draw."""
+
+
 class ControlError (Exception):
 	"""A path or a value that does not name part of a declared control."""
 
@@ -74,6 +90,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	elif kind == NOTE_GRID:
 		_apply_note(state.setdefault(control, {}), declaration, rest, value, path)
 
+	elif kind == PARAMS:
+		_apply_parameter(state.setdefault(control, {}), declaration, rest, value, path)
+
 	elif kind == TRANSPORT:
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
@@ -104,6 +123,54 @@ def _apply_cell (
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
 	_set_cell(grid, row, step, bool(value))
+
+
+def _apply_parameter (
+	settings: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Write one named setting, refusing anything the app did not offer.
+
+	Checked against the declaration rather than taken on trust, because this is
+	the service's copy of what the app holds and a value it could not have
+	reported would make the two disagree silently.
+	"""
+
+	if len(rest) != 1:
+		raise ControlError(f"{path!r} does not name a setting as control/name")
+
+	name = rest[0]
+	field = next((one for one in declaration.get("fields", []) if one.get("name") == name), None)
+
+	if field is None:
+		raise ControlError(f"this app offers no setting called {name!r}")
+
+	kind = field.get("kind")
+
+	if kind == "switch":
+		if not isinstance(value, bool):
+			raise ControlError(f"{name!r} is a switch and takes true or false, not {value!r}")
+
+	elif kind == "number":
+		if isinstance(value, bool) or not isinstance(value, (int, float)):
+			raise ControlError(f"{name!r} is a number, and {value!r} is not one")
+
+		low, high = field.get("min", 0), field.get("max", 127)
+
+		if not low <= value <= high:
+			raise ControlError(f"{name!r} is between {low} and {high}, and {value!r} is not")
+
+	elif kind == "choice":
+		if value not in [one.get("value") for one in field.get("options", [])]:
+			raise ControlError(f"{name!r} has no option called {value!r}")
+
+	else:
+		raise ControlError(f"{name!r} is a {kind!r}, which this version does not know")
+
+	settings[name] = value
 
 
 NOTE_FIELDS = ("length", "velocity")

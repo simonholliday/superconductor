@@ -87,6 +87,11 @@ const GAP = 4;
 const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
 const LANE_CELLS = 3;
+const PARAM_CELLS = 6;
+
+const DRAWN = ["step_grid", "note_grid", "params"];
+/* The kinds a page draws as blocks of their own. A transport is not among them:
+   it belongs in the header, with what is constant across pages (#2075). */
 /* The gap between cells, how many of them the row labels span, and the height
    a title bar will not go below. GAP is written in the stylesheet too and the
    two must agree; there is a test that says so. */
@@ -475,6 +480,92 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
 						onPointerUp=${() => { holding.current = null; }}
 						onPointerCancel=${() => { holding.current = null; }}
 					>${found && html`<i style=${{ height: `${height}%` }}></i>`}</div>`;
+			})}
+		</div>`;
+}
+
+/* An instrument's own settings: switches, numbers and choices.
+ *
+ * Three shapes cover every control-change message a Minitaur answers to, and
+ * most likely most instruments (#2081). Nothing here knows that any of them is
+ * a MIDI message — a panel draws a switch, and what that switch is wired to is
+ * the composition's business.
+ *
+ * The ones worth glass are the parameters an instrument has no knob for at
+ * all, which is why this is a block of its own rather than a strip beside a
+ * grid: it is the part of the instrument the panel is the only way to reach. */
+function Params ({ name, fields, values, cell, onSet }) {
+	const style = {
+		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
+	};
+
+	const sliding = useRef(null);
+
+	const slide = (event, field) => {
+		const box = event.currentTarget.getBoundingClientRect();
+		const low = field.min ?? 0;
+		const high = field.max ?? 127;
+
+		const part = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+		const step = field.step || 1;
+		const wanted = Math.round((low + part * (high - low)) / step) * step;
+
+		if (wanted !== values[field.name]) onSet(`${name}/${field.name}`, wanted);
+	};
+
+	return html`
+		<div class="grid params" style=${style}>
+			${fields.map((field) => {
+				const held = values[field.name];
+
+				return html`
+					<div class="row-label" key=${`label-${field.name}`}>${field.label || field.name}</div>
+
+					<div class="setting" key=${field.name} style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+						${field.kind === "switch" && html`
+							<button
+								class=${`switch ${held ? "on" : ""}`}
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									onSet(`${name}/${field.name}`, !held);
+								}}
+							>${held ? "on" : "off"}</button>`}
+
+						${field.kind === "choice" && html`
+							<div class="choices">
+								${(field.options || []).map((option) => html`
+									<button
+										key=${option.value}
+										class=${option.value === held ? "here" : ""}
+										onPointerDown=${(event) => {
+											event.preventDefault();
+											onSet(`${name}/${field.name}`, option.value);
+										}}
+									>${option.label || option.value}</button>`)}
+							</div>`}
+
+						${field.kind === "number" && html`
+							<div
+								class="dial"
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									event.currentTarget.setPointerCapture(event.pointerId);
+									sliding.current = event.pointerId;
+									slide(event, field);
+								}}
+								onPointerMove=${(event) => {
+									if (sliding.current === event.pointerId) slide(event, field);
+								}}
+								onPointerUp=${() => { sliding.current = null; }}
+								onPointerCancel=${() => { sliding.current = null; }}
+							>
+								<i style=${{
+									width: `${((held - (field.min ?? 0))
+										/ ((field.max ?? 127) - (field.min ?? 0))) * 100}%`,
+								}}></i>
+								<span>${held}</span>
+							</div>`}
+					</div>`;
 			})}
 		</div>`;
 }
@@ -1225,8 +1316,7 @@ function Panel () {
 	   driving one instrument belong on one page as stacked blocks, which is
 	   what Simon settled in #1944 — and a page that showed only the first of
 	   them would be quietly wrong rather than obviously incomplete. */
-	const declaredGrids = Object.keys(controls).filter(
-		(name) => controls[name].type === "step_grid" || controls[name].type === "note_grid");
+	const declaredGrids = Object.keys(controls).filter((name) => DRAWN.includes(controls[name].type));
 
 	/* Which page is showing. A remembered choice for a page that is no longer
 	   offered falls back to the first without being forgotten: a composition
@@ -1246,11 +1336,17 @@ function Panel () {
 
 	/* A pitched pattern is as tall as its rows plus the velocity lane beneath
 	   them, which is what the fit has to solve for rather than the rows alone. */
-	const blocks = gridNames.map((name) => ({
-		name,
-		rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-			+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
-		steps: controls[name].steps }));
+	const blocks = gridNames.map((name) => {
+		if (kindOf(name) === "params") {
+			return { name, rows: (controls[name].fields || []).length, steps: PARAM_CELLS };
+		}
+
+		return {
+			name,
+			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
+				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
+			steps: controls[name].steps };
+	});
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -1371,7 +1467,12 @@ function Panel () {
 					arranging=${arranging}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}>
-					${kindOf(name) === "note_grid"
+					${kindOf(name) === "params"
+						? html`
+							<${Params} name=${name} fields=${controls[name].fields || []}
+								values=${(state[appName] || {})[name] || {}}
+								cell=${size.cell} onSet=${request} />`
+						: kindOf(name) === "note_grid"
 						? html`
 							<${NoteGrid} name=${name} control=${controls[name]}
 								rows=${controls[name].rows} steps=${controls[name].steps}
@@ -1387,8 +1488,9 @@ function Panel () {
 								cells=${(state[appName] || {})[name] || {}}
 								visible=${controls[name].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
-					${up && html`<${Playhead} anchor=${anchor} steps=${controls[name].steps}
-						beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
+					${up && kindOf(name) !== "params" && html`
+						<${Playhead} anchor=${anchor} steps=${controls[name].steps}
+							beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
 				<//>`)}
 		</div>`;
 }

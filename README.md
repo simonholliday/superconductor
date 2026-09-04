@@ -125,6 +125,35 @@ Rows are names, as they are everywhere here. `compositions/drm1_grid.py` builds
 them from note names and hands the same list to Subsequence as a note map, so
 what the panel calls `C2` and what the synthesiser plays cannot drift apart.
 
+## An instrument's own settings
+
+A **params** control is a block of an instrument's settings, in the three shapes
+they come in: a **switch**, a **number** you drag, and a **choice** of named
+options. Between them those cover every control-change message a Moog Minitaur
+answers to, and probably most other instruments.
+
+Nothing in this package knows that a switch is a MIDI control change. A
+composition declares what shape each setting is and what it may hold, and is
+given a function to call when one moves — which is where a message gets sent,
+if that is what the setting stands for:
+
+```python
+superintendent.subsequence_adapter.Params(
+    composition,
+    parameters=[
+        superintendent.subsequence_adapter.Parameter("glide", "switch", label="Glide"),
+        superintendent.subsequence_adapter.Parameter("rate", "number", default=24),
+        superintendent.subsequence_adapter.Parameter(
+            "shape", "choice", options=[("lcr", "LCR"), ("exp", "EXP")]),
+    ],
+    on_change=send_setting,
+)
+```
+
+The settings worth putting on glass are usually the ones an instrument has no
+knob for at all — reachable otherwise only through editor software. On the
+Minitaur that is most of them.
+
 ## Arranging a page
 
 Tap **ARRANGE** in the bar. While it is latched the grids stop responding and

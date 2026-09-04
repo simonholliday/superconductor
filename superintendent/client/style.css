@@ -616,3 +616,94 @@ html, body {
 	background: var(--on);
 	border-top: 1px solid var(--on-edge);
 }
+
+/* An instrument's own settings. Three shapes, one block.
+ *
+ * Sized for a finger like everything else, and deliberately not scaled down
+ * with the cell: a switch is read and pressed once, not laid out in a rhythm,
+ * so it keeps a comfortable target whatever the grids beside it are set to. */
+.grid.params .setting {
+	display: flex;
+	align-items: center;
+	min-height: max(44px, var(--cell));
+}
+
+.grid.params .switch {
+	min-width: 5rem;
+	min-height: 44px;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
+	font-size: 0.85rem;
+	letter-spacing: 0.04em;
+	touch-action: none;
+}
+
+/* On is filled rather than outlined, the way a held transport is: a state you
+   are in, not an action you can take. */
+.grid.params .switch.on {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: #1a1206;
+	font-weight: 700;
+}
+
+.grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+.grid.params .choices button {
+	min-height: 44px;
+	padding: 0 0.7rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
+	font-size: 0.8rem;
+	white-space: nowrap;
+	touch-action: none;
+}
+
+.grid.params .choices button.here {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: #1a1206;
+	font-weight: 600;
+}
+
+/* A number is a bar you push rather than a knob you turn: a rotary gesture on
+   glass has no detent and no purchase, and a bar says its value by its length
+   as well as by its figure. */
+.grid.params .dial {
+	position: relative;
+	flex: 1;
+	min-height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	padding: 0 0.6rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	overflow: hidden;
+	touch-action: none;
+}
+
+.grid.params .dial i {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	display: block;
+	background: var(--on);
+	opacity: 0.85;
+}
+
+.grid.params .dial span {
+	position: relative;
+	color: var(--ink);
+	font-size: 0.85rem;
+	font-variant-numeric: tabular-nums;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
