@@ -153,7 +153,7 @@ link = superintendent.subsequence_adapter.AppLink(
 	],
 	pages=[
 		superintendent.subsequence_adapter.Page(
-			"both", parts=["grid", "layer"], title="Both"),
+			"both", parts=["grid", "layer"], title="Both", columns=2),
 		superintendent.subsequence_adapter.Page(
 			"pattern_1", parts=["grid"], title="Pattern 1"),
 		superintendent.subsequence_adapter.Page(
@@ -163,8 +163,8 @@ link = superintendent.subsequence_adapter.AppLink(
 )
 """Three views over the same two patterns.
 
-Each pattern appears on two of them — once beside the other and once with the
-whole panel to itself — which is the case worth having: see how they play
+Each pattern appears on two of them — once beside the other, side by side on a
+wide panel, and once with the whole glass to itself — which is the case worth having: see how they play
 together, then take one on its own to work on it closely.  Nothing keeps the
 two views of a pattern in step, because nothing has to: both draw the grid the
 composition holds.

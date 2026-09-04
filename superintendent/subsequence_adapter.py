@@ -358,17 +358,28 @@ class Page:
 	control declared, which is what it did before pages existed.
 	"""
 
-	def __init__ (self, page_id: str, parts: collections.abc.Sequence[str], title: str | None = None) -> None:
-		"""Name a view and say which declared controls appear on it."""
+	def __init__ (self, page_id: str, parts: collections.abc.Sequence[str],
+	              title: str | None = None, columns: int = 1) -> None:
+		"""Name a view, say which controls appear on it, and how wide it runs.
+
+		``columns`` is how many parts stand side by side before the next one
+		starts a new row.  One is a column of blocks, which is where every page
+		started; two puts a pair of grids across a wide panel instead of leaving
+		half of it empty.  It is a starting arrangement chosen by whoever wrote
+		the composition, not a constraint — a page is arranged by the person
+		using it, and this is only what they find before they do.
+		"""
 
 		self.page_id = page_id
 		self.parts = list(parts)
 		self.title = title
+		self.columns = max(1, columns)
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to offer this page and draw it."""
 
-		return {"id": self.page_id, "title": self.title or self.page_id, "parts": self.parts}
+		return {"id": self.page_id, "title": self.title or self.page_id,
+		        "parts": self.parts, "columns": self.columns}
 
 
 class AppLink:

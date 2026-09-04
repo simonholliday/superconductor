@@ -428,7 +428,7 @@ function Build ({ service, stale }) {
  * the closest thing to per-person storage that exists while page files are
  * still unsettled (#1948) — one browser profile is one panel is, in practice,
  * one pair of hands. */
-function useCellSize (rows, steps, blocks) {
+function useCellSize (blocks, columns) {
 	const [choice, setChoice] = useState(() => {
 		try {
 			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
@@ -471,7 +471,7 @@ function useCellSize (rows, steps, blocks) {
 		const fit = () => {
 			const box = wrap.current;
 
-			if (!box || !rows || !steps) return;
+			if (!box || !blocks.length) return;
 
 			const label = box.querySelector(".row-label");
 			const shape = getComputedStyle(box);
@@ -497,12 +497,12 @@ function useCellSize (rows, steps, blocks) {
 			   next one. */
 			const parts = Array.from(box.querySelectorAll(".part"));
 
-			const chrome = parts.reduce((total, part) => {
+			const chrome = parts.map((part) => {
 				const inside = part.querySelector(".grid");
 
-				return total + part.getBoundingClientRect().height
+				return part.getBoundingClientRect().height
 					- (inside ? inside.getBoundingClientRect().height : 0);
-			}, 0);
+			});
 
 			const sides = parts.reduce((widest, part) => {
 				const inside = part.querySelector(".grid");
@@ -511,15 +511,41 @@ function useCellSize (rows, steps, blocks) {
 					- (inside ? inside.getBoundingClientRect().width : 0));
 			}, 0);
 
-			const across = outer.width - padX - FIT_SLACK - sides
-				- label.getBoundingClientRect().width - gap * steps;
+			/* Blocks fill the page left to right and then wrap, so column c
+			   holds blocks c, c + columns, c + 2 columns, and so on. Each
+			   column is solved on its own and the tightest one wins: a page
+			   fits when its worst column fits. */
+			const perColumn = Array.from({ length: columns }, () => ({ rows: 0, count: 0, chrome: 0 }));
 
-			/* A block of r rows has r - 1 gaps inside it, so every block gives
-			   one back; the space between blocks is counted separately. */
-			const down = outer.height - padY - FIT_SLACK - chrome
-				- gap * Math.max(0, rows - blocks) - PART_GAP * Math.max(0, blocks - 1);
+			blocks.forEach((block, index) => {
+				const column = perColumn[index % columns];
 
-			const size = Math.floor(Math.min(across / steps, down / rows));
+				column.rows += block.rows;
+				column.count += 1;
+				column.chrome += chrome[index] || 0;
+			});
+
+			const widest = blocks.reduce((most, block) => Math.max(most, block.steps), 0);
+			const labels = label.getBoundingClientRect().width;
+
+			const room = (outer.width - padX - FIT_SLACK - PART_GAP * (columns - 1)) / columns;
+			const across = (room - sides - labels - gap * widest) / widest;
+
+			/* A block of r rows has r - 1 gaps inside it, so every block in a
+			   column gives one back; the space between blocks is separate. */
+			const height = outer.height - padY - FIT_SLACK;
+
+			const down = perColumn.reduce((tightest, column) => {
+				if (!column.rows) return tightest;
+
+				const spare = height - column.chrome
+					- gap * Math.max(0, column.rows - column.count)
+					- PART_GAP * Math.max(0, column.count - 1);
+
+				return Math.min(tightest, spare / column.rows);
+			}, Infinity);
+
+			const size = Math.floor(Math.min(across, down));
 
 			setCell(Math.max(FIT_FLOOR, Math.min(FIT_CEILING, size)));
 		};
@@ -534,7 +560,7 @@ function useCellSize (rows, steps, blocks) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, rows, steps, blocks]);
+	}, [choice, JSON.stringify(blocks), columns]);
 
 	useEffect(() => {
 		document.documentElement.style.setProperty("--cell", `${cell}px`);
@@ -797,13 +823,16 @@ function Panel () {
 		? declaredGrids.filter((name) => (page.parts || []).includes(name))
 		: declaredGrids;
 
-	/* Asked for before the page can return early, because a hook must be. What
-	   has to fit is every row of every visible block down, and the widest
-	   across. With nothing showing these are zero and nothing is fitted. */
+	/* How many blocks stand side by side. The composition's starting choice,
+	   and one when it says nothing — which is where every page began. */
+	const columns = Math.max(1, (page && page.columns) || 1);
+
+	/* Asked for before the page can return early, because a hook must be. It
+	   is given the shape of every visible block rather than a total, since a
+	   page in columns is only as tall as its tallest column. */
 	const size = useCellSize(
-		gridNames.reduce((total, name) => total + controls[name].rows.length, 0),
-		gridNames.reduce((widest, name) => Math.max(widest, controls[name].steps), 0),
-		gridNames.length);
+		gridNames.map((name) => ({ rows: controls[name].rows.length, steps: controls[name].steps })),
+		columns);
 
 	/* Both halves have to be known before they can disagree: a page served
 	   without a stamp, or a service too old to send one, is not evidence of
@@ -842,7 +871,8 @@ function Panel () {
 			</span>
 			<${Build} service=${service} stale=${stale} />
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}>
+		<div class=${`grid-wrap ${up ? "" : "absent"}`} ref=${size.wrap}
+			style=${{ "--columns": columns }}>
 			${gridNames.map((name) => html`
 				<${Part} key=${name} name=${name} title=${controls[name].title}>
 					<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}

@@ -86,9 +86,14 @@ html, body {
 	flex: 1;
 	overflow: auto;
 	padding: 0.5rem;
-	display: flex;
-	flex-direction: column;
-	align-items: start;
+
+	/* Blocks fill the page across and then wrap. One column is a stack, which
+	   is where every page began; more than one puts grids side by side rather
+	   than leaving half a wide panel empty. How many is the page's to say. */
+	display: grid;
+	grid-template-columns: repeat(var(--columns, 1), max-content);
+	align-content: start;
+	justify-content: start;
 	gap: 10px;
 }
 
