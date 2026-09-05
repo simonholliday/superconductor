@@ -150,6 +150,19 @@
 	   pitch that changed shape with the cell would stop being a pitch. */
 	--mark-hair: max(2px, calc(var(--cell) * 0.045));
 	--mark-grip: clamp(7px, calc(var(--cell) * 0.2), 12px);
+
+	/* The inset between a block's frame and what is inside it.
+	
+	   **Fixed, and twice the gap.** It is not a mark — nobody reads it — so the
+	   rule above does not reach it; it is the block's frame, and the frame is
+	   the same kind of thing as `--gap`: structure that the lattice's arithmetic
+	   shares rather than something that scales with what is drawn on it.
+	
+	   Whole pixels for the same reason. A fraction of a cell put every grid on a
+	   fractional origin, and a cell declared 32px then measured 31.99999 — which
+	   a test caught, and which would have shown up on the glass as a soft edge
+	   on every cell at some sizes. */
+	--pad: calc(var(--gap) * 2);
 }
 
 /* **The reader's choice sits above the machine's.**
@@ -258,6 +271,12 @@ html, body {
  * instead, which paints outside the box without taking any room in it. */
 .part {
 	position: absolute;
+
+	/* One inset, and everything in the block sits on it — the title, the grid
+	   and the footer all line up on the same edge. That is why the title bar
+	   has no horizontal padding of its own. */
+	padding: var(--pad);
+
 	border-radius: 6px;
 	background: var(--part);
 	box-shadow: 0 0 0 1px var(--edge), 0 6px 18px var(--shadow-near);
@@ -271,18 +290,54 @@ html, body {
 	   taller than it looks at the smallest size is a rounding error; a title
 	   nobody can read is not. */
 	height: max(24px, var(--cell));
-	padding: 0 0.5rem;
+	gap: 0.6rem;
 	overflow: hidden;
-	text-overflow: ellipsis;
 	color: var(--ink-quiet);
 	font-size: var(--type-title);
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	white-space: nowrap;
+}
 
-	/* Never scaled by the cell size. Text has a legibility floor, and a block
-	   whose name cannot be read is not contained, only boxed. */
+/* The name keeps its size until there is nothing else to give, because the name
+   is what a block is found by. */
+.part-title > b {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: inherit;
+}
+
+/* What the app thought was worth knowing at a glance, pushed to the far end and
+   the first thing given up when the block is narrow.
+ *
+ * Nothing here knows what any of it means (#1465). A MIDI channel and an
+ * instrument's name are facts about a studio, and this draws whatever the
+ * composition said without reading a word of it. */
+.part-title .about {
+	flex: 0 2 auto;
+	display: flex;
+	align-items: baseline;
+	gap: 0.55rem;
+	margin-left: auto;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.part-title .about > span { flex: none; }
+
+.part-title .about i {
+	font-style: normal;
+	opacity: 0.65;
+}
+
+.part-title .about em {
+	margin-left: 0.25rem;
+	font-style: normal;
+	color: var(--ink);
+	font-variant-numeric: tabular-nums;
 }
 
 /* One gap between the title and the grid, which is the gap the lattice puts

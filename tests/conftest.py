@@ -24,7 +24,8 @@ import superintendent.service
 
 
 CONTROLS: dict[str, typing.Any] = {
-	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums"},
+	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums",
+	         "about": [{"label": "ch", "value": "10"}, {"label": "", "value": "Vermona DRM1"}]},
 	"second": {"type": "step_grid", "rows": ["kick"], "steps": 8, "beats": 2},
 	"bass": {"type": "note_grid", "rows": ["D2", "C#2", "C2"], "steps": 8, "beats": 2,
 	         "visible_rows": 2,
@@ -41,7 +42,7 @@ CONTROLS: dict[str, typing.Any] = {
 	"stack": {"type": "recipe", "title": "Generators", "builds": "grid", "generators": [
 		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
 		 "parameters": [
-		     {"name": "pitch", "label": "pitch", "kind": "choice",
+		     {"name": "pitch", "label": "pitch", "kind": "choice", "role": "pitch",
 		      "options": [{"value": voice, "label": voice}
 		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
 		     {"name": "pulses", "label": "pulses", "kind": "number",

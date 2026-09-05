@@ -318,13 +318,16 @@ link = superintendent.subsequence_adapter.AppLink(
 	controls=[
 		superintendent.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
-			data_key="grid", name="grid", title="DRM1 — pattern 1"),
+			data_key="grid", name="grid", title="DRM1 — pattern 1",
+			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
 		superintendent.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
-			data_key="layer", name="layer", title="DRM1 — pattern 2"),
+			data_key="layer", name="layer", title="DRM1 — pattern 2",
+			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
+			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 			visible_rows=12),
 		superintendent.subsequence_adapter.Params(
@@ -354,6 +357,7 @@ link = superintendent.subsequence_adapter.AppLink(
 					"local_control", "switch", label="Front panel controls", default=True),
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
+			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			on_change=send_setting),
 		drum_recipe,
 		superintendent.subsequence_adapter.Transport(composition),

@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.6.0"
+CONTRACT_VERSION = "1.7.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -37,6 +37,15 @@ by that layer for the whole of its life and never handed out twice.  A panel too
 old to read it draws the stack exactly as it did; an app too old to send one
 leaves every layer at zero, which is what a panel shows when it has not been
 told a number.
+
+1.7.0 adds two things a panel may draw and neither end acts on.  A control may
+carry ``about``: a list of ``{label, value}`` facts shown beside its name.  It
+exists because the package may not hold a MIDI channel or an instrument's name
+(#1465), so a composition that wants those on the glass has to be the one saying
+them.  And a parameter may carry ``role``, which says what a shape was before it
+became a shape — a ``choice`` with ``role: "pitch"`` is a pitch the composition
+resolved into the voices it has.  A panel too old for either ignores it as it
+ignores any field it does not know.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

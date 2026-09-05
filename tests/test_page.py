@@ -229,7 +229,8 @@ def test_a_part_is_titled_by_the_app_or_by_its_address (panel: typing.Any) -> No
 	a drum pattern. An app that offers none gets its address tidied, which is
 	honest about where the words came from."""
 
-	assert panel.locator('.part[data-part="grid"] .part-title').inner_text().strip().lower() == "drums"
+	assert panel.locator(
+		'.part[data-part="grid"] .part-title > b').inner_text().strip().lower() == "drums"
 	assert panel.locator('.part[data-part="second"] .part-title').inner_text().strip().lower() == "second"
 
 
@@ -1687,12 +1688,15 @@ def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
 def _two_generators (panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Put a second layer in the stack and wait for both windows to draw."""
 
-	held = {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
-	        "duration": 1, "probability": 1}
+	held = {"pulses": 3, "velocity": [40, 80], "duration": 1, "probability": 1}
 
+	# Two different voices, because two generators writing the same row is the
+	# case that hides a line arriving at the wrong one.
 	fake_app.confirm("stack/layers", [
-		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False, "params": held},
-		{"id": "two", "generator": "euclidean", "index": 2, "bypassed": False, "params": held},
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
+		 "params": {**held, "pitch": "kick"}},
+		{"id": "two", "generator": "euclidean", "index": 2, "bypassed": False,
+		 "params": {**held, "pitch": "snare"}},
 	], by="app")
 
 	panel.wait_for_function(
@@ -2256,3 +2260,137 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 
 	# And each sits on the edge of the block it belongs to, not adrift of it.
 	assert _on_the_edge(dots[0], line["from"]) or _on_the_edge(dots[0], line["to"])
+
+
+def test_a_block_does_not_butt_its_content_against_its_frame (panel: typing.Any) -> None:
+	"""Content on the frame reads as spilling out of it.  Simon: "let's have a
+	little padding before the edge"."""
+
+	_settled(panel)
+
+	room = panel.evaluate("""() => {
+		const block = document.querySelector('.part[data-part="grid"]');
+		const inside = block.querySelector(".grid");
+		const outer = block.getBoundingClientRect();
+		const held = inside.getBoundingClientRect();
+
+		return { left: held.left - outer.left, right: outer.right - held.right,
+		         bottom: outer.bottom - held.bottom };
+	}""")
+
+	for side, gap in room.items():
+		assert gap >= 4, f"the grid is {gap}px from the block's {side} edge"
+
+
+def test_a_block_still_leaves_a_lane_beside_its_neighbour (panel: typing.Any) -> None:
+	"""The frame has to be counted in a starting arrangement or the lane is the
+	lane minus the frame — which is how a padding added for looks would quietly
+	eat a rule that was measured and settled."""
+
+	_settled(panel)
+
+	seen = panel.evaluate("""() => {
+		const blocks = [...document.querySelectorAll(".part")].map((one) => one.getBoundingClientRect());
+		let closest = null;
+
+		for (const one of blocks) {
+			for (const other of blocks) {
+				if (one === other) continue;
+
+				const across = Math.max(other.left - one.right, one.left - other.right);
+
+				if (across > 0 && (closest === null || across < closest)) closest = across;
+			}
+		}
+
+		return {
+			closest,
+			cell: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")),
+		};
+	}""")
+
+	assert seen["closest"] is not None, "only one block on the page to compare"
+	assert seen["closest"] >= seen["cell"] - 1, \
+		f"blocks sit {seen['closest']}px apart, less than one {seen['cell']}px cell"
+
+
+def test_a_block_says_what_the_app_told_it_to_say_about_itself (panel: typing.Any) -> None:
+	"""A MIDI channel and an instrument's name are facts about a studio, and
+	this package is not allowed to hold one (#1465).  So a panel that worked
+	them out would be a panel that knew what a rig looked like; a panel that is
+	told them is repeating what the composition said, which is the same rule as
+	the title and the row names."""
+
+	_settled(panel)
+
+	said = panel.eval_on_selector_all(
+		'.part[data-part="grid"] .part-title .about span',
+		"els => els.map((one) => one.textContent.trim())")
+
+	assert said == ["ch10", "Vermona DRM1"], f"the block said {said}"
+
+	# And a block the app said nothing about says nothing.
+	assert panel.locator('.part[data-part="second"] .part-title .about').count() == 0
+
+
+def test_a_line_arrives_level_with_the_row_the_generator_writes (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon asked for it, and the reason is why the lines exist at all: a
+	generator that writes the snare should arrive at the snare, not at the
+	middle of a pattern that has ten rows in it.
+
+	Worked out without knowing the name of a single parameter.  A generator
+	that writes one voice has a choice whose options are the pattern's own rows,
+	because the composition is what joined those two together (#2085) — so the
+	question is about the shape of what is offered, not about Subsequence's
+	vocabulary.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	for layer, voice in (("one", "kick"), ("two", "snare")):
+		line = _edges(panel, f"stack/{layer}>grid")
+		row = panel.eval_on_selector(
+			f'.part[data-part="grid"] [data-row="{voice}"]',
+			"""(one, wrap) => {
+				const outer = wrap.getBoundingClientRect();
+				const at = one.getBoundingClientRect();
+
+				return at.top - outer.top + wrap.scrollTop + at.height / 2;
+			}""", panel.query_selector(".grid-wrap"))
+
+		assert abs(line["b"]["y"] - row) < 1.5, (
+			f"the line for {voice} arrives at {line['b']['y']}, not at the row's {row}")
+
+		# And it comes in from a side, which is what being level with a row costs.
+		assert (abs(line["b"]["x"] - line["to"]["x"]) < 1.5
+		        or abs(line["b"]["x"] - line["to"]["x"] - line["to"]["w"]) < 1.5), (
+			f"the line arrived at the top or bottom edge: {line}")
+
+
+def test_a_generator_that_names_no_row_points_at_the_pattern_itself (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A generic generator feeds the whole pattern rather than a part of it, and
+	pointing at one of its rows would be a claim that is not true."""
+
+	_open_the_stack(panel)
+
+	held = {"pulses": 3, "velocity": [40, 80], "duration": 1, "probability": 1}
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False, "params": held},
+	], by="app")
+	_settled(panel)
+
+	line = _edges(panel, "stack/one>grid")
+	sides = [
+		{"x": line["to"]["x"] + line["to"]["w"] / 2, "y": line["to"]["y"]},
+		{"x": line["to"]["x"] + line["to"]["w"], "y": line["to"]["y"] + line["to"]["h"] / 2},
+		{"x": line["to"]["x"] + line["to"]["w"] / 2, "y": line["to"]["y"] + line["to"]["h"]},
+		{"x": line["to"]["x"], "y": line["to"]["y"] + line["to"]["h"] / 2},
+	]
+
+	assert any(abs(line["b"]["x"] - one["x"]) < 1.5 and abs(line["b"]["y"] - one["y"]) < 1.5
+	           for one in sides), (
+		f"a generator naming no row did not arrive at a side's middle: {line}")

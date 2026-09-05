@@ -150,6 +150,20 @@ const FIT_CEILING = 96;
 const FIT_SLACK = 2;
 
 const GAP = 4;
+
+const PAD = GAP * 2;
+/* The inset between a block's frame and what is in it, in pixels.
+ *
+ * The same number as the stylesheet's `--pad`, and it is known here for the same
+ * reason `GAP` is: a block's frame makes it wider than the cells its grid
+ * occupies, so a starting arrangement that counted only the grid would quietly
+ * eat the lane it leaves between blocks.
+ *
+ * Declared here rather than beside `SEPARATION`, which is where it reads best
+ * and where it cannot go: `GAP` is below that, and a `const` read before its own
+ * declaration throws on evaluation. The module then never runs and the page is
+ * blank — with the syntax check passing, because it is not a syntax error.
+ * The page suite is what finds this, and did. */
 const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
 const LANE_CELLS = 3;
@@ -208,7 +222,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.6.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.7.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -253,7 +267,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.6.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.7.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -397,7 +411,7 @@ function Grid ({ control, rows, steps, cells, visible, cell, pending, failed, on
 		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
 			${rows.map((row) => html`
-				<div class="row-label" key=${`label-${row}`}>${row.replace(/_/g, " ")}</div>
+				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${control}/${row}/${step}`;
 					const on = (cells[row] || []).includes(step);
@@ -473,7 +487,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell}>
 		<div class="grid notes" style=${style}>
 			${rows.map((row) => html`
-				<div class="row-label" key=${`label-${row}`}>${row}</div>
+				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${name}/${row}/${step}`;
 					const note = (notes[row] || {})[String(step)];
@@ -1062,7 +1076,7 @@ function Footer ({ onAdd, onClear }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
+function Part ({ title, about, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1140,7 +1154,23 @@ function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, 
 				onPointerMove=${move}
 				onPointerUp=${release}
 				onPointerCancel=${release}
-			>${title || name.replace(/_/g, " ")}</header>
+			>
+				<b>${title || name.replace(/_/g, " ")}</b>
+				${/* Whatever the app thought was worth knowing at a glance — a MIDI
+				     channel, the instrument's full name. Drawn and nothing else:
+				     this package is not allowed to know any of them, so a panel
+				     that worked them out would be a panel that knew what a rig
+				     looked like (#1465). The name keeps its size and these give
+				     way, because the name is what a block is found by. */ ""}
+				${(about || []).length > 0 && html`
+					<span class="about">
+						${about.map((fact) => html`
+							<span key=${fact.label}>
+								<i>${fact.label}</i>
+								<em>${fact.value}</em>
+							</span>`)}
+					</span>`}
+			</header>
 			<div class="part-body">${children}</div>
 			${footer}
 		</section>`;
@@ -1157,6 +1187,49 @@ function sidesOf (box) {
 		{ x: box.x + box.w, y: box.y + box.h / 2 },
 		{ x: box.x + box.w / 2, y: box.y + box.h },
 		{ x: box.x, y: box.y + box.h / 2 },
+	];
+}
+
+/* Where a line should start and end.
+ *
+ * **Level with the row it acts on, when it acts on one.** Simon asked for it and
+ * the reason is the whole point of drawing lines at all: a generator that writes
+ * the snare should arrive at the snare, not at the middle of a pattern that has
+ * ten rows in it. It costs the freedom to leave by the top or the bottom — a
+ * line level with a row has to come in from a side — and that is a price he
+ * named himself when asking.
+ *
+ * A contribution that names no row keeps the nearest pair of side midpoints. A
+ * generic generator feeds the pattern rather than a part of it, and pointing at
+ * one of its rows would be a claim that is not true.
+ *
+ * The row's height is clamped inside the block, because a pattern taller than
+ * its window scrolls: a row that is out of view would otherwise be pointed at
+ * somewhere off the block entirely. */
+function anchorsFor (from, to, level, anchor) {
+	if (level === null) {
+		let best = null;
+
+		for (const a of sidesOf(from)) {
+			for (const b of sidesOf(to)) {
+				const away = Math.hypot(b.x - a.x, b.y - a.y);
+
+				if (!best || away < best.away) best = { a, b, away };
+			}
+		}
+
+		return [best.a, best.b];
+	}
+
+	/* Whichever pair of facing sides is shorter, which for two blocks side by
+	   side is the obvious one and for two that overlap is at least consistent. */
+	const leftward = from.x + from.w / 2 <= to.x + to.w / 2;
+	const held = Math.min(
+		Math.max(level, to.y + anchor), Math.max(to.y + anchor, to.y + to.h - anchor));
+
+	return [
+		{ x: leftward ? from.x + from.w : from.x, y: from.y + from.h / 2 },
+		{ x: leftward ? to.x : to.x + to.w, y: held },
 	];
 }
 
@@ -1193,20 +1266,41 @@ function Connections ({ box, joins, touched, cell, when }) {
 
 		const measure = () => {
 			const outer = wrap.getBoundingClientRect();
-			const where = new Map();
 
-			for (const part of wrap.querySelectorAll("[data-part]")) {
-				const at = part.getBoundingClientRect();
+			/* Relative to the scrolled content rather than to the viewport,
+			   because that is the space the blocks themselves are placed in. A
+			   line has to stay on its block when the page scrolls. */
+			const placed = (element) => {
+				const at = element.getBoundingClientRect();
 
-				/* Relative to the scrolled content rather than to the viewport,
-				   because that is the space the blocks themselves are placed
-				   in. A line has to stay on its block when the page scrolls. */
-				where.set(part.dataset.part, {
+				return {
 					x: at.left - outer.left + wrap.scrollLeft,
 					y: at.top - outer.top + wrap.scrollTop,
 					w: at.width, h: at.height,
-				});
+				};
+			};
+
+			const where = new Map();
+
+			for (const part of wrap.querySelectorAll("[data-part]")) {
+				where.set(part.dataset.part, placed(part));
 			}
+
+			/* How high up a block one of its rows is drawn, asked of the page
+			   rather than worked out: a row's height depends on the cell size, on
+			   whether the pattern is windowed and on how far that window has
+			   been scrolled, and the rendering is the only thing that knows all
+			   three. */
+			const levelOf = (part, row) => {
+				const label = wrap.querySelector(
+					`[data-part="${CSS.escape(part)}"] [data-row="${CSS.escape(row)}"]`);
+
+				if (!label) return null;
+
+				const at = placed(label);
+
+				return at.y + at.h / 2;
+			};
 
 			const next = [];
 
@@ -1216,17 +1310,11 @@ function Connections ({ box, joins, touched, cell, when }) {
 
 				if (!from || !to) continue;
 
-				let best = null;
+				const level = join.row ? levelOf(join.to, join.row) : null;
+				const [a, b] = anchorsFor(from, to, level, marked(
+					cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling));
 
-				for (const a of sidesOf(from)) {
-					for (const b of sidesOf(to)) {
-						const away = Math.hypot(b.x - a.x, b.y - a.y);
-
-						if (!best || away < best.away) best = { a, b, away };
-					}
-				}
-
-				next.push({ ...join, a: best.a, b: best.b });
+				next.push({ ...join, a, b });
 			}
 
 			/* Compared before it is kept. This runs from an observer as well as
@@ -1574,7 +1662,7 @@ function blockSize (block, cell, chrome) {
  * surprised by before they have made one of their own. It is a starting point
  * and nothing more: the moment anything is dragged, this stops being consulted
  * for that part. */
-function autoPlace (blocks, across) {
+function autoPlace (blocks, across, frame) {
 	const placed = {};
 
 	let x = 0;
@@ -1586,13 +1674,15 @@ function autoPlace (blocks, across) {
 		   column plus a cell per step across, a title plus a cell per row
 		   down. Nothing measured, because nothing here needs pixels.
 		
-		   Plus a cell of air on each side. Blocks packed edge to edge read as
-		   one surface with lines drawn on it; a lane between them says they are
-		   separate things, which they are. A person who wants them touching can
-		   drag them together, and this stops being consulted for that block the
-		   moment they do. */
-		const wide = LABEL_CELLS + block.steps + SEPARATION;
-		const high = 1 + block.rows + SEPARATION;
+		   Plus the block's own frame, and then a cell of air on each side.
+		   Blocks packed edge to edge read as one surface with lines drawn on it;
+		   a lane between them says they are separate things, which they are. The
+		   frame has to be counted or the lane is the lane minus the frame, which
+		   is how a padding added for looks quietly ate a rule. A person who wants
+		   them touching can drag them together, and this stops being consulted
+		   for that block the moment they do. */
+		const wide = LABEL_CELLS + block.steps + frame + SEPARATION;
+		const high = 1 + block.rows + frame + SEPARATION;
 
 		if (x && x + wide > across) { x = 0; y += tallest; tallest = 0; }
 
@@ -1614,6 +1704,17 @@ function acrossAtTestedSize () {
 	const tested = SIZES.find((size) => size.key === "tested").px;
 
 	return Math.max(1, Math.floor(window.innerWidth / (tested + GAP)));
+}
+
+/* How many cells a block's own frame takes, over and above what is inside it.
+ *
+ * At the tested size, deliberately, and for the same reason as the width above:
+ * a starting arrangement worked out from the size in force would move every time
+ * somebody changed that setting. */
+function frameInCells () {
+	const tested = SIZES.find((size) => size.key === "tested").px;
+
+	return Math.ceil((PAD * 2) / (tested + GAP));
 }
 
 function useCellSize (blocks, layout, dragging) {
@@ -2323,6 +2424,38 @@ function Panel () {
 			const offered = controls[name].generators || [];
 			const builds = controls[name].builds;
 			const feeds = builds && gridNames.includes(builds) ? builds : null;
+			const voices = (feeds && controls[feeds].rows) || [];
+
+			/* Which row of the pattern this contribution acts on, if it acts on
+			   one — so its line can arrive level with that row rather than at the
+			   middle of a pattern with ten of them (Simon, 2026-09-05).
+			 *
+			 * **Told, not guessed.** The app says a parameter is a pitch and the
+			 * composition says which pitches exist; the join between them is
+			 * declared as `role: "pitch"`, and this reads that word. My first
+			 * version inferred it from the option list — a choice offering
+			 * exactly this pattern's rows — and it was wrong for an ordinary
+			 * case: a composition may offer a generator a wider pool of voices
+			 * than any one pattern has rows, and then the inference finds
+			 * nothing. The knowledge existed upstream and was being thrown away.
+			 *
+			 * The row still has to be a row of *this* pattern. A pool may hold
+			 * voices this grid does not draw, and pointing at one of those would
+			 * be pointing at nothing.
+			 *
+			 * A generator that names no row feeds the whole pattern, and its line
+			 * says so by pointing at the pattern rather than at a part of it. */
+			const voiceOf = (generator, layer) => {
+				for (const field of (generator ? generator.parameters : [])) {
+					if (field.role !== "pitch") continue;
+
+					const chosen = (layer.params || {})[field.name];
+
+					if (typeof chosen === "string" && voices.includes(chosen)) return chosen;
+				}
+
+				return null;
+			};
 
 			for (const layer of held) {
 				const generator = offered.find((one) => one.name === layer.generator);
@@ -2330,6 +2463,7 @@ function Panel () {
 				contributions.push({
 					key: `${name}/${layer.id}`,
 					control: name, layer, layers: held, offered: generator, feeds,
+					voice: voiceOf(generator, layer),
 
 					/* "Euclidean 1", where the number belongs to that layer for
 					   the whole of its life — a neighbour being removed never
@@ -2358,6 +2492,7 @@ function Panel () {
 
 		if (kindOf(name) === "params") {
 			windows.push({ key: name, control: name, title: named(name),
+			               about: controls[name].about || [],
 			               rows: Math.max(1, (controls[name].fields || []).length),
 			               steps: PARAM_CELLS });
 			continue;
@@ -2369,6 +2504,7 @@ function Panel () {
 		   be cleared. */
 		windows.push({
 			key: name, control: name, title: named(name),
+			about: controls[name].about || [],
 			add: stackFor(name) || null, clear: true,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0) + 1,
@@ -2386,7 +2522,7 @@ function Panel () {
 	   the other one. */
 	const joins = contributions
 		.filter((one) => one.feeds)
-		.map((one) => ({ from: one.key, to: one.feeds }));
+		.map((one) => ({ from: one.key, to: one.feeds, row: one.voice }));
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -2415,7 +2551,7 @@ function Panel () {
 	 * wide would hold at the tested cell size, which is a fixed number for a
 	 * given panel and so cannot chase its own answer. */
 	const defaults = useMemo(
-		() => autoPlace(blocks, acrossAtTestedSize()),
+		() => autoPlace(blocks, acrossAtTestedSize(), frameInCells()),
 		[pageId, blocks.map((block) => block.name).join(",")]);
 
 	/* Three layers, in order of authority. Where the panel would put a part
@@ -2524,7 +2660,7 @@ function Panel () {
 			...${pinch}
 		>
 			${drawn.map((one) => html`
-				<${Part} key=${one.key} name=${one.key} title=${one.title}
+				<${Part} key=${one.key} name=${one.key} title=${one.title} about=${one.about}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
@@ -2581,8 +2717,7 @@ function Panel () {
 			${/* Told what could have moved a line, because measuring is what this
 			     does and nothing else in the page will tell it. */ ""}
 			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
-				when=${`${size.cell}|${JSON.stringify(layout)}`
-					+ `|${joins.map((join) => `${join.from}>${join.to}`).join(",")}`} />
+				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
 
 		${adding && controls[adding] && html`

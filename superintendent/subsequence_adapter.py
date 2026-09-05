@@ -68,6 +68,41 @@ class Control:
 	rule as the row names, and the same reason.
 	"""
 
+	about: collections.abc.Sequence[tuple[str, typing.Any]] = ()
+	"""Facts about this control, to be shown beside its name and nothing more.
+
+	A pair per fact: ``[("ch", 10), ("instrument", "Vermona DRM1 MkIV")]``.
+
+	**This exists because the package may not know any of them.**  A MIDI
+	channel and an instrument's name are facts about a studio, and nothing here
+	is allowed to hold one (#1465).  A panel that worked them out would be a
+	panel that knew what a rig looked like; a panel that is *told* them is a
+	panel repeating what the composition said, which is the same rule as the
+	title and the row names.
+
+	Shown, never read.  Nothing in the protocol or the client does anything with
+	these but draw them, so a composition may say whatever is worth knowing at a
+	glance without teaching anything a new word.
+	"""
+
+	def said (self) -> dict[str, typing.Any]:
+		"""What this control says about itself, over and above what it does.
+
+		Gathered here rather than repeated in every declaration, so a control
+		added later cannot quietly offer one and not the other.
+		"""
+
+		said: dict[str, typing.Any] = {}
+
+		if self.title is not None:
+			said["title"] = self.title
+
+		if self.about:
+			said["about"] = [{"label": str(label), "value": str(value)}
+			                 for label, value in self.about]
+
+		return said
+
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to draw this."""
 
@@ -141,6 +176,7 @@ class StepGrid (Control):
 		data_key: str = "grid",
 		name: str = "grid",
 		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		visible_rows: int | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps."""
@@ -152,6 +188,7 @@ class StepGrid (Control):
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.about = list(about)
 		self.visible_rows = visible_rows
 		"""How many rows to show at once, if fewer than there are.
 
@@ -170,8 +207,7 @@ class StepGrid (Control):
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
 
-		if self.title is not None:
-			declared["title"] = self.title
+		declared.update(self.said())
 
 		return declared
 
@@ -297,6 +333,7 @@ class NoteGrid (Control):
 		data_key: str = "notes",
 		name: str = "notes",
 		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		mono: bool = False,
 		default_length: int = 1,
 		default_velocity: int = 100,
@@ -311,6 +348,7 @@ class NoteGrid (Control):
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.about = list(about)
 		self.mono = mono
 		self.default_length = default_length
 		self.default_velocity = default_velocity
@@ -343,8 +381,7 @@ class NoteGrid (Control):
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
 
-		if self.title is not None:
-			declared["title"] = self.title
+		declared.update(self.said())
 
 		return declared
 
@@ -675,6 +712,7 @@ class Params (Control):
 		data_key: str = "settings",
 		name: str = "settings",
 		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		on_change: collections.abc.Callable[[str, typing.Any], None] | None = None,
 	) -> None:
 		"""Describe the settings to offer, and how the composition hears about one."""
@@ -684,6 +722,7 @@ class Params (Control):
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.about = list(about)
 		self.on_change = on_change
 
 		self._to_assert = False
@@ -707,8 +746,7 @@ class Params (Control):
 			"type": "params",
 			"fields": [parameter.declaration() for parameter in self.parameters.values()]}
 
-		if self.title is not None:
-			declared["title"] = self.title
+		declared.update(self.said())
 
 		return declared
 
@@ -848,9 +886,17 @@ def offerable (
 				dropped = True
 				continue
 
+			# **What it was stays with it.**  A pitch becomes a choice here and
+			# every trace of what made it one would otherwise be lost — which
+			# matters on the glass, where a line from a generator arrives level
+			# with the row it writes rather than at the middle of a pattern that
+			# has ten (#2109).  A panel guessing that from the option list alone
+			# has to guess, and a composition may offer a wider pool of voices
+			# than any one pattern has rows.  Saying it costs a word.
 			fields.append({
 				**{key: held for key, held in field.items() if key != "multiple"},
 				"kind": "choice",
+				"role": "pitch",
 				"options": [{"value": pitch, "label": pitch} for pitch in pitches],
 			})
 
@@ -919,6 +965,7 @@ class Recipe (Control):
 		data_key: str = "recipe",
 		name: str = "recipe",
 		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 	) -> None:
 		"""Offer a stack over a list the composition keeps."""
 
@@ -937,6 +984,7 @@ class Recipe (Control):
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.about = list(about)
 
 		self._offered = {
 			generator.get("name"): {
@@ -967,8 +1015,7 @@ class Recipe (Control):
 		if self.builds is not None:
 			declared["builds"] = self.builds
 
-		if self.title is not None:
-			declared["title"] = self.title
+		declared.update(self.said())
 
 		return declared
 
