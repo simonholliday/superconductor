@@ -13,6 +13,7 @@ import pytest
 
 import conftest
 import superintendent.protocol
+import superintendent.service
 
 
 playwright_api = pytest.importorskip("playwright.sync_api")
@@ -2938,3 +2939,129 @@ def test_silencing_a_block_does_not_empty_it (
 	panel.wait_for_selector(".part.silent", timeout=5_000)
 
 	assert panel.locator('.part[data-part="grid"] .cell.on').count() == before
+
+
+SURFACE_RULES = {
+	".part-title button",
+	".part-body button, .part-foot button",
+	".bar button, .sheet button, .menu .options button, .sizes .choices button,"
+	" .theme .choices button",
+	".part-body .menu .options button, .part-foot .menu .options button",
+}
+"""The only rules allowed to give a control a height or a type.
+
+Named rather than matched by a prefix, so a fourth surface cannot arrive by
+accident — adding one is a decision, and this is where it is made.
+"""
+
+
+def _button_sizes (panel: typing.Any) -> dict[str, dict[str, set]]:
+	"""Every button on the page, grouped by the surface it sits on."""
+
+	return panel.evaluate("""() => {
+		const surface = (one) =>
+			one.closest(".sheet, .menu .options, .sizes .choices, .theme .choices") ? "chrome"
+			: one.closest(".bar") ? "chrome"
+			: one.closest(".part-title") ? "title"
+			: one.closest(".part") ? "lattice" : "loose";
+
+		const seen = {};
+
+		for (const one of document.querySelectorAll("button")) {
+			const at = surface(one);
+			const shape = getComputedStyle(one);
+
+			seen[at] = seen[at] || { sizes: [], floors: [], who: [] };
+			seen[at].sizes.push(shape.fontSize);
+			seen[at].floors.push(shape.minHeight);
+			seen[at].who.push(one.className + "|" + shape.fontSize + "|" + shape.minHeight);
+		}
+
+		return seen;
+	}""")
+
+
+def test_a_control_takes_its_size_from_the_surface_it_sits_on (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, twice: "I am not seeing consistency ... I want to ensure that as we
+	build out more UI components, consistency is *default* not something I have
+	to ask for each time."
+
+	It was declared per purpose — `.offer`, `.clear`, `.switch`, `.move` — each
+	in the place it was first needed and each correct there.  Then a button was
+	added to a footer, inherited the sheet's size, and "send to…" came out half
+	again as large as "clear" beside it.
+
+	So a control's size is the surface's to decide and never the control's.
+	A purpose may change colour, width and wording; it may not change height or
+	type.  This is what makes that a rule rather than a paragraph.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	# A sheet and a menu open, so chrome is measured with something in it rather
+	# than only the bar.
+	panel.locator('.part[data-part="grid"] .part-foot .offer.add').click()
+	panel.wait_for_selector(".sheet .offer", timeout=5_000)
+
+	for at, seen in _button_sizes(panel).items():
+		assert len(set(seen["sizes"])) == 1, \
+			f"{at} draws buttons at {sorted(set(seen['sizes']))}: {sorted(set(seen['who']))}"
+		assert len(set(seen["floors"])) == 1, \
+			f"{at} floors buttons at {sorted(set(seen['floors']))}: {sorted(set(seen['who']))}"
+
+
+def test_a_control_on_the_lattice_is_a_cell_and_one_in_chrome_is_a_finger (
+	panel: typing.Any) -> None:
+	"""The division is the whole of the rule (#2107): what is on the lattice
+	follows the size a person chose, and what is not keeps a fixed target.
+
+	A menu option has no business being 96px tall because the pattern behind it
+	is set large — and it has no business shrinking to 22 either, because it is
+	not part of the music.
+	"""
+
+	_settled(panel)
+
+	row = panel.evaluate(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--row').trim()")
+
+	seen = _button_sizes(panel)
+
+	assert set(seen["lattice"]["floors"]) == {row}, \
+		f"a control on the lattice is not one row: {sorted(set(seen['lattice']['who']))}"
+	assert set(seen["chrome"]["floors"]) == {"44px"}, \
+		f"a control in chrome is not a finger: {sorted(set(seen['chrome']['who']))}"
+
+
+def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
+	"""The static half, and the one that catches it at the moment it is written
+	rather than the moment somebody looks.
+
+	A rule that names a button and sets its height or its type is a rule that
+	will be right where it was written and wrong the first time that button is
+	used somewhere else.  That is exactly how this went wrong.
+	"""
+
+	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	code = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
+
+	loose = []
+
+	for block in re.findall(r"([^{}]+)\{([^{}]*)\}", code):
+		selector, body = block[0].strip(), block[1]
+
+		if "button" not in selector or ":" in selector.split("button")[-1].split(",")[0]:
+			continue
+
+		# The surface rules are the only ones allowed to say it, and they are
+		# named here rather than matched by a prefix so that a fourth cannot be
+		# added by accident.
+		if selector.replace("\n", " ") in SURFACE_RULES:
+			continue
+
+		if "min-height" in body or re.search(r"(?<!-)\bheight:", body) or "font-size" in body:
+			loose.append(selector)
+
+	assert loose == [], f"these name a button and set its own size: {loose}"

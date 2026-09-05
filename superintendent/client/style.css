@@ -66,7 +66,6 @@
 	   an overlay rather than a value so one rule serves a block, the bar and a
 	   popover, which are three different grounds. */
 	--wash: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.04));
-	--sunken: light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.25));
 	--veil: light-dark(rgba(16, 18, 22, 0.38), rgba(0, 0, 0, 0.6));
 	--playhead-edge: light-dark(rgba(0, 0, 0, 0.38), rgba(255, 255, 255, 0.35));
 
@@ -361,16 +360,12 @@ html, body {
 .part-title .close {
 	flex: none;
 	width: max(24px, var(--cell));
-	height: max(24px, var(--cell));
 	margin-right: calc(var(--pad) * -1);
 	border: none;
 	border-radius: 6px;
 	background: transparent;
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-title);
 	line-height: 1;
-	touch-action: none;
 }
 
 .part-title .close:hover { color: var(--danger); }
@@ -388,6 +383,67 @@ html, body {
 	color: var(--ink);
 	font-variant-numeric: tabular-nums;
 }
+
+/* --- What size a control is, and it is never the control's own decision ------
+ *
+ * **A control takes its size from the surface it sits on.** Not from what it
+ * does, not from where it was written, and never from a rule that names it.
+ *
+ * This exists because the alternative was tried and failed twice. Sizes were
+ * declared per purpose — `.offer`, `.clear`, `.switch`, `.move` — each in the
+ * place it was first needed, and each correct there. Then a button was added to
+ * a footer and inherited the sheet's size, and "send to…" came out half again
+ * as large as "clear" beside it. Simon found it, as he found the last one, and
+ * said the thing that matters: consistency has to be *default*, not something he
+ * asks for each time.
+ *
+ * A purpose may still change a control's **colour**, its **width**, and what is
+ * written on it. It may not change its height or its type. There are three
+ * surfaces and that is the whole of the rule:
+ *
+ *   a title bar — title type, one cell tall, because a title has its own scale
+ *   a part's body or foot — body type, one row tall, because it is on the lattice
+ *   chrome — the bar, a sheet, a popover: fixed 44px and chrome type, because
+ *       none of it is on the lattice and a menu option has no business being
+ *       96px tall because the pattern behind it is set large (#2107)
+ *
+ * `tests/test_page.py` measures every button on the page, groups them by
+ * surface, and refuses a group that does not agree with itself. That is what
+ * makes this a rule rather than a paragraph. */
+
+.part-title button {
+	min-height: max(24px, var(--cell));
+	font: inherit;
+	font-size: var(--type-title);
+	touch-action: none;
+}
+
+.part-body button,
+.part-foot button {
+	min-height: var(--row);
+	font-size: var(--type-body);
+	touch-action: none;
+}
+
+.bar button,
+.sheet button,
+.menu .options button,
+.sizes .choices button,
+.theme .choices button {
+	min-height: 44px;
+	font-size: var(--type-chrome);
+	touch-action: none;
+}
+
+/* A popover hangs off a block but is not on it. Written after the lattice rule
+   above so it wins, because a menu opened from inside a part is a descendant of
+   one and would otherwise take the part's size. */
+.part-body .menu .options button,
+.part-foot .menu .options button {
+	min-height: 44px;
+	font-size: var(--type-chrome);
+}
+
 
 /* One gap between the title and the grid, which is the gap the lattice puts
    between any two cells — so a block of ten rows is exactly eleven cells. */
@@ -629,16 +685,13 @@ html, body {
 .transport { display: flex; align-items: center; gap: 0.9rem; }
 
 .transport button {
-	min-height: 44px;
 	padding: 0 0.9rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	font: inherit;
 	font-variant-numeric: tabular-nums;
-	touch-action: none;
-}
+	touch-action: none;}
 
 .transport button:disabled { opacity: 0.35; }
 
@@ -681,17 +734,13 @@ html, body {
 .sizes, .theme { position: relative; display: flex; align-items: center; }
 
 .sizes > button, .theme > button {
-	min-height: 44px;
 	min-width: 44px;
 	padding: 0 0.8rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
-	touch-action: none;
-}
+	touch-action: none;}
 
 .sizes > button.open, .theme > button.open { color: var(--ink); border-color: var(--ring); }
 
@@ -714,18 +763,14 @@ html, body {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
-	min-height: 44px;
 	padding: 0 0.8rem;
 	border-radius: 8px;
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--ink);
-	font: inherit;
-	font-size: var(--type-chrome);
 	text-align: left;
 	white-space: nowrap;
-	touch-action: none;
-}
+	touch-action: none;}
 
 .sizes .choices button.chosen { border-color: var(--on-edge); color: var(--on); }
 
@@ -793,18 +838,14 @@ html, body {
 .pages { display: flex; align-items: center; gap: 0.3rem; }
 
 .pages button {
-	min-height: 44px;
 	min-width: 44px;
 	padding: 0 0.8rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
 	white-space: nowrap;
-	touch-action: none;
-}
+	touch-action: none;}
 
 /* The page you are on is filled rather than outlined, the way a held transport
    is: it is a state you are in, not an action you can take. */
@@ -904,17 +945,13 @@ html, body {
 .inventory { display: flex; align-items: center; gap: 0.3rem; }
 
 .inventory button {
-	min-height: 44px;
 	padding: 0 0.7rem;
 	border-radius: 8px;
 	border: 1px dashed var(--edge);
 	background: transparent;
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
 	white-space: nowrap;
-	touch-action: none;
-}
+	touch-action: none;}
 
 /* A pitched pattern.
  *
@@ -988,15 +1025,11 @@ html, body {
 
 .grid.params .switch {
 	min-width: 5rem;
-	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-body);
 	letter-spacing: 0.04em;
-	touch-action: none;
 }
 
 /* On is filled rather than outlined, the way a held transport is: a state you
@@ -1011,16 +1044,12 @@ html, body {
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
 .grid.params .choices button {
-	min-height: var(--row);
 	padding: 0 0.7rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-body);
 	white-space: nowrap;
-	touch-action: none;
 }
 
 .grid.params .choices button.here {
@@ -1167,14 +1196,10 @@ html, body {
    letter. */
 .grid.params .layer .move {
 	min-width: var(--row);
-	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-body);
-	touch-action: none;
 }
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
@@ -1190,14 +1215,10 @@ html, body {
 
 .stepper button {
 	min-width: 44px;
-	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	font: inherit;
-	font-size: var(--type-body);
-	touch-action: none;
 }
 
 .stepper span {
@@ -1228,63 +1249,26 @@ html, body {
 
 /* Picking a generator. A tall list of names on a touchscreen, so it scrolls
    inside the block rather than making the block taller than the glass. */
-.catalogue {
-	display: flex;
-	flex-direction: column;
-	gap: 0.3rem;
-	max-height: 22rem;
-	overflow-y: auto;
-	padding: 0.3rem;
-	border: 1px solid var(--edge);
-	border-radius: 8px;
-	background: var(--sunken);
-}
-
-.catalogue .pick {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding: 0.2rem 0.4rem;
-	color: var(--ink-quiet);
-	font-size: var(--type-note);
-}
-
-.catalogue .pick .spacer { flex: 1; }
-
-.catalogue .pick button {
-	min-height: 44px;
-	padding: 0 0.8rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
-	background: var(--panel);
-	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
-	touch-action: none;
-}
 
 .offer {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 0.15rem;
-	min-height: 44px;
 	padding: 0.5rem 0.8rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	font: inherit;
 	text-align: left;
-	touch-action: none;
 }
 
-.offer b { font-family: ui-monospace, monospace; font-size: var(--type-body); }
+.offer b { font-family: ui-monospace, monospace; font-size: var(--type-chrome); }
 
 .offer i {
 	color: var(--ink-quiet);
 	font-style: normal;
-	font-size: var(--type-note);
+	font-size: var(--type-chrome-quiet);
 	line-height: 1.4;
 }
 
@@ -1293,12 +1277,11 @@ html, body {
    shorter list, and it is the same courtesy the app pays upstream. */
 .offer.partial { opacity: 0.45; }
 
-/* This one is permanent and sits on the lattice, unlike the chooser it opens. */
-.offer.add {
+/* These are permanent and sit on the lattice, unlike the chooser they open.
+   Only what a purpose may say: how it is laid out and what colour it is. */
+.part-foot .offer {
 	align-items: center;
-	min-height: var(--row);
 	color: var(--ink-quiet);
-	font-size: var(--type-body);
 }
 
 
@@ -1316,16 +1299,12 @@ html, body {
 	justify-content: space-between;
 	gap: 0.5rem;
 	flex: 1;
-	min-height: var(--row);
 	padding: 0 0.8rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	font: inherit;
-	font-size: var(--type-body);
 	text-align: left;
-	touch-action: none;
 }
 
 .menu > button.open { border-color: var(--ring); }
@@ -1356,18 +1335,14 @@ html, body {
 }
 
 .menu .options button {
-	min-height: 44px;
 	padding: 0 0.9rem;
 	border-radius: 8px;
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--ink);
-	font: inherit;
-	font-size: var(--type-chrome);
 	text-align: left;
 	white-space: nowrap;
-	touch-action: none;
-}
+	touch-action: none;}
 
 .menu .options button.here { border-color: var(--on-edge); color: var(--on); }
 
@@ -1394,16 +1369,12 @@ html, body {
 .part.silent .part-title { opacity: 0.4; }
 
 .part-foot .clear {
-	min-height: var(--row);
 	padding: 0 0.9rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--danger);
-	font: inherit;
-	font-size: var(--type-body);
 	white-space: nowrap;
-	touch-action: none;
 }
 
 /* --- The lines between a contribution and the pattern it feeds ------------
@@ -1546,22 +1517,18 @@ html, body {
 	gap: 0.5rem;
 	padding: 0.2rem 0.4rem 0.5rem;
 	color: var(--ink);
-	font-size: var(--type-body);
+	font-size: var(--type-chrome);
 }
 
 .sheet-body header .spacer { flex: 1; }
 
 .sheet-body header button {
-	min-height: 44px;
 	padding: 0 0.9rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-body);
-	touch-action: none;
-}
+	touch-action: none;}
 
 /* What a sheet's list is divided into, when it holds more than one kind. */
 .sheet-body h4 {
@@ -1575,11 +1542,14 @@ html, body {
 
 .sheet-body h4:first-of-type { margin-top: 0; }
 
+/* A sheet is chrome, so its words read at chrome size: it opens over the page
+   rather than sitting on the lattice, and it has no business growing because
+   the grid behind it was set large. */
 .sheet .ask {
 	margin: 0;
 	padding: 0.4rem 0.6rem 1rem;
 	color: var(--ink-quiet);
-	font-size: var(--type-note);
+	font-size: var(--type-chrome);
 	line-height: 1.6;
 }
 
@@ -1588,16 +1558,12 @@ html, body {
 .sheet .answers { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 .sheet .answers button {
-	min-height: 44px;
 	padding: 0 1.2rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	font: inherit;
-	font-size: var(--type-body);
-	touch-action: none;
-}
+	touch-action: none;}
 
 /* The one that cannot be taken back is the one that is coloured. */
 .sheet .answers button.danger {
