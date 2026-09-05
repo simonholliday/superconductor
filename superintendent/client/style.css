@@ -1418,17 +1418,37 @@ html, body {
 	fill: none;
 }
 
-/* The head and the two anchors, which are one object with the line and so are
-   never a different colour or a different weight from it. */
-.join path, .join circle {
+/* The anchors, which are one object with the line and so are never a different
+   colour or a different weight from it. */
+.join circle.anchor {
 	fill: var(--ring);
 	fill-opacity: 0.45;
+}
+
+/* The switch on a line, and it looks like one.
+ *
+ * It was a bare triangle, and it was already a switch — Simon asked whether it
+ * should become one, which is the finding rather than the request: an
+ * affordance nobody can see is not an affordance.
+ *
+ * A disc with the arrow inside it, so the direction is still said and the
+ * target is unmistakable. Filled while the link is sounding; the arrow is
+ * punched out of it in the page's own ground, which is what makes it read as
+ * one object rather than two stacked marks. */
+.join circle.node {
+	fill: var(--ring);
+	fill-opacity: 0.9;
+}
+
+.join path {
+	fill: var(--ground);
+	fill-opacity: 1;
 }
 
 /* Brighter under a finger: the line says "these are related" all the time, and
    "this one, right now" while a hand is on either end. */
 .join.live line { stroke-opacity: 1; }
-.join.live path, .join.live circle { fill-opacity: 1; }
+.join.live circle.anchor { fill-opacity: 1; }
 
 /* **The head is the switch, and only the head.**
  *
@@ -1442,7 +1462,7 @@ html, body {
    not a target — so the head could be tapped to silence a link and then only on
    its two-pixel outline to bring it back. Caught by the test that turns one off
    and on again, which is why that test does both. */
-.join path { pointer-events: all; cursor: pointer; }
+.join circle.node, .join path { pointer-events: all; cursor: pointer; }
 
 /* A silenced link, said twice over: the line goes dashed and the head goes
    hollow.
@@ -1456,17 +1476,28 @@ html, body {
 	stroke-opacity: 0.3;
 }
 
+/* Hollow, which is what every toggle on this surface says when it is off: a
+   filled thing is sounding and an outlined one is not. The colour stays the
+   thing's own — a link is the accent because a link is a connection — because
+   what has to be identical is the *sentence*, not the hue. */
+.join.off circle.node {
+	fill: none;
+	stroke: var(--ring);
+	stroke-width: var(--mark-hair);
+	stroke-opacity: 0.55;
+}
+
 .join.off path {
 	fill: none;
 	stroke: var(--ring);
 	stroke-width: var(--mark-hair);
-	stroke-opacity: 0.5;
+	stroke-opacity: 0.55;
 }
 
-.join.off circle { fill-opacity: 0.2; }
+.join.off circle.anchor { fill-opacity: 0.2; }
 
 .join.off.live line { stroke-opacity: 0.7; }
-.join.off.live path { stroke-opacity: 1; }
+.join.off.live circle.node, .join.off.live path { stroke-opacity: 1; }
 
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 

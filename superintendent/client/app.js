@@ -64,6 +64,14 @@ const ARROW = { floor: 15, share: 0.5, ceiling: 30 };
  * gathered on its edge merge into a smudge that says nothing — Simon found that
  * with three of them. At the middle they are as far apart as the lines are. */
 
+const NODE = 0.7;
+/* How large the switch on a line is, as a share of its arrowhead.
+ *
+ * Large enough to hold the head inside it, which is what makes it read as one
+ * object rather than a mark with a halo. It was a bare triangle and it *was*
+ * already a switch — Simon asked whether it should become one, which is the
+ * finding: an affordance nobody can see is not an affordance. */
+
 const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
 /* How large the dot is where a line meets a block.
  *
@@ -1448,6 +1456,9 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 				].join(" ");
 
 				const live = touched === line.from || touched === line.to;
+				const flip = line.control && onFlip
+					? (event) => { event.preventDefault(); onFlip(line); }
+					: null;
 
 				return html`
 					<g key=${`${line.from}>${line.to}`}
@@ -1461,14 +1472,20 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 						     surface on the panel. A head is drawn where it is, so a
 						     person can see what they are about to hit and move the
 						     block if it is in the way. */ ""}
-						<path
-							d=${head}
-							onPointerDown=${line.control && onFlip
-								? (event) => { event.preventDefault(); onFlip(line); }
-								: null} />
-						${/* Both ends, because either could be the one read wrongly. */ ""}
-						<circle cx=${line.a.x} cy=${line.a.y} r=${anchor} />
-						<circle cx=${line.b.x} cy=${line.b.y} r=${anchor} />
+						${/* The switch, and it looks like one: a disc with the arrow
+						     inside it. Filled while the link is sounding, hollow when
+						     it is not — the same sentence every other toggle on this
+						     surface says, in the shape a line can carry. */ ""}
+						<circle
+							class="node" cx=${middle.x} cy=${middle.y} r=${arrow * NODE}
+							onPointerDown=${flip} />
+						<path d=${head} onPointerDown=${flip} />
+						${/* Both ends, because either could be the one read wrongly.
+						     Inert: an anchor says where a line stops and nothing else,
+						     and every live target on this overlay is one the grid
+						     underneath has lost. */ ""}
+						<circle class="anchor" cx=${line.a.x} cy=${line.a.y} r=${anchor} />
+						<circle class="anchor" cx=${line.b.x} cy=${line.b.y} r=${anchor} />
 					</g>`;
 			})}
 		</svg>`;

@@ -64,11 +64,6 @@
 	],
 	"shared": [
 		{
-			"name": "grid",
-			"x": 44,
-			"y": 1
-		},
-		{
 			"name": "drum_recipe/probe",
 			"x": 3,
 			"y": 1
@@ -85,13 +80,13 @@
 		},
 		{
 			"name": "shared",
-			"x": 21,
-			"y": 6
+			"x": 25,
+			"y": 15
 		},
 		{
-			"name": "drum_recipe/lmton4tu0rsm",
-			"x": 42,
-			"y": 18
+			"name": "grid",
+			"x": 51,
+			"y": 2
 		}
 	]
 }

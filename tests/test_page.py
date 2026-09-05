@@ -2260,7 +2260,7 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 
 	line = _edges(panel, "stack/one>grid")
 	dots = panel.eval_on_selector_all(
-		'[data-join="stack/one>grid"] circle',
+		'[data-join="stack/one>grid"] circle.anchor',
 		"""els => els.map((one) => ({
 			x: +one.getAttribute("cx"), y: +one.getAttribute("cy"), r: +one.getAttribute("r") }))""")
 
@@ -2627,19 +2627,22 @@ def test_a_silenced_link_is_dashed_and_hollow (
 	_settled(panel)
 
 	drawn = panel.evaluate("""() => {
-		const line = document.querySelector('[data-join="second>grid"] line');
-		const head = document.querySelector('[data-join="second>grid"] path');
+		const at = (selector) => getComputedStyle(
+			document.querySelector('[data-join="second>grid"] ' + selector));
 
 		return {
-			dashes: getComputedStyle(line).strokeDasharray,
-			fill: getComputedStyle(head).fill,
-			stroke: getComputedStyle(head).stroke,
+			dashes: at("line").strokeDasharray,
+			head: { fill: at("path").fill, stroke: at("path").stroke },
+			node: { fill: at("circle.node").fill, stroke: at("circle.node").stroke },
 		};
 	}""")
 
 	assert drawn["dashes"] not in ("none", ""), f"a silenced link is not dashed: {drawn}"
-	assert drawn["fill"] == "none", f"a silenced head is still filled: {drawn}"
-	assert drawn["stroke"] != "none", f"a silenced head has no outline: {drawn}"
+
+	# Hollow, which is what every toggle here says when it is off.
+	for part in ("head", "node"):
+		assert drawn[part]["fill"] == "none", f"a silenced {part} is still filled: {drawn}"
+		assert drawn[part]["stroke"] != "none", f"a silenced {part} has no outline: {drawn}"
 
 
 def test_only_the_head_of_an_arrow_takes_a_tap (
@@ -2661,8 +2664,9 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 		return {
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
 			lines: parts(".join line"),
-			anchors: parts(".join circle"),
+			anchors: parts(".join circle.anchor"),
 			heads: parts(".join path"),
+			nodes: parts(".join circle.node"),
 		};
 	}""")
 
@@ -2670,6 +2674,7 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 	assert set(inert["lines"]) == {"none"}, f"a line takes taps: {inert}"
 	assert set(inert["anchors"]) == {"none"}, f"an anchor takes taps: {inert}"
 	assert set(inert["heads"]) == {"all"}, f"a head takes no taps: {inert}"
+	assert set(inert["nodes"]) == {"all"}, f"the switch takes no taps: {inert}"
 
 
 def test_a_route_is_unmade_where_it_was_made (
@@ -3065,3 +3070,69 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 			loose.append(selector)
 
 	assert loose == [], f"these name a button and set its own size: {loose}"
+
+
+def test_the_switch_on_a_line_is_big_enough_to_find (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It was a bare triangle, and it was already a switch — Simon asked whether
+	it should become one, which is the finding rather than the request: an
+	affordance nobody can see is not an affordance.
+
+	Held to the same floor as a control on the lattice, because that is what it
+	is: something a finger has to land on, at whatever size the person chose.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	row = float(panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))"))
+
+	across = float(panel.eval_on_selector(
+		'[data-join="second>grid"] circle.node',
+		"one => one.getBoundingClientRect().width"))
+
+	assert across >= row * 0.5, f"the switch on a line is {across}px against a {row}px row"
+
+
+def test_every_toggle_says_off_the_same_way (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "should we mandate the same toggle in all places where we
+	enable/disable something?"
+
+	The shape cannot be the same — a block has a row to put a button in and a
+	line does not — but the *sentence* must be: a filled thing is sounding and an
+	outlined one is not.  That is what makes a state readable without being
+	learned twice.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	filled = panel.evaluate("""() => {
+		const shape = (one) => {
+			const seen = getComputedStyle(one);
+
+			return seen.backgroundColor !== "rgba(0, 0, 0, 0)" ? "filled" : "outlined";
+		};
+
+		return {
+			live: shape(document.querySelector('.part[data-part="stack/one"] .switch.on')),
+			mute: shape(document.querySelector('.part[data-part="grid"] .part-foot .switch.on')),
+		};
+	}""")
+
+	assert set(filled.values()) == {"filled"}, f"a live toggle is not filled: {filled}"
+
+	# And off is the outline, in both places.
+	fake_app.confirm("grid/enabled", False, by="panel")
+	panel.wait_for_selector(".part.silent", timeout=5_000)
+
+	off = panel.eval_on_selector(
+		'.part[data-part="grid"] .part-foot .switch',
+		"one => getComputedStyle(one).backgroundColor")
+
+	assert off != panel.eval_on_selector(
+		'.part[data-part="stack/one"] .switch.on',
+		"one => getComputedStyle(one).backgroundColor"), \
+		"an off toggle is drawn like a live one"
