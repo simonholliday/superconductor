@@ -962,6 +962,7 @@ class Recipe (Control):
 		pitches: collections.abc.Sequence[str] = (),
 		bounds: dict[str, tuple[float, float]] | None = None,
 		builds: str | None = None,
+		sources: dict[str, collections.abc.Callable[[typing.Any], None]] | None = None,
 		data_key: str = "recipe",
 		name: str = "recipe",
 		title: str | None = None,
@@ -976,6 +977,20 @@ class Recipe (Control):
 		buttons on the pattern it feeds, so a person can see what makes what.
 		Nothing here reads it; it is a fact about the composition that the
 		composition states, like the rows of a grid.
+		"""
+
+		self.sources = dict(sources or {})
+		"""Which other grids this stack may take notes from, and how to play one.
+
+		A name the composition also declared as a control, against a function
+		that writes that grid onto a pattern being built.  **The function is the
+		composition's because turning a grid into notes is** — a velocity, a
+		note map, a length, whether a row is a drum voice or a pitch.  This
+		routes; it does not know what it is routing (#1465).
+
+		Empty by default, which is a stack that offers generators only.  That is
+		what every stack was before #2108 and what a composition with nothing
+		worth sharing still wants.
 		"""
 
 		self.composition = composition
@@ -1015,6 +1030,12 @@ class Recipe (Control):
 		if self.builds is not None:
 			declared["builds"] = self.builds
 
+		if self.sources:
+			# Names only. What each is called on the glass is the control's own
+			# title, which a panel already has — saying it twice would be two
+			# places for it to be wrong.
+			declared["sources"] = sorted(self.sources)
+
 		declared.update(self.said())
 
 		return declared
@@ -1029,17 +1050,29 @@ class Recipe (Control):
 
 		held = self.composition.data.get(self.data_key) or {}
 
-		return [
-			{
+		kept = []
+
+		for layer in held.get("layers") or []:
+			one: dict[str, typing.Any] = {
 				"id": str(layer.get("id", "")),
 				"kind": str(layer.get("kind", "generator")),
-				"generator": layer.get("generator"),
 				"index": int(layer.get("index", 0)),
 				"bypassed": bool(layer.get("bypassed", False)),
 				"params": dict(layer.get("params") or {}),
 			}
-			for layer in held.get("layers") or []
-		]
+
+			# Each kind carries the one thing that says what it plays, and
+			# neither carries the other's — a routed grid has no generator and a
+			# generator has no source.
+			if one["kind"] == "pattern":
+				one["source"] = layer.get("source")
+
+			else:
+				one["generator"] = layer.get("generator")
+
+			kept.append(one)
+
+		return kept
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Rewrite the stack, or move one parameter of one layer."""
@@ -1094,8 +1127,26 @@ class Recipe (Control):
 
 			kind = str(entry.get("kind", "generator"))
 
-			if kind != "generator":
-				raise Refused(f"a layer cannot yet be a {kind}")
+			if kind not in ("generator", "pattern"):
+				raise Refused(f"a layer cannot be a {kind}")
+
+			if kind == "pattern":
+				source = entry.get("source")
+
+				if source not in self.sources:
+					raise Refused(f"this stack cannot take from a pattern called {source}")
+
+				wanted.append({
+					"id": name,
+					"kind": kind,
+					"source": source,
+					"index": self._numbered(str(source), name, entry, standing, counting),
+					"bypassed": bool(entry.get("bypassed", False)),
+
+					# Nothing to tune: a routed grid plays what is drawn on it.
+					"params": {},
+				})
+				continue
 
 			generator = entry.get("generator")
 			offered = self._offered.get(generator)
@@ -1142,8 +1193,8 @@ class Recipe (Control):
 		counted = {str(one): int(mark) for one, mark in (held.get("counts") or {}).items()}
 
 		for layer in self.layers():
-			generator = str(layer["generator"])
-			counted[generator] = max(counted.get(generator, 0), layer["index"])
+			named = str(layer.get("source") if layer["kind"] == "pattern" else layer["generator"])
+			counted[named] = max(counted.get(named, 0), layer["index"])
 
 		return counted
 
@@ -1254,6 +1305,22 @@ class Recipe (Control):
 
 		for layer in self.layers():
 			if layer["bypassed"]:
+				continue
+
+			if layer["kind"] == "pattern":
+				source = str(layer.get("source"))
+				play = self.sources.get(source)
+
+				if play is None:
+					self._complain(source, "this composition offers no such pattern")
+					continue
+
+				try:
+					play(pattern)
+
+				except Exception as error:
+					self._complain(source, str(error))
+
 				continue
 
 			generator = str(layer["generator"])

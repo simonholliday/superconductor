@@ -167,7 +167,7 @@ STACK: dict[str, typing.Any] = {
 		{"name": "thin", "parameters": [
 			{"name": "amount", "kind": "number", "min": 0.0, "max": 1.0},
 		]},
-	]},
+	], "sources": ["shared"]},
 }
 
 
@@ -187,6 +187,35 @@ def test_a_stack_is_set_whole_because_its_order_is_part_of_its_value () -> None:
 	assert state["recipe"]["layers"] == [
 		{"id": "a", "kind": "generator", "generator": "euclidean",
 		 "bypassed": False, "params": {"pulses": 7}}]
+
+
+def test_a_layer_may_take_from_a_pattern_instead_of_a_generator () -> None:
+	"""One mechanism, not two.  A generator contributes notes to a pattern and a
+	grid contributes notes to a pattern, and Simon settled that this is the same
+	thing in effect (#2108) — so a layer says which kind it is and carries the
+	one fact that says what it plays.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+		{"id": "a", "kind": "pattern", "source": "shared"}])
+
+	assert state["recipe"]["layers"] == [
+		{"id": "a", "kind": "pattern", "bypassed": False,
+		 "source": "shared", "params": {}}]
+
+
+def test_a_layer_may_not_take_from_a_pattern_the_app_does_not_offer () -> None:
+	"""Which grids a stack may take from is the app's to say, for the same
+	reason the generators are: this package does not know that a grid exists,
+	let alone which of them belongs to an instrument."""
+
+	state: dict[str, typing.Any] = {}
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+			{"id": "a", "kind": "pattern", "source": "nowhere"}])
 
 
 def test_a_layers_number_survives_the_service () -> None:

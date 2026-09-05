@@ -1467,6 +1467,18 @@ html, body {
 	touch-action: none;
 }
 
+/* What a sheet's list is divided into, when it holds more than one kind. */
+.sheet-body h4 {
+	margin: 0.6rem 0 0.1rem;
+	color: var(--ink-quiet);
+	font-size: var(--type-chrome-quiet);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.sheet-body h4:first-of-type { margin-top: 0; }
+
 .sheet .ask {
 	margin: 0;
 	padding: 0.4rem 0.6rem 1rem;

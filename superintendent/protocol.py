@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.7.0"
+CONTRACT_VERSION = "1.8.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -46,6 +46,13 @@ them.  And a parameter may carry ``role``, which says what a shape was before it
 became a shape — a ``choice`` with ``role: "pitch"`` is a pitch the composition
 resolved into the voices it has.  A panel too old for either ignores it as it
 ignores any field it does not know.
+
+1.8.0 lets a layer of a stack be a ``pattern`` as well as a ``generator``: a grid
+belonging to no instrument, routed into several so that two synths share a
+bassline and each add notes of their own (#2108).  It names a ``source`` where a
+generator names a ``generator``, and the stack declares the ``sources`` it may
+take from.  A service too old refuses the layer rather than dropping it, which is
+the right way round: the app would play a route the service was not holding.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

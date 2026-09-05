@@ -534,3 +534,123 @@ def test_a_stack_that_is_refused_hands_out_no_numbers () -> None:
 		])
 
 	assert composition.data["recipe"]["counts"] == {"euclidean": 1}
+
+
+def test_a_stack_may_take_its_notes_from_another_grid () -> None:
+	"""A grid belonging to no instrument, routed into several so that two synths
+	share a bassline and each add notes of their own (#2108).
+
+	The same mechanism as a generator rather than a second one: a contribution
+	is a contribution, and what makes its notes is its own business.
+	"""
+
+	composition = Composition()
+	played: list[str] = []
+
+	recipe = adapter.Recipe(
+		composition, catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: played.append("shared")})
+
+	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.build(Builder())
+
+	assert played == ["shared"]
+	assert recipe.layers() == [
+		{"id": "a", "kind": "pattern", "source": "shared", "index": 1,
+		 "bypassed": False, "params": {}}]
+
+
+def test_a_routed_grid_is_offered_by_name_and_nothing_else () -> None:
+	"""What a source is called on the glass is the control's own title, which a
+	panel already has.  Saying it twice would be two places for it to be wrong."""
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: None, "other": lambda pattern: None})
+
+	assert recipe.declaration()["sources"] == ["other", "shared"]
+
+
+def test_a_stack_offering_no_sources_says_so_by_saying_nothing () -> None:
+	"""Which is every stack there was before this, and every one a composition
+	with nothing worth sharing still wants."""
+
+	recipe, _ = _recipe()
+
+	assert "sources" not in recipe.declaration()
+
+
+def test_a_route_to_a_grid_this_composition_does_not_offer_is_refused () -> None:
+	"""Rather than kept and skipped.  A stack naming a grid nobody has is a
+	fault in the panel, and the panel should be told."""
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: None})
+
+	with pytest.raises(adapter.Refused):
+		recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "nowhere"}])
+
+
+def test_a_bypassed_route_is_not_played () -> None:
+	"""The same switch as a generator's, because it is the same stack."""
+
+	played: list[str] = []
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: played.append("shared")})
+
+	recipe.apply(["layers"], [
+		{"id": "a", "kind": "pattern", "source": "shared", "bypassed": True}])
+	recipe.build(Builder())
+
+	assert played == []
+
+
+def test_a_route_and_a_generator_play_in_the_order_they_are_held () -> None:
+	"""The order is musical content whichever kind is in it: a fill told to skip
+	where a note already sits depends on what ran before it, and a routed grid
+	puts notes there."""
+
+	played: list[str] = []
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: played.append("shared")})
+
+	builder = Builder()
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "kind": "pattern", "source": "shared"},
+	])
+	recipe.build(builder)
+
+	assert played == ["shared"]
+	assert [name for name, _ in builder.calls] == ["euclidean"]
+
+	recipe.apply(["layers"], list(reversed(recipe.layers())))
+	builder.calls.clear()
+	played.clear()
+	recipe.build(builder)
+
+	assert played == ["shared"]
+
+
+def test_a_route_that_will_not_play_is_skipped_rather_than_silencing_the_part () -> None:
+	"""One bad contribution must not cost the instrument its bar, which is the
+	same argument that already covers a failing generator."""
+
+	def broken (pattern: typing.Any) -> None:
+		raise RuntimeError("no")
+
+	builder = Builder()
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS, sources={"shared": broken})
+
+	recipe.apply(["layers"], [
+		{"id": "a", "kind": "pattern", "source": "shared"},
+		{"id": "b", "generator": "euclidean", "params": {}},
+	])
+	recipe.build(builder)
+
+	assert [name for name, _ in builder.calls] == ["euclidean"]

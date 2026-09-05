@@ -952,10 +952,20 @@ def test_a_number_with_no_declared_bounds_is_worked_with_one_finger (
 
 	assert stepper.count() == 1, "duration has no bounds and should be a stepper"
 
+	# One whole cell, like every other control on the lattice. Not 44: that floor
+	# was removed with an argument (#2107) — a step cell is the most tapped thing
+	# on this surface and shrinks to 22 without complaint, so protecting a
+	# stepper from a size a person is happily playing at was an inconsistency
+	# rather than a trade-off. This asserted 44 and only passed while the page
+	# happened to fit at that size.
+	row = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))")
+
 	for index in range(stepper.locator("button").count()):
 		box = stepper.locator("button").nth(index).bounding_box()
 
-		assert box["width"] >= 44 and box["height"] >= 44, "a stepper button is not reachable"
+		assert box["height"] >= row - 1, f"a stepper button is {box['height']}px, not a cell"
+		assert box["width"] >= row - 1, f"a stepper button is {box['width']}px wide, not a cell"
 
 
 def test_a_range_is_one_bar_with_two_handles (panel: typing.Any) -> None:
@@ -1167,26 +1177,30 @@ def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> N
 	panel.locator('.part[data-part="stack/one"] .menu > button').first.click()
 	panel.wait_for_selector('.part[data-part="stack/one"] .menu .options', timeout=5_000)
 
-	hidden = panel.evaluate("""() => {
+	seen = panel.evaluate("""() => {
 		const block = document.querySelector('.part[data-part="stack/one"] .part-body');
 		const edges = block.getBoundingClientRect();
+		const menu = document.querySelector(".menu .options").getBoundingClientRect();
 
-		return [...document.querySelectorAll('.menu .options button')]
-			.filter((one) => {
+		return {
+			escapes: [...document.querySelectorAll('.menu .options button')].some((one) => {
 				const box = one.getBoundingClientRect();
 				return box.bottom > edges.bottom + 1 || box.top < edges.top - 1;
-			})
-			.map((one) => ({
-				label: one.textContent,
-				reaches: one.getBoundingClientRect().bottom,
-				viewport: window.innerHeight,
-			}));
+			}),
+			top: menu.top, bottom: menu.bottom, viewport: window.innerHeight,
+		};
 	}""")
 
+	assert seen["escapes"], "the menu did not escape the block that clips it"
+
 	# Escaping the block is the point; what must not happen is leaving the glass.
-	for option in hidden:
-		assert option["reaches"] <= option["viewport"] + 1, \
-			f"{option['label']} is drawn off the bottom of the screen"
+	# The menu's own box is what has to stay on it — an option below the fold of
+	# a menu that scrolls is reached by scrolling, which is what the scrolling is
+	# for. Asserting on the options instead made this pass or fail on whether
+	# they happened to fit, which is not the property.
+	assert seen["top"] >= -1, f"the menu is drawn off the top of the screen: {seen}"
+	assert seen["bottom"] <= seen["viewport"] + 1, \
+		f"the menu is drawn off the bottom of the screen: {seen}"
 
 	for index in range(panel.locator(".menu .options button").count()):
 		assert panel.locator(".menu .options button").nth(index).is_visible(), \
@@ -2498,3 +2512,115 @@ def test_a_contributions_number_is_still_there_after_a_reload (
 
 	assert "2" in panel.locator('.part[data-part="stack/two"] .part-title').inner_text(), \
 		"the number was lost on the way through the service"
+
+
+# --- A grid routed into a pattern (#2108) ------------------------------------
+#
+# Simon: "I might create a 'generic' melodic grid, and route it to both
+# instruments. The individual instrument grids might be empty, but inherit from
+# the generic pattern." One mechanism, not two: a generator contributes notes to
+# a pattern and a grid contributes notes to a pattern.
+
+
+def _route (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Route the second grid into the pattern the stack builds."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		 "bypassed": False, "params": {}},
+	], by="app")
+
+	panel.wait_for_selector('.part[data-part="stack/one"]', timeout=5_000)
+	_settled(panel)
+
+
+def test_a_grid_can_be_routed_into_a_pattern_from_the_glass (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The sheet offers the patterns this stack may take from alongside the
+	generators, because they are the same kind of thing to add."""
+
+	_open_the_stack(panel)
+
+	panel.locator('.part[data-part="grid"] .part-foot .offer.add').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	panel.locator(".sheet .offer", has_text="second").click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked, "routing a pattern asked for nothing"
+
+	added = asked[-1]["v"][-1]
+
+	assert added["kind"] == "pattern"
+	assert added["source"] == "second"
+	assert "generator" not in added
+
+
+def test_a_routed_grid_takes_from_one_place_and_gives_to_another (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The first block on this surface with both an input and an output, which
+	is what makes the question of how to tell them apart a question about
+	something real (#2108)."""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	drawn = panel.eval_on_selector_all(
+		".joins .join", "els => els.map((one) => one.dataset.join)")
+
+	assert sorted(drawn) == ["second>stack/one", "stack/one>grid"]
+
+
+def test_a_routed_grid_says_where_it_takes_from (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A routed grid has nothing to tune — what it plays is what is drawn on it
+	— so its one row is which grid that is.
+
+	Drawn with whichever control a choice of that size gets, which is the point
+	of it being an ordinary choice: one source is a row of buttons and thirty
+	would be a menu, and neither is a thing this had to decide.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	assert panel.locator('.part[data-part="stack/one"] .row-label').inner_text().strip() == "from"
+
+	# Named by the control's own title, which the panel already has, rather than
+	# by anything the stack repeated.
+	assert "second" in panel.locator(
+		'.part[data-part="stack/one"] .setting').inner_text().lower()
+
+
+def test_a_routed_grid_is_bypassed_and_removed_like_any_other_contribution (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""One stack, one set of controls.  A second way of saying the same thing
+	would be a second thing to learn for no gain."""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	panel.locator('.part[data-part="stack/one"] .switch').click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked[-1]["v"][0]["bypassed"] is True
+
+	panel.locator('.part[data-part="stack/one"] .drop').click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked[-1]["v"] == []
+
+
+def test_a_stack_offering_no_patterns_still_says_generator (
+	panel: typing.Any) -> None:
+	"""Every stack before this offered generators alone, and a composition with
+	nothing worth sharing still wants exactly that."""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector(".grid.notes", timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator(".part-foot .offer.add").count() == 0

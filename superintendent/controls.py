@@ -70,14 +70,24 @@ is the same rule that keeps drum voices and control-change numbers out of it.
 GENERATOR = "generator"
 """A contribution that makes its notes from parameters."""
 
-CONTRIBUTIONS = (GENERATOR,)
+PATTERN = "pattern"
+"""A contribution that takes its notes from another grid.
+
+A grid belonging to no instrument, routed into several, so that two synths can
+share a bassline and each add notes of their own (#2108).  Simon settled that
+this is the same mechanism as a generator rather than a second one — a
+contribution is a contribution, and what makes its notes is its own business.
+
+Which grids a stack may take from is declared by the app, for the same reason
+the generators are: this package does not know that a grid exists, let alone
+which of them belongs to an instrument and which belongs to nobody.
+"""
+
+CONTRIBUTIONS = (GENERATOR, PATTERN)
 """What a layer of a stack may be.
 
-One so far.  A pattern is the other — a grid belonging to no instrument, routed
-into several, so that two synths can share a bassline and each add notes of its
-own.  Simon settled that this is the same mechanism rather than a second one,
-and the name here is what keeps the door open: a layer says what kind of thing
-it is from the start, so the second kind is an addition rather than a rewrite.
+The second was named here before it existed, so that adding it would be an
+addition rather than a rewrite.  It was.
 """
 
 
@@ -404,21 +414,35 @@ def _readable_layers (
 		if kind not in CONTRIBUTIONS:
 			raise ControlError(f"a layer is a {kind!r}, which this version does not know")
 
-		generator = entry.get("generator")
-		offered = _offered(declaration, generator)
-		held = entry.get("params")
-		kept: dict[str, typing.Any] = {}
-
-		for parameter, setting in (held if isinstance(held, dict) else {}).items():
-			_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
-
 		layer: dict[str, typing.Any] = {
 			"id": name,
 			"kind": kind,
-			"generator": generator,
 			"bypassed": bool(entry.get("bypassed", False)),
-			"params": kept,
 		}
+
+		if kind == PATTERN:
+			source = entry.get("source")
+
+			if source not in (declaration.get("sources") or []):
+				raise ControlError(f"this stack cannot take from a pattern called {source!r}")
+
+			# A routed grid has nothing to tune: what it plays is what is drawn
+			# on it, which is why the same mechanism serves both kinds without
+			# either of them growing the other's furniture.
+			layer["source"] = source
+			layer["params"] = {}
+
+		else:
+			generator = entry.get("generator")
+			offered = _offered(declaration, generator)
+			held = entry.get("params")
+			kept: dict[str, typing.Any] = {}
+
+			for parameter, setting in (held if isinstance(held, dict) else {}).items():
+				_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
+
+			layer["generator"] = generator
+			layer["params"] = kept
 
 		# The number the app gave this layer, which is what a person reads on
 		# its window. Held and never checked: it is the app's to hand out and

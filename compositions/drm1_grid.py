@@ -169,6 +169,7 @@ composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
 composition.data["layer"] = {row: [] for row in ROWS}
+composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
 
 def _cc_value (name: str, value: typing.Any) -> int:
@@ -247,6 +248,7 @@ def layer (p: typing.Any) -> None:
 	"""A second pass over the same machine, built the same way as the first."""
 
 	_play(p, composition.data["layer"])
+	layer_recipe.build(p)
 
 
 @composition.pattern(
@@ -282,20 +284,49 @@ def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 			p.hit_steps(row, list(steps), velocity=VELOCITY)
 
 
-drum_recipe = superintendent.subsequence_adapter.Recipe(
-	composition,
-	catalogue=subsequence.generators(),
-	pitches=ROWS,
-	bounds={
-		"pulses": (0, STEPS),
-		"grid": (1, STEPS),
-		"subdivisions": (1, 8),
-		"duration": (0.05, float(BEATS)),
-	},
-	builds="grid",
-	data_key="drum_recipe",
-	name="drum_recipe",
-	title="DRM1 — generators")
+SHARED = {"shared": lambda p: _play(p, composition.data["shared"])}
+"""Grids any pattern here may take its notes from, and how to play one.
+
+**Turning a grid into notes is this file's business, so the function is this
+file's.**  The velocity, the drum map and what a row name means are all facts
+about this rig; the package routes and does not look inside (#1465, #2108).
+
+One so far — a grid belonging to no instrument, which sounds only where it is
+routed.  Simon's own case is a bassline shared by two synths, each adding notes
+of its own; this is the same shape with one machine and two patterns, which is
+what this rig can show today.
+"""
+
+
+def _stack_for (pattern: str, name: str, title: str) -> typing.Any:
+	"""A stack of contributions that build one pattern.
+
+	Both patterns get one, because the point of a shared grid is that several
+	things take from it — a single stack could only ever prove half of it.
+	"""
+
+	return superintendent.subsequence_adapter.Recipe(
+		composition,
+		catalogue=subsequence.generators(),
+		pitches=ROWS,
+		bounds={
+			"pulses": (0, STEPS),
+			"grid": (1, STEPS),
+			"subdivisions": (1, 8),
+			"duration": (0.05, float(BEATS)),
+		},
+		builds=pattern,
+		sources=SHARED,
+		data_key=name,
+		name=name,
+		title=title)
+
+
+# The names are what the panel addresses and what a saved arrangement is keyed
+# by, so `drum_recipe` keeps the name it was born with rather than taking a
+# tidier one: renaming a control silently empties whatever it was holding.
+drum_recipe = _stack_for("grid", "drum_recipe", "DRM1 — generators")
+layer_recipe = _stack_for("layer", "layer_recipe", "DRM1 — generators 2")
 """Generators the panel can stack onto pattern 1, over the notes tapped by hand.
 
 The catalogue is Subsequence's own description of itself, and the ten voices
@@ -324,6 +355,14 @@ link = superintendent.subsequence_adapter.AppLink(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="layer", name="layer", title="DRM1 — pattern 2",
 			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
+
+		# A grid with no instrument behind it: no channel, no note map, no
+		# pattern function of its own. It makes no sound until something routes
+		# it, and then it makes that thing's sound (#2108).
+		superintendent.subsequence_adapter.StepGrid(
+			composition, rows=ROWS, steps=STEPS, beats=BEATS,
+			data_key="shared", name="shared", title="Shared — drums",
+			about=[("", "no instrument")]),
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
@@ -360,6 +399,7 @@ link = superintendent.subsequence_adapter.AppLink(
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			on_change=send_setting),
 		drum_recipe,
+		layer_recipe,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -377,6 +417,9 @@ link = superintendent.subsequence_adapter.AppLink(
 			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
 		superintendent.subsequence_adapter.Page(
 			"generators", parts=["grid", "drum_recipe"], title="Generators"),
+		superintendent.subsequence_adapter.Page(
+			"shared", parts=["shared", "grid", "layer", "drum_recipe", "layer_recipe"],
+			title="Shared"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),

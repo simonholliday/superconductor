@@ -222,7 +222,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.7.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.8.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -267,7 +267,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.7.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.8.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -918,7 +918,7 @@ function Params ({ name, fields, values, cell, onSet }) {
  * bypassing, reordering — and a single parameter is sent on its own. The split
  * is what lets two people turn different knobs without overwriting each other,
  * while a structural change genuinely is about the list. */
-function Contribution ({ name, layer, layers, offered, onSet }) {
+function Contribution ({ name, layer, layers, offered, sources, titled, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -970,7 +970,25 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 					>✕</button>
 				</div>
 
-				${offered
+				${layer.kind === "pattern"
+					? html`
+						${/* One row, and it is which grid this takes from. A routed
+						     grid has nothing to tune — what it plays is what is
+						     drawn on it — which is why the same window serves both
+						     kinds without either growing the other's furniture. */ ""}
+						<div class="row-label">from</div>
+						<div class="setting" style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+							<${Setting}
+								field=${{
+									name: "source", kind: "choice",
+									options: (sources || []).map((one) => ({
+										value: one, label: titled(one) })),
+								}}
+								held=${layer.source}
+								onSet=${(value) => onSet(`${name}/layers`, layers.map((one) =>
+									one.id === layer.id ? { ...one, source: value } : one))} />
+						</div>`
+					: offered
 					? offered.parameters.map((field) => [
 						html`
 							<div class="row-label" key=${`label-${field.name}`}>
@@ -1045,7 +1063,7 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, onClear }) {
+function Footer ({ onAdd, adds, onClear }) {
 	if (!onAdd && !onClear) return null;
 
 	return html`
@@ -1054,7 +1072,7 @@ function Footer ({ onAdd, onClear }) {
 				<button
 					class="offer add"
 					onPointerDown=${(event) => { event.preventDefault(); onAdd(); }}
-				>add a generator</button>`}
+				>${adds}</button>`}
 			<span class="spacer"></span>
 			${onClear && html`
 				<button
@@ -2458,23 +2476,33 @@ function Panel () {
 			};
 
 			for (const layer of held) {
-				const generator = offered.find((one) => one.name === layer.generator);
+				const routed = layer.kind === "pattern";
+				const generator = routed
+					? null
+					: offered.find((one) => one.name === layer.generator);
+
+				/* A routed grid takes from somewhere as well as giving to
+				   something, which is the first block on this surface to have
+				   both — and the reason Simon asked for it before settling how
+				   in and out should be told apart (#2108). */
+				const takes = routed && gridNames.includes(layer.source) ? layer.source : null;
 
 				contributions.push({
 					key: `${name}/${layer.id}`,
-					control: name, layer, layers: held, offered: generator, feeds,
-					voice: voiceOf(generator, layer),
+					control: name, layer, layers: held, offered: generator, feeds, takes,
+					sources: controls[name].sources || [],
+					voice: routed ? null : voiceOf(generator, layer),
 
 					/* "Euclidean 1", where the number belongs to that layer for
 					   the whole of its life — a neighbour being removed never
 					   moves it. The pattern is named beside it so that a line
 					   crossing another line is not the only thing on the glass
 					   saying what feeds what. */
-					title: `${tidied(layer.generator || "?")}`
+					title: `${tidied(routed ? (layer.source || "?") : (layer.generator || "?"))}`
 						+ (layer.index ? ` ${layer.index}` : "")
 						+ (builds ? ` · ${named(builds)}` : ""),
 
-					rows: 1 + (generator ? generator.parameters.length : 1),
+					rows: routed ? 2 : 1 + (generator ? generator.parameters.length : 1),
 					steps: PARAM_CELLS,
 				});
 			}
@@ -2520,9 +2548,21 @@ function Panel () {
 	   pattern, so the head of the line is at the pattern; the ordering is the
 	   direction, which is the field #2109 asked to exist before anything needs
 	   the other one. */
-	const joins = contributions
-		.filter((one) => one.feeds)
-		.map((one) => ({ from: one.key, to: one.feeds, row: one.voice }));
+	/* Every line on this page, and which way each one runs.
+	 *
+	 * A generator has one: itself into the pattern it builds. A routed grid has
+	 * two — the grid it takes from into it, and it into the pattern it builds —
+	 * because it is a contribution *and* a thing that is contributed to. That is
+	 * the first block here to have both, and it is what makes the question of
+	 * how to tell an in from an out a question about something real (#2108). */
+	const joins = [
+		...contributions
+			.filter((one) => one.takes)
+			.map((one) => ({ from: one.takes, to: one.key, row: null })),
+		...contributions
+			.filter((one) => one.feeds)
+			.map((one) => ({ from: one.key, to: one.feeds, row: one.voice })),
+	];
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -2671,11 +2711,14 @@ function Panel () {
 					footer=${html`
 						<${Footer}
 							onAdd=${one.add ? () => setAdding(one.add) : null}
+							adds=${one.add && (controls[one.add].sources || []).length
+								? "add a contribution" : "add a generator"}
 							onClear=${one.clear ? () => setClearing(one.control) : null} />`}>
 					${one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
-								layers=${one.layers} offered=${one.offered} onSet=${request} />`
+								layers=${one.layers} offered=${one.offered}
+								sources=${one.sources} titled=${named} onSet=${request} />`
 						: controls[one.control].unsupported
 						? html`
 							<div class="unsupported">
@@ -2720,39 +2763,67 @@ function Panel () {
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
 
-		${adding && controls[adding] && html`
-			<${Sheet} title="add a generator" onClose=${() => setAdding(null)}>
-				${(controls[adding].generators || []).map((generator) => html`
-					<button
-						key=${generator.name}
-						class=${`offer ${generator.partial ? "partial" : ""}`}
-						disabled=${generator.partial}
-						onPointerDown=${(event) => {
-							event.preventDefault();
+		${adding && controls[adding] && (() => {
+			const sources = controls[adding].sources || [];
 
-							const held = ((state[appName] || {})[adding] || {}).layers || [];
+			/* An id has to survive a round trip and be unique among its
+			   neighbours. The clock alone is not enough: two taps inside a
+			   millisecond are a stutter rather than an impossibility on a
+			   surface meant to be played. */
+			const added = (layer) => {
+				const held = ((state[appName] || {})[adding] || {}).layers || [];
 
-							/* An id has to survive a round trip and be unique among
-							   its neighbours. The clock alone is not enough: two
-							   taps inside a millisecond are a stutter rather than an
-							   impossibility on a surface meant to be played. */
-							request(`${adding}/layers`, [...held, {
-								id: `l${Date.now().toString(36)}`
-									+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-								kind: "generator",
-								generator: generator.name,
-								params: {},
-							}]);
+				request(`${adding}/layers`, [...held, {
+					id: `l${Date.now().toString(36)}`
+						+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+					...layer,
+				}]);
 
-							setAdding(null);
-						}}
-					>
-						<b>${generator.name}</b>
-						<i>${generator.partial
-							? "takes something this panel cannot draw yet"
-							: generator.summary}</i>
-					</button>`)}
-			<//>`}
+				setAdding(null);
+			};
+
+			return html`
+				<${Sheet}
+					title=${sources.length ? "add a contribution" : "add a generator"}
+					onClose=${() => setAdding(null)}>
+
+					${/* Patterns first, and only when there are any. A grid this
+					     one can take from is a thing a person already has on the
+					     glass and can point at; a generator is a thing they have
+					     to know the name of. The near one goes first. */ ""}
+					${sources.length > 0 && html`
+						<h4>from a pattern</h4>
+						${sources.map((source) => html`
+							<button
+								key=${source}
+								class="offer"
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									added({ kind: "pattern", source });
+								}}
+							>
+								<b>${named(source)}</b>
+								<i>every note drawn on it, played here as well</i>
+							</button>`)}
+						<h4>from a generator</h4>`}
+
+					${(controls[adding].generators || []).map((generator) => html`
+						<button
+							key=${generator.name}
+							class=${`offer ${generator.partial ? "partial" : ""}`}
+							disabled=${generator.partial}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								added({ kind: "generator", generator: generator.name, params: {} });
+							}}
+						>
+							<b>${generator.name}</b>
+							<i>${generator.partial
+								? "takes something this panel cannot draw yet"
+								: generator.summary}</i>
+						</button>`)}
+				<//>`;
+		})()}
 
 		${clearing && html`
 			<${Sheet} title="clear this pattern" onClose=${() => setClearing(null)}>
