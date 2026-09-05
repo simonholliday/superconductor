@@ -993,14 +993,6 @@ class Recipe (Control):
 		tapped (#1925).  Withheld, it says nothing and behaves exactly as it did.
 		"""
 
-		self._realised: dict[str, list[int]] = {}
-		"""What was drawn last cycle, so an unchanged answer costs no frame.
-
-		A euclidean layer realises the same cells every cycle; a random one does
-		not.  Comparing here means the quiet case is quiet and the noisy case is
-		as noisy as it truly is.
-		"""
-
 		self.sources = dict(sources or {})
 		"""Which other grids this stack may take notes from, and how to play one.
 
@@ -1376,26 +1368,27 @@ class Recipe (Control):
 			except Exception as error:
 				self._complain(generator, str(error))
 
-		if before is not None:
-			self._say_what_landed(before, self._reads(pattern), pattern)
+		after = self._reads(pattern) if before is not None else None
 
-	def _reads (self, pattern: typing.Any = None) -> list[typing.Any]:
-		"""What is on the pattern now, or nothing if this build cannot be read.
+		if before is not None and after is not None:
+			self._say_what_landed(before, after)
 
-		A composition older than the read-back, or one whose pattern object is
-		something else entirely, is not an error — it is a panel that draws no
-		dots, and everything else works exactly as before.
+	def _reads (self, pattern: typing.Any) -> list[typing.Any] | None:
+		"""What is on the pattern now, or None if it cannot be read at all.
+
+		The two are different answers and were briefly the same one: a pattern
+		holding nothing reports nothing realised, and a pattern that cannot be
+		asked reports *nothing at all*.  A composition older than the read-back,
+		or one whose pattern object is something else entirely, is not an error —
+		it is a panel that draws no dots, and everything else works exactly as
+		before.
 		"""
-
-		if pattern is None:
-			return []
 
 		reader = getattr(pattern, "placed", None)
 
-		return list(reader()) if callable(reader) else []
+		return list(reader()) if callable(reader) else None
 
-	def _say_what_landed (
-		self, before: list[typing.Any], after: list[typing.Any], pattern: typing.Any) -> None:
+	def _say_what_landed (self, before: list[typing.Any], after: list[typing.Any]) -> None:
 		"""Report the cells this stack realised, as rows and step numbers.
 
 		Ephemeral and stored nowhere: an event rather than a change, because
@@ -1436,10 +1429,18 @@ class Recipe (Control):
 		for row in cells:
 			cells[row].sort()
 
-		if cells == self._realised:
-			return
-
-		self._realised = cells
+		# **Every cycle, including one that says the same as the last.**
+		#
+		# Comparing with the previous answer and staying quiet is the obvious
+		# saving and it is wrong: a euclidean layer realises the same cells for
+		# ever, so a panel that opened after the first cycle would wait for a
+		# change that never comes and draw nothing at all. Found on the rig,
+		# with four generators playing and a fresh socket seeing silence.
+		#
+		# Nothing keeps this, by design (#1965), so there is nowhere for a late
+		# panel to read it from — which means saying it again is not repetition,
+		# it is the only way anybody who was not listening can hear it. One small
+		# frame a cycle, two seconds apart at this tempo.
 		self.link.happened("realised", control=grid.name, cells=cells)
 
 	def _target (self) -> typing.Any:

@@ -796,10 +796,16 @@ def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
 	assert speaker.events[-1][1]["cells"] == {"kick": [2]}
 
 
-def test_an_unchanged_answer_costs_no_frame () -> None:
-	"""A euclidean layer realises the same cells every cycle and a random one
-	does not, so the quiet case stays quiet and the noisy case is as noisy as it
-	truly is."""
+def test_every_cycle_says_what_it_realised_even_when_it_is_the_same () -> None:
+	"""Comparing with the last answer and staying quiet is the obvious saving
+	and it is wrong.
+
+	A euclidean layer realises the same cells for ever, so a panel that opened
+	after the first cycle would wait for a change that never comes and draw
+	nothing.  Found on the rig with four generators playing and a fresh socket
+	seeing silence — and nothing keeps these, by design, so there is nowhere for
+	a late panel to read them from instead.
+	"""
 
 	recipe, speaker, builder = _watching()
 
@@ -811,13 +817,8 @@ def test_an_unchanged_answer_costs_no_frame () -> None:
 		builder.notes = []
 		recipe.build(builder)
 
-	assert len(speaker.events) == 1, f"the same answer was sent {len(speaker.events)} times"
-
-	builder.notes = []
-	builder.lands = [Note(6, "kick")]
-	recipe.build(builder)
-
-	assert len(speaker.events) == 2
+	assert len(speaker.events) == 3, "a panel joining late would never be told"
+	assert {name for name, _ in speaker.events} == {"realised"}
 
 
 def test_a_stack_told_no_pulse_count_says_nothing_at_all () -> None:
