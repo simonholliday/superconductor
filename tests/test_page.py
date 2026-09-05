@@ -1378,3 +1378,112 @@ def test_every_row_label_is_right_aligned_at_the_same_offset (panel: typing.Any)
 	assert offsets, "no labels were drawn"
 	assert len(set(offsets)) == 1, f"labels sit at different offsets: {sorted(set(offsets))}"
 	assert offsets[0] >= 0, "a label reaches past its own right edge"
+
+
+def _two_fingers (panel: typing.Any, apart: int, then: int) -> None:
+	"""Put two touch pointers on the page and move them to a new distance."""
+
+	panel.evaluate("""([apart, then]) => {
+		const wrap = document.querySelector('.grid-wrap');
+		const box = wrap.getBoundingClientRect();
+		const midX = box.left + box.width / 2;
+		const midY = box.top + box.height / 2;
+
+		const send = (type, id, x) => wrap.dispatchEvent(new PointerEvent(type, {
+			pointerId: id, clientX: x, clientY: midY,
+			pointerType: 'touch', bubbles: true, cancelable: true }));
+
+		send('pointerdown', 1, midX - apart / 2);
+		send('pointerdown', 2, midX + apart / 2);
+		send('pointermove', 1, midX - then / 2);
+		send('pointermove', 2, midX + then / 2);
+		send('pointerup', 1, midX - then / 2);
+		send('pointerup', 2, midX + then / 2);
+	}""", [apart, then])
+
+
+def test_two_fingers_spread_apart_make_the_grid_bigger (panel: typing.Any) -> None:
+	"""Simon, after using a smaller screen: being able to spread two fingers to
+	see one instrument closely, and pinch back to see every instrument, is how a
+	person expects to move around a hand-held panel.
+
+	It sets the panel's own size rather than the browser's zoom — browser zoom
+	scales the type and the targets together and leaves the same amount of music
+	on the glass, where this brings more of the piece into view.
+	"""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Tested").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '44px'",
+		timeout=5_000)
+
+	_two_fingers(panel, apart=200, then=300)
+
+	panel.wait_for_function(
+		"() => parseFloat(getComputedStyle(document.documentElement)"
+		".getPropertyValue('--cell')) > 44", timeout=5_000)
+
+	grown = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))")
+
+	assert 60 <= grown <= 72, f"a half-again spread gave {grown}px from 44"
+
+
+def test_two_fingers_brought_together_make_it_smaller (panel: typing.Any) -> None:
+	"""And the way back, clamped so a pinch cannot shrink the page to nothing."""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Tested").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '44px'",
+		timeout=5_000)
+
+	_two_fingers(panel, apart=400, then=40)
+
+	panel.wait_for_function(
+		"() => parseFloat(getComputedStyle(document.documentElement)"
+		".getPropertyValue('--cell')) < 44", timeout=5_000)
+
+	shrunk = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))")
+
+	assert shrunk >= 22, f"a pinch went below the floor: {shrunk}px"
+
+
+def test_two_fingers_that_do_not_move_are_still_two_taps (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The whole reason there is a threshold.
+
+	Playing several cells at once is what multi-touch was measured for (#1997),
+	and a gesture that claimed the second finger would take that away. Two
+	fingers that land and stay put switch two steps.
+	"""
+
+	before = panel.evaluate(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
+
+	panel.evaluate("""() => {
+		const cells = ['grid/kick/2', 'grid/snare/6'].map(
+			(path) => document.querySelector(`.cell[data-path="${path}"]`));
+
+		cells.forEach((cell, index) => {
+			const box = cell.getBoundingClientRect();
+
+			for (const type of ['pointerdown', 'pointerup']) {
+				cell.dispatchEvent(new PointerEvent(type, {
+					pointerId: index + 1,
+					clientX: box.left + box.width / 2,
+					clientY: box.top + box.height / 2,
+					pointerType: 'touch', bubbles: true, cancelable: true }));
+			}
+		});
+	}""")
+
+	fake_app.await_set("grid/kick/2")
+	fake_app.await_set("grid/snare/6")
+
+	after = panel.evaluate(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
+
+	assert after == before, f"two taps resized the page from {before} to {after}"

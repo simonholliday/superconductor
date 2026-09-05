@@ -42,6 +42,18 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
  * and left alone. */
 const PAGE_KEY = "superintendent.page";
 const PAGE_BUTTONS = 6;
+
+const PINCH_THRESHOLD = 0.12;
+/* How far two fingers must move apart or together before it is a pinch.
+ *
+ * There has to be a threshold, and this is what it protects: two fingers on a
+ * grid are two taps. Playing several cells at once is the reason multi-touch
+ * was measured at all (#1997), and a gesture that claimed the second finger
+ * would take that away. Two fingers that land and stay put switch two steps; it
+ * is only when the distance between them changes by an eighth that this becomes
+ * a size. A cell is switched on press (#2046), so those two taps have already
+ * happened by then and are not taken back — which is right: the person did tap
+ * two cells, and then went on to do something else. */
 const CHOICE_BUTTONS = 4;
 
 
@@ -1368,6 +1380,14 @@ function useCellSize (blocks, layout, dragging) {
 	}, []);
 
 	useEffect(() => {
+		/* A pinch does not land on one of the named steps, so a size may also be
+		   a plain number of pixels. It is kept the same way and read back the
+		   same way, which is why the chooser can go on showing what is set
+		   without knowing where it came from. */
+		const pinched = Number(choice);
+
+		if (Number.isFinite(pinched) && pinched >= FIT_FLOOR) { setCell(pinched); return; }
+
 		const named = SIZES.find((size) => size.key === choice);
 
 		if (!named) { setChoice(DEFAULT_SIZE); return; }
@@ -1454,6 +1474,79 @@ function useCellSize (blocks, layout, dragging) {
 	}, [cell]);
 
 	return { wrap, cell, choice, choose };
+}
+
+/* Pinch to resize, so the size is reachable without finding the control for it.
+ *
+ * Simon asked for this after using a smaller screen: on a hand-held panel, being
+ * able to spread two fingers to see one instrument closely and pinch back to see
+ * every instrument is how a person expects to move around, and hunting for a
+ * menu in the corner is not.
+ *
+ * It sets the panel's own cell size rather than the browser's zoom. Browser zoom
+ * would scale the type and the touch targets together and leave the same amount
+ * of music on the glass; this is the setting a person would otherwise have
+ * chosen from the menu, so what comes into view is more of the piece.
+ *
+ * Nothing is captured and nothing is prevented until the gesture is certain, so
+ * a two-finger chord on a grid is still two taps. */
+function usePinch (cell, choose) {
+	const held = useRef({ points: new Map(), apart: 0, from: 0, engaged: false });
+
+	const down = useCallback((event) => {
+		const gesture = held.current;
+
+		gesture.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+		if (gesture.points.size !== 2) return;
+
+		const [one, two] = [...gesture.points.values()];
+
+		gesture.apart = Math.hypot(one.x - two.x, one.y - two.y);
+		gesture.from = cell;
+		gesture.engaged = false;
+	}, [cell]);
+
+	const move = useCallback((event) => {
+		const gesture = held.current;
+
+		if (!gesture.points.has(event.pointerId)) return;
+
+		gesture.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+		if (gesture.points.size !== 2 || !gesture.apart) return;
+
+		const [one, two] = [...gesture.points.values()];
+		const apart = Math.hypot(one.x - two.x, one.y - two.y);
+		const ratio = apart / gesture.apart;
+
+		if (!gesture.engaged && Math.abs(ratio - 1) < PINCH_THRESHOLD) return;
+
+		gesture.engaged = true;
+
+		/* Held back until now: preventing earlier would stop a tap that had every
+		   right to be one. */
+		event.preventDefault();
+
+		const wanted = Math.round(
+			Math.min(FIT_CEILING, Math.max(FIT_FLOOR, gesture.from * ratio)));
+
+		if (wanted !== cell) choose(String(wanted));
+	}, [cell, choose]);
+
+	const up = useCallback((event) => {
+		const gesture = held.current;
+
+		gesture.points.delete(event.pointerId);
+
+		if (gesture.points.size < 2) {
+			gesture.apart = 0;
+			gesture.engaged = false;
+		}
+	}, []);
+
+	return { onPointerDown: down, onPointerMove: move,
+	         onPointerUp: up, onPointerCancel: up };
 }
 
 /* The size chooser.
@@ -1897,6 +1990,8 @@ function Panel () {
 	   is only as large as its furthest corner. */
 	const size = useCellSize(blocks, layout, dragging);
 
+	const pinch = usePinch(size.cell, size.choose);
+
 	/* Where every block on this page has ended up, sent to the app that owns
 	   the page. Called when a finger lifts from a block that actually moved. */
 	const keep = () => {
@@ -1957,7 +2052,11 @@ function Panel () {
 			</span>
 			<${Build} service=${service} stale=${stale} />
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"}`} ref=${size.wrap}>
+		<div
+			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"}`}
+			ref=${size.wrap}
+			...${pinch}
+		>
 			${gridNames.map((name) => html`
 				<${Part} key=${name} name=${name} title=${controls[name].title}
 					at=${layout[name]} cell=${size.cell} depth=${stacked.indexOf(name)}
