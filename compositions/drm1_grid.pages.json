@@ -37,14 +37,29 @@
 	],
 	"generators": [
 		{
-			"name": "grid",
-			"x": 0,
-			"y": 0
+			"name": "drum_recipe/lmto9msrruk1",
+			"x": 35,
+			"y": 13
 		},
 		{
-			"name": "drum_recipe",
+			"name": "drum_recipe/probe",
+			"x": 38,
+			"y": 1
+		},
+		{
+			"name": "drum_recipe/lmtoemgmm2oj",
 			"x": 20,
-			"y": 0
+			"y": 15
+		},
+		{
+			"name": "drum_recipe/lmto9a02ipm2",
+			"x": 6,
+			"y": 15
+		},
+		{
+			"name": "grid",
+			"x": 16,
+			"y": 1
 		}
 	]
 }

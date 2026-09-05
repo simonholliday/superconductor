@@ -7,6 +7,7 @@ behaves like an app, and drive the glass. These fixtures provide the first two.
 
 import asyncio
 import contextlib
+import copy
 import socket
 import threading
 import time
@@ -17,6 +18,7 @@ import uvicorn
 import websockets.asyncio.client
 
 import superintendent.config
+import superintendent.controls
 import superintendent.protocol
 import superintendent.service
 
@@ -78,6 +80,25 @@ is the case #2075 says needs no synchronising.
 """
 
 
+STATE: dict[str, typing.Any] = {
+	"grid": {"kick": [0, 4], "snare": []},
+	"second": {"kick": [2]},
+	"bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
+	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
+	"stack": {"layers": [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
+		            "duration": 1, "probability": 1}},
+	]},
+	"transport": {"paused": False, "bpm": 120.0},
+}
+"""What the stand-in app starts out holding.
+
+One layer rather than none, because a stack with nothing in it draws none of
+the controls most of these tests are about.
+"""
+
+
 def _free_port () -> int:
 	"""Take a port the operating system says is free."""
 
@@ -101,6 +122,15 @@ class FakeApp:
 		self.sets: list[superintendent.protocol.Frame] = []
 		self.arrangements: dict[str, list[dict[str, typing.Any]]] = {}
 		self.version = 1
+
+		self.state: dict[str, typing.Any] = copy.deepcopy(STATE)
+		"""What this app holds, kept rather than rebuilt from a literal.
+
+		An arrangement is answered with a fresh declaration, and a declaration
+		carries the state — so an app that made one up each time would forget
+		everything a test had confirmed the moment a block was dragged.  It did,
+		silently, and the second layer of a stack vanished mid-drag.
+		"""
 
 		self._loop: asyncio.AbstractEventLoop | None = None
 		self._socket: typing.Any = None
@@ -152,17 +182,7 @@ class FakeApp:
 		         for page in PAGES]
 
 		return superintendent.protocol.declare(
-			"subsequence", CONTROLS,
-			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
-			 "bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
-			 "moog": {"glide": False, "rate": 24, "shape": "lcr"},
-			 "stack": {"layers": [
-			     {"id": "one", "generator": "euclidean", "bypassed": False,
-			      "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
-			                 "duration": 1, "probability": 1}},
-			 ]},
-			 "transport": {"paused": False, "bpm": 120.0}},
-			self.version, pages)
+			"subsequence", CONTROLS, self.state, self.version, pages)
 
 	def send (self, frame: superintendent.protocol.Frame) -> None:
 		"""Put one frame on the wire from the app's side."""
@@ -177,6 +197,12 @@ class FakeApp:
 		"""Report a change as applied, the way an app confirms a tap."""
 
 		self.version += 1
+
+		# By the service's own rules, so what the fake remembers and what the
+		# service remembers cannot come apart.
+		with contextlib.suppress(superintendent.controls.ControlError):
+			superintendent.controls.apply_change(self.state, CONTROLS, path, value)
+
 		self.send(superintendent.protocol.changed(
 			"subsequence", path, value, self.version, by=by, client=client, seq=seq))
 

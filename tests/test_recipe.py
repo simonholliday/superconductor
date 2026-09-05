@@ -435,3 +435,102 @@ def test_a_parameter_left_out_is_not_passed_to_the_generator () -> None:
 	recipe.build(builder)
 
 	assert "grid" not in builder.calls[0][1]
+
+
+def test_a_layer_is_given_a_number_of_its_own () -> None:
+	"""Which is what a window is called on the glass: "Euclidean 1" (#2109).
+
+	Per generator rather than across the stack, because the number is read as
+	part of a name and "Euclidean 1, Bresenham 2" reads like a mistake.
+	"""
+
+	recipe, _ = _recipe()
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "generator": "evolve", "params": {}},
+		{"id": "c", "generator": "euclidean", "params": {}},
+	])
+
+	assert [one["index"] for one in recipe.layers()] == [1, 1, 2]
+
+
+def test_a_number_does_not_move_when_a_neighbour_is_removed () -> None:
+	"""Renumbering under somebody's hand is the surprise this exists to stop.
+
+	A person reaches for the window they read a number on a moment ago.  If
+	removing the first layer renamed the second, the thing they reach for is
+	something else by the time they get there.
+	"""
+
+	recipe, _ = _recipe()
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "generator": "euclidean", "params": {}},
+		{"id": "c", "generator": "euclidean", "params": {}},
+	])
+
+	kept = [one for one in recipe.layers() if one["id"] != "a"]
+
+	recipe.apply(["layers"], kept)
+
+	assert [(one["id"], one["index"]) for one in recipe.layers()] == [("b", 2), ("c", 3)]
+
+
+def test_a_number_is_never_handed_out_twice () -> None:
+	"""So a stack may read 1, 3, 4 — stranger to look at, safer to work with.
+
+	The mark is kept beside the stack rather than worked out from it, because
+	the highest number in a stack goes down when the highest layer is removed
+	and the next one added would take a name that has just been on the glass.
+	"""
+
+	recipe, composition = _recipe()
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "generator": "euclidean", "params": {}},
+	])
+
+	recipe.apply(["layers"], [one for one in recipe.layers() if one["id"] == "a"])
+	recipe.apply(["layers"], recipe.layers() + [
+		{"id": "c", "generator": "euclidean", "params": {}}])
+
+	assert [(one["id"], one["index"]) for one in recipe.layers()] == [("a", 1), ("c", 3)]
+	assert composition.data["recipe"]["counts"] == {"euclidean": 3}
+
+
+def test_a_number_a_panel_sends_back_is_the_one_it_keeps () -> None:
+	"""Which is what makes ``restore_state`` restore a layout as well as a stack.
+
+	A window's position is saved under a name built from that number, so a
+	stack replayed with fresh numbers would come back to a page where nothing
+	was where it was left.
+	"""
+
+	recipe, _ = _recipe()
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "euclidean", "index": 4, "params": {}},
+		{"id": "b", "generator": "euclidean", "params": {}},
+	])
+
+	assert [one["index"] for one in recipe.layers()] == [4, 5]
+
+
+def test_a_stack_that_is_refused_hands_out_no_numbers () -> None:
+	"""A stack is checked entire before any of it is kept, and the count is part
+	of what is kept."""
+
+	recipe, composition = _recipe()
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+
+	with pytest.raises(adapter.Refused):
+		recipe.apply(["layers"], [
+			{"id": "a", "generator": "euclidean", "params": {}},
+			{"id": "b", "generator": "nonesuch", "params": {}},
+		])
+
+	assert composition.data["recipe"]["counts"] == {"euclidean": 1}

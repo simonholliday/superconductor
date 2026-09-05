@@ -10,7 +10,7 @@
  *   3. A tap acts on the finger landing, not on it lifting.
  */
 
-import { html, render, useState, useEffect, useRef, useCallback, useMemo }
+import { html, render, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo }
 	from "./vendor/htm-preact-standalone.module.js";
 
 const PING_EVERY = 2000;
@@ -45,6 +45,13 @@ const PAGE_BUTTONS = 6;
 
 const SEPARATION = 1;
 /* Cells of air left between blocks that nobody has placed. */
+
+const ARROW = 9;
+/* How long the head of a connecting line is, in pixels.
+ *
+ * Not scaled by the cell. It is a mark rather than a control: nobody touches it,
+ * and at the smallest size a proportional arrowhead would be three pixels of
+ * nothing. */
 
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
@@ -181,7 +188,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.5.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.6.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -226,7 +233,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.5.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.6.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -853,12 +860,20 @@ function Params ({ name, fields, values, cell, onSet }) {
 }
 
 
-/* A stack of generators that build one pattern, and their parameters.
+/* One contribution: a single generator, the parameters it takes, and where it
+ * sits in the stack that builds a pattern.
+ *
+ * A window of its own rather than a row in a tall block, which is what Simon
+ * asked for after building a stack of two: "generators should each appear in
+ * their own window ... generator windows can move freely, as with pattern
+ * windows" (#2109). Two contributions are two things, and two things a person
+ * arranges themselves are two things they can find again.
  *
  * The order is musical content rather than presentation: a fill told to skip
  * where a note already sits depends entirely on what ran before it, so moving a
- * layer up or down changes what is heard. That is why the arrows are as
- * prominent as the parameters.
+ * layer up or down changes what is heard. Free-floating windows lose the one
+ * thing a stack showed for nothing — which of them runs first — so the arrows
+ * stay and the place in the stack is written beside them.
  *
  * Nothing here knows the name of a single generator. The list comes from the
  * app describing itself, joined by the composition to the voices this studio
@@ -869,22 +884,19 @@ function Params ({ name, fields, values, cell, onSet }) {
  * bypassing, reordering — and a single parameter is sent on its own. The split
  * is what lets two people turn different knobs without overwriting each other,
  * while a structural change genuinely is about the list. */
-function Recipe ({ name, generators, layers, onSet }) {
+function Contribution ({ name, layer, layers, offered, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
 
 	const full = { gridColumn: `span ${PARAM_CELLS + 1}` };
-	const known = (generator) => generators.find((one) => one.name === generator);
+	const index = layers.findIndex((one) => one.id === layer.id);
 	const send = (next) => onSet(`${name}/layers`, next);
 
-	/* An id has to survive a round trip and be unique among its neighbours. The
-	   clock alone is not enough: two taps inside a millisecond are a stutter,
-	   not an impossibility, on a surface meant to be played. */
-	const shift = (index, by) => {
+	const shift = (by) => {
 		const to = index + by;
 
-		if (to < 0 || to >= layers.length) return;
+		if (index < 0 || to < 0 || to >= layers.length) return;
 
 		const next = [...layers];
 
@@ -897,61 +909,71 @@ function Recipe ({ name, generators, layers, onSet }) {
 	return html`
 		<div class="recipe">
 			<div class="grid params" style=${style}>
-				${layers.map((layer, index) => {
-					const offered = known(layer.generator);
+				<div class="layer" style=${full}>
+					<button
+						class=${`switch ${layer.bypassed ? "" : "on"}`}
+						title="bypass"
+						onPointerDown=${press(() => send(layers.map((one) =>
+							one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one)))}
+					>${layer.bypassed ? "off" : "on"}</button>
+					${/* Which of them runs first, said in words because the windows no
+					     longer say it by sitting on top of one another. Left off when
+					     there is only one, where it would be noise. */ ""}
+					${layers.length > 1 && html`
+						<span class="place">${index + 1} of ${layers.length}</span>`}
+					<span class="spacer"></span>
+					<button
+						class="move" disabled=${index <= 0}
+						onPointerDown=${press(() => shift(-1))}
+					>↑</button>
+					<button
+						class="move" disabled=${index < 0 || index === layers.length - 1}
+						onPointerDown=${press(() => shift(1))}
+					>↓</button>
+					<button
+						class="drop" title="remove this layer"
+						onPointerDown=${press(() => send(layers.filter((one) => one.id !== layer.id)))}
+					>✕</button>
+				</div>
 
-					return [
+				${offered
+					? offered.parameters.map((field) => [
 						html`
-							<div class="layer" key=${`head-${layer.id}`} style=${full}>
-								<button
-									class=${`switch ${layer.bypassed ? "" : "on"}`}
-									title="bypass"
-									onPointerDown=${press(() => send(layers.map((one) =>
-										one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one)))}
-								>${layer.bypassed ? "off" : "on"}</button>
-								<b>${layer.generator}</b>
-								<span class="spacer"></span>
-								<button
-									class="move" disabled=${index === 0}
-									onPointerDown=${press(() => shift(index, -1))}
-								>↑</button>
-								<button
-									class="move" disabled=${index === layers.length - 1}
-									onPointerDown=${press(() => shift(index, 1))}
-								>↓</button>
-								<button
-									class="drop" title="remove this layer"
-									onPointerDown=${press(() => send(
-										layers.filter((one) => one.id !== layer.id)))}
-								>✕</button>
+							<div class="row-label" key=${`label-${field.name}`}>
+								${field.label || field.name}
 							</div>`,
-
-						...(offered
-							? offered.parameters.map((field) => [
-								html`
-									<div class="row-label" key=${`label-${layer.id}-${field.name}`}>
-										${field.label || field.name}
-									</div>`,
-								html`
-									<div class="setting" key=${`${layer.id}-${field.name}`}
-										style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-										<${Setting}
-											field=${field}
-											held=${(layer.params || {})[field.name]}
-											onSet=${(value) =>
-												onSet(`${name}/${layer.id}/${field.name}`, value)} />
-									</div>`,
-							]).flat()
-							: [html`
-								<div class="unsupported" key=${`gone-${layer.id}`} style=${full}>
-									The application no longer offers a generator called
-									<b>${layer.generator}</b>. This layer is not playing, and
-									removing it is the only thing that will change that.
-								</div>`]),
-					];
-				}).flat()}
+						html`
+							<div class="setting" key=${field.name}
+								style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+								<${Setting}
+									field=${field}
+									held=${(layer.params || {})[field.name]}
+									onSet=${(value) => onSet(`${name}/${layer.id}/${field.name}`, value)} />
+							</div>`,
+					]).flat()
+					: html`
+						<div class="unsupported" style=${full}>
+							The application no longer offers a generator called
+							<b>${layer.generator}</b>. This layer is not playing, and
+							removing it is the only thing that will change that.
+						</div>`}
 			</div>
+		</div>`;
+}
 
+
+/* A stack whose pattern is not on this page, reduced to the one thing it still
+ * has to offer.
+ *
+ * "Add a generator" belongs on the pattern, which is where Simon put it — but a
+ * page carrying the stack without the pattern is an ordinary thing to make, and
+ * on one of those there would otherwise be no way to add anything at all. So
+ * the stack keeps a small window of its own, and only there. */
+function Orphan ({ builds }) {
+	return html`
+		<div class="orphan">
+			Building <b>${builds ? builds.replace(/_/g, " ") : "a pattern"}</b>, which is
+			not on this page.
 		</div>`;
 }
 
@@ -1020,7 +1042,7 @@ function Footer ({ onAdd, onClear }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, footer, children }) {
+function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1083,7 +1105,15 @@ function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, 
 	};
 
 	return html`
-		<section class="part" data-part=${name} style=${place}>
+		<section
+			class="part" data-part=${name} style=${place}
+			${/* Anywhere on the block, not only its handle: a person turning a knob
+			     on a generator is asking the same question a person dragging it is
+			     — what does this feed? — so the same line brightens (#2109). It is
+			     let go of at the document, which is the only listener a pointer
+			     captured by a slider cannot slip past. */ ""}
+			onPointerDown=${() => onTouch(name)}
+		>
 			<header
 				class="part-title"
 				onPointerDown=${grab}
@@ -1095,6 +1125,153 @@ function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, 
 			${footer}
 		</section>`;
 }
+
+/* The four points a line may leave a block by: the middle of each of its sides.
+ *
+ * Corners are deliberately not offered. A line from a corner reads as pointing
+ * past the block rather than at it, and the whole job of these lines is to say
+ * which two things belong together. */
+function sidesOf (box) {
+	return [
+		{ x: box.x + box.w / 2, y: box.y },
+		{ x: box.x + box.w, y: box.y + box.h / 2 },
+		{ x: box.x + box.w / 2, y: box.y + box.h },
+		{ x: box.x, y: box.y + box.h / 2 },
+	];
+}
+
+/* The lines joining each contribution to the pattern it feeds.
+ *
+ * Simon asked for this in the same breath as the windows, and the two are one
+ * feature: the moment a stack becomes several blocks that move freely, nothing
+ * on the glass says which pattern any of them builds. "A line should be drawn
+ * connecting the two closest sides of the generator window and its associated
+ * pattern" (#2109).
+ *
+ * **The line carries a direction, and does so now.** Only one direction exists
+ * today — a contribution feeds a pattern — but Simon has already named the case
+ * that needs the other one: an element that *shows* a property of a pattern
+ * rather than controlling it. An arrowhead costs a triangle today and a format
+ * change later, so it is drawn from the start. The direction is the ordering:
+ * the head is always at ``to``.
+ *
+ * Measured from the page rather than worked out from the lattice. A block's
+ * height depends on what is in it — a generator with two parameters is shorter
+ * than one with five — and the only thing that reliably knows a rendered height
+ * is the rendering. That also means this cannot drift from the fit: it is not a
+ * second opinion about geometry, it is the geometry.
+ *
+ * It takes no pointer events at all, so a line drawn across a grid cannot cost
+ * a tap. */
+function Connections ({ box, joins, touched, when }) {
+	const [drawn, setDrawn] = useState([]);
+
+	useLayoutEffect(() => {
+		const wrap = box.current;
+
+		if (!wrap || !joins.length) { setDrawn((was) => (was.length ? [] : was)); return; }
+
+		const measure = () => {
+			const outer = wrap.getBoundingClientRect();
+			const where = new Map();
+
+			for (const part of wrap.querySelectorAll("[data-part]")) {
+				const at = part.getBoundingClientRect();
+
+				/* Relative to the scrolled content rather than to the viewport,
+				   because that is the space the blocks themselves are placed
+				   in. A line has to stay on its block when the page scrolls. */
+				where.set(part.dataset.part, {
+					x: at.left - outer.left + wrap.scrollLeft,
+					y: at.top - outer.top + wrap.scrollTop,
+					w: at.width, h: at.height,
+				});
+			}
+
+			const next = [];
+
+			for (const join of joins) {
+				const from = where.get(join.from);
+				const to = where.get(join.to);
+
+				if (!from || !to) continue;
+
+				let best = null;
+
+				for (const a of sidesOf(from)) {
+					for (const b of sidesOf(to)) {
+						const away = Math.hypot(b.x - a.x, b.y - a.y);
+
+						if (!best || away < best.away) best = { a, b, away };
+					}
+				}
+
+				next.push({ ...join, a: best.a, b: best.b });
+			}
+
+			/* Compared before it is kept. This runs from an observer as well as
+			   from the effect, and a fresh array every time would re-render the
+			   overlay for every resize of every block. */
+			setDrawn((was) => (JSON.stringify(was) === JSON.stringify(next) ? was : next));
+		};
+
+		measure();
+
+		/* A block that is dragged moves without changing size, and a block that
+		   is resized changes size without being told: the first arrives as a new
+		   layout in `when`, and the second only ever arrives here. Both have to
+		   be watched — a line that followed one and not the other would come
+		   adrift from the block it names, which is worse than no line. */
+		const watcher = new ResizeObserver(measure);
+
+		watcher.observe(wrap);
+
+		for (const part of wrap.querySelectorAll("[data-part]")) watcher.observe(part);
+
+		return () => watcher.disconnect();
+	}, [when]);
+
+	if (!drawn.length) return null;
+
+	/* Large enough to hold every line and no larger. Every endpoint sits on the
+	   edge of a block, so this can never be wider than the blocks already are —
+	   which matters, because an overlay that outgrew them would scroll the page
+	   to somewhere there is nothing to see. */
+	const extent = drawn.reduce(
+		(most, line) => ({
+			x: Math.max(most.x, line.a.x, line.b.x),
+			y: Math.max(most.y, line.a.y, line.b.y),
+		}),
+		{ x: 0, y: 0 });
+
+	return html`
+		<svg class="joins" width=${Math.ceil(extent.x) + 1} height=${Math.ceil(extent.y) + 1}>
+			${drawn.map((line) => {
+				const angle = Math.atan2(line.b.y - line.a.y, line.b.x - line.a.x);
+				const back = {
+					x: line.b.x - Math.cos(angle) * ARROW,
+					y: line.b.y - Math.sin(angle) * ARROW,
+				};
+				const wing = ARROW * 0.42;
+				const head = [
+					`M ${line.b.x} ${line.b.y}`,
+					`L ${back.x - Math.sin(angle) * wing} ${back.y + Math.cos(angle) * wing}`,
+					`L ${back.x + Math.sin(angle) * wing} ${back.y - Math.cos(angle) * wing}`,
+					"Z",
+				].join(" ");
+
+				const live = touched === line.from || touched === line.to;
+
+				return html`
+					<g key=${`${line.from}>${line.to}`}
+						class=${`join ${live ? "live" : ""}`} data-join=${`${line.from}>${line.to}`}>
+						<line x1=${line.a.x} y1=${line.a.y} x2=${line.b.x} y2=${line.b.y} />
+						<path d=${head} />
+					</g>`;
+			})}
+		</svg>`;
+}
+
 
 /* The parts on this page, by name, while it is being arranged.
  *
@@ -1665,6 +1842,7 @@ function Panel () {
 	const [adding, setAdding] = useState(null);
 	const [clearing, setClearing] = useState(null);
 	const [moved, setMoved] = useState({});
+	const [touched, setTouched] = useState(null);
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -1680,6 +1858,25 @@ function Panel () {
 	   at mount would be the empty declarations it had then — the same trap the
 	   'changed' case below was already written around. */
 	const kinds = useRef(new Map());
+
+	/* Which block a hand is on, so the lines it is joined to can say so.
+	 *
+	 * Let go of at the document rather than on the block. A slider captures the
+	 * pointer while it is being dragged, so the release lands on the slider and
+	 * not necessarily anywhere this could see; the document is the one place
+	 * every pointer ends up. Cleared to the same value it already holds is not
+	 * a change, so an ordinary tap on a grid costs no render. */
+	useEffect(() => {
+		const let_go = () => setTouched((was) => (was === null ? was : null));
+
+		document.addEventListener("pointerup", let_go);
+		document.addEventListener("pointercancel", let_go);
+
+		return () => {
+			document.removeEventListener("pointerup", let_go);
+			document.removeEventListener("pointercancel", let_go);
+		};
+	}, []);
 
 	const drop = useCallback((path) => {
 		setPending((was) => {
@@ -1948,70 +2145,115 @@ function Panel () {
 
 	const kindOf = (name) => controls[name].type;
 
-	/* A stack says which pattern it contributes to, and that one fact places
-	   its buttons: the pattern grows an "add a generator", not the stack. A
-	   stack that names nothing keeps its own, which is the only way a person
-	   could reach it. */
+	/* A stack says which pattern it contributes to, and that one fact places its
+	   buttons: the pattern grows an "add a generator", not the stack. */
 	const stackFor = (name) => Object.keys(controls).find(
 		(one) => kindOf(one) === "recipe" && controls[one].builds === name);
 
-	const canClear = (name) => ["step_grid", "note_grid"].includes(kindOf(name));
+	const tidied = (word) => String(word).replace(/_/g, " ");
 
-	const footFor = (name) => {
-		/* A stack keeps its own button when the pattern it feeds is not on this
-		   page, because otherwise there would be no way to reach it at all: a
-		   page showing the stack alone is a perfectly ordinary thing to make. */
-		const orphan = kindOf(name) === "recipe"
-			&& !gridNames.includes(controls[name].builds);
+	/* What a control is called on the glass: the app's own word for it, or its
+	   address tidied up when the app offered none (#2071). */
+	const named = (name) => (controls[name] && controls[name].title) || tidied(name);
 
-		return {
-			stack: stackFor(name) || (orphan ? name : null),
-			clear: canClear(name),
-		};
-	};
+	/* Every window on this page, which is no longer the same thing as every
+	   control on it.
+	 *
+	 * A stack of generators is not one tall block any more: each contribution in
+	 * it is a window of its own, placed and moved like any other (#2109). So a
+	 * window carries the control it draws, the layer it draws from when it is a
+	 * contribution, and its key — which is what the lattice, the stacking order
+	 * and the saved arrangement all know it by.
+	 *
+	 * A contribution appears wherever its stack is named, which is how a person
+	 * chooses to see one: a page carrying the pattern alone is the uncluttered
+	 * grid Simon described wanting, and a page carrying both is the one given
+	 * over to building it (#2085). Inheriting the pattern's pages instead would
+	 * put generators on the page that was made without them.
+	 *
+	 * Contributions come after the patterns rather than beside them, and that is
+	 * deliberate. A starting position is worked out by flowing the list left to
+	 * right, so where a block lands depends on everything before it; adding a
+	 * generator appends, and appending moves nothing that is already down. */
+	const windows = [];
+	const contributions = [];
 
-	/* A pitched pattern is as tall as its rows plus the velocity lane beneath
-	   them, which is what the fit has to solve for rather than the rows alone. */
-	const blocks = gridNames.map((name) => {
+	for (const name of gridNames) {
 		if (controls[name].unsupported) {
-			return { name, rows: 3, steps: PARAM_CELLS };
+			windows.push({ key: name, control: name, title: named(name),
+			               rows: 3, steps: PARAM_CELLS });
+			continue;
 		}
 
-		if (kindOf(name) === "params") {
-			return {
-				name, rows: (controls[name].fields || []).length,
-				steps: PARAM_CELLS };
-		}
-
-		/* A stack is as tall as what is in it: a heading for each layer, a row
-		   for each parameter of each layer, and one more for the button that
-		   adds another. It grows as a person builds, which is what makes the
-		   fit re-solve — and that is wanted here, unlike during a drag. */
 		if (kindOf(name) === "recipe") {
 			const held = ((state[appName] || {})[name] || {}).layers || [];
 			const offered = controls[name].generators || [];
+			const builds = controls[name].builds;
+			const feeds = builds && gridNames.includes(builds) ? builds : null;
 
-			const rows = held.reduce((total, layer) => {
+			for (const layer of held) {
 				const generator = offered.find((one) => one.name === layer.generator);
 
-				return total + 1 + (generator ? generator.parameters.length : 1);
-			}, 1);
+				contributions.push({
+					key: `${name}/${layer.id}`,
+					control: name, layer, layers: held, offered: generator, feeds,
 
-			const foot = footFor(name);
+					/* "Euclidean 1", where the number belongs to that layer for
+					   the whole of its life — a neighbour being removed never
+					   moves it. The pattern is named beside it so that a line
+					   crossing another line is not the only thing on the glass
+					   saying what feeds what. */
+					title: `${tidied(layer.generator || "?")}`
+						+ (layer.index ? ` ${layer.index}` : "")
+						+ (builds ? ` · ${named(builds)}` : ""),
 
-			return { name, rows: Math.max(rows, 2) + (foot.stack || foot.clear ? 1 : 0),
-			         steps: PARAM_CELLS };
+					rows: 1 + (generator ? generator.parameters.length : 1),
+					steps: PARAM_CELLS,
+				});
+			}
+
+			/* A stack keeps a window of its own when the pattern it feeds is not
+			   on this page, and only then: otherwise the way to add a generator
+			   would be on a page the person is not looking at. */
+			if (!feeds) {
+				windows.push({ key: name, control: name, title: named(name),
+				               add: name, rows: 2, steps: PARAM_CELLS });
+			}
+
+			continue;
 		}
 
-		const foot = footFor(name);
+		if (kindOf(name) === "params") {
+			windows.push({ key: name, control: name, title: named(name),
+			               rows: Math.max(1, (controls[name].fields || []).length),
+			               steps: PARAM_CELLS });
+			continue;
+		}
 
-		return {
-			name,
+		/* A pitched pattern is as tall as its rows plus the velocity lane
+		   beneath them, which is what the fit has to solve for rather than the
+		   rows alone. Every pattern carries a footer, because every pattern can
+		   be cleared. */
+		windows.push({
+			key: name, control: name, title: named(name),
+			add: stackFor(name) || null, clear: true,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0)
-				+ (foot.stack || foot.clear ? 1 : 0),
-			steps: controls[name].steps };
-	});
+				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0) + 1,
+			steps: controls[name].steps,
+		});
+	}
+
+	const drawn = [...windows, ...contributions];
+	const blocks = drawn.map(
+		(one) => ({ name: one.key, rows: Math.max(1, one.rows), steps: one.steps }));
+
+	/* Which windows are joined, and which way round. A contribution feeds a
+	   pattern, so the head of the line is at the pattern; the ordering is the
+	   direction, which is the field #2109 asked to exist before anything needs
+	   the other one. */
+	const joins = contributions
+		.filter((one) => one.feeds)
+		.map((one) => ({ from: one.key, to: one.feeds }));
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -2067,9 +2309,11 @@ function Panel () {
 		? arranged.order
 		: kept.map((one) => one.name);
 
+	const keys = drawn.map((one) => one.key);
+
 	const stacked = [
-		...gridNames.filter((name) => !order.includes(name)),
-		...order.filter((name) => gridNames.includes(name)),
+		...keys.filter((key) => !order.includes(key)),
+		...order.filter((key) => keys.includes(key)),
 	];
 
 	/* Asked for before the page can return early, because a hook must be. It is
@@ -2128,7 +2372,7 @@ function Panel () {
 			>${locked ? "🔒" : "🔓"} LAYOUT</button>
 			${!locked && html`
 				<${Inventory} names=${stacked} titles=${Object.fromEntries(
-					gridNames.map((name) => [name, controls[name].title]))}
+					drawn.map((one) => [one.key, one.title]))}
 					onRaise=${(who) => rearrange(who, null)} />`}
 			<span class="spacer"></span>
 			${notice && html`<span class="warn">${notice}</span>`}
@@ -2144,60 +2388,66 @@ function Panel () {
 			ref=${size.wrap}
 			...${pinch}
 		>
-			${gridNames.map((name) => html`
-				<${Part} key=${name} name=${name} title=${controls[name].title}
-					at=${layout[name]} cell=${size.cell} depth=${stacked.indexOf(name)}
+			${drawn.map((one) => html`
+				<${Part} key=${one.key} name=${one.key} title=${one.title}
+					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}
 					onHold=${setDragging}
 					onSettled=${keep}
-					footer=${(() => {
-						const foot = footFor(name);
-
-						return html`<${Footer}
-							onAdd=${foot.stack ? () => setAdding(foot.stack) : null}
-							onClear=${foot.clear ? () => setClearing(name) : null} />`;
-					})()}>
-					${controls[name].unsupported
+					onTouch=${setTouched}
+					footer=${html`
+						<${Footer}
+							onAdd=${one.add ? () => setAdding(one.add) : null}
+							onClear=${one.clear ? () => setClearing(one.control) : null} />`}>
+					${one.layer
+						? html`
+							<${Contribution} name=${one.control} layer=${one.layer}
+								layers=${one.layers} offered=${one.offered} onSet=${request} />`
+						: controls[one.control].unsupported
 						? html`
 							<div class="unsupported">
 								This service does not know how to draw a
-								<b>${controls[name].unsupported}</b>. It is older than the
+								<b>${controls[one.control].unsupported}</b>. It is older than the
 								application that declared it, and is not keeping this
 								control's state — so nothing here would follow the music.
 							</div>`
-						: kindOf(name) === "params"
+						: kindOf(one.control) === "recipe"
+						? html`<${Orphan} builds=${controls[one.control].builds} />`
+						: kindOf(one.control) === "params"
 						? html`
-							<${Params} name=${name} fields=${controls[name].fields || []}
-								values=${(state[appName] || {})[name] || {}}
+							<${Params} name=${one.control} fields=${controls[one.control].fields || []}
+								values=${(state[appName] || {})[one.control] || {}}
 								cell=${size.cell} onSet=${request} />`
-						: kindOf(name) === "recipe"
+						: kindOf(one.control) === "note_grid"
 						? html`
-							<${Recipe} name=${name}
-								generators=${controls[name].generators || []}
-								layers=${((state[appName] || {})[name] || {}).layers || []}
-								onSet=${request} />`
-						: kindOf(name) === "note_grid"
-						? html`
-							<${NoteGrid} name=${name} control=${controls[name]}
-								rows=${controls[name].rows} steps=${controls[name].steps}
-								notes=${(state[appName] || {})[name] || {}} cell=${size.cell}
-								window=${controls[name].visible_rows}
+							<${NoteGrid} name=${one.control} control=${controls[one.control]}
+								rows=${controls[one.control].rows} steps=${controls[one.control].steps}
+								notes=${(state[appName] || {})[one.control] || {}} cell=${size.cell}
+								window=${controls[one.control].visible_rows}
 								pending=${pending} failed=${failed} onSet=${request} />
-							<${VelocityLane} name=${name} rows=${controls[name].rows}
-								steps=${controls[name].steps} cell=${size.cell}
-								notes=${(state[appName] || {})[name] || {}}
-								range=${controls[name].velocity_range} onSet=${request} />`
+							<${VelocityLane} name=${one.control} rows=${controls[one.control].rows}
+								steps=${controls[one.control].steps} cell=${size.cell}
+								notes=${(state[appName] || {})[one.control] || {}}
+								range=${controls[one.control].velocity_range} onSet=${request} />`
 						: html`
-							<${Grid} control=${name} rows=${controls[name].rows} steps=${controls[name].steps}
-								cells=${(state[appName] || {})[name] || {}}
-								visible=${controls[name].visible_rows} cell=${size.cell}
+							<${Grid} control=${one.control} rows=${controls[one.control].rows}
+								steps=${controls[one.control].steps}
+								cells=${(state[appName] || {})[one.control] || {}}
+								visible=${controls[one.control].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
-					${up && !["params", "recipe"].includes(kindOf(name)) && html`
-						<${Playhead} anchor=${anchor} steps=${controls[name].steps}
-							beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
+					${up && one.clear && html`
+						<${Playhead} anchor=${anchor} steps=${controls[one.control].steps}
+							beats=${controls[one.control].beats || 4}
+							paused=${transportFields.paused === true} />`}
 				<//>`)}
+
+			${/* Told what could have moved a line, because measuring is what this
+			     does and nothing else in the page will tell it. */ ""}
+			<${Connections} box=${size.wrap} joins=${joins} touched=${touched}
+				when=${`${size.cell}|${JSON.stringify(layout)}`
+					+ `|${joins.map((join) => `${join.from}>${join.to}`).join(",")}`} />
 		</div>
 
 		${adding && controls[adding] && html`

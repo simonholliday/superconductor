@@ -126,6 +126,13 @@ html, body {
 	overflow: auto;
 	padding: 0.5rem;
 	position: relative;
+
+	/* A world of its own for stacking. A block is raised by being given a
+	   higher number than its neighbours, and that number has no ceiling — so
+	   without this, a page of enough blocks would eventually out-rank the
+	   popovers and the sheet, which are set once and cannot climb. Isolating
+	   the lattice keeps that contest inside it. */
+	isolation: isolate;
 }
 
 /* One part: a titled block holding one control, placed at its own corner of
@@ -838,6 +845,18 @@ html, body {
 
 .grid.params .layer .spacer { flex: 1 1 auto; }
 
+/* Which of them runs first, in words.
+ *
+ * A stack drawn as one block said this for nothing, by the order the layers sat
+ * in. Windows that move freely cannot, and the order is musical content: a fill
+ * told to skip where a note already sits depends on what ran before it. */
+.grid.params .layer .place {
+	color: var(--ink-quiet);
+	font-size: var(--type-note);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 /* Narrower here than in a settings block: this one shares its row with four
    other controls rather than having the width to itself. */
 /* Wide enough for its own word, which is the one thing here that is not
@@ -1028,7 +1047,7 @@ html, body {
 	   anything a finger can scroll. Placed by the component, which is the only
 	   thing that knows where the button ended up. */
 	position: fixed;
-	z-index: 20;
+	z-index: 900;
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -1085,6 +1104,65 @@ html, body {
 	white-space: nowrap;
 	touch-action: none;
 }
+
+/* --- The lines between a contribution and the pattern it feeds ------------
+ *
+ * The moment a stack became several windows that move freely, nothing on the
+ * glass said which pattern any of them built. A line does — and it has to be
+ * quiet, because it crosses the grids rather than sitting beside them (#2109).
+ *
+ * Faint until a hand is on one end. That is the moment the question is being
+ * asked, and answering it then costs nothing the rest of the time. */
+
+.joins {
+	/* The same origin the blocks are placed from. An absolutely positioned
+	   child is laid out from the padding box, so a block at cell (0, 0) sits at
+	   left: 0 and the padding does not move it — and a line measured against
+	   the wrapper has to start from exactly there or every line is off by the
+	   padding. */
+	position: absolute;
+	top: 0;
+	left: 0;
+
+	/* Never a target. A line drawn across a pattern must not cost a tap, and
+	   the overlay covers every block on the page. */
+	pointer-events: none;
+	overflow: visible;
+
+	/* Above every block, below everything that opens over them. Both are inside
+	   the lattice's own stacking context, so this is a comparison with the
+	   blocks alone rather than with the whole page. */
+	z-index: 500;
+}
+
+.join line {
+	stroke: var(--ring);
+	stroke-width: 1.5;
+	stroke-opacity: 0.28;
+	stroke-dasharray: 5 4;
+	fill: none;
+}
+
+.join path {
+	fill: var(--ring);
+	fill-opacity: 0.28;
+}
+
+/* Brighter, and solid. A dashed line says "these are related"; the same line
+   solid under a finger says "this one, right now". */
+.join.live line { stroke-opacity: 0.95; stroke-dasharray: none; }
+.join.live path { fill-opacity: 0.95; }
+
+/* --- A stack whose pattern is elsewhere ----------------------------------- */
+
+.orphan {
+	padding: 0.5rem;
+	color: var(--ink-quiet);
+	font-size: var(--type-note);
+	line-height: 1.5;
+}
+
+.orphan b { color: var(--ink); font-family: ui-monospace, monospace; }
 
 /* --- A sheet -------------------------------------------------------------
  *

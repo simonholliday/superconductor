@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.5.0"
+CONTRACT_VERSION = "1.6.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -31,6 +31,12 @@ other respect; the word was the problem.  *Arrangement* is a musical term in a
 package that talks to a sequencer, and it was being used here for where a block
 sits on a screen — a collision worth the rename while there is one app and one
 panel to keep in step.
+
+1.6.0 gives a layer an ``index``: the number a person sees on its window, held
+by that layer for the whole of its life and never handed out twice.  A panel too
+old to read it draws the stack exactly as it did; an app too old to send one
+leaves every layer at zero, which is what a panel shows when it has not been
+told a number.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

@@ -987,6 +987,7 @@ class Recipe (Control):
 				"id": str(layer.get("id", "")),
 				"kind": str(layer.get("kind", "generator")),
 				"generator": layer.get("generator"),
+				"index": int(layer.get("index", 0)),
 				"bypassed": bool(layer.get("bypassed", False)),
 				"params": dict(layer.get("params") or {}),
 			}
@@ -1027,6 +1028,8 @@ class Recipe (Control):
 
 		wanted: list[dict[str, typing.Any]] = []
 		seen: set[str] = set()
+		standing = {one["id"]: one for one in self.layers()}
+		counting = self._counted()
 
 		for entry in value:
 			if not isinstance(entry, dict):
@@ -1066,6 +1069,7 @@ class Recipe (Control):
 				"id": name,
 				"kind": kind,
 				"generator": generator,
+				"index": self._numbered(str(generator), name, entry, standing, counting),
 				"bypassed": bool(entry.get("bypassed", False)),
 				"params": {**self._opening(str(generator)), **kept},
 			})
@@ -1073,9 +1077,68 @@ class Recipe (Control):
 		if self.layers() == wanted:
 			return False
 
-		self.composition.data.setdefault(self.data_key, {})["layers"] = wanted
+		held = self.composition.data.setdefault(self.data_key, {})
+		held["layers"] = wanted
+		held["counts"] = counting
 
 		return True
+
+	def _counted (self) -> dict[str, int]:
+		"""The highest number handed out to each generator so far.
+
+		Seeded from the stack itself as well as from what was written down, so
+		a composition that predates the counter does not start again at one and
+		hand a fresh window a number that is already on the glass.
+		"""
+
+		held = self.composition.data.get(self.data_key) or {}
+		counted = {str(one): int(mark) for one, mark in (held.get("counts") or {}).items()}
+
+		for layer in self.layers():
+			generator = str(layer["generator"])
+			counted[generator] = max(counted.get(generator, 0), layer["index"])
+
+		return counted
+
+	def _numbered (
+		self,
+		generator: str,
+		layer_id: str,
+		entry: dict[str, typing.Any],
+		standing: dict[str, dict[str, typing.Any]],
+		counting: dict[str, int],
+	) -> int:
+		"""The number this layer is known by on the glass, for the whole of its life.
+
+		A person reads "Euclidean 2" on a window and reaches for that window, so
+		the number has to be a name and not a position.  A layer already in the
+		stack keeps the number it has whatever a panel sends: renumbering under
+		somebody's hand because a neighbour was removed is the exact surprise
+		this exists to prevent.
+
+		A number is never handed out twice, so a stack may read 1, 3, 4 after a
+		removal.  That is stranger to look at and much safer to work with, which
+		is the right way round.  The high-water mark is written down beside the
+		stack, so it survives a restart of the composition as well.
+		"""
+
+		held = standing.get(layer_id, {}).get("index")
+
+		if isinstance(held, int) and held > 0:
+			return held
+
+		# A panel replaying a stack it captured earlier sends the numbers back
+		# with it, and those are the ones the person already knows.
+		asked = entry.get("index")
+
+		if isinstance(asked, int) and asked > 0:
+			counting[generator] = max(counting.get(generator, 0), asked)
+
+			return asked
+
+		counting[generator] = counting.get(generator, 0) + 1
+
+		return counting[generator]
 
 	def _keep_parameter (self, layer_id: str, parameter: str, value: typing.Any) -> bool:
 		"""Move one parameter of one layer, which is what turning a knob does."""

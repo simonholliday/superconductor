@@ -925,9 +925,9 @@ def test_one_parameter_is_addressed_on_its_own_not_as_the_whole_stack (
 
 	_open_the_stack(panel)
 
-	panel.locator('.part[data-part="stack"] .switch').first.click()
+	panel.locator('.part[data-part="stack/one"] .switch').first.click()
 
-	dial = panel.locator('.part[data-part="stack"] .dial').first
+	dial = panel.locator('.part[data-part="stack/one"] .dial').first
 	box = dial.bounding_box()
 
 	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
@@ -947,7 +947,7 @@ def test_a_number_with_no_declared_bounds_is_worked_with_one_finger (
 
 	_open_the_stack(panel)
 
-	stepper = panel.locator('.part[data-part="stack"] .stepper')
+	stepper = panel.locator('.part[data-part="stack/one"] .stepper')
 
 	assert stepper.count() == 1, "duration has no bounds and should be a stepper"
 
@@ -963,7 +963,7 @@ def test_a_range_is_one_bar_with_two_handles (panel: typing.Any) -> None:
 
 	_open_the_stack(panel)
 
-	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
 
 	assert ranged.count() == 1
 	assert ranged.locator("b").count() == 2
@@ -976,7 +976,7 @@ def test_a_range_moves_the_end_the_finger_took_hold_of (
 
 	_open_the_stack(panel)
 
-	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
 	box = ranged.bounding_box()
 
 	# Held is 40–80 of 1–127, so the left quarter is nearest the low end.
@@ -1009,10 +1009,11 @@ def test_a_layer_is_moved_up_and_down_the_stack (
 	], by="panel")
 
 	panel.wait_for_function(
-		"() => document.querySelectorAll('.part[data-part=stack] .layer').length === 2",
+		"() => document.querySelectorAll('.recipe .layer').length === 2",
 		timeout=5_000)
 
-	panel.locator('.part[data-part="stack"] .layer').nth(1).locator(".move").first.click()
+	# The second layer's own window, and the arrow that sends it up one.
+	panel.locator('.part[data-part="stack/two"] .move').first.click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -1031,9 +1032,9 @@ def test_a_layer_naming_a_generator_that_has_gone_says_so (
 		{"id": "one", "generator": "withdrawn", "bypassed": False, "params": {}},
 	], by="app")
 
-	panel.wait_for_selector('.part[data-part="stack"] .unsupported', timeout=5_000)
+	panel.wait_for_selector('.part[data-part="stack/one"] .unsupported', timeout=5_000)
 
-	assert "withdrawn" in panel.locator('.part[data-part="stack"] .unsupported').inner_text()
+	assert "withdrawn" in panel.locator('.part[data-part="stack/one"] .unsupported').inner_text()
 
 
 def test_turning_a_layers_knob_moves_the_control_it_turned (
@@ -1049,7 +1050,7 @@ def test_turning_a_layers_knob_moves_the_control_it_turned (
 
 	_open_the_stack(panel)
 
-	dial = panel.locator('.part[data-part="stack"] .dial').first
+	dial = panel.locator('.part[data-part="stack/one"] .dial').first
 	box = dial.bounding_box()
 
 	panel.mouse.click(box["x"] + box["width"] * 0.9, box["y"] + box["height"] / 2)
@@ -1072,20 +1073,20 @@ def test_one_of_many_is_chosen_from_a_menu_rather_than_a_wall_of_buttons (
 
 	_open_the_stack(panel)
 
-	menu = panel.locator('.part[data-part="stack"] .menu')
+	menu = panel.locator('.part[data-part="stack/one"] .menu')
 
 	assert menu.count() == 1, "the six voices should be behind a menu"
 	assert menu.locator(".options").count() == 0, "and closed until it is asked for"
 
 	menu.locator("button").first.click()
-	panel.wait_for_selector('.part[data-part="stack"] .menu .options', timeout=5_000)
+	panel.wait_for_selector('.part[data-part="stack/one"] .menu .options', timeout=5_000)
 
 	menu.locator(".options button", has_text="clap").click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/one/pitch"]
 
 	assert asked and asked[-1]["v"] == "clap"
-	playwright_api.expect(panel.locator('.part[data-part="stack"] .menu .options')).to_have_count(0)
+	playwright_api.expect(panel.locator('.part[data-part="stack/one"] .menu .options')).to_have_count(0)
 
 
 def test_a_short_choice_stays_a_row_of_buttons (panel: typing.Any) -> None:
@@ -1112,7 +1113,7 @@ def test_a_float_with_no_declared_step_is_not_snapped_to_whole_numbers (
 
 	_open_the_stack(panel)
 
-	dials = panel.locator('.part[data-part="stack"] .dial:not(.ranged)')
+	dials = panel.locator('.part[data-part="stack/one"] .dial:not(.ranged)')
 	probability = dials.last
 	box = probability.bounding_box()
 
@@ -1141,7 +1142,7 @@ def test_a_layers_controls_are_not_clipped_at_the_smallest_cell_size (
 	_settled(panel)
 
 	spilling = panel.evaluate("""() => {
-		const header = document.querySelector('.part[data-part="stack"] .layer');
+		const header = document.querySelector('.part[data-part="stack/one"] .layer');
 		const edge = header.getBoundingClientRect().right;
 
 		return [...header.querySelectorAll('button')]
@@ -1162,11 +1163,11 @@ def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> N
 
 	_open_the_stack(panel)
 
-	panel.locator('.part[data-part="stack"] .menu > button').first.click()
-	panel.wait_for_selector('.part[data-part="stack"] .menu .options', timeout=5_000)
+	panel.locator('.part[data-part="stack/one"] .menu > button').first.click()
+	panel.wait_for_selector('.part[data-part="stack/one"] .menu .options', timeout=5_000)
 
 	hidden = panel.evaluate("""() => {
-		const block = document.querySelector('.part[data-part="stack"] .part-body');
+		const block = document.querySelector('.part[data-part="stack/one"] .part-body');
 		const edges = block.getBoundingClientRect();
 
 		return [...document.querySelectorAll('.menu .options button')]
@@ -1498,7 +1499,7 @@ def test_a_range_is_moved_by_its_middle_without_changing_its_width (
 
 	_open_the_stack(panel)
 
-	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
 	box = ranged.bounding_box()
 
 	# Held is 40–80 of 1–127, so the middle of the span is around a third across.
@@ -1528,7 +1529,7 @@ def test_a_range_moved_to_the_end_stops_rather_than_squashing (
 
 	_open_the_stack(panel)
 
-	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
 	box = ranged.bounding_box()
 
 	across = ((40 + 80) / 2 - 1) / (127 - 1)
@@ -1585,7 +1586,7 @@ def test_a_range_dragged_past_the_edge_still_goes_the_way_the_finger_went (
 
 	_open_the_stack(panel)
 
-	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
 	box = ranged.bounding_box()
 	width = panel.evaluate("() => window.innerWidth")
 
@@ -1673,3 +1674,308 @@ def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
 
 	assert len(asked) == 1, f"clearing sent {len(asked)} requests"
 	assert asked[0]["v"] == {}
+
+
+# --- Each contribution in its own window (#2109) -----------------------------
+#
+# A stack drawn as one tall block could not be arranged: two generators sat on
+# top of one another and neither could be moved. Simon asked for a window each,
+# named and placed like any other, and for a line saying which pattern each one
+# builds.
+
+
+def _two_generators (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Put a second layer in the stack and wait for both windows to draw."""
+
+	held = {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
+	        "duration": 1, "probability": 1}
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False, "params": held},
+		{"id": "two", "generator": "euclidean", "index": 2, "bypassed": False, "params": held},
+	], by="app")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 2", timeout=5_000)
+	_settled(panel)
+
+
+def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
+	"""Where one line starts and ends, and where the two blocks it joins are.
+
+	All four in the space the blocks are placed in — the wrapper's own scrolled
+	content — because that is the space the overlay draws in.
+	"""
+
+	return panel.evaluate(
+		"""(join) => {
+			const wrap = document.querySelector('.grid-wrap');
+			const outer = wrap.getBoundingClientRect();
+			const at = (name) => {
+				const box = document
+					.querySelector(`.part[data-part="${name}"]`).getBoundingClientRect();
+
+				return {
+					x: box.left - outer.left + wrap.scrollLeft,
+					y: box.top - outer.top + wrap.scrollTop,
+					w: box.width, h: box.height,
+				};
+			};
+
+			const [from, to] = join.split(">");
+			const line = document.querySelector(`[data-join="${join}"] line`);
+
+			return {
+				from: at(from), to: at(to),
+				a: { x: +line.getAttribute("x1"), y: +line.getAttribute("y1") },
+				b: { x: +line.getAttribute("x2"), y: +line.getAttribute("y2") },
+			};
+		}""", join)
+
+
+def _on_the_edge (point: dict[str, float], box: dict[str, float]) -> bool:
+	"""Whether a point sits on the boundary of a block, give or take a pixel."""
+
+	slack = 1.5
+	inside = (box["x"] - slack <= point["x"] <= box["x"] + box["w"] + slack
+	          and box["y"] - slack <= point["y"] <= box["y"] + box["h"] + slack)
+	against = (abs(point["x"] - box["x"]) <= slack
+	           or abs(point["x"] - box["x"] - box["w"]) <= slack
+	           or abs(point["y"] - box["y"]) <= slack
+	           or abs(point["y"] - box["y"] - box["h"]) <= slack)
+
+	return inside and against
+
+
+def test_each_contribution_is_a_window_of_its_own (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "when I add a second generator, it appears under the first, and the
+	two are not independently draggable"."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	assert panel.locator('.part[data-part="stack/one"]').count() == 1
+	assert panel.locator('.part[data-part="stack/two"]').count() == 1
+
+	# And the stack itself is no longer a block, because there is nothing left
+	# in it that is not in one of these.
+	assert panel.locator('.part[data-part="stack"]').count() == 0
+
+
+def test_a_contribution_is_named_for_its_generator_its_number_and_its_pattern (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The number is the layer's own for life, so a person can reach for the
+	window they read a moment ago.  The pattern is named beside it because a
+	line that crosses another is not enough on a busy page.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	second = panel.locator('.part[data-part="stack/two"] .part-title').inner_text().lower()
+
+	assert "euclidean" in second
+	assert "2" in second
+	assert "drums" in second, f"the pattern is not named: {second!r}"
+
+
+def test_a_contribution_says_where_it_runs_in_the_stack (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A stack drawn as one block said this for nothing, by the order its layers
+	sat in.  Windows that move freely cannot, and the order is what is heard: a
+	fill told to skip an occupied step depends on what ran before it.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	assert panel.locator('.part[data-part="stack/two"] .place').inner_text().strip() == "2 of 2"
+
+
+def test_a_contribution_moves_on_its_own (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Which is the whole ask: two things a person arranges themselves are two
+	things they can find again."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+	# In cells rather than in pixels. A drag that makes the arrangement taller
+	# re-solves the fit when the finger lifts, so every block's pixel position
+	# moves while its place on the lattice does not — and the lattice is what
+	# this is about.
+	def at (part: str) -> list[int]:
+		return panel.evaluate(
+			"""(part) => {
+				const block = document.querySelector(`.part[data-part="${part}"]`);
+				const root = getComputedStyle(document.documentElement);
+				const pitch = parseFloat(root.getPropertyValue("--cell"))
+					+ parseFloat(root.getPropertyValue("--gap"));
+
+				return [Math.round(parseFloat(block.style.left) / pitch),
+				        Math.round(parseFloat(block.style.top) / pitch)];
+			}""", part)
+
+	before = at("stack/one")
+	was = at("stack/two")
+
+	grip = panel.locator('.part[data-part="stack/two"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 125, steps=8)
+	panel.mouse.up()
+	_settled(panel)
+
+	assert at("stack/two")[1] > was[1], "the block did not move"
+	assert at("stack/one") == before, "its neighbour moved with it"
+
+
+def test_a_line_joins_each_contribution_to_the_pattern_it_feeds (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Nothing else on the glass says what builds what once the windows are
+	scattered, which is why the line arrived with them."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	drawn = panel.eval_on_selector_all(
+		".joins .join", "els => els.map((one) => one.dataset.join)")
+
+	assert sorted(drawn) == ["stack/one>grid", "stack/two>grid"]
+
+
+def test_a_line_runs_between_the_two_nearest_sides (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Corners are deliberately not offered: a line from one reads as pointing
+	past a block rather than at it."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	line = _edges(panel, "stack/one>grid")
+
+	assert _on_the_edge(line["a"], line["from"]), f"the tail is not on the generator: {line}"
+	assert _on_the_edge(line["b"], line["to"]), f"the head is not on the pattern: {line}"
+
+
+def test_a_line_carries_a_direction_and_points_at_the_pattern (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Only one direction exists today.  The other one is already named — an
+	element that *shows* a property of a pattern rather than controlling it —
+	and an arrowhead costs a triangle now against a format change later (#2109).
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	line = _edges(panel, "stack/one>grid")
+	tip = panel.eval_on_selector(
+		'[data-join="stack/one>grid"] path',
+		"""one => {
+			const [x, y] = one.getAttribute("d").split(" ").slice(1, 3);
+
+			return { x: +x, y: +y };
+		}""")
+
+	assert _on_the_edge(tip, line["to"]), f"the head is not at the pattern: {tip} of {line}"
+
+
+def test_a_line_brightens_while_a_hand_is_on_either_end (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Faint the rest of the time, because it crosses the grids rather than
+	sitting beside them.  A hand on a block is the moment the question is being
+	asked."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	live = panel.locator('[data-join="stack/one>grid"].live')
+
+	assert live.count() == 0, "a line was bright with nothing touched"
+
+	grip = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+
+	assert live.count() == 1, "the pattern was held and its line stayed faint"
+
+	panel.mouse.up()
+
+	assert live.count() == 0, "the line stayed bright after the hand left"
+
+
+def test_a_contribution_appears_where_its_stack_does_not_where_its_pattern_does (
+	panel: typing.Any) -> None:
+	"""How a person chooses to see generators at all (#2085).  A page carrying
+	the pattern alone is the uncluttered grid; a page carrying both is the one
+	given over to building it.  Inheriting the pattern's pages instead would put
+	generators on the page that was made without them.
+	"""
+
+	_settled(panel)
+
+	# The opening page carries the pattern and not the stack.
+	assert panel.locator('.part[data-part="grid"]').count() == 1
+	assert panel.locator(".recipe").count() == 0
+	assert panel.locator(".joins").count() == 0
+
+
+def test_a_contribution_is_drawn_even_where_its_pattern_is_not (
+	panel: typing.Any) -> None:
+	"""A page showing the stack alone is an ordinary thing to make.  The line
+	has nowhere to go, and the window's own title is then the only thing saying
+	what it builds — which is why the title says it."""
+
+	panel.locator(".pages button", has_text="Stack alone").click()
+	panel.wait_for_selector(".recipe", timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator('.part[data-part="stack/one"]').count() == 1
+	assert panel.locator(".joins .join").count() == 0
+	assert "drums" in panel.locator(
+		'.part[data-part="stack/one"] .part-title').inner_text().lower()
+
+
+def test_a_line_follows_the_block_it_is_joined_to (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Found by another test failing for a reason that took a while to see.
+
+	A dragged block moves without changing size, and this overlay measures the
+	page rather than calculating from the lattice — so a resize told it and a
+	move did not, and the line stayed where the block had been.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	# A fixed size rather than the fit. Under "fit the glass" a drag usually
+	# changes the arrangement's extent and every block is resized to suit, and a
+	# resize is a signal this does receive — which hid the defect. Held still,
+	# the move is the only thing that happens.
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
+	_settled(panel)
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+	grip = panel.locator('.part[data-part="stack/one"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 130, steps=8)
+	panel.mouse.up()
+	_settled(panel)
+
+	line = _edges(panel, "stack/one>grid")
+
+	assert _on_the_edge(line["a"], line["from"]), f"the line stayed behind: {line}"
