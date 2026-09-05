@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.9.0"
+CONTRACT_VERSION = "1.10.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -55,7 +55,10 @@ take from.  A service too old refuses the layer rather than dropping it, which i
 the right way round: the app would play a route the service was not holding.
 
 1.9.0 adds the ``realised`` event: which cells of a grid the algorithms put
-there this cycle, as ``control`` and ``cells``.  **An event and never a change**,
+there this cycle, as ``control`` and ``cells``.  1.10.0 makes each row's cells a
+map of step to velocity rather than a list of steps, because how hard a
+generated note is played is the thing that tells a ghost fill from a full hit,
+and a panel drawing them the same weight says the opposite of what they are.  **An event and never a change**,
 which is the whole of #1965 — a change is intent and is kept, and these notes are
 not intent.  Nothing applies one to any control's state, a panel draws them as
 dots beside the steps somebody tapped, and a person's taps remain the only thing

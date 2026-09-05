@@ -1407,7 +1407,7 @@ class Recipe (Control):
 			return
 
 		known = set(grid.rows)
-		cells: dict[str, list[int]] = {}
+		cells: dict[str, dict[str, int]] = {}
 
 		for note in set(after) - set(before):
 			row = getattr(note, "origin", None)
@@ -1423,11 +1423,19 @@ class Recipe (Control):
 
 			step = int(getattr(note, "position", 0) // per_step)
 
-			if 0 <= step < grid.steps and step not in cells.setdefault(row, []):
-				cells[row].append(step)
+			if not 0 <= step < grid.steps:
+				continue
 
-		for row in cells:
-			cells[row].sort()
+			# **How hard, not only whether.** A ghost fill is quiet by its whole
+			# nature and drawing it at the weight of a full hit says the opposite
+			# of what it is (Simon, 2026-09-05).
+			#
+			# The loudest wins where two contributions land on one step, because
+			# that is what a person hears: two notes on one drum voice are one
+			# sound at the weight of the louder.
+			loud = int(getattr(note, "velocity", 0) or 0)
+			held = cells.setdefault(row, {})
+			held[str(step)] = max(held.get(str(step), 0), loud)
 
 		# **Every cycle, including one that says the same as the last.**
 		#

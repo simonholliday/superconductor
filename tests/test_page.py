@@ -2630,7 +2630,7 @@ def test_a_routed_grid_is_bypassed_and_removed_like_any_other_contribution (
 
 	assert asked[-1]["v"][0]["bypassed"] is True
 
-	panel.locator('.part[data-part="stack/one"] .drop').click()
+	panel.locator('.part[data-part="stack/one"] .part-title .close').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -2652,7 +2652,8 @@ def test_a_stack_offering_no_patterns_still_says_generator (
 # --- What an algorithm put there, drawn beside what a person tapped (#1925) ---
 
 
-def _realised (panel: typing.Any, fake_app: typing.Any, cells: dict[str, list[int]]) -> None:
+def _realised (panel: typing.Any, fake_app: typing.Any,
+               cells: dict[str, dict[str, int]]) -> None:
 	"""Report a cycle's generated cells the way the app does."""
 
 	fake_app.send(superintendent.protocol.event(
@@ -2668,7 +2669,7 @@ def test_a_generated_step_is_drawn_as_a_dot_not_as_a_face (
 	does not (#1965)."""
 
 	_settled(panel)
-	_realised(panel, fake_app, {"snare": [1]})
+	_realised(panel, fake_app, {"snare": {"1": 100}})
 
 	ghost = panel.locator(f'{conftest.cell("grid/snare/1")}.ghost')
 
@@ -2688,7 +2689,7 @@ def test_a_generated_step_is_never_kept_as_state (
 	"""
 
 	_settled(panel)
-	_realised(panel, fake_app, {"snare": [1]})
+	_realised(panel, fake_app, {"snare": {"1": 100}})
 
 	assert panel.locator(".cell.ghost").count() == 1
 
@@ -2706,7 +2707,7 @@ def test_a_generated_step_is_traced_by_an_ordinary_tap (
 	and that is what tracing into a permanent step means."""
 
 	_settled(panel)
-	_realised(panel, fake_app, {"snare": [1]})
+	_realised(panel, fake_app, {"snare": {"1": 100}})
 
 	panel.locator(conftest.cell("grid/snare/1")).click()
 
@@ -2721,10 +2722,121 @@ def test_a_traced_step_still_says_the_algorithm_wants_it (
 	so the dot stays under the face rather than disappearing."""
 
 	_settled(panel)
-	_realised(panel, fake_app, {"kick": [0]})
+	_realised(panel, fake_app, {"kick": {"0": 100}})
 
 	cell = panel.locator(conftest.cell("grid/kick/0"))
 
 	assert "on" in (cell.get_attribute("class") or ""), "the fixture's kick 0 is not lit"
 	assert "ghost" in (cell.get_attribute("class") or ""), \
 		"a traced step stopped saying the algorithm wants it"
+
+
+def test_a_window_is_closed_from_its_title_bar (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Top right, where every windowed system has put it for forty years.
+
+	It was among the controls, which put "remove this whole thing" next to
+	"nudge it up one" — Simon's point, and it costs nothing to be where a hand
+	already goes.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	close = panel.locator('.part[data-part="stack/two"] .part-title .close')
+
+	assert close.count() == 1, "a contribution cannot be closed from its title bar"
+
+	block = panel.locator('.part[data-part="stack/two"]').bounding_box()
+	where = close.bounding_box()
+
+	assert where["x"] + where["width"] > block["x"] + block["width"] - 2 * where["width"], \
+		"the close is not at the right-hand end of the title bar"
+
+	# A block the composition declared cannot be closed: the panel did not make
+	# it and taking it away is not the panel's to offer.
+	assert panel.locator('.part[data-part="grid"] .part-title .close').count() == 0
+
+
+def test_closing_a_window_does_not_drag_it (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The title bar is the handle, so a button in it has to stop the drag it
+	would otherwise begin under the same finger."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+	before = panel.locator('.part[data-part="stack/one"]').bounding_box()
+
+	panel.locator('.part[data-part="stack/two"] .part-title .close').click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert [layer["id"] for layer in asked[-1]["v"]] == ["one"], "the close did not remove it"
+	assert panel.locator('.part[data-part="stack/one"]').bounding_box() == before, \
+		"closing one block moved another"
+
+
+def test_a_quiet_generated_note_is_drawn_smaller_than_a_loud_one (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A ghost is a quiet note by its whole nature, and drawing it at the weight
+	of a full hit says the opposite of what it is."""
+
+	_settled(panel)
+	_realised(panel, fake_app, {"kick": {"1": 127}, "snare": {"1": 20}})
+
+	def across (path: str) -> float:
+		return float(panel.eval_on_selector(
+			conftest.cell(path),
+			"one => parseFloat(getComputedStyle(one, '::after').width)"))
+
+	loud = across("grid/kick/1")
+	quiet = across("grid/snare/1")
+
+	assert loud > quiet * 1.4, f"a note at 127 is drawn {loud}px and one at 20 is {quiet}px"
+
+	# And the quietest is still something rather than nothing: this says how
+	# hard, and a note that cannot be seen has stopped saying anything at all.
+	assert quiet >= 4, f"a quiet note is {quiet}px across"
+
+
+def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "how should I connect the output of shared-drums to an
+	instrument?"  The honest answer was: from the other end.  That is backwards
+	from how anybody thinks about a signal — you have a thing, and you send it.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator('.part[data-part="second"] .part-foot .offer.send').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	panel.locator(".sheet .offer").first.click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked, "sending a grid asked for nothing"
+
+	added = asked[-1]["v"][-1]
+
+	assert added == {**added, "kind": "pattern", "source": "second"}
+
+	# A grid nothing can take from does not offer to send itself anywhere.
+	assert panel.locator('.part[data-part="grid"] .part-foot .offer.send').count() == 0
+
+
+def test_a_grid_already_sent_somewhere_does_not_offer_it_twice (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Routing the same grid into one pattern twice plays it twice, which is a
+	thing a person can ask for and never a thing to offer by accident."""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	panel.locator('.part[data-part="second"] .part-foot .offer.send').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	assert panel.locator(".sheet .offer").first.is_disabled()

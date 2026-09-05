@@ -344,15 +344,36 @@ html, body {
  * Nothing here knows what any of it means (#1465). A MIDI channel and an
  * instrument's name are facts about a studio, and this draws whatever the
  * composition said without reading a word of it. */
+.part-title .spacer { flex: 1 1 0; min-width: 0; }
+
 .part-title .about {
 	flex: 0 2 auto;
 	display: flex;
 	align-items: baseline;
 	gap: 0.55rem;
-	margin-left: auto;
 	min-width: 0;
 	overflow: hidden;
 }
+
+/* Top right, where a windowed system has put it for forty years. A whole cell,
+   like every other control on the lattice, and never smaller than a finger can
+   find — the title bar has a legibility floor and this shares it. */
+.part-title .close {
+	flex: none;
+	width: max(24px, var(--cell));
+	height: max(24px, var(--cell));
+	margin-right: calc(var(--pad) * -1);
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--ink-quiet);
+	font: inherit;
+	font-size: var(--type-title);
+	line-height: 1;
+	touch-action: none;
+}
+
+.part-title .close:hover { color: var(--danger); }
 
 .part-title .about > span { flex: none; }
 
@@ -540,8 +561,8 @@ html, body {
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	width: clamp(5px, calc(var(--cell) * 0.3), 14px);
-	height: clamp(5px, calc(var(--cell) * 0.3), 14px);
+	width: calc(clamp(5px, calc(var(--cell) * 0.62), 30px) * var(--struck, 1));
+	height: calc(clamp(5px, calc(var(--cell) * 0.62), 30px) * var(--struck, 1));
 	transform: translate(-50%, -50%);
 	border-radius: 50%;
 	background: var(--on);
@@ -1144,8 +1165,7 @@ html, body {
    floor from when a control had a height floor: at the compact size that left
    132px of buttons on a 230px header and the generator's name was cut to one
    letter. */
-.grid.params .layer .move,
-.grid.params .layer .drop {
+.grid.params .layer .move {
 	min-width: var(--row);
 	min-height: var(--row);
 	border-radius: 8px;
@@ -1159,7 +1179,6 @@ html, body {
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
-.grid.params .layer .drop { color: var(--danger); font-size: var(--type-body); }
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs
    none, works with one finger, and never claims a limit that was invented. */

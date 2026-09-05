@@ -64,44 +64,29 @@
 	],
 	"shared": [
 		{
-			"name": "drum_recipe/lmtoemgmm2oj",
-			"x": 52,
-			"y": 2
-		},
-		{
-			"name": "drum_recipe/lmto9a02ipm2",
-			"x": 1,
-			"y": 21
-		},
-		{
-			"name": "drum_recipe/lmto9msrruk1",
-			"x": 4,
-			"y": 12
+			"name": "grid",
+			"x": 59,
+			"y": 10
 		},
 		{
 			"name": "drum_recipe/probe",
-			"x": 5,
-			"y": 1
+			"x": 4,
+			"y": 4
+		},
+		{
+			"name": "drum_recipe/lmto9a02ipm2",
+			"x": 21,
+			"y": 12
+		},
+		{
+			"name": "drum_recipe/lmtoemgmm2oj",
+			"x": 18,
+			"y": 25
 		},
 		{
 			"name": "shared",
-			"x": 11,
-			"y": 29
-		},
-		{
-			"name": "layer",
-			"x": 50,
-			"y": 19
-		},
-		{
-			"name": "grid",
-			"x": 30,
-			"y": 2
-		},
-		{
-			"name": "layer_recipe/route",
-			"x": 36,
-			"y": 26
+			"x": 41,
+			"y": 35
 		}
 	]
 }

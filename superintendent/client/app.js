@@ -222,7 +222,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.9.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.10.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -267,7 +267,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.9.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.10.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -428,7 +428,8 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
 					   decoration: a generator that does not skip occupied steps
 					   goes on firing there, so the step is now sounding twice.
 					   Hiding the dot under the face would hide that. */
-					const ghost = ((drawn || {})[row] || []).includes(step);
+					const struck = ((drawn || {})[row] || {})[step];
+					const ghost = struck !== undefined;
 
 					return html`
 						<div
@@ -438,6 +439,7 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+							style=${ghost ? { "--struck": weightOf(struck) } : null}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
 				})}
@@ -630,6 +632,23 @@ const stepOf = (field) => {
 /* Binary floating point makes 0.1 + 0.2 into something no one wants to read on
  * a control surface. Six places is far finer than any parameter here. */
 const tidy = (value) => Number(value.toFixed(6));
+
+/* How wide to draw a note that was played this hard, as a share of the cell.
+ *
+ * Simon: "ghost fills appear the same as full-on hits. This must change." They
+ * are not the same and never were — a ghost is a quiet note by its whole nature,
+ * and drawing it at the weight of a full hit says the opposite of what it is.
+ *
+ * Radius rather than opacity, because he is right that it reads on both a circle
+ * and a square, and because a faint mark on glass at an angle in a dark room is
+ * a mark that is not there. A floor of a third, so the quietest note is still
+ * something rather than nothing: this says *how hard*, and a note that cannot be
+ * seen has stopped saying anything at all. */
+const weightOf = (velocity) => {
+	const held = Math.min(127, Math.max(0, Number(velocity) || 0));
+
+	return (0.34 + 0.66 * (held / 127)).toFixed(3);
+};
 
 /* One parameter, in whichever of the four shapes it comes in.
  *
@@ -979,10 +998,6 @@ function Contribution ({ name, layer, layers, offered, sources, titled, onSet })
 						class="move" disabled=${index < 0 || index === layers.length - 1}
 						onPointerDown=${press(() => shift(1))}
 					>↓</button>
-					<button
-						class="drop" title="remove this layer"
-						onPointerDown=${press(() => send(layers.filter((one) => one.id !== layer.id)))}
-					>✕</button>
 				</div>
 
 				${layer.kind === "pattern"
@@ -1078,8 +1093,8 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onClear }) {
-	if (!onAdd && !onClear) return null;
+function Footer ({ onAdd, adds, onSend, onClear }) {
+	if (!onAdd && !onSend && !onClear) return null;
 
 	return html`
 		<footer class="part-foot">
@@ -1088,6 +1103,11 @@ function Footer ({ onAdd, adds, onClear }) {
 					class="offer add"
 					onPointerDown=${(event) => { event.preventDefault(); onAdd(); }}
 				>${adds}</button>`}
+			${onSend && html`
+				<button
+					class="offer send"
+					onPointerDown=${(event) => { event.preventDefault(); onSend(); }}
+				>send to…</button>`}
 			<span class="spacer"></span>
 			${onClear && html`
 				<button
@@ -1109,7 +1129,7 @@ function Footer ({ onAdd, adds, onClear }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1189,6 +1209,7 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, o
 				onPointerCancel=${release}
 			>
 				<b>${title || name.replace(/_/g, " ")}</b>
+				<span class="spacer"></span>
 				${/* Whatever the app thought was worth knowing at a glance — a MIDI
 				     channel, the instrument's full name. Drawn and nothing else:
 				     this package is not allowed to know any of them, so a panel
@@ -1203,6 +1224,22 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, o
 								<em>${fact.value}</em>
 							</span>`)}
 					</span>`}
+				${/* Top right, where every windowed system has put it for forty
+				     years — Simon's point, and it costs nothing to be where a
+				     hand already goes. It was among the controls, which put
+				     "remove this whole thing" beside "nudge it up one".
+				
+				     The propagation stops here or the title bar's drag begins
+				     under the same finger. */ ""}
+				${onClose && html`
+					<button
+						class="close" title="remove"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onClose();
+						}}
+					>✕</button>`}
 			</header>
 			<div class="part-body">${children}</div>
 			${footer}
@@ -2106,6 +2143,7 @@ function Panel () {
 	const [dragging, setDragging] = useState(false);
 	const [adding, setAdding] = useState(null);
 	const [clearing, setClearing] = useState(null);
+	const [sending, setSending] = useState(null);
 	const [moved, setMoved] = useState({});
 	const [touched, setTouched] = useState(null);
 	const [realised, setRealised] = useState({});
@@ -2566,10 +2604,24 @@ function Panel () {
 		   beneath them, which is what the fit has to solve for rather than the
 		   rows alone. Every pattern carries a footer, because every pattern can
 		   be cleared. */
+		/* Which stacks would take this grid's notes, so a person holding a grid
+		   can send it somewhere rather than having to go to the thing that
+		   receives it and ask for it by name.
+		
+		   Simon asked "how should I connect the output of shared-drums to an
+		   instrument?", and the honest answer was: from the other end. That is
+		   backwards from how anybody thinks about a signal — you have a thing,
+		   and you send it. The receiving end still works and still reads well
+		   for "what is this pattern made of"; this is the same fact asked from
+		   the side a person is standing on. */
+		const sends = Object.keys(controls).filter(
+			(one) => kindOf(one) === "recipe" && (controls[one].sources || []).includes(name));
+
 		windows.push({
 			key: name, control: name, title: named(name),
 			about: controls[name].about || [],
 			add: stackFor(name) || null, clear: true,
+			sends: sends.length ? sends : null,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0) + 1,
 			steps: controls[name].steps,
@@ -2745,11 +2797,14 @@ function Panel () {
 					onHold=${setDragging}
 					onSettled=${keep}
 					onTouch=${setTouched}
+					onClose=${one.layer ? () => request(`${one.control}/layers`,
+						one.layers.filter((held) => held.id !== one.layer.id)) : null}
 					footer=${html`
 						<${Footer}
 							onAdd=${one.add ? () => setAdding(one.add) : null}
 							adds=${one.add && (controls[one.add].sources || []).length
 								? "add a contribution" : "add a generator"}
+							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing(one.control) : null} />`}>
 					${one.layer
 						? html`
@@ -2862,6 +2917,44 @@ function Panel () {
 						</button>`)}
 				<//>`;
 		})()}
+
+		${sending && html`
+			<${Sheet} title=${`send ${named(sending)} to`} onClose=${() => setSending(null)}>
+				${Object.keys(controls)
+					.filter((one) => kindOf(one) === "recipe"
+						&& (controls[one].sources || []).includes(sending))
+					.map((stack) => {
+						const into = controls[stack].builds;
+						const already = (((state[appName] || {})[stack] || {}).layers || [])
+							.some((layer) => layer.kind === "pattern" && layer.source === sending);
+
+						return html`
+							<button
+								key=${stack}
+								class=${`offer ${already ? "partial" : ""}`}
+								disabled=${already}
+								onPointerDown=${(event) => {
+									event.preventDefault();
+
+									const held = ((state[appName] || {})[stack] || {}).layers || [];
+
+									request(`${stack}/layers`, [...held, {
+										id: `l${Date.now().toString(36)}`
+											+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+										kind: "pattern",
+										source: sending,
+									}]);
+
+									setSending(null);
+								}}
+							>
+								<b>${into ? named(into) : named(stack)}</b>
+								<i>${already
+									? "already takes from this grid"
+									: "every note drawn here, played there as well"}</i>
+							</button>`;
+					})}
+			<//>`}
 
 		${clearing && html`
 			<${Sheet} title="clear this pattern" onClose=${() => setClearing(null)}>

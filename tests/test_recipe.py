@@ -56,19 +56,21 @@ class Note:
 	difference and that is the whole mechanism (#2102).
 	"""
 
-	def __init__ (self, position: int, origin: str | None,
+	def __init__ (self, position: int, origin: str | None, velocity: int = 100,
 	              index: int = 0, primary_unmapped: bool = False) -> None:
-		"""One note, where it is and which voice asked for it."""
+		"""One note, where it is, which voice asked for it and how hard."""
 
 		self.position = position
 		self.origin = origin
+		self.velocity = velocity
 		self.index = index
 		self.primary_unmapped = primary_unmapped
 
 	def __hash__ (self) -> int:
 		"""By everything, so two notes on one pulse stay two notes."""
 
-		return hash((self.position, self.origin, self.index, self.primary_unmapped))
+		return hash((self.position, self.origin, self.velocity,
+		             self.index, self.primary_unmapped))
 
 	def __eq__ (self, other: object) -> bool:
 		"""By everything, for the same reason."""
@@ -729,13 +731,14 @@ def test_a_stack_says_which_cells_its_generators_realised () -> None:
 
 	recipe, speaker, builder = _watching()
 
-	builder.lands = [Note(0, "kick"), Note(12, "snare"), Note(90, "kick")]
+	builder.lands = [Note(0, "kick", 110), Note(12, "snare", 40), Note(90, "kick", 90)]
 
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
 	assert speaker.events == [
-		("realised", {"control": "grid", "cells": {"kick": [0, 15], "snare": [2]}})]
+		("realised", {"control": "grid",
+		              "cells": {"kick": {"0": 110, "15": 90}, "snare": {"2": 40}}})]
 
 
 def test_what_was_already_there_is_not_reported_as_realised () -> None:
@@ -750,7 +753,7 @@ def test_what_was_already_there_is_not_reported_as_realised () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": [2]}
+	assert speaker.events[-1][1]["cells"] == {"kick": {"2": 100}}
 
 
 def test_a_generated_note_landing_on_a_tapped_one_is_still_reported () -> None:
@@ -765,7 +768,7 @@ def test_a_generated_note_landing_on_a_tapped_one_is_still_reported () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": [0]}
+	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 100}}
 
 
 def test_a_note_that_will_not_sound_is_not_drawn () -> None:
@@ -779,7 +782,7 @@ def test_a_note_that_will_not_sound_is_not_drawn () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"snare": [1]}
+	assert speaker.events[-1][1]["cells"] == {"snare": {"1": 100}}
 
 
 def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
@@ -793,7 +796,7 @@ def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": [2]}
+	assert speaker.events[-1][1]["cells"] == {"kick": {"2": 100}}
 
 
 def test_every_cycle_says_what_it_realised_even_when_it_is_the_same () -> None:
@@ -856,3 +859,35 @@ def test_a_pattern_that_cannot_be_read_back_is_not_an_error () -> None:
 	recipe.build(Old())
 
 	assert speaker.events == []
+
+
+def test_how_hard_a_note_was_played_travels_with_it () -> None:
+	"""Simon: "ghost fills appear the same as full-on hits.  This must change."
+
+	They are not the same and never were — a ghost is a quiet note by its whole
+	nature, so a panel drawing it at the weight of a full hit says the opposite
+	of what it is.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, "kick", 127), Note(6, "kick", 30)]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 127, "1": 30}}
+
+
+def test_two_contributions_on_one_step_report_the_louder () -> None:
+	"""Which is what a person hears: two notes on one drum voice are one sound,
+	at the weight of the louder of them."""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, "kick", 40), Note(2, "kick", 115)]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 115}}
