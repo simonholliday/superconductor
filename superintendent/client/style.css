@@ -1399,13 +1399,6 @@ html, body {
 	touch-action: none;
 }
 
-/* A route is a connection rather than an instrument, and says so by being the
- * quietest block on the page: it has no notes and nothing to tune, and the two
- * things worth reading on it are already in its name. */
-.part.route .part-title > b { font-weight: 500; }
-
-.part.route { box-shadow: 0 0 0 1px var(--edge); }
-
 /* --- The lines between a contribution and the pattern it feeds ------------
  *
  * The moment a stack became several windows that move freely, nothing on the
@@ -1458,6 +1451,44 @@ html, body {
    "this one, right now" while a hand is on either end. */
 .join.live line { stroke-opacity: 1; }
 .join.live path, .join.live circle { fill-opacity: 1; }
+
+/* **The head is the switch, and only the head.**
+ *
+ * The overlay takes no pointer events at all, because a line crossing a pattern
+ * must not cost a tap. The triangle is the exception and it is deliberately the
+ * whole of it — no invisible circle around it. It sits above the blocks, so
+ * anything live here takes a pointer from the grid underneath, and the grid is
+ * the most tapped surface there is. A head is drawn where it is: a person can
+ * see what they are about to hit, and move the block if it is in the way. */
+/* `all`, not `auto`. A silenced head is `fill: none`, and an unpainted fill is
+   not a target — so the head could be tapped to silence a link and then only on
+   its two-pixel outline to bring it back. Caught by the test that turns one off
+   and on again, which is why that test does both. */
+.join path { pointer-events: all; cursor: pointer; }
+
+/* A silenced link, said twice over: the line goes dashed and the head goes
+   hollow.
+ *
+ * Dashes were where the lines started and Simon could not see them, which is
+ * why they are solid now. They come back here earning their place — a dash no
+ * longer means "this is quiet", it means *this is not sounding*, and a line
+ * that is hard to read is exactly right for a link that is doing nothing. */
+.join.off line {
+	stroke-dasharray: 6 5;
+	stroke-opacity: 0.3;
+}
+
+.join.off path {
+	fill: none;
+	stroke: var(--ring);
+	stroke-width: var(--mark-hair);
+	stroke-opacity: 0.5;
+}
+
+.join.off circle { fill-opacity: 0.2; }
+
+.join.off.live line { stroke-opacity: 0.7; }
+.join.off.live path { stroke-opacity: 1; }
 
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 

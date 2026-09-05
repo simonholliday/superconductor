@@ -2531,7 +2531,7 @@ def _route (panel: typing.Any, fake_app: typing.Any) -> None:
 		 "bypassed": False, "params": {}},
 	], by="app")
 
-	panel.wait_for_selector('.part[data-part="stack/one"]', timeout=5_000)
+	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
 	_settled(panel)
 
 
@@ -2558,11 +2558,15 @@ def test_a_grid_can_be_routed_into_a_pattern_from_the_glass (
 	assert "generator" not in added
 
 
-def test_a_routed_grid_takes_from_one_place_and_gives_to_another (
+def test_a_route_is_a_line_and_nothing_else (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""The first block on this surface with both an input and an output, which
-	is what makes the question of how to tell them apart a question about
-	something real (#2108)."""
+	"""It had a window carrying its bypass, its place in the stack and a picker
+	for where it came from.
+
+	Simon: "surely a *route* is a line with an arrow head?"  He is right — a
+	connection is not a thing that sits somewhere, it is the fact that two things
+	are joined, and the window was answering a question nobody asked.
+	"""
 
 	_open_the_stack(panel)
 	_route(panel, fake_app)
@@ -2570,71 +2574,124 @@ def test_a_routed_grid_takes_from_one_place_and_gives_to_another (
 	drawn = panel.eval_on_selector_all(
 		".joins .join", "els => els.map((one) => one.dataset.join)")
 
-	assert sorted(drawn) == ["second>stack/one", "stack/one>grid"]
+	assert drawn == ["second>grid"], f"a route drew {drawn}"
+
+	# No block of its own, anywhere.
+	assert panel.locator('.part[data-part^="stack/"]').count() == 0
 
 
-def test_a_route_is_named_by_the_two_things_it_joins (
+def test_the_head_of_an_arrow_silences_the_link (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""It first reused the generator's shape and read as "shared 1 · Drums" —
-	a generator called *shared*, with a number that meant nothing.  Simon asked
-	what it was, which is the whole answer: a route is not one of several of
-	anything, and the thing worth saying about a connection is what it joins.
-	"""
+	"""The most direct mapping there is: a link is a line, so you disable it by
+	touching the line."""
 
 	_open_the_stack(panel)
 	_route(panel, fake_app)
 
-	title = panel.locator('.part[data-part="stack/one"] .part-title > b').inner_text()
-
-	assert "→" in title, f"a route is not named by its ends: {title!r}"
-	assert title.lower().startswith("second"), title
-	assert title.lower().endswith("drums"), title
-
-	# The number stays in the data, where it identifies the layer, and says
-	# nothing here.
-	assert "1" not in title, f"a route is numbered on the glass: {title!r}"
-
-
-def test_a_routed_grid_says_where_it_takes_from (
-	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""A routed grid has nothing to tune — what it plays is what is drawn on it
-	— so its one row is which grid that is.
-
-	Drawn with whichever control a choice of that size gets, which is the point
-	of it being an ordinary choice: one source is a row of buttons and thirty
-	would be a menu, and neither is a thing this had to decide.
-	"""
-
-	_open_the_stack(panel)
-	_route(panel, fake_app)
-
-	assert panel.locator('.part[data-part="stack/one"] .row-label').inner_text().strip() == "from"
-
-	# Named by the control's own title, which the panel already has, rather than
-	# by anything the stack repeated.
-	assert "second" in panel.locator(
-		'.part[data-part="stack/one"] .setting').inner_text().lower()
-
-
-def test_a_routed_grid_is_bypassed_and_removed_like_any_other_contribution (
-	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""One stack, one set of controls.  A second way of saying the same thing
-	would be a second thing to learn for no gain."""
-
-	_open_the_stack(panel)
-	_route(panel, fake_app)
-
-	panel.locator('.part[data-part="stack/one"] .switch').click()
+	panel.locator('[data-join="second>grid"] path').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
+	assert asked, "tapping the head asked for nothing"
 	assert asked[-1]["v"][0]["bypassed"] is True
 
-	panel.locator('.part[data-part="stack/one"] .part-title .close').click()
+	fake_app.confirm("stack/layers", asked[-1]["v"], by="panel")
+	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
+
+	panel.locator('[data-join="second>grid"] path').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
-	assert asked[-1]["v"] == []
+	assert asked[-1]["v"][0]["bypassed"] is False, "the head would not turn it back on"
+
+
+def test_a_silenced_link_is_dashed_and_hollow (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Said twice over, because it is the one thing about a line worth reading
+	at a glance.
+
+	Dashes were where these lines started and Simon could not see them, which is
+	why they are solid now.  They come back here earning their place: a dash no
+	longer means "this is quiet", it means *this is not sounding*, and a line
+	that is hard to read is right for a link that is doing nothing.
+	"""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		 "bypassed": True, "params": {}},
+	], by="app")
+	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
+	_settled(panel)
+
+	drawn = panel.evaluate("""() => {
+		const line = document.querySelector('[data-join="second>grid"] line');
+		const head = document.querySelector('[data-join="second>grid"] path');
+
+		return {
+			dashes: getComputedStyle(line).strokeDasharray,
+			fill: getComputedStyle(head).fill,
+			stroke: getComputedStyle(head).stroke,
+		};
+	}""")
+
+	assert drawn["dashes"] not in ("none", ""), f"a silenced link is not dashed: {drawn}"
+	assert drawn["fill"] == "none", f"a silenced head is still filled: {drawn}"
+	assert drawn["stroke"] != "none", f"a silenced head has no outline: {drawn}"
+
+
+def test_only_the_head_of_an_arrow_takes_a_tap (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The overlay sits above the blocks, so anything live on it takes a pointer
+	from the grid underneath — and the grid is the most tapped surface there is.
+
+	So the triangle is the whole of the exception: no invisible circle around
+	it, and the line and the anchors stay inert.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	inert = panel.evaluate("""() => {
+		const parts = (selector) => [...document.querySelectorAll(selector)]
+			.map((one) => getComputedStyle(one).pointerEvents);
+
+		return {
+			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
+			lines: parts(".join line"),
+			anchors: parts(".join circle"),
+			heads: parts(".join path"),
+		};
+	}""")
+
+	assert inert["overlay"] == "none"
+	assert set(inert["lines"]) == {"none"}, f"a line takes taps: {inert}"
+	assert set(inert["anchors"]) == {"none"}, f"an anchor takes taps: {inert}"
+	assert set(inert["heads"]) == {"all"}, f"a head takes no taps: {inert}"
+
+
+def test_a_route_is_unmade_where_it_was_made (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The head of the arrow silences a route; this is what takes it away.  One
+	place to make a connection and unmake it, on the thing a person is holding.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	panel.locator('.part[data-part="second"] .part-foot .offer.send').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	offered = panel.locator(".sheet .offer").first
+
+	assert "tap to stop" in offered.inner_text(), offered.inner_text()
+
+	offered.click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked[-1]["v"] == [], "unrouting left the layer in place"
 
 
 def test_a_stack_offering_no_patterns_still_says_generator (
@@ -2826,17 +2883,3 @@ def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
 
 	# A grid nothing can take from does not offer to send itself anywhere.
 	assert panel.locator('.part[data-part="grid"] .part-foot .offer.send').count() == 0
-
-
-def test_a_grid_already_sent_somewhere_does_not_offer_it_twice (
-	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""Routing the same grid into one pattern twice plays it twice, which is a
-	thing a person can ask for and never a thing to offer by accident."""
-
-	_open_the_stack(panel)
-	_route(panel, fake_app)
-
-	panel.locator('.part[data-part="second"] .part-foot .offer.send').click()
-	panel.wait_for_selector(".sheet", timeout=5_000)
-
-	assert panel.locator(".sheet .offer").first.is_disabled()

@@ -952,7 +952,7 @@ function Params ({ name, fields, values, cell, onSet }) {
  * bypassing, reordering — and a single parameter is sent on its own. The split
  * is what lets two people turn different knobs without overwriting each other,
  * while a structural change genuinely is about the list. */
-function Contribution ({ name, layer, layers, offered, sources, titled, onSet }) {
+function Contribution ({ name, layer, layers, offered, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -1000,25 +1000,7 @@ function Contribution ({ name, layer, layers, offered, sources, titled, onSet })
 					>↓</button>
 				</div>
 
-				${layer.kind === "pattern"
-					? html`
-						${/* One row, and it is which grid this takes from. A routed
-						     grid has nothing to tune — what it plays is what is
-						     drawn on it — which is why the same window serves both
-						     kinds without either growing the other's furniture. */ ""}
-						<div class="row-label">from</div>
-						<div class="setting" style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-							<${Setting}
-								field=${{
-									name: "source", kind: "choice",
-									options: (sources || []).map((one) => ({
-										value: one, label: titled(one) })),
-								}}
-								held=${layer.source}
-								onSet=${(value) => onSet(`${name}/layers`, layers.map((one) =>
-									one.id === layer.id ? { ...one, source: value } : one))} />
-						</div>`
-					: offered
+				${offered
 					? offered.parameters.map((field) => [
 						html`
 							<div class="row-label" key=${`label-${field.name}`}>
@@ -1326,7 +1308,7 @@ function anchorsFor (from, to, level, anchor) {
  *
  * It takes no pointer events at all, so a line drawn across a grid cannot cost
  * a tap. */
-function Connections ({ box, joins, touched, cell, when }) {
+function Connections ({ box, joins, touched, cell, when, onFlip }) {
 	const [drawn, setDrawn] = useState([]);
 
 	useLayoutEffect(() => {
@@ -1460,9 +1442,21 @@ function Connections ({ box, joins, touched, cell, when }) {
 
 				return html`
 					<g key=${`${line.from}>${line.to}`}
-						class=${`join ${live ? "live" : ""}`} data-join=${`${line.from}>${line.to}`}>
+						class=${`join ${live ? "live" : ""} ${line.off ? "off" : ""}`}
+						data-join=${`${line.from}>${line.to}`}>
 						<line x1=${line.a.x} y1=${line.a.y} x2=${line.b.x} y2=${line.b.y} />
-						<path d=${head} />
+						${/* The one live target on this overlay, and only the triangle
+						     itself — not a fat circle around it. The overlay sits above
+						     the blocks, so anything that takes a pointer here takes it
+						     from the grid underneath, and the grid is the most tapped
+						     surface on the panel. A head is drawn where it is, so a
+						     person can see what they are about to hit and move the
+						     block if it is in the way. */ ""}
+						<path
+							d=${head}
+							onPointerDown=${line.control && onFlip
+								? (event) => { event.preventDefault(); onFlip(line); }
+								: null} />
 						${/* Both ends, because either could be the one read wrongly. */ ""}
 						<circle cx=${line.a.x} cy=${line.a.y} r=${anchor} />
 						<circle cx=${line.b.x} cy=${line.b.y} r=${anchor} />
@@ -2491,6 +2485,7 @@ function Panel () {
 	 * generator appends, and appending moves nothing that is already down. */
 	const windows = [];
 	const contributions = [];
+	const routes = [];
 
 	for (const name of gridNames) {
 		if (controls[name].unsupported) {
@@ -2538,45 +2533,43 @@ function Panel () {
 			};
 
 			for (const layer of held) {
-				const routed = layer.kind === "pattern";
-				const generator = routed
-					? null
-					: offered.find((one) => one.name === layer.generator);
+				/* **A route is a line, and nothing else.**
+				
+				   It had a window of its own, carrying its bypass, its place in
+				   the stack and a picker for where it came from. Simon: "surely
+				   a *route* is a line with an arrow head?" He is right, and the
+				   window was answering a question nobody asked — a connection is
+				   not a thing that sits somewhere, it is the fact that two
+				   things are joined. Its one real control moved to the head of
+				   its own arrow, which is where a hand goes to find it. */
+				if (layer.kind === "pattern") {
+					if (gridNames.includes(layer.source) && feeds) {
+						routes.push({
+							from: layer.source, to: feeds, row: null,
+							control: name, layer: layer.id, off: Boolean(layer.bypassed),
+						});
+					}
 
-				/* A routed grid takes from somewhere as well as giving to
-				   something, which is the first block on this surface to have
-				   both — and the reason Simon asked for it before settling how
-				   in and out should be told apart (#2108). */
-				const takes = routed && gridNames.includes(layer.source) ? layer.source : null;
+					continue;
+				}
+
+				const generator = offered.find((one) => one.name === layer.generator);
 
 				contributions.push({
 					key: `${name}/${layer.id}`,
-					control: name, layer, layers: held, offered: generator, feeds, takes,
-					sources: controls[name].sources || [],
-					voice: routed ? null : voiceOf(generator, layer),
+					control: name, layer, layers: held, offered: generator, feeds,
+					voice: voiceOf(generator, layer),
 
 					/* "Euclidean 1", where the number belongs to that layer for
 					   the whole of its life — a neighbour being removed never
 					   moves it. The pattern is named beside it so that a line
 					   crossing another line is not the only thing on the glass
-					   saying what feeds what.
-					
-					   **A route is named by its two ends instead**, and Simon is
-					   why: reusing the generator's shape gave "shared 1 · DRM1 —
-					   pattern 2", which reads as a generator called *shared*, and
-					   he asked what it was. It is not one of several of anything
-					   — it is a connection, and the thing worth saying about a
-					   connection is what it joins. The number stays in the data,
-					   where it identifies the layer; it just says nothing here. */
-					title: routed
-						? `${named(layer.source || "?")} → ${builds ? named(builds) : "?"}`
-						: `${tidied(layer.generator || "?")}`
-							+ (layer.index ? ` ${layer.index}` : "")
-							+ (builds ? ` · ${named(builds)}` : ""),
+					   saying what feeds what. */
+					title: `${tidied(layer.generator || "?")}`
+						+ (layer.index ? ` ${layer.index}` : "")
+						+ (builds ? ` · ${named(builds)}` : ""),
 
-					routed,
-
-					rows: routed ? 2 : 1 + (generator ? generator.parameters.length : 1),
+					rows: 1 + (generator ? generator.parameters.length : 1),
 					steps: PARAM_CELLS,
 				});
 			}
@@ -2644,13 +2637,29 @@ function Panel () {
 	 * the first block here to have both, and it is what makes the question of
 	 * how to tell an in from an out a question about something real (#2108). */
 	const joins = [
-		...contributions
-			.filter((one) => one.takes)
-			.map((one) => ({ from: one.takes, to: one.key, row: null })),
+		...routes,
 		...contributions
 			.filter((one) => one.feeds)
-			.map((one) => ({ from: one.key, to: one.feeds, row: one.voice })),
+			.map((one) => ({
+				from: one.key, to: one.feeds, row: one.voice,
+				control: one.control, layer: one.layer.id,
+				off: Boolean(one.layer.bypassed),
+			})),
 	];
+
+	/* Every arrowhead is a switch, and it switches the link it draws.
+	 *
+	 * Simon's, and it is the most direct mapping there is: a link is a line, so
+	 * you disable it by touching the line. For a generator the link and the
+	 * generator are the same thing, so its head and its own on/off are two
+	 * places showing one fact — which is a feature rather than a duplication,
+	 * because the head is where a hand already is when the question comes up. */
+	const flip = useCallback((join) => {
+		const held = ((state[appName] || {})[join.control] || {}).layers || [];
+
+		request(`${join.control}/layers`, held.map((layer) =>
+			layer.id === join.layer ? { ...layer, bypassed: !layer.bypassed } : layer));
+	}, [state, appName, request]);
 
 	const pageId = page ? page.id : "";
 	const arranged = moved[pageId] || {};
@@ -2789,7 +2798,6 @@ function Panel () {
 		>
 			${drawn.map((one) => html`
 				<${Part} key=${one.key} name=${one.key} title=${one.title} about=${one.about}
-					flavour=${one.routed ? "route" : ""}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
@@ -2809,8 +2817,7 @@ function Panel () {
 					${one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
-								layers=${one.layers} offered=${one.offered}
-								sources=${one.sources} titled=${named} onSet=${request} />`
+								layers=${one.layers} offered=${one.offered} onSet=${request} />`
 						: controls[one.control].unsupported
 						? html`
 							<div class="unsupported">
@@ -2853,6 +2860,7 @@ function Panel () {
 			${/* Told what could have moved a line, because measuring is what this
 			     does and nothing else in the page will tell it. */ ""}
 			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
+				onFlip=${flip}
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
 
@@ -2931,26 +2939,33 @@ function Panel () {
 						return html`
 							<button
 								key=${stack}
-								class=${`offer ${already ? "partial" : ""}`}
-								disabled=${already}
+								class=${`offer ${already ? "here" : ""}`}
 								onPointerDown=${(event) => {
 									event.preventDefault();
 
 									const held = ((state[appName] || {})[stack] || {}).layers || [];
 
-									request(`${stack}/layers`, [...held, {
-										id: `l${Date.now().toString(36)}`
-											+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-										kind: "pattern",
-										source: sending,
-									}]);
+									/* The same list, with this route in it or out of
+									   it. One place to make a connection and unmake
+									   it, on the thing a person is holding — the head
+									   of the arrow silences a route and this is what
+									   takes it away. */
+									request(`${stack}/layers`, already
+										? held.filter((layer) => !(layer.kind === "pattern"
+											&& layer.source === sending))
+										: [...held, {
+											id: `l${Date.now().toString(36)}`
+												+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+											kind: "pattern",
+											source: sending,
+										}]);
 
 									setSending(null);
 								}}
 							>
 								<b>${into ? named(into) : named(stack)}</b>
 								<i>${already
-									? "already takes from this grid"
+									? "goes here — tap to stop"
 									: "every note drawn here, played there as well"}</i>
 							</button>`;
 					})}

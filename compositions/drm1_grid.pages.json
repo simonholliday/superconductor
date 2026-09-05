@@ -65,28 +65,33 @@
 	"shared": [
 		{
 			"name": "grid",
-			"x": 59,
-			"y": 10
+			"x": 44,
+			"y": 1
 		},
 		{
 			"name": "drum_recipe/probe",
-			"x": 4,
-			"y": 4
+			"x": 3,
+			"y": 1
 		},
 		{
 			"name": "drum_recipe/lmto9a02ipm2",
-			"x": 21,
-			"y": 12
+			"x": 2,
+			"y": 10
 		},
 		{
 			"name": "drum_recipe/lmtoemgmm2oj",
-			"x": 18,
-			"y": 25
+			"x": 13,
+			"y": 18
 		},
 		{
 			"name": "shared",
-			"x": 41,
-			"y": 35
+			"x": 21,
+			"y": 6
+		},
+		{
+			"name": "drum_recipe/lmton4tu0rsm",
+			"x": 42,
+			"y": 18
 		}
 	]
 }
