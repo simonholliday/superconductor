@@ -42,6 +42,7 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
  * and left alone. */
 const PAGE_KEY = "superintendent.page";
 const PAGE_BUTTONS = 6;
+const CHOICE_BUTTONS = 4;
 
 
 function askedForPage () {
@@ -501,12 +502,25 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
  * grid: it is the part of the instrument the panel is the only way to reach. */
 /* A step for a number the app declared none for.
  *
- * Subsequence sends a step only where the type implies one, so an absent step
- * means a continuous value and something has to be chosen: a whole number moves
- * by one and a fractional one by a tenth. It is a guess, and the way to stop
- * guessing is for the composition to declare bounds — which turns the stepper
- * into a slider and takes the step from the range. */
-const stepOf = (field, held) => field.step ?? (Number.isInteger(held ?? 0) ? 1 : 0.1);
+ * An absent step is itself the signal: the app sends one only where the type
+ * implies it, so no step means a continuous value however round the number
+ * standing in it happens to look. Reading it off the held value instead was
+ * wrong in exactly the case that matters — `probability` runs 0 to 1 and
+ * defaults to 1.0, which crosses the wire as 1, so the slider offered nothing
+ * between none and all.
+ *
+ * Given two ends, a hundred or so positions across them is fine enough for a
+ * finger and lands on figures a person can read back. With no ends there is
+ * nothing to divide, so a tenth it is. */
+const stepOf = (field) => {
+	if (field.step !== undefined) return field.step;
+
+	if (field.min !== undefined && field.max !== undefined) {
+		return Math.max(1e-6, 10 ** Math.floor(Math.log10((field.max - field.min) / 100)));
+	}
+
+	return 0.1;
+};
 
 /* Binary floating point makes 0.1 + 0.2 into something no one wants to read on
  * a control surface. Six places is far finer than any parameter here. */
@@ -525,13 +539,48 @@ const tidy = (value) => Number(value.toFixed(6));
  * could act on. A stepper works with one finger and no keyboard either way. */
 function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
+
+	/* Asked for whatever this parameter turns out to be, because a hook must
+	   be: only a long choice opens a menu, and the shape is not known here
+	   until after the hooks have run. */
+	const [open, setOpen] = useState(false);
+	const [where, setWhere] = useState(null);
+	const trigger = useRef(null);
+
+	/* A menu is placed against the viewport rather than against the button it
+	   hangs from, and measured on the way open.
+	
+	   It has to escape its block: a part clips its own body so the playhead
+	   cannot widen the page, and a menu inside that block is clipped by the
+	   same rule — ten drum voices in a short block lost their lower half, which
+	   is not a thing a person can scroll to because the block is what is
+	   cutting them off. Nothing between here and the viewport establishes a
+	   containing block, so `fixed` really does escape.
+	
+	   It opens upward when there is more room above, which is the ordinary case
+	   for a parameter near the foot of the glass. */
+	const show = () => {
+		const box = trigger.current.getBoundingClientRect();
+		const below = window.innerHeight - box.bottom - 16;
+		const above = box.top - 16;
+
+		setWhere({
+			left: Math.round(box.left),
+			minWidth: Math.round(box.width),
+			...(below < 200 && above > below
+				? { bottom: Math.round(window.innerHeight - box.top + 4), maxHeight: Math.round(above) }
+				: { top: Math.round(box.bottom + 4), maxHeight: Math.round(below) }),
+		});
+
+		setOpen(true);
+	};
 	const bounded = field.min !== undefined && field.max !== undefined;
 
 	const at = (event, box) =>
 		Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
 
 	const along = (part) => {
-		const step = stepOf(field, held);
+		const step = stepOf(field);
 
 		return tidy(Math.round((field.min + part * (field.max - field.min)) / step) * step);
 	};
@@ -557,12 +606,12 @@ function Setting ({ field, held, onSet }) {
 		<div class="stepper">
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
-				onChange(tidy((value ?? 0) - stepOf(field, value)));
+				onChange(tidy((value ?? 0) - stepOf(field)));
 			}}>−</button>
 			<span>${value ?? 0}</span>
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
-				onChange(tidy((value ?? 0) + stepOf(field, value)));
+				onChange(tidy((value ?? 0) + stepOf(field)));
 			}}>+</button>
 		</div>`;
 
@@ -575,14 +624,66 @@ function Setting ({ field, held, onSet }) {
 	}
 
 	if (field.kind === "choice") {
+		const options = field.options || [];
+
+		/* Laid out flat while there are few enough to take in at a glance, and
+		   behind a menu when there are not. A row of buttons is a good way to
+		   choose one of three and a poor way to choose one of ten: it says
+		   "several of these" while accepting only one, and it costs the height
+		   of three rows to say it. The line is drawn at four because that is
+		   where an instrument's settings sit — glide type, note priority — and
+		   a generator's vocabularies do not: bias has eight, a drum kit ten.
+		
+		   The menu is the one the size chooser already uses, rather than a
+		   second way of doing the same thing. */
+		if (options.length <= CHOICE_BUTTONS) {
+			return html`
+				<div class="choices">
+					${options.map((option) => html`
+						<button
+							key=${option.value}
+							class=${option.value === held ? "here" : ""}
+							onPointerDown=${(event) => { event.preventDefault(); onSet(option.value); }}
+						>${option.label || option.value}</button>`)}
+				</div>`;
+		}
+
+		const chosen = options.find((option) => option.value === held);
+
 		return html`
-			<div class="choices">
-				${(field.options || []).map((option) => html`
-					<button
-						key=${option.value}
-						class=${option.value === held ? "here" : ""}
-						onPointerDown=${(event) => { event.preventDefault(); onSet(option.value); }}
-					>${option.label || option.value}</button>`)}
+			<div class="menu">
+				<button
+					ref=${trigger}
+					class=${open ? "open" : ""}
+					onPointerDown=${(event) => {
+						event.preventDefault();
+						open ? setOpen(false) : show();
+					}}
+				>${chosen ? chosen.label || chosen.value : "choose"}<i>▾</i></button>
+
+				${open && where && html`
+					<div
+						class="options"
+						style=${{
+							left: `${where.left}px`,
+							minWidth: `${where.minWidth}px`,
+							maxHeight: `${where.maxHeight}px`,
+							...(where.top !== undefined
+								? { top: `${where.top}px` }
+								: { bottom: `${where.bottom}px` }),
+						}}
+					>
+						${options.map((option) => html`
+							<button
+								key=${option.value}
+								class=${option.value === held ? "here" : ""}
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									onSet(option.value);
+									setOpen(false);
+								}}
+							>${option.label || option.value}</button>`)}
+					</div>`}
 			</div>`;
 	}
 
@@ -751,10 +852,10 @@ function Recipe ({ name, generators, layers, onSet }) {
 									onPointerDown=${press(() => shift(index, 1))}
 								>↓</button>
 								<button
-									class="drop"
+									class="drop" title="remove this layer"
 									onPointerDown=${press(() => send(
 										layers.filter((one) => one.id !== layer.id)))}
-								>remove</button>
+								>✕</button>
 							</div>`,
 
 						...(offered

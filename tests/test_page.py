@@ -1015,3 +1015,130 @@ def test_turning_a_layers_knob_moves_the_control_it_turned (
 	                 client=asked["client"], seq=asked["seq"])
 
 	playwright_api.expect(dial.locator("span")).to_have_text(str(asked["v"]), timeout=5_000)
+
+
+def test_one_of_many_is_chosen_from_a_menu_rather_than_a_wall_of_buttons (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A row of buttons is a good way to choose one of three and a poor way to
+	choose one of ten: it reads as "several of these" while taking only one, and
+	it costs three rows of height on a block that has better uses for them."""
+
+	_open_the_stack(panel)
+
+	menu = panel.locator('.part[data-part="stack"] .menu')
+
+	assert menu.count() == 1, "the six voices should be behind a menu"
+	assert menu.locator(".options").count() == 0, "and closed until it is asked for"
+
+	menu.locator("button").first.click()
+	panel.wait_for_selector('.part[data-part="stack"] .menu .options', timeout=5_000)
+
+	menu.locator(".options button", has_text="clap").click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/one/pitch"]
+
+	assert asked and asked[-1]["v"] == "clap"
+	playwright_api.expect(panel.locator('.part[data-part="stack"] .menu .options')).to_have_count(0)
+
+
+def test_a_short_choice_stays_a_row_of_buttons (panel: typing.Any) -> None:
+	"""Two options behind a menu would be worse than two buttons, which is why
+	there is a threshold rather than one rule for every length."""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(".grid.params", timeout=5_000)
+
+	assert panel.locator('.part[data-part="moog"] .menu').count() == 0
+	assert panel.locator('.part[data-part="moog"] .choices button').count() == 2
+
+
+def test_a_float_with_no_declared_step_is_not_snapped_to_whole_numbers (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""An absent step means a continuous value, however round the number
+	standing in it looks.
+
+	Reading the step off the held value instead broke the one case that
+	mattered: probability runs 0 to 1 and defaults to 1.0, which crosses the
+	wire as 1 — so the slider inferred a step of one and offered nothing
+	between none and all.
+	"""
+
+	_open_the_stack(panel)
+
+	dials = panel.locator('.part[data-part="stack"] .dial:not(.ranged)')
+	probability = dials.last
+	box = probability.bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/one/probability"]
+
+	assert asked, "the probability slider asked for nothing"
+	assert 0 < asked[-1]["v"] < 1, f"snapped to {asked[-1]['v']} instead of landing between"
+
+
+def test_a_layers_controls_are_not_clipped_at_the_smallest_cell_size (
+	panel: typing.Any) -> None:
+	"""The header carries four controls and a name, and at the compact size the
+	block is narrower than they are. Something has to give and it must be the
+	name — letting the buttons shrink instead cut "remove" down to "rem" on the
+	one screen this is for."""
+
+	_open_the_stack(panel)
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
+	_settled(panel)
+
+	spilling = panel.evaluate("""() => {
+		const header = document.querySelector('.part[data-part="stack"] .layer');
+		const edge = header.getBoundingClientRect().right;
+
+		return [...header.querySelectorAll('button')]
+			.filter((one) => one.getBoundingClientRect().right > edge + 1)
+			.map((one) => one.className + ':' + one.textContent);
+	}""")
+
+	assert spilling == [], f"these reach past the block: {spilling}"
+
+
+def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> None:
+	"""A part clips its own body so the playhead cannot widen the page, and a
+	menu drawn inside one is cut off by the same rule — which is not something a
+	person can scroll to, because the block is what is cutting it off.
+
+	Six voices in a short block lost their lower half. Ten would lose more.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator('.part[data-part="stack"] .menu > button').first.click()
+	panel.wait_for_selector('.part[data-part="stack"] .menu .options', timeout=5_000)
+
+	hidden = panel.evaluate("""() => {
+		const block = document.querySelector('.part[data-part="stack"] .part-body');
+		const edges = block.getBoundingClientRect();
+
+		return [...document.querySelectorAll('.menu .options button')]
+			.filter((one) => {
+				const box = one.getBoundingClientRect();
+				return box.bottom > edges.bottom + 1 || box.top < edges.top - 1;
+			})
+			.map((one) => ({
+				label: one.textContent,
+				reaches: one.getBoundingClientRect().bottom,
+				viewport: window.innerHeight,
+			}));
+	}""")
+
+	# Escaping the block is the point; what must not happen is leaving the glass.
+	for option in hidden:
+		assert option["reaches"] <= option["viewport"] + 1, \
+			f"{option['label']} is drawn off the bottom of the screen"
+
+	for index in range(panel.locator(".menu .options button").count()):
+		assert panel.locator(".menu .options button").nth(index).is_visible(), \
+			"an option is drawn but cannot be reached"

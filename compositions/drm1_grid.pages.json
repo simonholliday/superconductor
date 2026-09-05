@@ -34,5 +34,17 @@
 			"x": 20,
 			"y": 0
 		}
+	],
+	"generators": [
+		{
+			"name": "grid",
+			"x": 0,
+			"y": 0
+		},
+		{
+			"name": "drum_recipe",
+			"x": 19,
+			"y": 0
+		}
 	]
 }

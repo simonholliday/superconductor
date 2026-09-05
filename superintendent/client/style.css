@@ -756,17 +756,40 @@ html, body {
 .grid.params .layer {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
+
+	/* Tight, because the sum has to fit the narrowest block a person can
+	   choose: four controls at the 44px a finger needs is 188px, and a compact
+	   block is 230px wide. The gaps are the only slack there is. */
+	gap: 0.3rem;
 	min-height: max(44px, var(--cell));
-	padding: 0 0.2rem;
 	border-top: 1px solid var(--edge);
 }
 
+/* Everything but the name keeps its size; the name gives way.
+ *
+ * A header of four controls and a word is wider than the narrowest block a
+ * person can choose — at the compact size the block is 230px and the controls
+ * alone want 212 — so something has to yield, and it must be the part whose
+ * loss costs least. Letting the buttons shrink cut "remove" to "rem" on the
+ * panel, which is the one screen this is for. */
+.grid.params .layer > * { flex: none; }
+
 .grid.params .layer b {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: var(--ink);
 	font-family: ui-monospace, monospace;
 	font-size: 0.9rem;
 }
+
+.grid.params .layer .spacer { flex: 1 1 auto; }
+
+/* Narrower here than in a settings block: this one shares its row with four
+   other controls rather than having the width to itself. */
+.grid.params .layer .switch { min-width: 3.5rem; }
 
 .grid.params .layer .spacer { flex: 1; }
 
@@ -785,7 +808,7 @@ html, body {
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
-.grid.params .layer .drop { padding: 0 0.7rem; color: #ff8787; }
+.grid.params .layer .drop { color: #ff8787; font-size: 1rem; }
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs
    none, works with one finger, and never claims a limit that was invented. */
@@ -905,3 +928,73 @@ html, body {
 	color: var(--ink-quiet);
 	font-size: 0.85rem;
 }
+
+
+/* One of many, chosen from a menu rather than from a wall of buttons.
+ *
+ * Built out of the size chooser's parts, so there is one way of doing this
+ * rather than two. A row of buttons is a good way to choose one of three and a
+ * poor way to choose one of ten: it reads as "several of these" while taking
+ * only one, and it costs three rows of height to say so. */
+.menu { position: relative; display: flex; align-items: center; flex: 1; }
+
+.menu > button {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	flex: 1;
+	min-height: 44px;
+	padding: 0 0.8rem;
+	border-radius: 8px;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.85rem;
+	text-align: left;
+	touch-action: none;
+}
+
+.menu > button.open { border-color: var(--ring); }
+
+.menu > button i { color: var(--ink-quiet); font-style: normal; }
+
+/* Named apart from the flat row of buttons on purpose. A settings block wraps
+   its `.choices` into as many lines as it needs, which is right there and wrong
+   here: inside a popover it folded ten drum voices into two clipped columns. */
+.menu .options {
+	/* Against the viewport, not the button: a part clips its own body, and a
+	   menu positioned inside one is cut off by that rule rather than by
+	   anything a finger can scroll. Placed by the component, which is the only
+	   thing that knows where the button ended up. */
+	position: fixed;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	/* Ten drum voices fit; forty would not, so it scrolls rather than running
+	   off the bottom of the glass. */
+	overflow-y: auto;
+	padding: 0.4rem;
+	border-radius: 10px;
+	border: 1px solid var(--edge);
+	background: var(--ground);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.menu .options button {
+	min-height: 44px;
+	padding: 0 0.9rem;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	font-size: 0.9rem;
+	text-align: left;
+	white-space: nowrap;
+	touch-action: none;
+}
+
+.menu .options button.here { border-color: var(--on-edge); color: var(--on); }

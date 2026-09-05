@@ -32,18 +32,23 @@ CONTROLS: dict[str, typing.Any] = {
 	         "fields": [
 	             {"name": "glide", "kind": "switch", "label": "Glide"},
 	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127, "step": 1},
+	             {"name": "shape", "kind": "choice", "label": "Shape",
+	              "options": [{"value": "lcr", "label": "LCR"},
+	                          {"value": "exp", "label": "EXP"}]},
 	         ]},
 	"stack": {"type": "recipe", "title": "Generators", "generators": [
 		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
 		 "parameters": [
 		     {"name": "pitch", "label": "pitch", "kind": "choice",
-		      "options": [{"value": "kick", "label": "kick"},
-		                  {"value": "snare", "label": "snare"}]},
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
 		     {"name": "pulses", "label": "pulses", "kind": "number",
 		      "min": 0, "max": 8, "step": 1},
 		     {"name": "velocity", "label": "velocity", "kind": "range",
 		      "min": 1, "max": 127, "step": 1},
 		     {"name": "duration", "label": "duration", "kind": "number", "step": 1},
+		     {"name": "probability", "label": "probability", "kind": "number",
+		      "min": 0, "max": 1},
 		 ]},
 		{"name": "evolve", "summary": "Mutate a sequence.", "partial": True, "parameters": []},
 	]},
@@ -149,11 +154,11 @@ class FakeApp:
 			"subsequence", CONTROLS,
 			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
 			 "bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
-			 "moog": {"glide": False, "rate": 24},
+			 "moog": {"glide": False, "rate": 24, "shape": "lcr"},
 			 "stack": {"layers": [
 			     {"id": "one", "generator": "euclidean", "bypassed": False,
-			      "params": {"pitch": "kick", "pulses": 3,
-			                 "velocity": [40, 80], "duration": 1}},
+			      "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
+			                 "duration": 1, "probability": 1}},
 			 ]},
 			 "transport": {"paused": False, "bpm": 120.0}},
 			self.version, pages)
