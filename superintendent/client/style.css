@@ -361,8 +361,7 @@ html, body {
 	flex: none;
 	width: max(24px, var(--cell));
 	color: var(--ink-quiet);
-	line-height: 1;
-}
+	line-height: 1;}
 
 .part-title .close:hover { color: var(--danger); }
 
@@ -408,15 +407,6 @@ html, body {
  * On for a toggle is the accent filling that surface; off is the surface and
  * its edge alone. That is the same sentence in a fourth place. */
 
-.part-title .close,
-.part-body .switch,
-.part-foot .switch {
-	min-width: var(--row);
-	border: 1px solid var(--edge);
-	background: var(--panel);
-	border-radius: 8px;
-}
-
 /* --- What size a control is, and it is never the control's own decision ------
  *
  * **A control takes its size from the surface it sits on.** Not from what it
@@ -445,7 +435,13 @@ html, body {
  * makes this a rule rather than a paragraph. */
 
 .part-title button {
+	min-width: max(24px, var(--cell));
 	min-height: max(24px, var(--cell));
+	padding: 0 0.4rem;
+	border: 1px solid var(--edge);
+	border-radius: 8px;
+	background: var(--panel);
+	color: var(--ink-quiet);
 	font: inherit;
 	font-size: var(--type-title);
 	touch-action: none;
@@ -453,7 +449,14 @@ html, body {
 
 .part-body button,
 .part-foot button {
+	min-width: var(--row);
 	min-height: var(--row);
+	padding: 0 0.7rem;
+	border: 1px solid var(--edge);
+	border-radius: 8px;
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
 	font-size: var(--type-body);
 	touch-action: none;
 }
@@ -463,7 +466,14 @@ html, body {
 .menu .options button,
 .sizes .choices button,
 .theme .choices button {
+	min-width: 44px;
 	min-height: 44px;
+	padding: 0 0.8rem;
+	border: 1px solid var(--edge);
+	border-radius: 8px;
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font: inherit;
 	font-size: var(--type-chrome);
 	touch-action: none;
 }
@@ -603,13 +613,14 @@ html, body {
 	direction: rtl;
 	text-overflow: ellipsis;
 
-	/* The rail. Every label carries the same mark at its left edge, so stacked
-	   they draw one dotted line down the column — the convention for "this is
-	   not a control; push the view from here". A cell never carries it, because
-	   a finger landing on a cell is playing rather than looking. */
-	background-image: radial-gradient(circle at 3px 50%,
-		var(--edge) 0 1.5px, transparent 1.6px);
-	background-repeat: no-repeat;
+	/* **No rail.** Every label used to carry a dot at its left edge, stacking
+	   into a dotted line down the column — a convention for "this is not a
+	   control; push the view from here". Simon read it as leftover furniture
+	   from something abandoned, which is the answer: it predates the rule that
+	   a target has a surface and an edge and a mark has neither, and under that
+	   rule a mark hinting at an affordance is the exact ambiguity the rule
+	   exists to remove. Scrolling is what everything that is not a cell does;
+	   it does not need announcing. */
 }
 
 .cell {
@@ -718,9 +729,6 @@ html, body {
 .transport { display: flex; align-items: center; gap: 0.9rem; }
 
 .transport button {
-	padding: 0 0.9rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
 	font-variant-numeric: tabular-nums;
@@ -768,9 +776,6 @@ html, body {
 
 .sizes > button, .theme > button {
 	min-width: 44px;
-	padding: 0 0.8rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	touch-action: none;}
@@ -872,9 +877,6 @@ html, body {
 
 .pages button {
 	min-width: 44px;
-	padding: 0 0.8rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	white-space: nowrap;
@@ -978,9 +980,6 @@ html, body {
 .inventory { display: flex; align-items: center; gap: 0.3rem; }
 
 .inventory button {
-	padding: 0 0.7rem;
-	border-radius: 8px;
-	border: 1px dashed var(--edge);
 	background: transparent;
 	color: var(--ink-quiet);
 	white-space: nowrap;
@@ -1058,12 +1057,9 @@ html, body {
 
 .grid.params .switch {
 	min-width: 5rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	letter-spacing: 0.04em;
-}
+	letter-spacing: 0.04em;}
 
 /* On is filled rather than outlined, the way a held transport is: a state you
    are in, not an action you can take. */
@@ -1077,13 +1073,9 @@ html, body {
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
 .grid.params .choices button {
-	padding: 0 0.7rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	white-space: nowrap;
-}
+	white-space: nowrap;}
 
 .grid.params .choices button.here {
 	background: var(--on);
@@ -1229,11 +1221,8 @@ html, body {
    letter. */
 .grid.params .layer .move {
 	min-width: var(--row);
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
-	color: var(--ink-quiet);
-}
+	color: var(--ink-quiet);}
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
@@ -1248,11 +1237,8 @@ html, body {
 
 .stepper button {
 	min-width: 44px;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
-	color: var(--ink);
-}
+	color: var(--ink);}
 
 .stepper span {
 	min-width: 4rem;
@@ -1288,13 +1274,9 @@ html, body {
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 0.15rem;
-	padding: 0.5rem 0.8rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	text-align: left;
-}
+	text-align: left;}
 
 .offer b { font-family: ui-monospace, monospace; font-size: var(--type-chrome); }
 
@@ -1332,13 +1314,9 @@ html, body {
 	justify-content: space-between;
 	gap: 0.5rem;
 	flex: 1;
-	padding: 0 0.8rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
-	text-align: left;
-}
+	text-align: left;}
 
 .menu > button.open { border-color: var(--ring); }
 
@@ -1402,13 +1380,9 @@ html, body {
 .part.silent .part-title { opacity: 0.4; }
 
 .part-foot .clear {
-	padding: 0 0.9rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--danger);
-	white-space: nowrap;
-}
+	white-space: nowrap;}
 
 /* --- The lines between a contribution and the pattern it feeds ------------
  *
@@ -1609,9 +1583,6 @@ html, body {
 .sheet-body header .spacer { flex: 1; }
 
 .sheet-body header button {
-	padding: 0 0.9rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	touch-action: none;}
@@ -1644,9 +1615,6 @@ html, body {
 .sheet .answers { display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 .sheet .answers button {
-	padding: 0 1.2rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
 	touch-action: none;}

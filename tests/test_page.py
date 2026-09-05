@@ -649,7 +649,7 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 					fromRight: Math.round(box.right - range.getBoundingClientRect().right),
 					size: seen.fontSize,
 					colour: seen.color,
-					rail: seen.backgroundImage !== "none",
+					bare: seen.backgroundImage === "none",
 				};
 			}""")
 
@@ -665,11 +665,12 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	assert drums["fromRight"] >= 0, "a label reaches past its own right edge"
 	assert drums["size"] == pitched["size"]
 	assert drums["colour"] == pitched["colour"]
-	# A block with a window carries the strip instead, which is the same idea
-	# drawn once rather than twice — so what has to agree is that each part
-	# offers exactly one mark saying the view can be pushed from here.
-	assert drums["rail"], "a block with no window carries the rail on its labels"
-	assert not pitched["rail"], "a block with one carries the strip instead"
+	# A label is a mark: no surface, no edge, in either kind of block. It used to
+	# carry a dot at its left edge, stacking into a rail down the column —
+	# leftover furniture from before there was a rule for what a target looks
+	# like, and Simon read it as exactly that. Scrolling is what everything but a
+	# cell already does; it needs no announcing.
+	assert drums["bare"] and pitched["bare"], "a row label is drawing something"
 
 
 def test_a_window_shows_how_much_of_itself_you_are_seeing (panel: typing.Any) -> None:

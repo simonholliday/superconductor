@@ -987,12 +987,11 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 		<div class="recipe">
 			<div class="grid params" style=${style}>
 				<div class="layer" style=${full}>
-					<button
-						class=${`switch ${layer.bypassed ? "" : "on"}`}
-						title="bypass"
-						onPointerDown=${press(() => send(layers.map((one) =>
-							one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one)))}
-					>${layer.bypassed ? "off" : "on"}</button>
+					<${Toggle}
+						on=${!layer.bypassed}
+						title=${layer.bypassed ? "bring this back" : "silence this"}
+						onFlip=${() => send(layers.map((one) =>
+							one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one))} />
 					${/* Which of them runs first, said in words because the windows no
 					     longer say it by sitting on top of one another. Left off when
 					     there is only one, where it would be noise. */ ""}
@@ -1051,6 +1050,26 @@ function Orphan ({ builds }) {
 }
 
 
+/* One toggle, everywhere something is on or off.
+ *
+ * Simon: "Can we enable a 'toggle' control universally, for on/off?" — after
+ * finding a generator's bypass and a pattern's mute drawn at different weights
+ * in the same footer. They were two buttons written in two places that happened
+ * to mean the same thing, which is how they came to look different.
+ *
+ * There is one now, and it is the only way to draw one. A switch on a line
+ * cannot use it — SVG has no button — but it says the same sentence, which is
+ * the half that has to be identical: filled is sounding, outlined is not. */
+function Toggle ({ on, title, onFlip }) {
+	return html`
+		<button
+			class=${`switch ${on ? "on" : ""}`}
+			title=${title}
+			onPointerDown=${(event) => { event.preventDefault(); onFlip(!on); }}
+		>${on ? "on" : "off"}</button>`;
+}
+
+
 /* A sheet: the whole glass, briefly, for something that needs answering.
  *
  * Used for the two things that do. Picking a generator out of thirty-three is a
@@ -1093,11 +1112,8 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
 			     thing is the action a hand reaches for soonest and the one that
 			     has to be found without reading. */ ""}
 			${onLive !== undefined && html`
-				<button
-					class=${`switch ${live ? "on" : ""}`}
-					title=${live ? "silence this" : "bring this back"}
-					onPointerDown=${(event) => { event.preventDefault(); onLive(!live); }}
-				>${live ? "on" : "off"}</button>`}
+				<${Toggle} on=${live}
+					title=${live ? "silence this" : "bring this back"} onFlip=${onLive} />`}
 			${onAdd && html`
 				<button
 					class="offer add"
