@@ -1700,12 +1700,38 @@ def _two_generators (panel: typing.Any, fake_app: typing.Any) -> None:
 	_settled(panel)
 
 
+def _joins_settled (panel: typing.Any) -> None:
+	"""Wait until the overlay has stopped re-measuring.
+
+	The same trap as the cell size, one layer along: the lines are measured from
+	the page in an effect and again whenever a block resizes, so a reading taken
+	the instant the blocks stop moving is of the frame before they did.  It made
+	two of these tests flaky rather than wrong — a different one failed on each
+	run and a run in between passed clean, which is the tell.
+	"""
+
+	panel.wait_for_function(
+		"""() => {
+			const now = [...document.querySelectorAll(".join line")]
+				.map((one) => ["x1", "y1", "x2", "y2"].map((at) => one.getAttribute(at)).join())
+				.join("|");
+			const settled = now.length > 0 && window.__joins === now;
+
+			window.__joins = now;
+
+			return settled;
+		}""",
+		timeout=5_000, polling=100)
+
+
 def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 	"""Where one line starts and ends, and where the two blocks it joins are.
 
 	All four in the space the blocks are placed in — the wrapper's own scrolled
 	content — because that is the space the overlay draws in.
 	"""
+
+	_joins_settled(panel)
 
 	return panel.evaluate(
 		"""(join) => {
@@ -1881,7 +1907,7 @@ def test_a_line_carries_a_direction_and_points_at_the_pattern (
 	line = _edges(panel, "stack/one>grid")
 	head = panel.eval_on_selector(
 		'[data-join="stack/one>grid"] path',
-		"""one => {
+		r"""one => {
 			const [, tip, left, right] = one.getAttribute("d")
 				.split(/[MLZ]/).map((part) => part.trim().split(/\s+/).map(Number));
 
@@ -2123,3 +2149,110 @@ def test_a_theme_outlives_a_reload (panel: typing.Any, service_url: str) -> None
 
 	assert _ground(panel) == chosen
 	assert "light" in panel.locator(".theme > button").inner_text()
+
+
+def _at_size (panel: typing.Any, label: str, cell: str) -> None:
+	"""Set the cell size from the chooser and wait for the page to settle."""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text=label).click()
+	panel.wait_for_function(
+		"(want) => getComputedStyle(document.documentElement).getPropertyValue('--cell') === want",
+		arg=cell, timeout=5_000)
+	_settled(panel)
+
+
+def _head (panel: typing.Any, join: str) -> float:
+	"""How long the arrowhead on one line is, tip to base."""
+
+	_joins_settled(panel)
+
+	return float(panel.eval_on_selector(
+		f'[data-join="{join}"] path',
+		r"""one => {
+			const [, tip, left, right] = one.getAttribute("d")
+				.split(/[MLZ]/).map((part) => part.trim().split(/\s+/).map(Number));
+			const base = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
+
+			return Math.hypot(tip[0] - base[0], tip[1] - base[1]);
+		}"""))
+
+
+def test_a_mark_on_the_lattice_grows_with_the_cell (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon found this by zooming: the arrowhead stayed the size it was while
+	everything around it grew.
+
+	It was written as a constant on the argument that nobody touches a mark,
+	which is true and is an argument for a *floor* rather than for a constant.
+	Every other mark on the lattice already scaled between a floor and a
+	ceiling — the type scale, a cell's corner, the ring under an unconfirmed
+	tap — and this one did not.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	_at_size(panel, "Compact", "22px")
+	small = _head(panel, "stack/one>grid")
+	hair = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.querySelector('.join line')).strokeWidth)")
+
+	_at_size(panel, "Large", "60px")
+	large = _head(panel, "stack/one>grid")
+	thicker = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.querySelector('.join line')).strokeWidth)")
+
+	assert large > small, f"the head did not grow with the cell: {small} then {large}"
+	assert thicker > hair, f"the line did not thicken with the cell: {hair} then {thicker}"
+
+
+def test_a_mark_stops_growing_rather_than_running_away (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The other half of the same rule, and the half a bare proportion loses.
+
+	A ceiling is what keeps a mark a mark: an arrowhead that went on scaling
+	would end up larger than the parameter rows it points between.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	_at_size(panel, "Large", "60px")
+	large = _head(panel, "stack/one>grid")
+
+	row = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))")
+
+	assert large <= row, f"the head is taller than a control row: {large} against {row}"
+
+
+def test_a_line_shows_where_it_joins_at_both_ends (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A line that stops at an edge and a line that passes behind a block are
+	the same picture without something at the end saying which — which is what
+	Simon read on the glass.  Both ends, because either could be the one read
+	wrongly.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	line = _edges(panel, "stack/one>grid")
+	dots = panel.eval_on_selector_all(
+		'[data-join="stack/one>grid"] circle',
+		"""els => els.map((one) => ({
+			x: +one.getAttribute("cx"), y: +one.getAttribute("cy"), r: +one.getAttribute("r") }))""")
+
+	assert len(dots) == 2, f"a join drew {len(dots)} anchors"
+
+	for dot in dots:
+		assert dot["r"] > 0
+
+	assert {(round(dot["x"]), round(dot["y"])) for dot in dots} == {
+		(round(line["a"]["x"]), round(line["a"]["y"])),
+		(round(line["b"]["x"]), round(line["b"]["y"]))}, (
+		f"the anchors are not where the line ends: {dots} against {line}")
+
+	# And each sits on the edge of the block it belongs to, not adrift of it.
+	assert _on_the_edge(dots[0], line["from"]) or _on_the_edge(dots[0], line["to"])

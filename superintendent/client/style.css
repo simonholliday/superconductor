@@ -125,6 +125,31 @@
 	--type-title: clamp(9px, calc(var(--cell) * 0.25), 12px);
 	--type-body: clamp(10px, calc(var(--cell) * 0.27), 15px);
 	--type-note: clamp(10px, calc(var(--cell) * 0.25), 14px);
+
+	/* Marks: the same rule as type, for the things that are drawn rather than
+	   written.
+	
+	   **Anything on the lattice that is there to be read grows with the cell,
+	   between a floor and a ceiling.** The floor is where it stops being
+	   legible; the ceiling is where it starts to dominate what it is marking.
+	   That is exactly the shape of the three type steps above, and it is the
+	   answer to both halves of the question a fixed size gets wrong: a mark
+	   proportional all the way down is three pixels of nothing at the smallest
+	   cell, and a mark fixed all the way up is a speck on the largest.
+	
+	   Simon found the gap: an arrowhead did not grow when he zoomed, and
+	   everything around it did. It was written as a constant on the argument
+	   that nobody touches a mark — which is true and is an argument for a
+	   *floor*, not for a constant.
+	
+	   Chrome is the other half of the rule and does not scale: the bar, the
+	   popovers and the sheet are not on the lattice, and a person's reach for a
+	   button does not change because the grid did. `--gap` does not scale
+	   either, and that is deliberate rather than an omission — it is the
+	   lattice's own mortar, shared with the arithmetic in the client, and a
+	   pitch that changed shape with the cell would stop being a pitch. */
+	--mark-hair: max(2px, calc(var(--cell) * 0.045));
+	--mark-grip: clamp(7px, calc(var(--cell) * 0.2), 12px);
 }
 
 /* **The reader's choice sits above the machine's.**
@@ -429,7 +454,7 @@ html, body {
 	top: 0;
 	bottom: 0;
 	background: var(--playhead);
-	border-left: 2px solid var(--playhead-edge);
+	border-left: var(--mark-hair) solid var(--playhead-edge);
 	pointer-events: none;
 	will-change: transform;
 }
@@ -726,12 +751,11 @@ html, body {
 .grid-wrap.unlocked .part-title::before {
 	content: "";
 	flex: none;
-	width: 7px;
-	height: 11px;
+	width: calc(var(--mark-grip) * 0.62);
+	height: var(--mark-grip);
 	margin-right: 0.45rem;
-	background-image: radial-gradient(currentColor 0.9px, transparent 1.1px);
-	background-size: 4px 4px;
-	background-position: 0 1px;
+	background-image: radial-gradient(currentColor 8%, transparent 12%);
+	background-size: calc(var(--mark-grip) * 0.36) calc(var(--mark-grip) * 0.36);
 	opacity: 0.5;
 }
 
@@ -1277,12 +1301,14 @@ html, body {
    Quietness is the opacity's job alone. */
 .join line {
 	stroke: var(--ring);
-	stroke-width: 2;
+	stroke-width: var(--mark-hair);
 	stroke-opacity: 0.45;
 	fill: none;
 }
 
-.join path {
+/* The head and the two anchors, which are one object with the line and so are
+   never a different colour or a different weight from it. */
+.join path, .join circle {
 	fill: var(--ring);
 	fill-opacity: 0.45;
 }
@@ -1290,7 +1316,7 @@ html, body {
 /* Brighter under a finger: the line says "these are related" all the time, and
    "this one, right now" while a hand is on either end. */
 .join.live line { stroke-opacity: 1; }
-.join.live path { fill-opacity: 1; }
+.join.live path, .join.live circle { fill-opacity: 1; }
 
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 

@@ -46,17 +46,32 @@ const PAGE_BUTTONS = 6;
 const SEPARATION = 1;
 /* Cells of air left between blocks that nobody has placed. */
 
-const ARROW = 15;
-/* How long the head of a connecting line is, in pixels.
+/* A mark on the lattice: it grows with the cell, between a floor where it stops
+ * being legible and a ceiling where it starts to dominate what it marks.
  *
- * Not scaled by the cell. It is a mark rather than a control: nobody touches it,
- * and at the smallest size a proportional arrowhead would be three pixels of
- * nothing.
+ * The same rule as the type scale, and the stylesheet says the whole of it. This
+ * is the half of it that cannot live in CSS, because an SVG path is arithmetic
+ * rather than layout — which is exactly how the arrowhead came to be a constant
+ * while everything around it scaled. Simon found that by zooming. */
+const marked = (cell, floor, share, ceiling) =>
+	Math.min(ceiling, Math.max(floor, cell * share));
+
+const ARROW = { floor: 15, share: 0.5, ceiling: 30 };
+/* How long the head of a connecting line is.
  *
  * Drawn at the middle of the line rather than at the end it points to. Several
  * contributions feeding one pattern all arrive at the same block, and heads
  * gathered on its edge merge into a smudge that says nothing — Simon found that
  * with three of them. At the middle they are as far apart as the lines are. */
+
+const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
+/* How large the dot is where a line meets a block.
+ *
+ * "Right now it might be possible to misinterpret a line as going *behind* an
+ * item, since we cannot see the join" — Simon, and he is right: a line that
+ * stops at an edge and a line that passes under a block are the same picture
+ * without something at the end saying which. The dot is that something, and it
+ * has to be at both ends because either end could be the ambiguous one. */
 
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
@@ -1168,7 +1183,7 @@ function sidesOf (box) {
  *
  * It takes no pointer events at all, so a line drawn across a grid cannot cost
  * a tap. */
-function Connections ({ box, joins, touched, when }) {
+function Connections ({ box, joins, touched, cell, when }) {
 	const [drawn, setDrawn] = useState([]);
 
 	useLayoutEffect(() => {
@@ -1238,6 +1253,9 @@ function Connections ({ box, joins, touched, when }) {
 
 	if (!drawn.length) return null;
 
+	const arrow = marked(cell, ARROW.floor, ARROW.share, ARROW.ceiling);
+	const anchor = marked(cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling);
+
 	/* Large enough to hold every line and no larger. Every endpoint sits on the
 	   edge of a block, so this can never be wider than the blocks already are —
 	   which matters, because an overlay that outgrew them would scroll the page
@@ -1250,12 +1268,13 @@ function Connections ({ box, joins, touched, when }) {
 		{ x: 0, y: 0 });
 
 	return html`
-		${/* Room for the head's wings, which reach across the line rather than
-		     along it — the only part of a join that can fall outside the two
-		     points measured above. */ ""}
+		${/* Room for whatever reaches past the two points measured above: the
+		     head's wings, which cross the line rather than run along it, and an
+		     anchor dot, which is centred on an endpoint and so spills by its
+		     own radius. */ ""}
 		<svg class="joins"
-			width=${Math.ceil(extent.x + ARROW * 0.38) + 1}
-			height=${Math.ceil(extent.y + ARROW * 0.38) + 1}>
+			width=${Math.ceil(extent.x + Math.max(arrow * 0.38, anchor)) + 1}
+			height=${Math.ceil(extent.y + Math.max(arrow * 0.38, anchor)) + 1}>
 			${drawn.map((line) => {
 				const angle = Math.atan2(line.b.y - line.a.y, line.b.x - line.a.x);
 				const middle = { x: (line.a.x + line.b.x) / 2, y: (line.a.y + line.b.y) / 2 };
@@ -1264,14 +1283,14 @@ function Connections ({ box, joins, touched, when }) {
 				   so what a person sees pointing is centred on the line's own
 				   midpoint however long the line is. */
 				const tip = {
-					x: middle.x + Math.cos(angle) * ARROW / 2,
-					y: middle.y + Math.sin(angle) * ARROW / 2,
+					x: middle.x + Math.cos(angle) * arrow / 2,
+					y: middle.y + Math.sin(angle) * arrow / 2,
 				};
 				const back = {
-					x: middle.x - Math.cos(angle) * ARROW / 2,
-					y: middle.y - Math.sin(angle) * ARROW / 2,
+					x: middle.x - Math.cos(angle) * arrow / 2,
+					y: middle.y - Math.sin(angle) * arrow / 2,
 				};
-				const wing = ARROW * 0.38;
+				const wing = arrow * 0.38;
 				const head = [
 					`M ${tip.x} ${tip.y}`,
 					`L ${back.x - Math.sin(angle) * wing} ${back.y + Math.cos(angle) * wing}`,
@@ -1286,6 +1305,9 @@ function Connections ({ box, joins, touched, when }) {
 						class=${`join ${live ? "live" : ""}`} data-join=${`${line.from}>${line.to}`}>
 						<line x1=${line.a.x} y1=${line.a.y} x2=${line.b.x} y2=${line.b.y} />
 						<path d=${head} />
+						${/* Both ends, because either could be the one read wrongly. */ ""}
+						<circle cx=${line.a.x} cy=${line.a.y} r=${anchor} />
+						<circle cx=${line.b.x} cy=${line.b.y} r=${anchor} />
 					</g>`;
 			})}
 		</svg>`;
@@ -2558,7 +2580,7 @@ function Panel () {
 
 			${/* Told what could have moved a line, because measuring is what this
 			     does and nothing else in the page will tell it. */ ""}
-			<${Connections} box=${size.wrap} joins=${joins} touched=${touched}
+			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
 				when=${`${size.cell}|${JSON.stringify(layout)}`
 					+ `|${joins.map((join) => `${join.from}>${join.to}`).join(",")}`} />
 		</div>
