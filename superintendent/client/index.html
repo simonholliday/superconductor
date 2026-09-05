@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Superintendent</title>
 <link rel="stylesheet" href="/client/style.css">
+<!--
+	The panel's theme, applied before the first paint rather than when the app
+	mounts.
+
+	Deliberately not a module and deliberately not deferred: it has to run while
+	the parser is still in the head, because the alternative is a flash of the
+	wrong theme on every load for anybody who pinned one against their machine.
+	That is the whole reason it is here and not in app.js, which sets the same
+	attribute again on mount.
+
+	Nothing stored means "match system", which leaves `prefers-color-scheme` in
+	force — so this writes an attribute only for the two states that override it,
+	and anything else is ignored rather than trusted. Storage throws outright in
+	some privacy modes, so a failure here leaves the panel following the machine
+	rather than leaving it blank.
+-->
+<script>
+	try {
+		var pinned = localStorage.getItem("superintendent.theme");
+
+		if (pinned === "light" || pinned === "dark") {
+			document.documentElement.dataset.theme = pinned;
+		}
+	} catch (unavailable) {
+		/* No storage, so no stored choice: the machine's answer stands. */
+	}
+</script>
 </head>
 <body>
 <div id="panel"></div>

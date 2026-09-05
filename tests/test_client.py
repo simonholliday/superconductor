@@ -112,6 +112,39 @@ def test_the_scale_is_small_and_every_step_of_it_is_used () -> None:
 	assert defined == used, f"defined but unused: {sorted(defined - used)}"
 
 
+def test_every_colour_in_the_stylesheet_is_a_pair () -> None:
+	"""The defect a second theme block always has is a token defined in one
+	theme and missing from the other, and the way to make that impossible is to
+	have no second block: every colour is one `light-dark()` declaration.
+
+	So a literal anywhere is either a colour that only works in one theme, or a
+	colour that will be forgotten when the other one is touched.  Both are the
+	same bug arriving at different times, and neither is caught by looking.
+	"""
+
+	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+
+	# Comments carry item numbers, which look exactly like short hex colours;
+	# and the two halves of a pair are of course literals, which is the point.
+	code = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
+	code = re.sub(r"light-dark\((?:[^()]|\([^()]*\))*\)", "", code)
+	loose = re.findall(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)", code)
+
+	assert loose == [], f"these colours are not a pair: {loose}"
+
+
+def test_every_colour_is_named_once_and_read_somewhere () -> None:
+	"""A colour written into a rule is a colour the theme cannot reach, and a
+	colour named and never read is where the next one goes."""
+
+	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+
+	defined = set(re.findall(r"^\t(--[a-z-]+):\s*(?:light-dark|rgba?\(|#)", style, re.MULTILINE))
+	used = set(re.findall(r"var\((--[a-z-]+)\)", style))
+
+	assert defined - used == set(), f"named but never read: {sorted(defined - used)}"
+
+
 def test_the_client_speaks_the_contract_python_does () -> None:
 	"""The version is written in both languages and cannot be shared between
 	them, so the only thing keeping them together is this."""

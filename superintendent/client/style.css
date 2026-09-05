@@ -1,18 +1,85 @@
 /* The surface is read at two very different angles — upright like a monitor and
    flat like a table — so contrast is kept high and nothing depends on a hue
-   that shifts when the panel is tilted away from you. */
+   that shifts when the panel is tilted away from you.
+
+   **Light and dark live in one declaration each**, through `light-dark()`. It
+   reads `color-scheme`, so the choice below switches every colour at once and
+   there is no second block that has to agree with the first — the arrangement
+   where a colour added to one theme is silently missing from the other.
+   Subroutine's own page took this decision after measuring exactly that defect,
+   and the argument carries.
+
+   **`light-dark()` is therefore a requirement, and a narrow one**: Firefox 120,
+   Chrome 123, Safari 17.5. Nothing degrades if it is absent — every colour would
+   be invalid and the page would be unstyled — so it is declared here plainly
+   rather than assumed (#2049).
+
+   The dark values are the ones this panel has always drawn, unchanged: it was
+   built for a room with no ceiling lights (#1959). The light ones are for the
+   panel it was not built for, which is the whole of that same rule. */
 
 :root {
-	--ground: #101114;
-	--panel: #17191e;
-	--edge: #2a2e37;
-	--ink: #e8eaee;
-	--ink-quiet: #878d99;
-	--on: #f0b429;
-	--on-edge: #ffd166;
-	--ring: #4dabf7;
-	--playhead: rgba(255, 255, 255, 0.09);
-	--accent-beat: #21252d;
+	color-scheme: light dark;
+
+	--ground: light-dark(#eef0f3, #101114);
+	--panel: light-dark(#ffffff, #17191e);
+	--edge: light-dark(#d3d8df, #2a2e37);
+	--ink: light-dark(#171a1f, #e8eaee);
+	--ink-quiet: light-dark(#586069, #878d99);
+	/* **Amber both ways, but not the same amber.** A lit step is read from across
+	   a room and at an angle, so what matters is that it is unmistakably a
+	   different block from an unlit one — and on a dark panel that means a bright
+	   fill, while on a white one it means a dark fill. The light value was a light
+	   amber first, which measured 2.1:1 against a white cell: below even the 3:1 a
+	   non-text mark needs, and invisible at a glance. This is 3.8:1 against the
+	   cell and 4.6:1 under the ink of the filled buttons it also serves. */
+	--on: light-dark(#b87400, #f0b429);
+	--on-edge: light-dark(#8a5600, #ffd166);
+	--ring: light-dark(#1c6fe0, #4dabf7);
+	--playhead: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
+	--accent-beat: light-dark(#e2e6ec, #21252d);
+
+	/* A hairline that has to be seen rather than merely be there: the outline
+	   that says a block can be picked up. `--edge` is a separator and reads as
+	   part of the surface; this reads as a state. */
+	--edge-strong: light-dark(#7c8794, #5f6877);
+
+	/* Text drawn *on* a filled control rather than beside one. Two of them,
+	   because the two fills are a long way apart in lightness and neither can
+	   carry the other's ink. */
+	/* The same on both, and said twice rather than written once: both fills are
+	   amber, so both want the same near-black over them, and a single literal
+	   here would be a colour the theme cannot reach if either fill ever moves. */
+	--on-ink: light-dark(#1a1206, #1a1206);
+	--ring-ink: light-dark(#ffffff, #06121d);
+
+	/* The four things a colour is allowed to say here, and nothing else says
+	   anything in colour alone: a lamp is also a word, a warning is also a
+	   sentence, and the destructive button also says "clear". */
+	--good: light-dark(#177a35, #51cf66);
+	--bad: light-dark(#c22a2a, #d64545);
+	--warn: light-dark(#a15408, #ffa94d);
+	--danger: light-dark(#c22a2a, #ff8787);
+
+	/* Surfaces that are not a colour of their own but a change to whatever is
+	   under them — a grip, an inset well, the glass behind a sheet. Written as
+	   an overlay rather than a value so one rule serves a block, the bar and a
+	   popover, which are three different grounds. */
+	--wash: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.04));
+	--sunken: light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.25));
+	--veil: light-dark(rgba(16, 18, 22, 0.38), rgba(0, 0, 0, 0.6));
+	--playhead-edge: light-dark(rgba(0, 0, 0, 0.38), rgba(255, 255, 255, 0.35));
+
+	/* A halo behind a number that sits on top of a filled bar, in whichever
+	   direction the ground is. */
+	--halo: light-dark(rgba(255, 255, 255, 0.85), rgba(0, 0, 0, 0.7));
+
+	/* Two depths, not five. A thing at rest on the page, and a thing lifted
+	   over it — which is every popover, every held block and the sheet. The
+	   geometry stays with the rule; only the colour is shared, because that is
+	   the half that has to change with the theme. */
+	--shadow-near: light-dark(rgba(15, 20, 28, 0.12), rgba(0, 0, 0, 0.45));
+	--shadow-far: light-dark(rgba(15, 20, 28, 0.2), rgba(0, 0, 0, 0.6));
 
 	/* The edge of one grid cell, and the only size the grid's layout depends
 	   on. It is a per-user setting (#2055) rather than a number chosen here:
@@ -29,7 +96,7 @@
 	   step five of another (#2078). The text ellipsises when three cells is
 	   not enough for it, which at the compact size it will not be. */
 	--label: calc(var(--cell) * 3 + var(--gap) * 2);
-	--part: #14161a;
+	--part: light-dark(#ffffff, #14161a);
 
 	/* A control's row: as many whole cells as it takes to stay pressable.
 	   Written by the client, which works it out once and tells both the fit
@@ -59,6 +126,24 @@
 	--type-body: clamp(10px, calc(var(--cell) * 0.27), 15px);
 	--type-note: clamp(10px, calc(var(--cell) * 0.25), 14px);
 }
+
+/* **The reader's choice sits above the machine's.**
+ *
+ * Three states. Nothing set, or "system", leaves `color-scheme: light dark` in
+ * force and `prefers-color-scheme` decides, which is what a panel that has never
+ * been told anything gets. The other two pin it — because somebody whose Pi is
+ * set light and who wants *this* screen dark, in a room with no ceiling lights,
+ * had no way to say so.
+ *
+ * Kept in the browser rather than anywhere else, and on the merits rather than
+ * for cheapness: a theme is a property of the glass and the room it is in, so
+ * one panel wanting dark and another light is the ordinary case, not a
+ * conflict. It is the same argument that keeps the cell size there (#2055).
+ *
+ * `index.html` writes the attribute before the first paint, so a pinned theme
+ * does not flash the other one on the way in. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
@@ -117,9 +202,9 @@ html, body {
 	content: "";
 	width: 0.6rem; height: 0.6rem;
 	border-radius: 50%;
-	background: #d64545;
+	background: var(--bad);
 }
-.lamp.up::before { background: #51cf66; }
+.lamp.up::before { background: var(--good); }
 
 .grid-wrap {
 	flex: 1;
@@ -150,7 +235,7 @@ html, body {
 	position: absolute;
 	border-radius: 6px;
 	background: var(--part);
-	box-shadow: 0 0 0 1px var(--edge), 0 6px 18px rgba(0, 0, 0, 0.45);
+	box-shadow: 0 0 0 1px var(--edge), 0 6px 18px var(--shadow-near);
 }
 
 .part-title {
@@ -219,7 +304,7 @@ html, body {
 	left: 0;
 	width: 22px;
 	border-radius: 4px;
-	background: rgba(255, 255, 255, 0.04);
+	background: var(--wash);
 	touch-action: none;
 	cursor: grab;
 
@@ -344,7 +429,7 @@ html, body {
 	top: 0;
 	bottom: 0;
 	background: var(--playhead);
-	border-left: 2px solid rgba(255, 255, 255, 0.35);
+	border-left: 2px solid var(--playhead-edge);
 	pointer-events: none;
 	will-change: transform;
 }
@@ -362,7 +447,7 @@ html, body {
 	position: absolute;
 	inset: 0;
 	border-radius: max(3px, calc(var(--cell) * 0.16));
-	background: #d64545;
+	background: var(--bad);
 	animation: fade-out 0.9s ease-out forwards;
 }
 
@@ -375,7 +460,7 @@ html, body {
    thing the sequencer actually held, but nothing here is live. */
 .grid-wrap.absent .part { opacity: 0.45; }
 
-.bar .warn { color: #ffa94d; }
+.bar .warn { color: var(--warn); }
 
 /* The transport. Sized for a finger with no keyboard: nothing here is smaller
    than the grid's own cells, and the silence button is deliberately the
@@ -407,7 +492,7 @@ html, body {
 .transport .hold.engaged {
 	background: var(--on);
 	border-color: var(--on-edge);
-	color: #1a1206;
+	color: var(--on-ink);
 }
 
 .tempo { display: flex; align-items: center; gap: 0.35rem; }
@@ -432,9 +517,9 @@ html, body {
  * Deliberately fixed at a comfortable target and never scaled by --cell: the
  * one control a person needs after picking a size too small to work is this
  * one, so it must not shrink along with everything else. */
-.sizes { position: relative; display: flex; align-items: center; }
+.sizes, .theme { position: relative; display: flex; align-items: center; }
 
-.sizes > button {
+.sizes > button, .theme > button {
 	min-height: 44px;
 	min-width: 44px;
 	padding: 0 0.8rem;
@@ -447,9 +532,9 @@ html, body {
 	touch-action: none;
 }
 
-.sizes > button.open { color: var(--ink); border-color: var(--ring); }
+.sizes > button.open, .theme > button.open { color: var(--ink); border-color: var(--ring); }
 
-.sizes .choices {
+.sizes .choices, .theme .choices {
 	position: absolute;
 	top: calc(100% + 0.5rem);
 	right: 0;
@@ -461,10 +546,10 @@ html, body {
 	border-radius: 10px;
 	border: 1px solid var(--edge);
 	background: var(--ground);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	box-shadow: 0 8px 24px var(--shadow-near);
 }
 
-.sizes .choices button {
+.sizes .choices button, .theme .choices button {
 	display: flex;
 	align-items: center;
 	gap: 0.6rem;
@@ -493,6 +578,30 @@ html, body {
 
 .sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: var(--type-chrome-quiet); }
 
+/* A theme's swatch is that theme, not a copy of it.
+ *
+ * The element carries the `color-scheme` of the theme it offers, and every
+ * colour in this file is a `light-dark()` pair resolved against exactly that —
+ * so the ground it paints is the ground that theme paints, and no palette value
+ * is written down a second time to be got wrong later. "Match system" carries no
+ * scheme of its own, which is precisely what it means. */
+.theme .choices i {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	border-radius: 4px;
+	border: 1px solid var(--edge);
+	background: var(--ground);
+}
+
+.theme .choices i[data-scheme="light"] { color-scheme: light; }
+.theme .choices i[data-scheme="dark"] { color-scheme: dark; }
+
+/* Said rather than inherited. `color-scheme` inherits, so while a theme is
+   pinned this swatch would quietly show the pinned one — a picture of what you
+   already have, offered as the alternative. */
+.theme .choices i[data-scheme="system"] { color-scheme: light dark; }
+
 /* What is running. Quiet by design — it is provenance, not a control, and it
    earns its place in the bar only by costing no glass at all. */
 .bar .build {
@@ -508,9 +617,9 @@ html, body {
 	min-height: 44px;
 	padding: 0 0.9rem;
 	border-radius: 8px;
-	border: 1px solid #ffa94d;
+	border: 1px solid var(--warn);
 	background: transparent;
-	color: #ffa94d;
+	color: var(--warn);
 	font: inherit;
 	font-size: var(--type-chrome);
 	white-space: nowrap;
@@ -541,7 +650,7 @@ html, body {
 .pages button.here {
 	background: var(--on);
 	border-color: var(--on-edge);
-	color: #1a1206;
+	color: var(--on-ink);
 	font-weight: 600;
 }
 
@@ -588,20 +697,47 @@ html, body {
 .bar .latch.open {
 	background: var(--ring);
 	border-color: var(--ring);
-	color: #06121d;
+	color: var(--ring-ink);
 	font-weight: 700;
 }
 
 /* A title bar that will move says so, and stops scrolling the page while it is
-   doing it. The grid underneath goes on answering: that is the whole change. */
+   doing it. The grid underneath goes on answering: that is the whole change.
+ *
+ * **Said quietly, and that is a change Simon asked for.** Every title bar used
+ * to fill with the accent colour, which was defensible while unlocked was a mode
+ * you entered to do one thing and left again. It is not: a person may work
+ * unlocked all evening, and a page shouting its own state for hours is a page
+ * shouting over the music. So the state is carried by a grip, the way a handle
+ * is marked everywhere else, and by the block lifting slightly off the page.
+ *
+ * The padlock in the bar keeps its fill. That is one small control saying which
+ * state you are in, which is its whole job — the objection was never to knowing,
+ * it was to being told by every block at once. */
 .grid-wrap.unlocked .part-title {
-	background: var(--ring);
-	color: #06121d;
+	color: var(--ink);
 	cursor: grab;
 	touch-action: none;
 }
 
-.grid-wrap.unlocked .part { box-shadow: 0 0 0 1px var(--ring), 0 10px 28px rgba(0, 0, 0, 0.55); }
+/* Drawn rather than lettered. A braille grip is the conventional glyph for this
+   and it is a font away from being a tofu box on a panel nobody here has seen;
+   two columns of dots need no font at all. */
+.grid-wrap.unlocked .part-title::before {
+	content: "";
+	flex: none;
+	width: 7px;
+	height: 11px;
+	margin-right: 0.45rem;
+	background-image: radial-gradient(currentColor 0.9px, transparent 1.1px);
+	background-size: 4px 4px;
+	background-position: 0 1px;
+	opacity: 0.5;
+}
+
+.grid-wrap.unlocked .part {
+	box-shadow: 0 0 0 1px var(--edge-strong), 0 10px 28px var(--shadow-far);
+}
 
 /* The way back to a block that is completely covered, which overlap makes
    possible and nothing else would answer. */
@@ -708,7 +844,7 @@ html, body {
 .grid.params .switch.on {
 	background: var(--on);
 	border-color: var(--on-edge);
-	color: #1a1206;
+	color: var(--on-ink);
 	font-weight: 700;
 }
 
@@ -730,7 +866,7 @@ html, body {
 .grid.params .choices button.here {
 	background: var(--on);
 	border-color: var(--on-edge);
-	color: #1a1206;
+	color: var(--on-ink);
 	font-weight: 600;
 }
 
@@ -767,7 +903,7 @@ html, body {
 	color: var(--ink);
 	font-size: var(--type-body);
 	font-variant-numeric: tabular-nums;
-	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+	text-shadow: 0 1px 2px var(--halo);
 }
 
 /* A control this service is too old to draw. Said on the glass rather than
@@ -776,7 +912,7 @@ html, body {
 .unsupported {
 	padding: 0.8rem 1rem;
 	max-width: 32rem;
-	color: #ffa94d;
+	color: var(--warn);
 	font-size: var(--type-note);
 	line-height: 1.5;
 }
@@ -884,7 +1020,7 @@ html, body {
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
-.grid.params .layer .drop { color: #ff8787; font-size: var(--type-body); }
+.grid.params .layer .drop { color: var(--danger); font-size: var(--type-body); }
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs
    none, works with one finger, and never claims a limit that was invented. */
@@ -943,7 +1079,7 @@ html, body {
 	padding: 0.3rem;
 	border: 1px solid var(--edge);
 	border-radius: 8px;
-	background: rgba(0, 0, 0, 0.25);
+	background: var(--sunken);
 }
 
 .catalogue .pick {
@@ -1058,7 +1194,7 @@ html, body {
 	border-radius: 10px;
 	border: 1px solid var(--edge);
 	background: var(--ground);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	box-shadow: 0 8px 24px var(--shadow-near);
 }
 
 .menu .options button {
@@ -1098,7 +1234,7 @@ html, body {
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
-	color: #ff8787;
+	color: var(--danger);
 	font: inherit;
 	font-size: var(--type-body);
 	white-space: nowrap;
@@ -1135,23 +1271,26 @@ html, body {
 	z-index: 500;
 }
 
+/* Solid. It was dashed, on the argument that a quiet mark should look quiet —
+   and on the glass Simon could not see it. A dash halves the ink in a line
+   already drawn at a low opacity, and the two together came to nothing.
+   Quietness is the opacity's job alone. */
 .join line {
 	stroke: var(--ring);
-	stroke-width: 1.5;
-	stroke-opacity: 0.28;
-	stroke-dasharray: 5 4;
+	stroke-width: 2;
+	stroke-opacity: 0.45;
 	fill: none;
 }
 
 .join path {
 	fill: var(--ring);
-	fill-opacity: 0.28;
+	fill-opacity: 0.45;
 }
 
-/* Brighter, and solid. A dashed line says "these are related"; the same line
-   solid under a finger says "this one, right now". */
-.join.live line { stroke-opacity: 0.95; stroke-dasharray: none; }
-.join.live path { fill-opacity: 0.95; }
+/* Brighter under a finger: the line says "these are related" all the time, and
+   "this one, right now" while a hand is on either end. */
+.join.live line { stroke-opacity: 1; }
+.join.live path { fill-opacity: 1; }
 
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 
@@ -1178,7 +1317,7 @@ html, body {
 	align-items: center;
 	justify-content: center;
 	padding: 1rem;
-	background: rgba(0, 0, 0, 0.6);
+	background: var(--veil);
 	touch-action: none;
 }
 
@@ -1193,7 +1332,7 @@ html, body {
 	border-radius: 12px;
 	border: 1px solid var(--edge);
 	background: var(--ground);
-	box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6);
+	box-shadow: 0 18px 48px var(--shadow-far);
 }
 
 .sheet-body header {
@@ -1245,7 +1384,7 @@ html, body {
 
 /* The one that cannot be taken back is the one that is coloured. */
 .sheet .answers button.danger {
-	border-color: #ff8787;
-	color: #ff8787;
+	border-color: var(--danger);
+	color: var(--danger);
 	font-weight: 700;
 }

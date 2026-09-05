@@ -46,12 +46,17 @@ const PAGE_BUTTONS = 6;
 const SEPARATION = 1;
 /* Cells of air left between blocks that nobody has placed. */
 
-const ARROW = 9;
+const ARROW = 15;
 /* How long the head of a connecting line is, in pixels.
  *
  * Not scaled by the cell. It is a mark rather than a control: nobody touches it,
  * and at the smallest size a proportional arrowhead would be three pixels of
- * nothing. */
+ * nothing.
+ *
+ * Drawn at the middle of the line rather than at the end it points to. Several
+ * contributions feeding one pattern all arrive at the same block, and heads
+ * gathered on its edge merge into a smudge that says nothing — Simon found that
+ * with three of them. At the middle they are as far apart as the lines are. */
 
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
@@ -1245,16 +1250,30 @@ function Connections ({ box, joins, touched, when }) {
 		{ x: 0, y: 0 });
 
 	return html`
-		<svg class="joins" width=${Math.ceil(extent.x) + 1} height=${Math.ceil(extent.y) + 1}>
+		${/* Room for the head's wings, which reach across the line rather than
+		     along it — the only part of a join that can fall outside the two
+		     points measured above. */ ""}
+		<svg class="joins"
+			width=${Math.ceil(extent.x + ARROW * 0.38) + 1}
+			height=${Math.ceil(extent.y + ARROW * 0.38) + 1}>
 			${drawn.map((line) => {
 				const angle = Math.atan2(line.b.y - line.a.y, line.b.x - line.a.x);
-				const back = {
-					x: line.b.x - Math.cos(angle) * ARROW,
-					y: line.b.y - Math.sin(angle) * ARROW,
+				const middle = { x: (line.a.x + line.b.x) / 2, y: (line.a.y + line.b.y) / 2 };
+
+				/* The head straddles the middle rather than sitting behind it,
+				   so what a person sees pointing is centred on the line's own
+				   midpoint however long the line is. */
+				const tip = {
+					x: middle.x + Math.cos(angle) * ARROW / 2,
+					y: middle.y + Math.sin(angle) * ARROW / 2,
 				};
-				const wing = ARROW * 0.42;
+				const back = {
+					x: middle.x - Math.cos(angle) * ARROW / 2,
+					y: middle.y - Math.sin(angle) * ARROW / 2,
+				};
+				const wing = ARROW * 0.38;
 				const head = [
-					`M ${line.b.x} ${line.b.y}`,
+					`M ${tip.x} ${tip.y}`,
 					`L ${back.x - Math.sin(angle) * wing} ${back.y + Math.cos(angle) * wing}`,
 					`L ${back.x + Math.sin(angle) * wing} ${back.y - Math.cos(angle) * wing}`,
 					"Z",
@@ -1788,6 +1807,96 @@ function usePinch (cell, choose) {
  * Every button here is a fixed comfortable size and none of them scales with
  * the setting: the first thing a person needs after picking cells too small to
  * hit is this control, so it must not have shrunk along with them. */
+/* Light, dark, or whatever the machine says.
+ *
+ * Simon asked for all three, and the third is the default: a theme is a property
+ * of the glass and the room it is in, and the browser has already been told
+ * which. What it cannot know is that this particular room has no ceiling lights
+ * (#1959) — so the other two exist, and pinning one is one tap.
+ *
+ * Kept on the panel rather than anywhere shared, for the same reason the cell
+ * size is (#2055): one panel wanting dark and another light is the ordinary
+ * case, not a conflict to resolve. A page hung on a wall and a tablet carried
+ * around the room are two different rooms.
+ *
+ * The attribute is also written by `index.html` before the first paint, so a
+ * pinned theme does not flash the other one on the way in. This writes it again
+ * on mount, which costs nothing and means the two cannot disagree. */
+const THEME_KEY = "superintendent.theme";
+
+const THEMES = [
+	{ key: "system", label: "Match system", short: "system" },
+	{ key: "light", label: "Light", short: "light" },
+	{ key: "dark", label: "Dark", short: "dark" },
+];
+
+function rememberedTheme () {
+	try {
+		const held = localStorage.getItem(THEME_KEY);
+
+		return THEMES.some((one) => one.key === held) ? held : "system";
+
+	} catch (error) {
+		/* Storage can be refused outright rather than merely be empty. A panel
+		   in that state works; it just follows the machine every time. */
+		return "system";
+	}
+}
+
+function useTheme () {
+	const [choice, setChoice] = useState(rememberedTheme);
+
+	useEffect(() => {
+		/* Nothing set is the third state rather than a missing one: it leaves
+		   `color-scheme: light dark` in force, which is what makes the system's
+		   answer the answer. */
+		if (choice === "system") delete document.documentElement.dataset.theme;
+		else document.documentElement.dataset.theme = choice;
+
+		try {
+			localStorage.setItem(THEME_KEY, choice);
+		} catch (error) {
+			/* As above: forgetting between reloads is the only consequence. */
+		}
+	}, [choice]);
+
+	return { choice, choose: setChoice };
+}
+
+function Theme ({ choice, onChoose }) {
+	const [open, setOpen] = useState(false);
+	const named = THEMES.find((one) => one.key === choice) || THEMES[0];
+
+	return html`
+		<div class="theme">
+			<button
+				class=${open ? "open" : ""}
+				onPointerDown=${(event) => { event.preventDefault(); setOpen(!open); }}
+			>theme · ${named.short}</button>
+
+			${open && html`
+				<div class="choices">
+					${THEMES.map((theme) => html`
+						<button
+							key=${theme.key}
+							class=${theme.key === choice ? "chosen" : ""}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onChoose(theme.key);
+								setOpen(false);
+							}}
+						>
+							${/* The swatch is the theme rather than a copy of it: the
+							     element carries that theme's own `color-scheme`, so the
+							     ground it paints is whatever the stylesheet says the
+							     ground is. No palette value is written twice. */ ""}
+							<i data-scheme=${theme.key}></i>
+							<span>${theme.label}</span>
+						</button>`)}
+				</div>`}
+		</div>`;
+}
+
 function Sizes ({ cell, choice, onChoose }) {
 	const [open, setOpen] = useState(false);
 
@@ -1843,6 +1952,8 @@ function Panel () {
 	const [clearing, setClearing] = useState(null);
 	const [moved, setMoved] = useState({});
 	const [touched, setTouched] = useState(null);
+
+	const theme = useTheme();
 
 	const link = useRef(null);
 	const expiries = useRef(new Map());
@@ -2345,6 +2456,7 @@ function Panel () {
 		return html`
 			<div class="bar">
 				<span class="spacer"></span>
+				<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
 				<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
 				<${Build} service=${service} stale=${stale} />
 			</div>
@@ -2378,6 +2490,7 @@ function Panel () {
 			${notice && html`<span class="warn">${notice}</span>`}
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
 			<${Sizes} cell=${size.cell} choice=${size.choice} onChoose=${size.choose} />
+			<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>

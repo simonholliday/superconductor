@@ -1868,21 +1868,39 @@ def test_a_line_carries_a_direction_and_points_at_the_pattern (
 	"""Only one direction exists today.  The other one is already named — an
 	element that *shows* a property of a pattern rather than controlling it —
 	and an arrowhead costs a triangle now against a format change later (#2109).
+
+	The head is at the middle of the line rather than at the end it points to,
+	because several contributions feeding one pattern all arrive at the same
+	block and heads gathered on its edge merge into a smudge.  So what is
+	measured here is which way it points, not where it sits.
 	"""
 
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
 	line = _edges(panel, "stack/one>grid")
-	tip = panel.eval_on_selector(
+	head = panel.eval_on_selector(
 		'[data-join="stack/one>grid"] path',
 		"""one => {
-			const [x, y] = one.getAttribute("d").split(" ").slice(1, 3);
+			const [, tip, left, right] = one.getAttribute("d")
+				.split(/[MLZ]/).map((part) => part.trim().split(/\s+/).map(Number));
 
-			return { x: +x, y: +y };
+			return { tip: { x: tip[0], y: tip[1] },
+			         base: { x: (left[0] + right[0]) / 2, y: (left[1] + right[1]) / 2 } };
 		}""")
 
-	assert _on_the_edge(tip, line["to"]), f"the head is not at the pattern: {tip} of {line}"
+	def away (point: dict[str, float], other: dict[str, float]) -> float:
+		return ((point["x"] - other["x"]) ** 2 + (point["y"] - other["y"]) ** 2) ** 0.5
+
+	assert away(head["tip"], line["b"]) < away(head["base"], line["b"]), (
+		f"the head points away from the pattern: {head} on {line}")
+
+	# And it is on the line, near the middle of it, rather than at either end.
+	middle = {"x": (line["a"]["x"] + line["b"]["x"]) / 2,
+	          "y": (line["a"]["y"] + line["b"]["y"]) / 2}
+
+	assert away(head["tip"], middle) < away(line["a"], line["b"]) / 4, (
+		f"the head is not near the middle: {head} on {line}")
 
 
 def test_a_line_brightens_while_a_hand_is_on_either_end (
@@ -1979,3 +1997,129 @@ def test_a_line_follows_the_block_it_is_joined_to (
 	line = _edges(panel, "stack/one>grid")
 
 	assert _on_the_edge(line["a"], line["from"]), f"the line stayed behind: {line}"
+
+
+# --- Light, dark, or whatever the machine says -------------------------------
+#
+# A panel is read in a room, and the room is not this one. Simon asked for all
+# three states; the third is the default, because the browser has already been
+# told which way round the room is and this has not.
+
+
+def _ground (panel: typing.Any) -> str:
+	"""The colour the page paints behind everything, as the browser resolved it."""
+
+	return str(panel.evaluate("() => getComputedStyle(document.body).backgroundColor"))
+
+
+def _pick_theme (panel: typing.Any, label: str, key: str) -> None:
+	"""Choose a theme and wait for it to land.
+
+	The wait is not politeness.  A state change settles on the next tick and the
+	attribute is written by an effect after that, so a test reading the moment
+	the click returns reads the theme that was in force before it.
+	"""
+
+	panel.locator(".theme > button").click()
+	panel.locator(".theme .choices button", has_text=label).click()
+
+	panel.wait_for_function(
+		"(key) => (document.documentElement.dataset.theme || 'system') === key",
+		arg=key, timeout=5_000)
+
+
+def test_a_panel_told_nothing_follows_the_machine (panel: typing.Any) -> None:
+	"""Which is what "match system" means, and it is the state a panel that has
+	never been touched is in."""
+
+	panel.emulate_media(color_scheme="dark")
+	dark = _ground(panel)
+
+	panel.emulate_media(color_scheme="light")
+	light = _ground(panel)
+
+	assert dark != light, f"the machine's answer changed nothing: {dark}"
+	assert panel.evaluate("() => document.documentElement.dataset.theme") in (None, "")
+
+
+def test_a_pinned_theme_outranks_the_machine (panel: typing.Any) -> None:
+	"""The whole of what was missing: somebody whose machine is set light and
+	who wants *this* screen dark, in a room with no ceiling lights, had no way
+	to say so."""
+
+	panel.emulate_media(color_scheme="light")
+	following = _ground(panel)
+
+	_pick_theme(panel, "Dark", "dark")
+
+	assert _ground(panel) != following, "pinning dark against a light machine changed nothing"
+
+	_pick_theme(panel, "Light", "light")
+
+	assert _ground(panel) == following, "pinning light is not what a light machine gives"
+
+
+def test_a_pinned_theme_is_applied_before_the_app_is_even_loaded (
+	panel: typing.Any, service_url: str) -> None:
+	"""Otherwise every load flashes the other theme at somebody who pinned one,
+	which is the whole reason the boot script is in the head and not in app.js.
+
+	Proved by taking app.js away: whatever sets the attribute with no client on
+	the page is the only thing that could have.
+	"""
+
+	_pick_theme(panel, "Dark", "dark")
+
+	panel.route("**/client/app.js", lambda route: route.abort())
+	panel.goto(service_url)
+
+	assert panel.evaluate("() => document.documentElement.dataset.theme") == "dark"
+
+
+def test_a_theme_swatch_is_the_theme_it_offers (panel: typing.Any) -> None:
+	"""Rather than a copy of it.  Each swatch carries that theme's own
+	`color-scheme`, so the ground it paints is the ground the stylesheet paints
+	— which is what stops the picker becoming a second place the palette is
+	written down and a second place it goes wrong.
+	"""
+
+	_pick_theme(panel, "Dark", "dark")
+
+	dark_page = _ground(panel)
+
+	panel.locator(".theme > button").click()
+
+	swatches = panel.eval_on_selector_all(
+		".theme .choices i",
+		"""els => els.map((one) => [one.dataset.scheme, getComputedStyle(one).backgroundColor])""")
+	shown = dict(swatches)
+
+	assert shown["dark"] == dark_page, (
+		f"the dark swatch is not the dark ground: {shown} against {dark_page}")
+	assert shown["light"] != shown["dark"], f"both swatches are the same colour: {shown}"
+
+	# And "match system" shows the machine's answer rather than the pin. It
+	# inherits `color-scheme` like everything else, so while dark is pinned it
+	# would otherwise offer a picture of what the person already has.
+	panel.emulate_media(color_scheme="light")
+
+	following = panel.eval_on_selector(
+		'.theme .choices i[data-scheme="system"]', "one => getComputedStyle(one).backgroundColor")
+
+	assert following == shown["light"], (
+		f"the system swatch followed the pin rather than the machine: {following}")
+
+
+def test_a_theme_outlives_a_reload (panel: typing.Any, service_url: str) -> None:
+	"""A setting a person has to make again every time the panel restarts is not
+	a setting.  Kept on the panel, like the cell size, because a theme is a
+	property of the glass and the room it is in (#2055)."""
+
+	_pick_theme(panel, "Light", "light")
+	chosen = _ground(panel)
+
+	panel.goto(service_url)
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	assert _ground(panel) == chosen
+	assert "light" in panel.locator(".theme > button").inner_text()
