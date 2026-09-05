@@ -588,6 +588,15 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	this asserts they agree rather than trusting them to.
 	"""
 
+	# Pinned to one size before anything is measured. Type scales with the cell
+	# now, and the two pages fit at different cell sizes — so comparing raw
+	# pixels across them would be comparing two settings, not two rules.
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Tested").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '44px'",
+		timeout=5_000)
+
 	panel.locator(".pages button", has_text="All").click()
 	panel.wait_for_selector(".grid .cell", timeout=5_000)
 
@@ -1142,3 +1151,105 @@ def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> N
 	for index in range(panel.locator(".menu .options button").count()):
 		assert panel.locator(".menu .options button").nth(index).is_visible(), \
 			"an option is drawn but cannot be reached"
+
+
+def test_a_control_is_a_whole_number_of_cells_at_every_size (panel: typing.Any) -> None:
+	"""Two decisions used to disagree: a block measures whole cells (#2078), and
+	a control stays pressable however small the grid is set (#2055).
+
+	Pinning a control at 44px honoured the second and broke the first — the
+	pattern shrank when the grid was resized and the settings beside it did not,
+	so a slider styled like a grid button stopped lining up with one.
+	"""
+
+	_open_the_stack(panel)
+
+	for size in ("Compact", "Snug", "Tested", "Large"):
+		panel.locator(".sizes > button").click()
+		panel.locator(".sizes .choices button", has_text=size).click()
+		_settled(panel)
+
+		seen = panel.evaluate("""() => {
+			const root = getComputedStyle(document.documentElement);
+			const px = (name) => parseFloat(root.getPropertyValue(name));
+
+			return { cell: px('--cell'), gap: px('--gap'), row: px('--row') };
+		}""")
+
+		pitch = seen["cell"] + seen["gap"]
+
+		assert seen["row"] >= 44, f"at {size} a control is only {seen['row']}px"
+		assert (seen["row"] + seen["gap"]) % pitch == 0, \
+			f"at {size} a control is {seen['row']}px, which is not whole cells of {pitch}px"
+
+
+def test_every_control_on_the_lattice_is_a_row_tall (panel: typing.Any) -> None:
+	"""The rule is worth nothing if a control declares its own height instead.
+
+	Anything drawn on the lattice takes its height from --row; the bar and the
+	popovers hanging off it keep a fixed target, because neither is on the
+	lattice and neither should grow to 96px because the pattern behind it is
+	set large.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Large").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '60px'",
+		timeout=5_000)
+	_settled(panel)
+
+	short = panel.evaluate("""() => {
+		const row = parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue('--row'));
+
+		return [...document.querySelectorAll('.part .setting > *, .part .layer > button')]
+			.map((one) => ({ what: one.className || one.tagName,
+			                 tall: Math.round(one.getBoundingClientRect().height) }))
+			.filter((one) => one.tall < row);
+	}""")
+
+	assert short == [], f"these do not fill their row: {short}"
+
+
+def test_type_follows_the_grid_a_person_chose (panel: typing.Any) -> None:
+	"""The whole complaint in one assertion: resize the pattern and the words
+	beside it should resize with it.
+
+	A label and the value it names are also one size, not two — they are one
+	role seen from two sides, and a value drawn larger than its own name was
+	what inflated a settings block past the room it needed.
+	"""
+
+	_open_the_stack(panel)
+
+	def measured (name: str, cell: str) -> dict:
+		panel.locator(".sizes > button").click()
+		panel.locator(".sizes .choices button", has_text=name).click()
+
+		# Waiting on the number rather than on stillness: the cell has not begun
+		# moving when the click returns, and a wait for "stopped moving" is
+		# satisfied by a value that never started.
+		panel.wait_for_function(
+			"() => getComputedStyle(document.documentElement)"
+			f".getPropertyValue('--cell') === '{cell}'",
+			timeout=5_000)
+
+		return panel.evaluate("""() => {
+			const label = document.querySelector('.part .row-label');
+			const value = document.querySelector('.part .dial span');
+
+			return {
+				label: parseFloat(getComputedStyle(label).fontSize),
+				value: parseFloat(getComputedStyle(value).fontSize),
+			};
+		}""")
+
+	small = measured("Compact", "22px")
+	large = measured("Large", "60px")
+
+	assert small["label"] == small["value"], "a value is not the size of its own label"
+	assert large["label"] == large["value"], "a value is not the size of its own label"
+	assert large["label"] > small["label"], "the words did not follow the grid"

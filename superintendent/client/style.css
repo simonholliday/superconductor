@@ -30,6 +30,34 @@
 	   not enough for it, which at the compact size it will not be. */
 	--label: calc(var(--cell) * 3 + var(--gap) * 2);
 	--part: #14161a;
+
+	/* A control's row: as many whole cells as it takes to stay pressable.
+	   Written by the client, which works it out once and tells both the fit
+	   and this stylesheet, so the two cannot disagree. The value below is only
+	   what is drawn before the first measurement. */
+	--row: 44px;
+
+	/* Type: six sizes, and nothing outside them.
+	
+	   Split by where the text lives, because the two halves behave
+	   differently. The bar is fixed chrome and is not on the lattice, so its
+	   sizes do not move. Everything inside a part scales with the cell, which
+	   is the whole point: the grid was built to respect --cell and everything
+	   written since was in fixed rem, so the pattern shrank and the controls
+	   beside it did not.
+	
+	   Labels and values share one size on purpose. They are one role seen from
+	   two sides — one names a thing, the other reads it — and they are told
+	   apart by weight and by tabular figures, not by scale. A value drawn
+	   larger than the name beside it is what was inflating a settings block
+	   past the room it needed. */
+	--type-display: 1.35rem;
+	--type-chrome: 0.85rem;
+	--type-chrome-quiet: 0.72rem;
+
+	--type-title: clamp(9px, calc(var(--cell) * 0.25), 12px);
+	--type-body: clamp(10px, calc(var(--cell) * 0.27), 15px);
+	--type-note: clamp(10px, calc(var(--cell) * 0.25), 14px);
 }
 
 * { box-sizing: border-box; }
@@ -78,10 +106,10 @@ html, body {
 	padding: 0.6rem 0.9rem;
 	border-bottom: 1px solid var(--edge);
 	color: var(--ink-quiet);
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 }
 
-.bar .title { color: var(--ink); font-weight: 600; font-size: 1rem; }
+.bar .title { color: var(--ink); font-weight: 600; font-size: var(--type-chrome); }
 .bar .spacer { flex: 1; }
 
 .lamp { display: inline-flex; align-items: center; gap: 0.4rem; }
@@ -130,7 +158,7 @@ html, body {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	color: var(--ink-quiet);
-	font-size: 0.78rem;
+	font-size: var(--type-title);
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -248,7 +276,7 @@ html, body {
 	z-index: 1;
 	background: var(--part);
 	color: var(--ink-quiet);
-	font-size: min(0.8rem, calc(var(--cell) * 0.42));
+	font-size: var(--type-body);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -368,14 +396,14 @@ html, body {
 .tempo .reading {
 	min-width: 5.5rem;
 	text-align: center;
-	font-size: 1.35rem;
+	font-size: var(--type-display);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
 
 .tempo .reading i {
 	font-style: normal;
-	font-size: 0.7rem;
+	font-size: var(--type-chrome-quiet);
 	color: var(--ink-quiet);
 	margin-left: 0.3rem;
 }
@@ -396,7 +424,7 @@ html, body {
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 	touch-action: none;
 }
 
@@ -428,7 +456,7 @@ html, body {
 	background: transparent;
 	color: var(--ink);
 	font: inherit;
-	font-size: 0.9rem;
+	font-size: var(--type-chrome);
 	text-align: left;
 	white-space: nowrap;
 	touch-action: none;
@@ -444,13 +472,13 @@ html, body {
 	background: var(--edge);
 }
 
-.sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: 0.75rem; }
+.sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: var(--type-chrome-quiet); }
 
 /* What is running. Quiet by design — it is provenance, not a control, and it
    earns its place in the bar only by costing no glass at all. */
 .bar .build {
 	color: var(--ink-quiet);
-	font-size: 0.72rem;
+	font-size: var(--type-chrome-quiet);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
@@ -465,7 +493,7 @@ html, body {
 	background: transparent;
 	color: #ffa94d;
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 	white-space: nowrap;
 	touch-action: none;
 }
@@ -484,7 +512,7 @@ html, body {
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 	white-space: nowrap;
 	touch-action: none;
 }
@@ -502,7 +530,7 @@ html, body {
 	min-width: 7rem;
 	text-align: center;
 	color: var(--ink);
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 	white-space: nowrap;
 }
 
@@ -528,7 +556,7 @@ html, body {
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-chrome);
 	letter-spacing: 0.04em;
 	white-space: nowrap;
 	touch-action: none;
@@ -569,7 +597,7 @@ html, body {
 	background: transparent;
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.8rem;
+	font-size: var(--type-chrome);
 	white-space: nowrap;
 	touch-action: none;
 }
@@ -636,23 +664,23 @@ html, body {
    The fit is told about that floor, so the block is measured as tall as it
    draws — without both halves agreeing, the settings overlapped each other by
    eighteen pixels at the compact size. */
-.grid.params { grid-auto-rows: minmax(var(--cell), max-content); }
+.grid.params { grid-auto-rows: minmax(var(--row), max-content); }
 
 .grid.params .setting {
 	display: flex;
 	align-items: center;
-	min-height: max(44px, var(--cell));
+	min-height: var(--row);
 }
 
 .grid.params .switch {
 	min-width: 5rem;
-	min-height: 44px;
+	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-body);
 	letter-spacing: 0.04em;
 	touch-action: none;
 }
@@ -669,14 +697,14 @@ html, body {
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
 .grid.params .choices button {
-	min-height: 44px;
+	min-height: var(--row);
 	padding: 0 0.7rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.8rem;
+	font-size: var(--type-body);
 	white-space: nowrap;
 	touch-action: none;
 }
@@ -694,7 +722,7 @@ html, body {
 .grid.params .dial {
 	position: relative;
 	flex: 1;
-	min-height: 44px;
+	min-height: var(--row);
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
@@ -719,7 +747,7 @@ html, body {
 .grid.params .dial span {
 	position: relative;
 	color: var(--ink);
-	font-size: 0.85rem;
+	font-size: var(--type-body);
 	font-variant-numeric: tabular-nums;
 	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
@@ -731,11 +759,19 @@ html, body {
 	padding: 0.8rem 1rem;
 	max-width: 32rem;
 	color: #ffa94d;
-	font-size: 0.85rem;
+	font-size: var(--type-note);
 	line-height: 1.5;
 }
 
 .unsupported b { color: var(--ink); font-family: ui-monospace, monospace; }
+
+/* A touch target that is not on the lattice keeps a fixed comfortable size.
+ *
+ * The bar and the popovers that hang off it are chrome: they do not scale with
+ * the grid, and a menu option has no business being 96px tall because the
+ * pattern behind it is set large. Everything drawn *on* the lattice uses
+ * --row instead, which is a whole number of cells. That division is the rule,
+ * and it is the whole of the rule. */
 
 /* --- A stack of generators ------------------------------------------------
  *
@@ -761,7 +797,7 @@ html, body {
 	   choose: four controls at the 44px a finger needs is 188px, and a compact
 	   block is 230px wide. The gaps are the only slack there is. */
 	gap: 0.3rem;
-	min-height: max(44px, var(--cell));
+	min-height: var(--row);
 	border-top: 1px solid var(--edge);
 }
 
@@ -782,7 +818,7 @@ html, body {
 	white-space: nowrap;
 	color: var(--ink);
 	font-family: ui-monospace, monospace;
-	font-size: 0.9rem;
+	font-size: var(--type-body);
 }
 
 .grid.params .layer .spacer { flex: 1 1 auto; }
@@ -796,19 +832,19 @@ html, body {
 .grid.params .layer .move,
 .grid.params .layer .drop {
 	min-width: 44px;
-	min-height: 44px;
+	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.8rem;
+	font-size: var(--type-body);
 	touch-action: none;
 }
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
-.grid.params .layer .drop { color: #ff8787; font-size: 1rem; }
+.grid.params .layer .drop { color: #ff8787; font-size: var(--type-body); }
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs
    none, works with one finger, and never claims a limit that was invented. */
@@ -820,13 +856,13 @@ html, body {
 
 .stepper button {
 	min-width: 44px;
-	min-height: 44px;
+	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
 	font: inherit;
-	font-size: 1.1rem;
+	font-size: var(--type-body);
 	touch-action: none;
 }
 
@@ -834,7 +870,7 @@ html, body {
 	min-width: 4rem;
 	text-align: center;
 	color: var(--ink);
-	font-size: 0.85rem;
+	font-size: var(--type-body);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -876,7 +912,7 @@ html, body {
 	gap: 0.5rem;
 	padding: 0.2rem 0.4rem;
 	color: var(--ink-quiet);
-	font-size: 0.85rem;
+	font-size: var(--type-note);
 }
 
 .catalogue .pick .spacer { flex: 1; }
@@ -889,7 +925,7 @@ html, body {
 	background: var(--panel);
 	color: var(--ink-quiet);
 	font: inherit;
-	font-size: 0.8rem;
+	font-size: var(--type-chrome);
 	touch-action: none;
 }
 
@@ -909,12 +945,12 @@ html, body {
 	touch-action: none;
 }
 
-.offer b { font-family: ui-monospace, monospace; font-size: 0.9rem; }
+.offer b { font-family: ui-monospace, monospace; font-size: var(--type-body); }
 
 .offer i {
 	color: var(--ink-quiet);
 	font-style: normal;
-	font-size: 0.78rem;
+	font-size: var(--type-note);
 	line-height: 1.4;
 }
 
@@ -923,10 +959,12 @@ html, body {
    shorter list, and it is the same courtesy the app pays upstream. */
 .offer.partial { opacity: 0.45; }
 
+/* This one is permanent and sits on the lattice, unlike the chooser it opens. */
 .offer.add {
 	align-items: center;
+	min-height: var(--row);
 	color: var(--ink-quiet);
-	font-size: 0.85rem;
+	font-size: var(--type-body);
 }
 
 
@@ -944,14 +982,14 @@ html, body {
 	justify-content: space-between;
 	gap: 0.5rem;
 	flex: 1;
-	min-height: 44px;
+	min-height: var(--row);
 	padding: 0 0.8rem;
 	border-radius: 8px;
 	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink);
 	font: inherit;
-	font-size: 0.85rem;
+	font-size: var(--type-body);
 	text-align: left;
 	touch-action: none;
 }
@@ -991,7 +1029,7 @@ html, body {
 	background: transparent;
 	color: var(--ink);
 	font: inherit;
-	font-size: 0.9rem;
+	font-size: var(--type-chrome);
 	text-align: left;
 	white-space: nowrap;
 	touch-action: none;

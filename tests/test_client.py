@@ -6,6 +6,7 @@ and that the one value it has to keep in step with Python is in step.
 """
 
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -39,8 +40,15 @@ def _node () -> pathlib.Path | None:
 
 
 def test_the_client_parses () -> None:
-	"""A syntax error in the client is invisible until a browser loads it, and
-	no browser runs on this host. This is the only guard between the two."""
+	"""A syntax error in the client is a page that draws nothing at all.
+
+	Checked as a **module**, from standard input, and not as a path. Measured on
+	this host on 2026-09-05: ``node --check <path>`` silently passes a ``const``
+	redeclaration inside an ES module and catches the same code in a plain
+	script. Two ``const at`` in one function got through the path form, and what
+	found it was the page suite failing nineteen tests at once because the
+	module never evaluated.
+	"""
 
 	engine = _node()
 
@@ -49,9 +57,59 @@ def test_the_client_parses () -> None:
 
 	for script in sorted(superintendent.service.CLIENT_DIR.glob("*.js")):
 		done = subprocess.run(
-			[str(engine), "--check", str(script)], capture_output=True, text=True)
+			[str(engine), "--input-type=module", "--check"],
+			input=script.read_text(encoding="utf-8"), capture_output=True, text=True)
 
 		assert done.returncode == 0, f"{script.name} does not parse:\n{done.stderr}"
+
+
+def test_the_client_checker_would_catch_a_redeclaration () -> None:
+	"""The check above is only worth running if it catches what the old one missed.
+
+	This is the exact fault that reached the panel: a name declared twice in one
+	function, which Firefox refuses outright. Asserting the checker's teeth
+	rather than trusting the flag.
+	"""
+
+	engine = _node()
+
+	if engine is None:
+		pytest.skip("no JavaScript engine on this host, not even Playwright's own")
+
+	done = subprocess.run(
+		[str(engine), "--input-type=module", "--check"],
+		input='const [a, b] = [1, 2];\nconst a = 3;\n', capture_output=True, text=True)
+
+	assert done.returncode != 0, "the syntax check no longer catches a redeclaration"
+
+
+def test_every_size_in_the_stylesheet_comes_from_the_scale () -> None:
+	"""Consistency has to be enforced rather than remembered.
+
+	Eleven distinct font sizes had accumulated, of which exactly one scaled with
+	the cell — so the pattern shrank when a person resized the grid and the
+	controls beside it did not. A convention would drift again; this cannot.
+	"""
+
+	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+
+	declared = re.findall(r"font-size:\s*([^;]+);", style)
+	loose = [one.strip() for one in declared if not one.strip().startswith("var(--type-")]
+
+	assert loose == [], f"these sizes are outside the scale: {loose}"
+
+
+def test_the_scale_is_small_and_every_step_of_it_is_used () -> None:
+	"""A scale nobody uses all of is a scale with a spare step in it, and a
+	spare step is where the next inconsistency goes."""
+
+	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+
+	defined = set(re.findall(r"(--type-[a-z-]+):", style))
+	used = set(re.findall(r"var\((--type-[a-z-]+)\)", style))
+
+	assert len(defined) <= 6, f"the scale has grown to {len(defined)}: {sorted(defined)}"
+	assert defined == used, f"defined but unused: {sorted(defined - used)}"
 
 
 def test_the_client_speaks_the_contract_python_does () -> None:
