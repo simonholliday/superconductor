@@ -2665,16 +2665,19 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
 			lines: parts(".join line"),
 			anchors: parts(".join circle.anchor"),
-			heads: parts(".join path"),
-			nodes: parts(".join circle.node"),
+			switches: parts(".join.switchable path, .join.switchable circle.node"),
+			marks: parts(".join:not(.switchable) path"),
 		};
 	}""")
 
 	assert inert["overlay"] == "none"
 	assert set(inert["lines"]) == {"none"}, f"a line takes taps: {inert}"
 	assert set(inert["anchors"]) == {"none"}, f"an anchor takes taps: {inert}"
-	assert set(inert["heads"]) == {"all"}, f"a head takes no taps: {inert}"
-	assert set(inert["nodes"]) == {"all"}, f"the switch takes no taps: {inert}"
+	assert set(inert["switches"]) == {"all"}, f"a switch takes no taps: {inert}"
+
+	# A line with nothing to switch takes nothing: an arrowhead that is only a
+	# mark must not cost the grid underneath a tap.
+	assert set(inert["marks"]) <= {"none"}, f"a mark takes taps: {inert}"
 
 
 def test_a_route_is_unmade_where_it_was_made (
@@ -3136,3 +3139,58 @@ def test_every_toggle_says_off_the_same_way (
 		'.part[data-part="stack/one"] .switch.on',
 		"one => getComputedStyle(one).backgroundColor"), \
 		"an off toggle is drawn like a live one"
+
+
+def test_a_switch_lives_with_the_thing_it_switches (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "If I disable a *route* I am not disabling the *source*, which
+	might feed other *routes* which I have not disabled."
+
+	He is right, and the mistake was mine to defend.  A generator is a stack
+	entry in exactly one pattern, so it has exactly one link and its own on/off
+	*is* that link's — one stored value, which I showed in two places and called
+	a feature.  A person reading two switches reasonably believes they say two
+	things.
+
+	So: a generator has a block and its switch is in it; a route has only a line
+	and its switch is there.  Nothing has two, and nothing switchable has none.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	# A generator's line is a mark. Its switch is in its own window.
+	assert panel.locator('[data-join="stack/one>grid"].switchable').count() == 0
+	assert panel.locator('[data-join="stack/one>grid"] circle.node').count() == 0
+	assert panel.locator('.part[data-part="stack/one"] .switch').count() == 1
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		 "bypassed": False, "params": {}},
+	], by="app")
+	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
+	_settled(panel)
+
+	# A route has no window, so its switch is the one on its line.
+	assert panel.locator('[data-join="second>grid"].switchable').count() == 1
+	assert panel.locator('[data-join="second>grid"] circle.node').count() == 1
+
+
+def test_silencing_a_route_leaves_its_source_alone (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The case Simon reasoned to before it could arise: a grid feeding several
+	patterns, muted at one of them.  Silencing that link must not silence the
+	grid, which is still feeding the others."""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	before = panel.locator('.part[data-part="second"] .part-foot .switch').inner_text().strip()
+
+	panel.locator('[data-join="second>grid"] path').click()
+
+	asked = [one["path"] for one in fake_app.sets]
+
+	assert "second/enabled" not in asked, f"silencing a route touched its source: {asked}"
+	assert panel.locator(
+		'.part[data-part="second"] .part-foot .switch').inner_text().strip() == before

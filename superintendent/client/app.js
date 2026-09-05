@@ -1462,7 +1462,8 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 
 				return html`
 					<g key=${`${line.from}>${line.to}`}
-						class=${`join ${live ? "live" : ""} ${line.off ? "off" : ""}`}
+						class=${`join ${live ? "live" : ""} ${line.off ? "off" : ""}`
+							+ `${flip ? " switchable" : ""}`}
 						data-join=${`${line.from}>${line.to}`}>
 						<line x1=${line.a.x} y1=${line.a.y} x2=${line.b.x} y2=${line.b.y} />
 						${/* The one live target on this overlay, and only the triangle
@@ -1475,10 +1476,16 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 						${/* The switch, and it looks like one: a disc with the arrow
 						     inside it. Filled while the link is sounding, hollow when
 						     it is not — the same sentence every other toggle on this
-						     surface says, in the shape a line can carry. */ ""}
-						<circle
-							class="node" cx=${middle.x} cy=${middle.y} r=${arrow * NODE}
-							onPointerDown=${flip} />
+						     surface says, in the shape a line can carry.
+						
+						     Drawn only where there is something to switch, so the
+						     disc means "this is a control" and its absence means
+						     "this is a mark". A generator's line is a mark: its
+						     switch lives in its own block. */ ""}
+						${flip && html`
+							<circle
+								class="node" cx=${middle.x} cy=${middle.y} r=${arrow * NODE}
+								onPointerDown=${flip} />`}
 						<path d=${head} onPointerDown=${flip} />
 						${/* Both ends, because either could be the one read wrongly.
 						     Inert: an anchor says where a line stops and nothing else,
@@ -2672,18 +2679,30 @@ function Panel () {
 			.filter((one) => one.feeds)
 			.map((one) => ({
 				from: one.key, to: one.feeds, row: one.voice,
-				control: one.control, layer: one.layer.id,
 				off: Boolean(one.layer.bypassed),
+
+				/* No switch on this line, and that is the correction Simon made.
+				
+				   A generator is a stack entry in exactly one pattern, so it has
+				   exactly one link and its own on/off *is* that link's — one
+				   stored value. I showed it in two places and called it a
+				   feature. It is not: a person reading two switches reasonably
+				   believes they say two things, and he asked the question that
+				   proves it — what if the source feeds several destinations?
+				
+				   The rule that falls out is the same shape as the size rule:
+				   **a switch lives with the thing it switches.** A generator has
+				   a block, so its switch is in its block and its arrowhead is a
+				   mark. A route has only a line, so its switch is on the line.
+				   Nothing has two, and nothing switchable has none. */
 			})),
 	];
 
-	/* Every arrowhead is a switch, and it switches the link it draws.
+	/* The switch on a line, for the links that have one.
 	 *
-	 * Simon's, and it is the most direct mapping there is: a link is a line, so
-	 * you disable it by touching the line. For a generator the link and the
-	 * generator are the same thing, so its head and its own on/off are two
-	 * places showing one fact — which is a feature rather than a duplication,
-	 * because the head is where a hand already is when the question comes up. */
+	 * A route only — see above. The line still goes dashed when a generator is
+	 * bypassed, because that is worth seeing from across the page; it just is
+	 * not where you change it. */
 	const flip = useCallback((join) => {
 		const held = ((state[appName] || {})[join.control] || {}).layers || [];
 

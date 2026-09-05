@@ -1440,10 +1440,19 @@ html, body {
 	fill-opacity: 0.9;
 }
 
-.join path {
+/* The head of a line that carries a switch is punched out of its disc; the head
+   of one that does not is a plain mark, and reads as the line's own colour. */
+.join.switchable path {
 	fill: var(--ground);
 	fill-opacity: 1;
 }
+
+.join path {
+	fill: var(--ring);
+	fill-opacity: 0.45;
+}
+
+.join.live path { fill-opacity: 1; }
 
 /* Brighter under a finger: the line says "these are related" all the time, and
    "this one, right now" while a hand is on either end. */
@@ -1462,7 +1471,8 @@ html, body {
    not a target — so the head could be tapped to silence a link and then only on
    its two-pixel outline to bring it back. Caught by the test that turns one off
    and on again, which is why that test does both. */
-.join circle.node, .join path { pointer-events: all; cursor: pointer; }
+.join.switchable circle.node,
+.join.switchable path { pointer-events: all; cursor: pointer; }
 
 /* A silenced link, said twice over: the line goes dashed and the head goes
    hollow.
