@@ -1386,6 +1386,13 @@ html, body {
 
 .part-foot .spacer { flex: 1; }
 
+/* A block that has been silenced says so from across the room, because a silent
+   block that looks identical to a live one is a block you will spend a minute
+   staring at. The same dimming an absent app already uses, for the same reason
+   and by the same amount: it is not gone, it is not sounding. */
+.part.silent .part-body,
+.part.silent .part-title { opacity: 0.4; }
+
 .part-foot .clear {
 	min-height: var(--row);
 	padding: 0 0.9rem;

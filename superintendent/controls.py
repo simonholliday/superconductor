@@ -172,6 +172,14 @@ def _apply_cell (
 	something goes wrong is worse than one that is not applied at all.
 	"""
 
+	# A control's own mute, beside its rows rather than under a key of its own:
+	# a control's state is one object and a panel reads it as one. Held and
+	# never interpreted — what "off" means is the app's business, and here it is
+	# only a value to keep so a panel arriving late is told about it.
+	if rest == ["enabled"]:
+		grid["enabled"] = bool(value)
+		return
+
 	if rest == ["rows"]:
 		# Checked entire before a single row is touched. Clearing first and
 		# validating afterwards left the grid empty when the new one was
@@ -483,6 +491,14 @@ def _apply_note (
 	rather than quietly creating one, because a length without a note is not a
 	state the app could have reported.
 	"""
+
+	# A control's own mute, beside its rows rather than under a key of its own:
+	# a control's state is one object and a panel reads it as one. Held and
+	# never interpreted — what "off" means is the app's business, and here it is
+	# only a value to keep so a panel arriving late is told about it.
+	if rest == ["enabled"]:
+		grid["enabled"] = bool(value)
+		return
 
 	if rest == ["rows"]:
 		kept = _readable_notes(declaration, value, path)

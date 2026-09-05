@@ -891,3 +891,37 @@ def test_two_contributions_on_one_step_report_the_louder () -> None:
 	recipe.build(builder)
 
 	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 115}}
+
+
+def test_a_grid_switched_off_contributes_nothing_where_it_is_routed () -> None:
+	"""A mute rather than a delete: the route is still there and still drawn, it
+	just carries nothing.
+
+	Simon asked for an on/off on every item, and this is what one means for a
+	grid with no instrument — there is no pattern of its own to silence, so the
+	only thing "off" can say is that it stops contributing.
+	"""
+
+	played: list[str] = []
+	grid = adapter.StepGrid(Composition(), rows=["kick"], steps=16, beats=4, name="shared")
+	speaker = Speaker({"shared": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		sources={"shared": lambda pattern: played.append("shared")})
+	recipe.attach(speaker)
+
+	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.build(Builder())
+
+	assert played == ["shared"]
+
+	grid.apply(["enabled"], False)
+	recipe.build(Builder())
+
+	assert played == ["shared"], "a grid that is off still contributed"
+
+	grid.apply(["enabled"], True)
+	recipe.build(Builder())
+
+	assert played == ["shared", "shared"], "switching it back on did not bring it back"

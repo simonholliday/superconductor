@@ -222,7 +222,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.10.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.11.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -267,7 +267,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.10.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.11.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -1075,11 +1075,20 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear }) {
-	if (!onAdd && !onSend && !onClear) return null;
+function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
+	if (!onAdd && !onSend && !onClear && onLive === undefined) return null;
 
 	return html`
 		<footer class="part-foot">
+			${/* A mute, in the sense a mixer means it. First, because silencing a
+			     thing is the action a hand reaches for soonest and the one that
+			     has to be found without reading. */ ""}
+			${onLive !== undefined && html`
+				<button
+					class=${`switch ${live ? "on" : ""}`}
+					title=${live ? "silence this" : "bring this back"}
+					onPointerDown=${(event) => { event.preventDefault(); onLive(!live); }}
+				>${live ? "on" : "off"}</button>`}
 			${onAdd && html`
 				<button
 					class="offer add"
@@ -2615,6 +2624,10 @@ function Panel () {
 			about: controls[name].about || [],
 			add: stackFor(name) || null, clear: true,
 			sends: sends.length ? sends : null,
+
+			/* Absent means on. A control the app has said nothing about is
+			   playing, which is what every grid did before there was a switch. */
+			live: ((state[appName] || {})[name] || {}).enabled !== false,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0) + 1,
 			steps: controls[name].steps,
@@ -2798,6 +2811,7 @@ function Panel () {
 		>
 			${drawn.map((one) => html`
 				<${Part} key=${one.key} name=${one.key} title=${one.title} about=${one.about}
+					flavour=${one.live === false ? "silent" : ""}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
@@ -2813,7 +2827,11 @@ function Panel () {
 							adds=${one.add && (controls[one.add].sources || []).length
 								? "add a contribution" : "add a generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
-							onClear=${one.clear ? () => setClearing(one.control) : null} />`}>
+							onClear=${one.clear ? () => setClearing(one.control) : null}
+							live=${one.live}
+							onLive=${one.clear
+								? (want) => request(`${one.control}/enabled`, want)
+								: undefined} />`}>
 					${one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}

@@ -85,6 +85,20 @@ class Control:
 	glance without teaching anything a new word.
 	"""
 
+	enabled: bool = True
+	"""Whether this control is contributing anything at all.
+
+	A mute, in the sense a mixer means it: the notes stay where they are and stop
+	being heard.  Simon asked for one on every item, and the panel had none —
+	silencing one instrument for eight bars was not a thing a person could do at
+	all.
+
+	What "off" means is the control's own business.  A grid that drives a pattern
+	mutes that pattern; a grid that drives nothing but is routed elsewhere simply
+	stops contributing.  Both are "this makes no sound anywhere", said in the
+	terms each has available.
+	"""
+
 	def said (self) -> dict[str, typing.Any]:
 		"""What this control says about itself, over and above what it does.
 
@@ -178,6 +192,7 @@ class StepGrid (Control):
 		title: str | None = None,
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		visible_rows: int | None = None,
+		pattern: str | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps."""
 
@@ -189,6 +204,19 @@ class StepGrid (Control):
 		self.name = name
 		self.title = title
 		self.about = list(about)
+
+		self.pattern = pattern
+		"""Which of the composition's patterns this grid drives, if it drives one.
+
+		Given, switching this control off mutes that pattern — everything it
+		plays, its stack of contributions included, because "off" means this
+		instrument is silent rather than "off except for the algorithms".
+
+		A grid that drives nothing has none, and that is not a lesser thing: a
+		grid with no instrument is the whole of #2108.  Switching *that* off
+		stops it contributing wherever it is routed, which is the same sentence
+		in the only terms it has.
+		"""
 		self.visible_rows = visible_rows
 		"""How many rows to show at once, if fewer than there are.
 
@@ -261,6 +289,37 @@ class StepGrid (Control):
 
 		return self.snapshot() if rest == ["rows"] else value
 
+	def _keep_enabled (self, value: typing.Any) -> bool:
+		"""Silence this control, or bring it back.
+
+		A pattern is muted through the composition's own mute rather than by
+		emptying anything: the notes stay where they are and stop being heard,
+		which is what a mute is and what makes it reversible without loss.
+
+		A composition too old to have one is not an error.  The flag is still
+		kept and still honoured everywhere this package does the playing — a
+		routed grid stops contributing — so what is lost is only the half that
+		was never this package's to do.
+		"""
+
+		wanted = bool(value)
+
+		if wanted == self.enabled:
+			return False
+
+		self.enabled = wanted
+
+		if self.pattern is not None:
+			switch = getattr(self.composition, "unmute" if wanted else "mute", None)
+
+			if callable(switch):
+				switch(self.pattern)
+
+			else:
+				LOG.warning("this composition cannot mute %r", self.pattern)
+
+		return True
+
 	def snapshot (self) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.
 
@@ -271,8 +330,15 @@ class StepGrid (Control):
 		"""
 
 		grid = self.composition.data.get(self.data_key) or {}
+		held: dict[str, typing.Any] = {row: sorted(grid.get(row, [])) for row in self.rows}
 
-		return {row: sorted(grid.get(row, [])) for row in self.rows}
+		# Beside the rows rather than under a key of its own, because a control's
+		# state is one object and a panel reads it as one. `rows` is already
+		# reserved here for the whole-grid write, so a row cannot be called that
+		# either; this is the second word spent and it buys a mute.
+		held["enabled"] = self.enabled
+
+		return held
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Switch one cell, absolutely rather than by toggling.
@@ -280,6 +346,9 @@ class StepGrid (Control):
 		Absolute is what makes a re-send after a reconnect safe: applying it
 		twice reaches the same grid as applying it once.
 		"""
+
+		if rest == ["enabled"]:
+			return self._keep_enabled(value)
 
 		if rest == ["rows"]:
 			return self._keep_rows(value)
@@ -334,6 +403,7 @@ class NoteGrid (Control):
 		name: str = "notes",
 		title: str | None = None,
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+		pattern: str | None = None,
 		mono: bool = False,
 		default_length: int = 1,
 		default_velocity: int = 100,
@@ -349,6 +419,7 @@ class NoteGrid (Control):
 		self.name = name
 		self.title = title
 		self.about = list(about)
+		self.pattern = pattern
 		self.mono = mono
 		self.default_length = default_length
 		self.default_velocity = default_velocity
@@ -1345,6 +1416,14 @@ class Recipe (Control):
 
 				if play is None:
 					self._complain(source, "this composition offers no such pattern")
+					continue
+
+				# A grid switched off contributes nothing, wherever it is routed.
+				# The route is still there and still drawn; it just carries
+				# nothing, which is the difference between a mute and a delete.
+				held = self.link.controls.get(source) if self.link is not None else None
+
+				if held is not None and not held.enabled:
 					continue
 
 				try:

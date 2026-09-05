@@ -244,7 +244,7 @@ def test_the_grid_is_offered_whole_with_every_row_named () -> None:
 
 	link._apply("grid/kick/4", True, "panel-1", 1)
 
-	assert link.controls["grid"].snapshot() == {"kick": [4], "snare": []}
+	assert link.controls["grid"].snapshot() == {"kick": [4], "snare": [], "enabled": True}
 
 
 def _transport () -> tuple[superintendent.subsequence_adapter.Transport, FakeComposition]:
@@ -364,3 +364,65 @@ def test_a_composition_that_cannot_pause_does_not_offer_the_field () -> None:
 
 	assert transport.declaration()["fields"] == ["bpm"]
 	assert "paused" not in transport.snapshot()
+
+
+def test_a_grid_that_drives_a_pattern_mutes_it () -> None:
+	"""A mute in the sense a mixer means it: the notes stay where they are and
+	stop being heard, which is what makes it reversible without loss.
+
+	Everything the pattern plays, its stack of contributions included — "off"
+	means this instrument is silent, not "off except for the algorithms".
+	"""
+
+	class Muting:
+		"""A composition that writes down what it was asked to silence."""
+
+		def __init__ (self) -> None:
+			"""Start with nothing muted."""
+
+			self.data: dict[str, typing.Any] = {}
+			self.silenced: list[tuple[str, str]] = []
+
+		def mute (self, name: str) -> None:
+			"""Silence one pattern."""
+
+			self.silenced.append(("mute", name))
+
+		def unmute (self, name: str) -> None:
+			"""Bring it back."""
+
+			self.silenced.append(("unmute", name))
+
+	composition = Muting()
+	grid = superintendent.subsequence_adapter.StepGrid(
+		composition, rows=["kick"], name="grid", pattern="drums")
+
+	assert grid.apply(["enabled"], False) is True
+	assert grid.enabled is False
+	assert composition.silenced == [("mute", "drums")]
+
+	# Setting it to what it already is changes nothing and says nothing.
+	assert grid.apply(["enabled"], False) is False
+	assert composition.silenced == [("mute", "drums")]
+
+	assert grid.apply(["enabled"], True) is True
+	assert composition.silenced == [("mute", "drums"), ("unmute", "drums")]
+
+
+def test_a_composition_that_cannot_mute_is_not_an_error () -> None:
+	"""What is lost is the half that was never this package's to do.  The flag
+	is still kept and still honoured everywhere this package does the playing."""
+
+	class Old:
+		"""A composition from before mute."""
+
+		def __init__ (self) -> None:
+			"""Just the dict."""
+
+			self.data: dict[str, typing.Any] = {}
+
+	grid = superintendent.subsequence_adapter.StepGrid(
+		Old(), rows=["kick"], name="grid", pattern="drums")
+
+	assert grid.apply(["enabled"], False) is True
+	assert grid.enabled is False

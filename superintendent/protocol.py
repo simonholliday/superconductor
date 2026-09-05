@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.10.0"
+CONTRACT_VERSION = "1.11.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -64,6 +64,13 @@ not intent.  Nothing applies one to any control's state, a panel draws them as
 dots beside the steps somebody tapped, and a person's taps remain the only thing
 anything stores.  Sent only when the answer differs from the cycle before, so a
 deterministic stack is silent.
+
+1.11.0 gives a grid an ``enabled`` flag beside its rows, set at
+``control/enabled``.  A mute in the sense a mixer means it: the notes stay where
+they are and stop being heard.  What "off" does is the app's business — a grid
+that drives a pattern mutes that pattern, a grid that only feeds routes stops
+contributing — and neither the service nor the panel interprets it.  Absent means
+on, which is what every grid was before there was a switch.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

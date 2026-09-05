@@ -2883,3 +2883,58 @@ def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
 
 	# A grid nothing can take from does not offer to send itself anywhere.
 	assert panel.locator('.part[data-part="grid"] .part-foot .offer.send').count() == 0
+
+
+def test_a_block_can_be_silenced_from_its_own_footer (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon asked for one on every item, and the panel had none: silencing one
+	instrument for eight bars was not a thing a person could do at all."""
+
+	_settled(panel)
+
+	switch = panel.locator('.part[data-part="grid"] .part-foot .switch')
+
+	assert switch.count() == 1, "a pattern cannot be silenced"
+	assert switch.inner_text().strip() == "on"
+
+	switch.click()
+
+	asked = fake_app.await_set("grid/enabled")
+
+	assert asked["v"] is False
+
+
+def test_a_silenced_block_says_so_from_across_the_room (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A silent block that looks identical to a live one is a block you will
+	spend a minute staring at."""
+
+	_settled(panel)
+
+	fake_app.confirm("grid/enabled", False, by="panel")
+	panel.wait_for_selector(".part.silent", timeout=5_000)
+
+	dimmed = float(panel.eval_on_selector(
+		'.part[data-part="grid"] .part-body', "one => getComputedStyle(one).opacity"))
+	lit = float(panel.eval_on_selector(
+		'.part[data-part="second"] .part-body', "one => getComputedStyle(one).opacity"))
+
+	assert dimmed < lit, f"a silenced block is drawn like a live one: {dimmed} against {lit}"
+	assert panel.locator('.part[data-part="grid"] .part-foot .switch').inner_text().strip() == "off"
+
+
+def test_silencing_a_block_does_not_empty_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A mute rather than a delete, which is what makes it reversible without
+	loss: the notes stay where they are and stop being heard."""
+
+	_settled(panel)
+
+	before = panel.locator('.part[data-part="grid"] .cell.on').count()
+
+	assert before > 0, "the fixture's grid has no notes to keep"
+
+	fake_app.confirm("grid/enabled", False, by="panel")
+	panel.wait_for_selector(".part.silent", timeout=5_000)
+
+	assert panel.locator('.part[data-part="grid"] .cell.on').count() == before

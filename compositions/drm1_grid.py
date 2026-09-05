@@ -326,7 +326,8 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="grid", name="grid", title="DRM1 — pattern 1",
-			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
+			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
+			pattern="drums"),
 		# A grid with no instrument behind it: no channel, no note map, no
 		# pattern function of its own. It makes no sound until something routes
 		# it, and then it makes that thing's sound (#2108).
@@ -337,6 +338,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
+			pattern="bass",
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 			visible_rows=12),
