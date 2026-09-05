@@ -112,26 +112,21 @@ const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
 const LANE_CELLS = 3;
 const PARAM_CELLS = 6;
-const TOUCH = 44;
-/* The smallest a control may be drawn and still be worked with one finger. */
-
-/* A control's row, in whole lattice cells.
+/* A control's row is one cell. The same cell as everything else.
  *
- * Two decisions used to disagree here, and this is what settles it. A block
- * must measure a whole number of cells or the lattice means nothing (#2078);
- * a control must stay pressable however small the grids beside it are set
- * (#2055). Pinning a control at 44px did the second and broke the first — the
- * grid shrank, the settings did not, and a slider styled like a grid button
- * stopped lining up with one.
+ * This had a 44px floor under it, on the grounds that a control must stay
+ * pressable however small the grid beside it is set (#2055). The floor is
+ * gone, and the argument that removed it is that a *step cell* is the most
+ * tapped thing on this whole surface and shrinks to 22px without complaint.
+ * Protecting a switch from a size a person is happily playing at was not a
+ * trade-off, it was an inconsistency — and it was visible: at the compact size
+ * the pattern shrank and the settings beside it stayed put.
  *
- * So a control takes as many whole cells as it needs to clear the touch
- * target: two at the compact size, one from 44px up. It shrinks in steps
- * rather than smoothly, which is the price, and it never leaves the lattice,
- * which is what was wanted. */
+ * The size is the person's choice (#2055) and it now governs everything they
+ * chose it for. If 22px turns out to be too small to work with, that is an
+ * argument against 22px rather than for a control that ignores it. */
 function controlRow (cell) {
-	const pitch = cell + GAP;
-
-	return Math.ceil(TOUCH / pitch) * pitch - GAP;
+	return cell;
 }
 
 const DRAWN = ["step_grid", "note_grid", "params", "recipe"];
@@ -1282,11 +1277,9 @@ function blockSize (block, cell, chrome) {
 	const width = LABEL_CELLS * cell + (LABEL_CELLS - 1) * GAP
 		+ GAP + block.steps * cell + (block.steps - 1) * GAP + chrome.x;
 
-	/* A grid's row is one cell; a control's is however many whole cells it
-	   takes to stay pressable. The fit has to agree with the stylesheet about
-	   which, or a block is measured shorter than it draws and its contents
-	   overlap. Both read it from the same function. */
-	const row = block.controls ? controlRow(cell) : cell;
+	/* Every row is one cell, a control's included. The fit and the stylesheet
+	   read it from the same function so they cannot come to disagree. */
+	const row = controlRow(cell);
 
 	const height = Math.max(TITLE_FLOOR, cell)
 		+ block.rows * row + (block.rows - 1) * GAP + chrome.y;
@@ -1813,7 +1806,7 @@ function Panel () {
 		if (kindOf(name) === "params") {
 			return {
 				name, rows: (controls[name].fields || []).length,
-				steps: PARAM_CELLS, controls: true };
+				steps: PARAM_CELLS };
 		}
 
 		/* A stack is as tall as what is in it: a heading for each layer, a row
@@ -1830,7 +1823,7 @@ function Panel () {
 				return total + 1 + (generator ? generator.parameters.length : 1);
 			}, 1);
 
-			return { name, rows: Math.max(rows, 2), steps: PARAM_CELLS, controls: true };
+			return { name, rows: Math.max(rows, 2), steps: PARAM_CELLS };
 		}
 
 		return {

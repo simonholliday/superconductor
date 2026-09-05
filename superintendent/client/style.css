@@ -263,7 +263,11 @@ html, body {
 	   cells it names, so the eye travels the shortest way from the name to the
 	   thing named — and one rule for every kind is worth more than a rule for
 	   each, until something needs the exception. */
-	justify-content: flex-end;
+	/* flex-start, and it means the right-hand edge: the direction is reversed
+	   below so an over-long name is trimmed at its front, and reversing the
+	   direction reverses what "start" means. Right-aligned is the rule (#2073);
+	   this is what keeps it while the trimming works. */
+	justify-content: flex-start;
 	padding-right: 0.6rem;
 
 	/* Held against the left edge while the grid scrolls under it. A grid wider
@@ -279,6 +283,14 @@ html, body {
 	font-size: var(--type-body);
 	white-space: nowrap;
 	overflow: hidden;
+
+	/* Trimmed at the front, not the back. A label is right-aligned (#2073), so
+	   an overflowing one runs off its *left* edge — and an ellipsis renders at
+	   the end of a line, which is the end that fits. At the compact size
+	   "hihat_1_closed" was simply losing its h, silently, with the rest intact
+	   and nothing to say a letter had gone. Reversing the direction puts the
+	   mark where the loss is. */
+	direction: rtl;
 	text-overflow: ellipsis;
 
 	/* The rail. Every label carries the same mark at its left edge, so stacked
@@ -797,7 +809,11 @@ html, body {
 	   block is 230px wide. The gaps are the only slack there is. */
 	gap: 0.3rem;
 	min-height: var(--row);
-	border-top: 1px solid var(--edge);
+
+	/* Drawn rather than laid out. A 1px border here took a pixel of height,
+	   which put the header a pixel off the lattice and accumulated down a
+	   stack of layers — the exact drift the row rule exists to prevent. */
+	box-shadow: inset 0 1px 0 var(--edge);
 }
 
 /* Everything but the name keeps its size; the name gives way.
@@ -824,13 +840,19 @@ html, body {
 
 /* Narrower here than in a settings block: this one shares its row with four
    other controls rather than having the width to itself. */
-.grid.params .layer .switch { min-width: 3.5rem; }
+/* Wide enough for its own word, which is the one thing here that is not
+   square: "off" has to be readable or the state is not. */
+.grid.params .layer .switch { min-width: max(var(--row), 2.6rem); }
 
 .grid.params .layer .spacer { flex: 1; }
 
+/* Square, and the square is the person's cell. These carried a 44px width
+   floor from when a control had a height floor: at the compact size that left
+   132px of buttons on a 230px header and the generator's name was cut to one
+   letter. */
 .grid.params .layer .move,
 .grid.params .layer .drop {
-	min-width: 44px;
+	min-width: var(--row);
 	min-height: var(--row);
 	border-radius: 8px;
 	border: 1px solid var(--edge);

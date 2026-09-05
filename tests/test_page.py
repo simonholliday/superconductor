@@ -632,8 +632,18 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 			f'.part[data-part="{part}"] .row-label',
 			"""el => {
 				const seen = getComputedStyle(el);
+				const box = el.getBoundingClientRect();
+				const range = document.createRange();
+
+				range.selectNodeContents(el);
+
 				return {
-					justify: seen.justifyContent,
+					/* Where the words actually end, not which keyword put them
+					   there: the direction is reversed so an over-long name is
+					   trimmed at its front, and that reverses what "flex-end"
+					   means. The rule is right-aligned (#2073); this measures
+					   whether they are, rather than how. */
+					fromRight: Math.round(box.right - range.getBoundingClientRect().right),
 					size: seen.fontSize,
 					colour: seen.color,
 					rail: seen.backgroundImage !== "none",
@@ -648,7 +658,8 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	panel.wait_for_selector(".grid .cell", timeout=5_000)
 	drums = label("grid")
 
-	assert drums["justify"] == pitched["justify"] == "flex-end"
+	assert drums["fromRight"] == pitched["fromRight"], "the two kinds align differently"
+	assert drums["fromRight"] >= 0, "a label reaches past its own right edge"
 	assert drums["size"] == pitched["size"]
 	assert drums["colour"] == pitched["colour"]
 	# A block with a window carries the strip instead, which is the same idea
@@ -1180,34 +1191,31 @@ def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> N
 			"an option is drawn but cannot be reached"
 
 
-def test_a_control_is_a_whole_number_of_cells_at_every_size (panel: typing.Any) -> None:
-	"""Two decisions used to disagree: a block measures whole cells (#2078), and
-	a control stays pressable however small the grid is set (#2055).
+def test_a_control_is_the_size_the_person_chose (panel: typing.Any) -> None:
+	"""One cell, the same cell as everything else.
 
-	Pinning a control at 44px honoured the second and broke the first — the
-	pattern shrank when the grid was resized and the settings beside it did not,
-	so a slider styled like a grid button stopped lining up with one.
+	There was a 44px floor under this, on the grounds that a control must stay
+	pressable however small the grid is set. It came out because a *step cell*
+	is the most tapped thing on the surface and shrinks to 22px without
+	complaint — so the floor was protecting a switch from a size a person is
+	happily playing at, and it showed: the pattern shrank and the settings
+	beside it stayed put.
 	"""
 
 	_open_the_stack(panel)
 
-	for size in ("Compact", "Snug", "Tested", "Large"):
+	for size, cell in (("Compact", "22px"), ("Snug", "32px"),
+	                   ("Tested", "44px"), ("Large", "60px")):
 		panel.locator(".sizes > button").click()
 		panel.locator(".sizes .choices button", has_text=size).click()
-		_settled(panel)
+		panel.wait_for_function(
+			"() => getComputedStyle(document.documentElement)"
+			f".getPropertyValue('--cell') === '{cell}'", timeout=5_000)
 
-		seen = panel.evaluate("""() => {
-			const root = getComputedStyle(document.documentElement);
-			const px = (name) => parseFloat(root.getPropertyValue(name));
+		row = panel.evaluate(
+			"() => getComputedStyle(document.documentElement).getPropertyValue('--row')")
 
-			return { cell: px('--cell'), gap: px('--gap'), row: px('--row') };
-		}""")
-
-		pitch = seen["cell"] + seen["gap"]
-
-		assert seen["row"] >= 44, f"at {size} a control is only {seen['row']}px"
-		assert (seen["row"] + seen["gap"]) % pitch == 0, \
-			f"at {size} a control is {seen['row']}px, which is not whole cells of {pitch}px"
+		assert row.strip() == cell, f"at {size} a control's row is {row}, not {cell}"
 
 
 def test_every_control_on_the_lattice_is_a_row_tall (panel: typing.Any) -> None:
@@ -1335,3 +1343,38 @@ def test_a_drag_that_moves_nothing_writes_nothing (
 	time.sleep(0.5)
 
 	assert "all" not in fake_app.arrangements
+
+
+def test_every_row_label_is_right_aligned_at_the_same_offset (panel: typing.Any) -> None:
+	"""#2073 settled one rule for every kind: labels are right-aligned.
+
+	Worth asserting rather than trusting, because the fix for a *different*
+	problem broke it. An over-long name is trimmed at its front now — an
+	ellipsis renders at the end of a line, which for right-aligned text is the
+	end that fits, so "hihat_1_closed" was quietly losing its h. Reversing the
+	direction puts the mark where the loss is, and reversing the direction also
+	reverses what "start" means to the layout, which left every label hard
+	against the wrong edge.
+	"""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
+	_settled(panel)
+
+	offsets = panel.evaluate("""() => {
+		return [...document.querySelectorAll('.part .row-label')].map((el) => {
+			const box = el.getBoundingClientRect();
+			const range = document.createRange();
+
+			range.selectNodeContents(el);
+
+			return Math.round(box.right - range.getBoundingClientRect().right);
+		});
+	}""")
+
+	assert offsets, "no labels were drawn"
+	assert len(set(offsets)) == 1, f"labels sit at different offsets: {sorted(set(offsets))}"
+	assert offsets[0] >= 0, "a label reaches past its own right edge"
