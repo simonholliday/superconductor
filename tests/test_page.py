@@ -2394,3 +2394,82 @@ def test_a_generator_that_names_no_row_points_at_the_pattern_itself (
 	assert any(abs(line["b"]["x"] - one["x"]) < 1.5 and abs(line["b"]["y"] - one["y"]) < 1.5
 	           for one in sides), (
 		f"a generator naming no row did not arrive at a side's middle: {line}")
+
+
+def test_words_can_be_copied_where_there_is_a_mouse (panel: typing.Any) -> None:
+	"""Simon went to paste what the panel was showing, so that we could compare
+	it against what I thought it was showing, and could not.
+
+	Selection is off everywhere by default and that is right for glass: a long
+	press on a pattern must not raise a selection callout over the music.  It is
+	wrong for a desk, and the two had never been separated.
+	"""
+
+	_settled(panel)
+
+	# Dragged across with the mouse, rather than read off a computed value: an
+	# element that only inherits the page default reports `auto` either way, so
+	# the property says less than the gesture does.
+	label = panel.locator('.part[data-part="grid"] .row-label').first.bounding_box()
+
+	panel.mouse.move(label["x"] + 2, label["y"] + label["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(label["x"] + label["width"] - 2, label["y"] + label["height"] / 2, steps=6)
+	panel.mouse.up()
+
+	assert "kick" in panel.evaluate("() => window.getSelection().toString()"), \
+		"a row label could not be selected with a mouse"
+
+	# And a right-click offers the menu that copies it.
+	assert not panel.evaluate("""() => {
+		const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+
+		document.querySelector(".row-label").dispatchEvent(menu);
+
+		return menu.defaultPrevented;
+	}"""), "a right-click was refused its menu"
+
+	# A cell is not text, and selecting one would mean nothing, so it does not
+	# opt back in and the page default stands.
+	assert panel.eval_on_selector(
+		conftest.cell("grid/kick/0"), "one => getComputedStyle(one).userSelect") != "text"
+	assert panel.eval_on_selector(
+		"body", "one => getComputedStyle(one).userSelect") == "none"
+
+
+def test_a_finger_still_selects_nothing_and_gets_no_menu (
+	browser: typing.Any, service_url: str, fake_app: typing.Any) -> None:
+	"""The other half of the same division, and the reason the default exists.
+
+	A long press must not raise a selection callout or a context menu over the
+	music.  Nothing about that changed; it just has nothing to do with a mouse.
+	"""
+
+	context = browser.new_context(has_touch=True, viewport={"width": 1280, "height": 720})
+	page = context.new_page()
+
+	try:
+		page.goto(service_url)
+		page.wait_for_selector(".cell", timeout=10_000)
+
+		assert page.evaluate("() => matchMedia('(pointer: coarse)').matches"), \
+			"this context is not standing in for a touch panel"
+
+		# Nothing opts back in, so the page default of `none` stands over all of
+		# it. A computed `auto` is what an element that only inherits reports.
+		assert page.eval_on_selector(
+			'.part[data-part="grid"] .part-title',
+			"one => getComputedStyle(one).userSelect") != "text"
+		assert page.eval_on_selector(
+			"body", "one => getComputedStyle(one).userSelect") == "none"
+
+		assert page.evaluate("""() => {
+			const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+
+			document.querySelector(".part-title").dispatchEvent(menu);
+
+			return menu.defaultPrevented;
+		}"""), "a long press was offered a context menu"
+
+	finally:
+		context.close()

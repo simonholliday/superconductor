@@ -211,6 +211,34 @@ html, body {
 	-webkit-tap-highlight-color: transparent;
 }
 
+/* Words can be copied where there is a mouse to copy them with.
+ *
+ * Selection is off everywhere by default and that is right for glass: a long
+ * press on a pattern must not raise a selection callout over the music. It is
+ * wrong for a desk, and Simon found the cost of not separating the two — he
+ * went to paste what the panel was showing so that we could compare it against
+ * what I thought it was showing, and could not.
+ *
+ * The same division the rest of this file already makes for `touch-action`: a
+ * surface that is not a control behaves like an ordinary page. Here it is
+ * narrowed further to a pointer that is not a finger, because the reason the
+ * default exists has not gone away — it just has nothing to do with a mouse.
+ *
+ * Only the words. A cell is not text and selecting one would mean nothing. */
+@media (hover: hover) and (pointer: fine) {
+	.part-title,
+	.row-label,
+	.about,
+	.unsupported,
+	.notice,
+	.sheet .ask,
+	.bar .build,
+	.grid.params .dial span {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+}
+
 #panel { height: 100%; display: flex; flex-direction: column; }
 
 .bar {

@@ -2793,6 +2793,16 @@ function countOf (grid) {
 render(html`<${Panel} />`, document.getElementById("panel"));
 
 /* A long press must not offer a context menu, and a double tap must not zoom:
- * both are the browser deciding a musician's gesture means something else. */
-document.addEventListener("contextmenu", (event) => event.preventDefault());
+ * both are the browser deciding a musician's gesture means something else.
+ *
+ * A right-click is neither. It is a deliberate act by somebody with a mouse, and
+ * on a desk it is how a person copies what the panel is showing — which was not
+ * possible at all until Simon went looking for it. So the suppression is for the
+ * pointer it was written for, and the stylesheet makes the same division for
+ * selection a few lines further on. */
+const byFinger = !window.matchMedia("(pointer: fine)").matches;
+
+document.addEventListener("contextmenu", (event) => {
+	if (byFinger) event.preventDefault();
+});
 document.addEventListener("gesturestart", (event) => event.preventDefault());

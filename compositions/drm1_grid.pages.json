@@ -37,14 +37,19 @@
 	],
 	"generators": [
 		{
+			"name": "grid",
+			"x": 21,
+			"y": 6
+		},
+		{
 			"name": "drum_recipe/probe",
 			"x": 52,
 			"y": 3
 		},
 		{
-			"name": "drum_recipe/lmto9a02ipm2",
-			"x": 3,
-			"y": 5
+			"name": "drum_recipe/lmto9msrruk1",
+			"x": 49,
+			"y": 15
 		},
 		{
 			"name": "drum_recipe/lmtoemgmm2oj",
@@ -52,14 +57,9 @@
 			"y": 18
 		},
 		{
-			"name": "grid",
-			"x": 21,
-			"y": 6
-		},
-		{
-			"name": "drum_recipe/lmto9msrruk1",
-			"x": 49,
-			"y": 15
+			"name": "drum_recipe/lmto9a02ipm2",
+			"x": 5,
+			"y": 3
 		}
 	]
 }
