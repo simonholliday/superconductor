@@ -36,7 +36,7 @@ CONTROLS: dict[str, typing.Any] = {
 	              "options": [{"value": "lcr", "label": "LCR"},
 	                          {"value": "exp", "label": "EXP"}]},
 	         ]},
-	"stack": {"type": "recipe", "title": "Generators", "generators": [
+	"stack": {"type": "recipe", "title": "Generators", "builds": "grid", "generators": [
 		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
 		 "parameters": [
 		     {"name": "pitch", "label": "pitch", "kind": "choice",
@@ -67,7 +67,8 @@ PAGES: list[dict[str, typing.Any]] = [
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
 	{"id": "bass", "title": "Bass", "parts": ["bass"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
-	{"id": "stack", "title": "Generators", "parts": ["stack"]},
+	{"id": "stack", "title": "Generators", "parts": ["grid", "stack"]},
+	{"id": "alone", "title": "Stack alone", "parts": ["stack"]},
 ]
 """Two views over the same two grids, one of which carries both.
 

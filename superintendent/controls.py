@@ -67,6 +67,20 @@ is the same rule that keeps drum voices and control-change numbers out of it.
 """
 
 
+GENERATOR = "generator"
+"""A contribution that makes its notes from parameters."""
+
+CONTRIBUTIONS = (GENERATOR,)
+"""What a layer of a stack may be.
+
+One so far.  A pattern is the other — a grid belonging to no instrument, routed
+into several, so that two synths can share a bassline and each add notes of its
+own.  Simon settled that this is the same mechanism rather than a second one,
+and the name here is what keeps the door open: a layer says what kind of thing
+it is from the start, so the second kind is an addition rather than a rewrite.
+"""
+
+
 KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT)
 """Every kind of control this version of the service understands.
 
@@ -140,7 +154,23 @@ def _apply_cell (
 	value: typing.Any,
 	path: str,
 ) -> None:
-	"""Switch one cell of a step grid on or off."""
+	"""Switch one cell of a step grid on or off, or replace the whole grid.
+
+	``control/rows`` carries the grid entire, which is how it is cleared and how
+	one could later be pasted in.  A cell at a time would mean a hundred and
+	sixty frames to empty a drum pattern, and a clear that is half-applied when
+	something goes wrong is worse than one that is not applied at all.
+	"""
+
+	if rest == ["rows"]:
+		# Checked entire before a single row is touched. Clearing first and
+		# validating afterwards left the grid empty when the new one was
+		# refused, which is the half-applied state this shape exists to avoid.
+		kept = _readable_rows(declaration, value, path)
+
+		grid.clear()
+		grid.update(kept)
+		return
 
 	if len(rest) != 2 or not rest[1].isdigit():
 		raise ControlError(f"{path!r} does not name a cell as control/row/step")
@@ -156,6 +186,40 @@ def _apply_cell (
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
 	_set_cell(grid, row, step, bool(value))
+
+
+def _readable_rows (
+	declaration: dict[str, typing.Any],
+	value: typing.Any,
+	path: str,
+) -> dict[str, list[int]]:
+	"""A whole step grid, checked before any of it replaces what is there."""
+
+	if not isinstance(value, dict):
+		raise ControlError(f"{path!r} takes a grid of rows, and {value!r} is not one")
+
+	rows = declaration.get("rows", [])
+	steps = declaration.get("steps", 0)
+	kept: dict[str, list[int]] = {}
+
+	for row, held in value.items():
+		if row not in rows:
+			raise ControlError(f"this grid has no row named {row!r}")
+
+		if not isinstance(held, list):
+			raise ControlError(f"row {row!r} takes a list of steps, and {held!r} is not one")
+
+		for step in held:
+			if isinstance(step, bool) or not isinstance(step, int):
+				raise ControlError(f"a step is a whole number, and {step!r} is not one")
+
+			if not 0 <= step < steps:
+				raise ControlError(f"step {step} is outside a grid {steps} steps wide")
+
+		if held:
+			kept[row] = sorted(set(held))
+
+	return kept
 
 
 def _within (field: dict[str, typing.Any], value: float, name: str) -> None:
@@ -335,6 +399,11 @@ def _readable_layers (
 
 		seen.add(name)
 
+		kind = entry.get("kind", GENERATOR)
+
+		if kind not in CONTRIBUTIONS:
+			raise ControlError(f"a layer is a {kind!r}, which this version does not know")
+
 		generator = entry.get("generator")
 		offered = _offered(declaration, generator)
 		held = entry.get("params")
@@ -345,6 +414,7 @@ def _readable_layers (
 
 		layers.append({
 			"id": name,
+			"kind": kind,
 			"generator": generator,
 			"bypassed": bool(entry.get("bypassed", False)),
 			"params": kept,
@@ -372,6 +442,13 @@ def _apply_note (
 	rather than quietly creating one, because a length without a note is not a
 	state the app could have reported.
 	"""
+
+	if rest == ["rows"]:
+		kept = _readable_notes(declaration, value, path)
+
+		grid.clear()
+		grid.update(kept)
+		return
 
 	if len(rest) not in (2, 3) or not rest[1].isdigit():
 		raise ControlError(f"{path!r} does not name a note as control/row/step or control/row/step/field")
@@ -411,6 +488,45 @@ def _apply_note (
 		raise ControlError(f"{path!r} shapes a note that is not there")
 
 	notes[step][field] = value
+
+
+def _readable_notes (
+	declaration: dict[str, typing.Any],
+	value: typing.Any,
+	path: str,
+) -> dict[str, dict[str, typing.Any]]:
+	"""A whole pitched grid, checked before any of it replaces what is there."""
+
+	if not isinstance(value, dict):
+		raise ControlError(f"{path!r} takes a grid of rows, and {value!r} is not one")
+
+	rows = declaration.get("rows", [])
+	steps = declaration.get("steps", 0)
+	kept: dict[str, dict[str, typing.Any]] = {}
+
+	for row, held in value.items():
+		if row not in rows:
+			raise ControlError(f"this grid has no row named {row!r}")
+
+		if not isinstance(held, dict):
+			raise ControlError(f"row {row!r} takes notes by step, and {held!r} does not")
+
+		placed: dict[str, typing.Any] = {}
+
+		for step, note in held.items():
+			if not str(step).isdigit() or not 0 <= int(step) < steps:
+				raise ControlError(f"step {step!r} is outside a grid {steps} steps wide")
+
+			if not isinstance(note, dict):
+				raise ControlError(f"a note is an object, and {note!r} is not one")
+
+			placed[str(step)] = {
+				field: note[field] for field in NOTE_FIELDS if field in note}
+
+		if placed:
+			kept[row] = placed
+
+	return kept
 
 
 def _apply_field (

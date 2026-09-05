@@ -185,7 +185,8 @@ def test_a_stack_is_set_whole_because_its_order_is_part_of_its_value () -> None:
 	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
 
 	assert state["recipe"]["layers"] == [
-		{"id": "a", "generator": "euclidean", "bypassed": False, "params": {"pulses": 7}}]
+		{"id": "a", "kind": "generator", "generator": "euclidean",
+		 "bypassed": False, "params": {"pulses": 7}}]
 
 
 def test_the_order_a_stack_is_given_in_is_the_order_it_is_kept_in () -> None:
@@ -277,3 +278,30 @@ def test_a_parameter_of_a_layer_that_is_not_there_is_refused () -> None:
 
 	with pytest.raises(superintendent.controls.ControlError):
 		superintendent.controls.apply_change(state, STACK, "recipe/gone/pulses", 3)
+
+
+def test_a_layer_says_what_kind_of_contribution_it_is () -> None:
+	"""One kind so far. A pattern is the other — a grid belonging to no
+	instrument, routed into several so two synths can share a bassline and each
+	add notes of its own — and Simon settled that it is the same mechanism
+	rather than a second one.
+
+	The field is here now so that the second kind is an addition rather than a
+	rewrite, and it defaults, so a stack written before it existed still reads.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(
+		state, STACK, "recipe/layers", [{"id": "a", "generator": "euclidean"}])
+
+	assert state["recipe"]["layers"][0]["kind"] == "generator"
+
+
+def test_a_kind_of_contribution_this_version_does_not_know_is_refused () -> None:
+	"""Rather than kept as a layer nothing will ever play."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{}, STACK, "recipe/layers",
+			[{"id": "a", "kind": "invented", "generator": "euclidean"}])

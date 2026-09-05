@@ -292,6 +292,7 @@ drum_recipe = superintendent.subsequence_adapter.Recipe(
 		"subdivisions": (1, 8),
 		"duration": (0.05, float(BEATS)),
 	},
+	builds="grid",
 	data_key="drum_recipe",
 	name="drum_recipe",
 	title="DRM1 — generators")
@@ -301,6 +302,10 @@ The catalogue is Subsequence's own description of itself, and the ten voices
 are this rig's — which is the whole division: the app knows a parameter is a
 pitch and cannot know which pitches exist, and only this file knows they are a
 DRM1's (#1465, #2085).  Superintendent is handed both and names neither.
+
+``builds`` names the pattern this stack contributes to.  The panel draws the
+two joined and puts the stack's own "add a generator" on the grid it feeds,
+because that is where a person is looking when they want another one.
 
 Built *after* the hand grid in the pattern function, deliberately.  A generator
 told to skip a step that already sounds has to see the taps before it runs, and

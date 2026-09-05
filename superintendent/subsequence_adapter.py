@@ -175,6 +175,56 @@ class StepGrid (Control):
 
 		return declared
 
+	def _keep_rows (self, value: typing.Any) -> bool:
+		"""Replace the whole grid, which is how it is cleared.
+
+		A cell at a time would be a hundred and sixty requests to empty a drum
+		pattern, and a clear that stops half way through is worse than one that
+		never started.  Checked entire before a single row is touched.
+		"""
+
+		if not isinstance(value, dict):
+			raise Refused("a grid is a set of rows")
+
+		wanted: dict[str, list[int]] = {}
+
+		for row, held in value.items():
+			if row not in self.rows:
+				raise Refused(f"this grid has no {row!r} row")
+
+			if not isinstance(held, list):
+				raise Refused(f"the {row!r} row takes a list of steps")
+
+			for step in held:
+				if isinstance(step, bool) or not isinstance(step, int):
+					raise Refused("a step is a whole number")
+
+				if not 0 <= step < self.steps:
+					raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+
+			if held:
+				wanted[row] = sorted(set(held))
+
+		grid = self.composition.data.setdefault(self.data_key, {})
+
+		if {row: steps for row, steps in grid.items() if steps} == wanted:
+			return False
+
+		grid.clear()
+		grid.update(wanted)
+
+		return True
+
+	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
+		"""What the grid now holds, which for a whole-grid write is not the ask.
+
+		A row given the same step twice, or out of order, is kept once and in
+		order — so the request and the result differ, and the panel has to be
+		told the second.
+		"""
+
+		return self.snapshot() if rest == ["rows"] else value
+
 	def snapshot (self) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.
 
@@ -194,6 +244,9 @@ class StepGrid (Control):
 		Absolute is what makes a re-send after a reconnect safe: applying it
 		twice reaches the same grid as applying it once.
 		"""
+
+		if rest == ["rows"]:
+			return self._keep_rows(value)
 
 		if len(rest) != 2 or not rest[1].isdigit():
 			raise Refused(f"{'/'.join(rest)!r} does not name a cell of this grid")
@@ -306,6 +359,9 @@ class NoteGrid (Control):
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one note, absolutely rather than by toggling."""
 
+		if rest == ["rows"]:
+			return self._keep_rows(value)
+
 		if len(rest) not in (2, 3) or not rest[1].isdigit():
 			raise Refused("that does not name a note")
 
@@ -354,6 +410,22 @@ class NoteGrid (Control):
 		if step not in notes:
 			raise Refused("there is no note there to shape")
 
+		wanted = self._checked_field(field, value)
+
+		if notes[step][field] == wanted:
+			return False
+
+		notes[step][field] = wanted
+
+		return True
+
+	def _checked_field (self, field: str, value: typing.Any) -> int:
+		"""One of a note's two numbers, refused if it would not sound.
+
+		Shared between shaping a note and writing a whole grid, so a length that
+		is legal one way cannot be illegal the other.
+		"""
+
 		wanted = int(value)
 
 		if field == "length":
@@ -367,12 +439,57 @@ class NoteGrid (Control):
 		else:
 			raise Refused(f"a note has no {field}")
 
-		if notes[step][field] == wanted:
+		return wanted
+
+	def _keep_rows (self, value: typing.Any) -> bool:
+		"""Replace the whole grid, which is how it is cleared."""
+
+		if not isinstance(value, dict):
+			raise Refused("a grid is a set of rows")
+
+		wanted: dict[str, dict[str, typing.Any]] = {}
+
+		for row, held in value.items():
+			if row not in self.rows:
+				raise Refused(f"this grid has no {row!r} row")
+
+			if not isinstance(held, dict):
+				raise Refused(f"the {row!r} row takes notes by step")
+
+			placed: dict[str, typing.Any] = {}
+
+			for step, note in held.items():
+				if not str(step).isdigit() or not 0 <= int(step) < self.steps:
+					raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+
+				if not isinstance(note, dict):
+					raise Refused("a note is an object")
+
+				placed[str(step)] = {
+					"length": self._checked_field(
+						"length", note.get("length", self.default_length)),
+					"velocity": self._checked_field(
+						"velocity", note.get("velocity", self.default_velocity)),
+				}
+
+			if placed:
+				wanted[row] = placed
+
+		grid = self.composition.data.setdefault(self.data_key, {})
+
+		if {row: notes for row, notes in grid.items() if notes} == wanted:
 			return False
 
-		notes[step][field] = wanted
+		grid.clear()
+		grid.update(wanted)
 
 		return True
+
+	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
+		"""What the grid now holds, which for a whole-grid write is not the ask:
+		a note arrives without its shape and is kept with one."""
+
+		return self.snapshot() if rest == ["rows"] else value
 
 	def _clear_others (self, grid: dict[str, typing.Any], keep: str, step: str) -> None:
 		"""Take away any other note in this step, and say so.
@@ -798,11 +915,21 @@ class Recipe (Control):
 		catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 		pitches: collections.abc.Sequence[str] = (),
 		bounds: dict[str, tuple[float, float]] | None = None,
+		builds: str | None = None,
 		data_key: str = "recipe",
 		name: str = "recipe",
 		title: str | None = None,
 	) -> None:
 		"""Offer a stack over a list the composition keeps."""
+
+		self.builds = builds
+		"""Which control this stack contributes to, by name.
+
+		The panel draws the two joined by a line and puts this stack's own
+		buttons on the pattern it feeds, so a person can see what makes what.
+		Nothing here reads it; it is a fact about the composition that the
+		composition states, like the rows of a grid.
+		"""
 
 		self.composition = composition
 		self.pitches = list(pitches)
@@ -837,6 +964,9 @@ class Recipe (Control):
 
 		declared: dict[str, typing.Any] = {"type": "recipe", "generators": self.catalogue}
 
+		if self.builds is not None:
+			declared["builds"] = self.builds
+
 		if self.title is not None:
 			declared["title"] = self.title
 
@@ -855,6 +985,7 @@ class Recipe (Control):
 		return [
 			{
 				"id": str(layer.get("id", "")),
+				"kind": str(layer.get("kind", "generator")),
 				"generator": layer.get("generator"),
 				"bypassed": bool(layer.get("bypassed", False)),
 				"params": dict(layer.get("params") or {}),
@@ -911,6 +1042,11 @@ class Recipe (Control):
 
 			seen.add(name)
 
+			kind = str(entry.get("kind", "generator"))
+
+			if kind != "generator":
+				raise Refused(f"a layer cannot yet be a {kind}")
+
 			generator = entry.get("generator")
 			offered = self._offered.get(generator)
 
@@ -928,6 +1064,7 @@ class Recipe (Control):
 
 			wanted.append({
 				"id": name,
+				"kind": kind,
 				"generator": generator,
 				"bypassed": bool(entry.get("bypassed", False)),
 				"params": {**self._opening(str(generator)), **kept},

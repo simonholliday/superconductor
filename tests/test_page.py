@@ -893,11 +893,9 @@ def test_a_generator_is_added_from_the_glass (panel: typing.Any, fake_app: typin
 
 	_open_the_stack(panel)
 
-	panel.locator(".offer.add").click()
-	panel.locator(".catalogue .offer", has_text="euclidean").click()
-
-	panel.wait_for_function(
-		"() => window.__sets === undefined || true", timeout=1_000)
+	panel.locator(".part-foot .offer.add").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+	panel.locator(".sheet .offer", has_text="euclidean").click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -911,9 +909,10 @@ def test_a_generator_this_panel_cannot_fully_draw_is_shown_but_not_offered (
 	worth more than a shorter list, and it is what the app itself says."""
 
 	_open_the_stack(panel)
-	panel.locator(".offer.add").click()
+	panel.locator(".part-foot .offer.add").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
 
-	partial = panel.locator(".catalogue .offer", has_text="evolve")
+	partial = panel.locator(".sheet .offer", has_text="evolve")
 
 	assert partial.count() == 1
 	assert partial.is_disabled()
@@ -1000,8 +999,9 @@ def test_a_layer_is_moved_up_and_down_the_stack (
 
 	_open_the_stack(panel)
 
-	panel.locator(".offer.add").click()
-	panel.locator(".catalogue .offer", has_text="euclidean").click()
+	panel.locator(".part-foot .offer.add").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+	panel.locator(".sheet .offer", has_text="euclidean").click()
 
 	fake_app.confirm("stack/layers", [
 		{"id": "one", "generator": "euclidean", "bypassed": False, "params": {}},
@@ -1487,3 +1487,189 @@ def test_two_fingers_that_do_not_move_are_still_two_taps (
 		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
 
 	assert after == before, f"two taps resized the page from {before} to {after}"
+
+
+def test_a_range_is_moved_by_its_middle_without_changing_its_width (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A velocity of 30 to 50 is a character. Wanting all of it louder is a
+	different request from wanting it wider, and until now only the second could
+	be asked for — each end moved alone and the span had to be rebuilt by hand.
+	"""
+
+	_open_the_stack(panel)
+
+	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	box = ranged.bounding_box()
+
+	# Held is 40–80 of 1–127, so the middle of the span is around a third across.
+	middle = (40 + 80) / 2
+	across = (middle - 1) / (127 - 1)
+
+	panel.mouse.move(box["x"] + box["width"] * across, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(box["x"] + box["width"] * (across + 0.15),
+	                 box["y"] + box["height"] / 2, steps=6)
+	panel.mouse.up()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+
+	assert asked, "the range asked for nothing"
+
+	low, high = asked[-1]["v"]
+
+	assert high - low == 40, f"the span changed width: {low}–{high}"
+	assert low > 40, f"the span did not move: {low}–{high}"
+
+
+def test_a_range_moved_to_the_end_stops_rather_than_squashing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Dragging a span into the ceiling should stop it, not compress it — a
+	character does not narrow because it got loud."""
+
+	_open_the_stack(panel)
+
+	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	box = ranged.bounding_box()
+
+	across = ((40 + 80) / 2 - 1) / (127 - 1)
+
+	panel.mouse.move(box["x"] + box["width"] * across, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(box["x"] + box["width"] - 2, box["y"] + box["height"] / 2, steps=8)
+	panel.mouse.up()
+
+	low, high = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"][-1]["v"]
+
+	assert high == 127, f"the span did not reach the ceiling: {low}–{high}"
+	assert high - low == 40, f"the span was squashed: {low}–{high}"
+
+
+def test_blocks_nobody_placed_are_not_touching (panel: typing.Any) -> None:
+	"""Packed edge to edge they read as one surface with lines drawn on it. A
+	lane between them says they are separate things, which they are."""
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector(".grid .cell", timeout=5_000)
+	_settled(panel)
+
+	seen = panel.evaluate("""() => {
+		const cell = parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue('--cell'));
+		const parts = [...document.querySelectorAll('.part')].map(
+			(el) => el.getBoundingClientRect());
+
+		const gaps = [];
+
+		for (const one of parts) {
+			for (const two of parts) {
+				if (one === two) continue;
+
+				const apart = Math.max(two.left - one.right, two.top - one.bottom);
+
+				if (apart >= 0) gaps.push(apart);
+			}
+		}
+
+		return { cell, closest: gaps.length ? Math.min(...gaps) : null };
+	}""")
+
+	assert seen["closest"] is not None, "only one block on the page to compare"
+	assert seen["closest"] >= seen["cell"] - 1, \
+		f"blocks sit {seen['closest']}px apart, less than one {seen['cell']}px cell"
+
+
+def test_a_range_dragged_past_the_edge_still_goes_the_way_the_finger_went (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A finger that overshoots the control is ordinary on a touchscreen, and it
+	must not send the span the other way."""
+
+	_open_the_stack(panel)
+
+	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	box = ranged.bounding_box()
+	width = panel.evaluate("() => window.innerWidth")
+
+	beyond = min(box["x"] + box["width"] + 120, width - 4)
+
+	assert beyond > box["x"] + box["width"], "no room to the right to overshoot into"
+
+	across = ((40 + 80) / 2 - 1) / (127 - 1)
+
+	panel.mouse.move(box["x"] + box["width"] * across, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(beyond, box["y"] + box["height"] / 2, steps=8)
+	panel.mouse.up()
+
+	asked = [one["v"] for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+
+	assert asked, "the drag asked for nothing"
+
+	low, high = asked[-1]
+
+	assert high - low == 40, f"the span changed width: {low}-{high} (all: {asked})"
+	assert low > 40, f"overshooting sent the span backwards: {low}-{high} (all: {asked})"
+
+
+def test_a_pattern_carries_the_button_that_adds_to_its_stack (panel: typing.Any) -> None:
+	"""A stack says which pattern it feeds, and that one fact places its
+	buttons: the pattern grows the button, not the stack.
+
+	The title bar is the handle and has to stay one, so the foot of the grid is
+	where a pattern's own actions accrue — and clear is already the second.
+	"""
+
+	_open_the_stack(panel)
+
+	assert panel.locator('.part[data-part="grid"] .part-foot .offer.add').count() == 1
+	assert panel.locator('.part[data-part="stack"] .part-foot .offer.add').count() == 0
+
+
+def test_a_stack_whose_pattern_is_elsewhere_keeps_its_own_button (panel: typing.Any) -> None:
+	"""A page showing the stack alone is an ordinary thing to make, and on one
+	there would otherwise be no way to add a generator at all."""
+
+	panel.locator(".pages button", has_text="Stack alone").click()
+	panel.wait_for_selector(".recipe", timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator('.part[data-part="stack"] .part-foot .offer.add').count() == 1
+
+
+def test_clearing_a_pattern_asks_first_and_says_what_will_go (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The count is the whole argument for a dialog over an armed button: only a
+	dialog can say *what* is about to be lost, and a pattern may be the only
+	copy there is until #2067 is settled."""
+
+	_settled(panel)
+
+	panel.locator('.part[data-part="grid"] .part-foot .clear').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	asking = panel.locator(".sheet .ask").inner_text()
+
+	assert "2 steps" in asking, f"the dialog did not count what would go: {asking!r}"
+	assert "Drums" in asking, f"the dialog did not name the pattern: {asking!r}"
+
+	panel.locator(".sheet .answers button", has_text="keep them").click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	assert not [one for one in fake_app.sets if one["path"] == "grid/rows"]
+
+
+def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A cell at a time would be a hundred and sixty frames to empty a drum
+	pattern, and a clear that stops half way through is worse than one that
+	never started."""
+
+	_settled(panel)
+
+	panel.locator('.part[data-part="grid"] .part-foot .clear').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+	panel.locator(".sheet .answers button.danger").click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "grid/rows"]
+
+	assert len(asked) == 1, f"clearing sent {len(asked)} requests"
+	assert asked[0]["v"] == {}

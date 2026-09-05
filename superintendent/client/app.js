@@ -43,6 +43,9 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
 const PAGE_KEY = "superintendent.page";
 const PAGE_BUTTONS = 6;
 
+const SEPARATION = 1;
+/* Cells of air left between blocks that nobody has placed. */
+
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
  *
@@ -637,13 +640,48 @@ function Setting ({ field, held, onSet }) {
 		if (wanted !== held) onSet(wanted);
 	};
 
-	/* Which end of a range the finger took hold of, decided once on the way
-	   down and then kept: deciding it again on every move would swap ends
-	   under the finger the moment the two crossed. */
-	const slideRange = (event, end) => {
+	/* What the finger took hold of, decided once on the way down and then kept:
+	   deciding it again on every move would swap ends under the finger the
+	   moment the two crossed.
+	
+	   Three things it can be. An end, which moves alone. Or the span between
+	   them, which moves both and keeps its width — a velocity of 30 to 50 is a
+	   *character*, and wanting all of it louder is a different request from
+	   wanting it wider. The span is only there to be taken hold of when the two
+	   ends are actually apart; with both together there is no middle, so the
+	   nearer end answers and the common default behaves as it always did. */
+	const grip = (event) => {
+		const box = event.currentTarget.getBoundingClientRect();
+		const wanted = field.min + at(event, box) * (field.max - field.min);
+		const [low, high] = held || [field.min, field.min];
+
+		return (low < high && wanted > low && wanted < high)
+			? { part: "span", from: wanted - low }
+			: { part: Math.abs(wanted - low) <= Math.abs(wanted - high) ? "low" : "high" };
+	};
+
+	const slideRange = (event) => {
+		const taken = sliding.current;
+
+		if (!taken) return;
+
 		const wanted = along(at(event, event.currentTarget.getBoundingClientRect()));
 		const [low, high] = held || [field.min, field.min];
-		const next = end === "low" ? [Math.min(wanted, high), high] : [low, Math.max(wanted, low)];
+		let next;
+
+		if (taken.part === "span") {
+			const width = high - low;
+			const start = Math.min(Math.max(wanted - taken.from, field.min), field.max - width);
+			const settled = along((start - field.min) / (field.max - field.min));
+
+			next = [settled, tidy(settled + width)];
+
+		} else if (taken.part === "low") {
+			next = [Math.min(wanted, high), high];
+
+		} else {
+			next = [low, Math.max(wanted, low)];
+		}
 
 		if (next[0] !== low || next[1] !== high) onSet(next);
 	};
@@ -754,16 +792,11 @@ function Setting ({ field, held, onSet }) {
 					event.preventDefault();
 					event.currentTarget.setPointerCapture(event.pointerId);
 
-					const part = at(event, event.currentTarget.getBoundingClientRect());
-					const wanted = field.min + part * span;
-
-					sliding.current = Math.abs(wanted - low) <= Math.abs(wanted - high)
-						? "low" : "high";
-
-					slideRange(event, sliding.current);
+					sliding.current = grip(event);
+					slideRange(event);
 				}}
 				onPointerMove=${(event) => {
-					if (sliding.current) slideRange(event, sliding.current);
+					if (sliding.current) slideRange(event);
 				}}
 				onPointerUp=${() => { sliding.current = null; }}
 				onPointerCancel=${() => { sliding.current = null; }}
@@ -837,8 +870,6 @@ function Params ({ name, fields, values, cell, onSet }) {
  * is what lets two people turn different knobs without overwriting each other,
  * while a structural change genuinely is about the list. */
 function Recipe ({ name, generators, layers, onSet }) {
-	const [adding, setAdding] = useState(false);
-
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -850,15 +881,6 @@ function Recipe ({ name, generators, layers, onSet }) {
 	/* An id has to survive a round trip and be unique among its neighbours. The
 	   clock alone is not enough: two taps inside a millisecond are a stutter,
 	   not an impossibility, on a surface meant to be played. */
-	const add = (generator) => {
-		setAdding(false);
-		send([...layers, {
-			id: `l${Date.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36)}`,
-			generator,
-			params: {},
-		}]);
-	};
-
 	const shift = (index, by) => {
 		const to = index + by;
 
@@ -930,32 +952,60 @@ function Recipe ({ name, generators, layers, onSet }) {
 				}).flat()}
 			</div>
 
-			${adding
-				? html`
-					<div class="catalogue">
-						<div class="pick">
-							<b>add a generator</b>
-							<span class="spacer"></span>
-							<button onPointerDown=${press(() => setAdding(false))}>close</button>
-						</div>
-						${generators.map((generator) => html`
-							<button
-								key=${generator.name}
-								class=${`offer ${generator.partial ? "partial" : ""}`}
-								disabled=${generator.partial}
-								onPointerDown=${press(() => add(generator.name))}
-							>
-								<b>${generator.name}</b>
-								<i>${generator.partial
-									? "takes something this panel cannot draw yet"
-									: generator.summary}</i>
-							</button>`)}
-					</div>`
-				: html`
-					<button class="offer add" onPointerDown=${press(() => setAdding(true))}>
-						add a generator
-					</button>`}
 		</div>`;
+}
+
+
+/* A sheet: the whole glass, briefly, for something that needs answering.
+ *
+ * Used for the two things that do. Picking a generator out of thirty-three is a
+ * list, not a dropdown, and on a hand-held panel a dropdown of that length is
+ * worse than the screen. Clearing a pattern is destructive and has no undo, so
+ * it has to be read before it is agreed to — which is the whole argument for a
+ * dialog over an armed button: only a dialog can say *what* is about to go. */
+function Sheet ({ title, onClose, children }) {
+	return html`
+		<div
+			class="sheet"
+			onPointerDown=${(event) => {
+				if (event.target === event.currentTarget) { event.preventDefault(); onClose(); }
+			}}
+		>
+			<div class="sheet-body">
+				<header>
+					<b>${title}</b>
+					<span class="spacer"></span>
+					<button
+						onPointerDown=${(event) => { event.preventDefault(); onClose(); }}
+					>close</button>
+				</header>
+				${children}
+			</div>
+		</div>`;
+}
+
+/* What a pattern can be asked to do, beside the grid rather than inside it.
+ *
+ * The title bar is the handle and has to stay one, so this is the place where
+ * a pattern's own actions accrue — Simon's words, and clear is already the
+ * second of them. */
+function Footer ({ onAdd, onClear }) {
+	if (!onAdd && !onClear) return null;
+
+	return html`
+		<footer class="part-foot">
+			${onAdd && html`
+				<button
+					class="offer add"
+					onPointerDown=${(event) => { event.preventDefault(); onAdd(); }}
+				>add a generator</button>`}
+			<span class="spacer"></span>
+			${onClear && html`
+				<button
+					class="clear"
+					onPointerDown=${(event) => { event.preventDefault(); onClear(); }}
+				>clear</button>`}
+		</footer>`;
 }
 
 
@@ -970,7 +1020,7 @@ function Recipe ({ name, generators, layers, onSet }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, children }) {
+function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1042,6 +1092,7 @@ function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, 
 				onPointerCancel=${release}
 			>${title || name.replace(/_/g, " ")}</header>
 			<div class="part-body">${children}</div>
+			${footer}
 		</section>`;
 }
 
@@ -1315,9 +1366,15 @@ function autoPlace (blocks, across) {
 	for (const block of blocks) {
 		/* A block's footprint in cells comes from what is in it: the label
 		   column plus a cell per step across, a title plus a cell per row
-		   down. Nothing measured, because nothing here needs pixels. */
-		const wide = LABEL_CELLS + block.steps;
-		const high = 1 + block.rows;
+		   down. Nothing measured, because nothing here needs pixels.
+		
+		   Plus a cell of air on each side. Blocks packed edge to edge read as
+		   one surface with lines drawn on it; a lane between them says they are
+		   separate things, which they are. A person who wants them touching can
+		   drag them together, and this stops being consulted for that block the
+		   moment they do. */
+		const wide = LABEL_CELLS + block.steps + SEPARATION;
+		const high = 1 + block.rows + SEPARATION;
 
 		if (x && x + wide > across) { x = 0; y += tallest; tallest = 0; }
 
@@ -1605,6 +1662,8 @@ function Panel () {
 	const [chosen, setChosen] = useState(rememberedPage);
 	const [locked, setLocked] = useState(rememberedLock);
 	const [dragging, setDragging] = useState(false);
+	const [adding, setAdding] = useState(null);
+	const [clearing, setClearing] = useState(null);
 	const [moved, setMoved] = useState({});
 
 	const link = useRef(null);
@@ -1889,6 +1948,28 @@ function Panel () {
 
 	const kindOf = (name) => controls[name].type;
 
+	/* A stack says which pattern it contributes to, and that one fact places
+	   its buttons: the pattern grows an "add a generator", not the stack. A
+	   stack that names nothing keeps its own, which is the only way a person
+	   could reach it. */
+	const stackFor = (name) => Object.keys(controls).find(
+		(one) => kindOf(one) === "recipe" && controls[one].builds === name);
+
+	const canClear = (name) => ["step_grid", "note_grid"].includes(kindOf(name));
+
+	const footFor = (name) => {
+		/* A stack keeps its own button when the pattern it feeds is not on this
+		   page, because otherwise there would be no way to reach it at all: a
+		   page showing the stack alone is a perfectly ordinary thing to make. */
+		const orphan = kindOf(name) === "recipe"
+			&& !gridNames.includes(controls[name].builds);
+
+		return {
+			stack: stackFor(name) || (orphan ? name : null),
+			clear: canClear(name),
+		};
+	};
+
 	/* A pitched pattern is as tall as its rows plus the velocity lane beneath
 	   them, which is what the fit has to solve for rather than the rows alone. */
 	const blocks = gridNames.map((name) => {
@@ -1916,13 +1997,19 @@ function Panel () {
 				return total + 1 + (generator ? generator.parameters.length : 1);
 			}, 1);
 
-			return { name, rows: Math.max(rows, 2), steps: PARAM_CELLS };
+			const foot = footFor(name);
+
+			return { name, rows: Math.max(rows, 2) + (foot.stack || foot.clear ? 1 : 0),
+			         steps: PARAM_CELLS };
 		}
+
+		const foot = footFor(name);
 
 		return {
 			name,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0),
+				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0)
+				+ (foot.stack || foot.clear ? 1 : 0),
 			steps: controls[name].steps };
 	});
 
@@ -2064,7 +2151,14 @@ function Panel () {
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}
 					onHold=${setDragging}
-					onSettled=${keep}>
+					onSettled=${keep}
+					footer=${(() => {
+						const foot = footFor(name);
+
+						return html`<${Footer}
+							onAdd=${foot.stack ? () => setAdding(foot.stack) : null}
+							onClear=${foot.clear ? () => setClearing(name) : null} />`;
+					})()}>
 					${controls[name].unsupported
 						? html`
 							<div class="unsupported">
@@ -2104,7 +2198,76 @@ function Panel () {
 						<${Playhead} anchor=${anchor} steps=${controls[name].steps}
 							beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
 				<//>`)}
-		</div>`;
+		</div>
+
+		${adding && controls[adding] && html`
+			<${Sheet} title="add a generator" onClose=${() => setAdding(null)}>
+				${(controls[adding].generators || []).map((generator) => html`
+					<button
+						key=${generator.name}
+						class=${`offer ${generator.partial ? "partial" : ""}`}
+						disabled=${generator.partial}
+						onPointerDown=${(event) => {
+							event.preventDefault();
+
+							const held = ((state[appName] || {})[adding] || {}).layers || [];
+
+							/* An id has to survive a round trip and be unique among
+							   its neighbours. The clock alone is not enough: two
+							   taps inside a millisecond are a stutter rather than an
+							   impossibility on a surface meant to be played. */
+							request(`${adding}/layers`, [...held, {
+								id: `l${Date.now().toString(36)}`
+									+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+								kind: "generator",
+								generator: generator.name,
+								params: {},
+							}]);
+
+							setAdding(null);
+						}}
+					>
+						<b>${generator.name}</b>
+						<i>${generator.partial
+							? "takes something this panel cannot draw yet"
+							: generator.summary}</i>
+					</button>`)}
+			<//>`}
+
+		${clearing && html`
+			<${Sheet} title="clear this pattern" onClose=${() => setClearing(null)}>
+				<p class="ask">
+					${/* Spaces kept inside the spans: the template collapses the
+					     whitespace around an element, and "taken offDRM1" is what
+					     that looks like on the glass. */ ""}
+					<span>${countOf((state[appName] || {})[clearing])} steps will be taken off </span>
+					<b>${controls[clearing].title || clearing}</b>
+					<span>. There is no undo.</span>
+				</p>
+				<div class="answers">
+					<button
+						onPointerDown=${(event) => { event.preventDefault(); setClearing(null); }}
+					>keep them</button>
+					<button
+						class="danger"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							request(`${clearing}/rows`, {});
+							setClearing(null);
+						}}
+					>clear</button>
+				</div>
+			<//>`}`;
+}
+
+/* How much a person is about to lose, counted so the dialog can say it.
+ *
+ * The count is the whole reason a dialog beats an armed button here: only a
+ * dialog can say *what* is about to go, and a pattern may be the only copy
+ * there is until #2067 is settled. */
+function countOf (grid) {
+	return Object.values(grid || {}).reduce(
+		(total, row) => total + (Array.isArray(row) ? row.length : Object.keys(row || {}).length), 0);
 }
 
 render(html`<${Panel} />`, document.getElementById("panel"));
