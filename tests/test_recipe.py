@@ -49,18 +49,68 @@ class Composition:
 		self.data: dict[str, typing.Any] = {}
 
 
+class Note:
+	"""What the sequencer's read-back hands back, reduced to what is read.
+
+	Frozen and hashable, because the difference between two reads is a set
+	difference and that is the whole mechanism (#2102).
+	"""
+
+	def __init__ (self, position: int, origin: str | None,
+	              index: int = 0, primary_unmapped: bool = False) -> None:
+		"""One note, where it is and which voice asked for it."""
+
+		self.position = position
+		self.origin = origin
+		self.index = index
+		self.primary_unmapped = primary_unmapped
+
+	def __hash__ (self) -> int:
+		"""By everything, so two notes on one pulse stay two notes."""
+
+		return hash((self.position, self.origin, self.index, self.primary_unmapped))
+
+	def __eq__ (self, other: object) -> bool:
+		"""By everything, for the same reason."""
+
+		return hash(self) == hash(other)
+
+
+class Speaker:
+	"""A link that writes down what was announced rather than sending it."""
+
+	def __init__ (self, controls: dict[str, typing.Any] | None = None) -> None:
+		"""Start with nothing said."""
+
+		self.controls = controls or {}
+		self.events: list[tuple[str, dict[str, typing.Any]]] = []
+
+	def happened (self, name: str, **fields: typing.Any) -> None:
+		"""Write down one event."""
+
+		self.events.append((name, fields))
+
+
 class Builder:
 	"""A pattern builder that writes down what was called on it, in order."""
 
-	def __init__ (self) -> None:
-		"""Start with nothing played."""
+	def __init__ (self, places: list[Note] | None = None) -> None:
+		"""Start with nothing played, and optionally something already there."""
 
 		self.calls: list[tuple[str, dict[str, typing.Any]]] = []
+		self.notes: list[Note] = list(places or [])
+		self.lands: list[Note] = []
+
+	def placed (self) -> list[Note]:
+		"""What is on this pattern now."""
+
+		return list(self.notes)
 
 	def euclidean (self, **arguments: typing.Any) -> None:
-		"""Record a call."""
+		"""Record a call, and put down whatever this builder was told to."""
 
 		self.calls.append(("euclidean", arguments))
+		self.notes.extend(self.lands)
 
 	def evolve (self, **arguments: typing.Any) -> None:
 		"""Record a call."""
@@ -654,3 +704,154 @@ def test_a_route_that_will_not_play_is_skipped_rather_than_silencing_the_part ()
 	recipe.build(builder)
 
 	assert [name for name, _ in builder.calls] == ["euclidean"]
+
+
+def _watching (places: list[Note] | None = None) -> tuple[adapter.Recipe, Speaker, Builder]:
+	"""A stack over a two-voice grid, with somewhere for it to say what it did."""
+
+	grid = adapter.StepGrid(Composition(), rows=["kick", "snare"], steps=16, beats=4, name="grid")
+	speaker = Speaker({"grid": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="grid", pulses_per_beat=24)
+	recipe.attach(speaker)
+
+	return recipe, speaker, Builder(places)
+
+
+def test_a_stack_says_which_cells_its_generators_realised () -> None:
+	"""So the panel can draw them beside the steps somebody tapped (#1925).
+
+	Six pulses to a step here — four beats of sixteen steps at twenty-four
+	pulses a beat — so a note at pulse 12 is step 2.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, "kick"), Note(12, "snare"), Note(90, "kick")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events == [
+		("realised", {"control": "grid", "cells": {"kick": [0, 15], "snare": [2]}})]
+
+
+def test_what_was_already_there_is_not_reported_as_realised () -> None:
+	"""A person's own taps are placed before the stack runs, so the difference
+	is exactly what the algorithms added — which is the whole point of reading
+	either side rather than reading once."""
+
+	recipe, speaker, builder = _watching([Note(0, "kick"), Note(6, "snare")])
+
+	builder.lands = [Note(12, "kick")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"kick": [2]}
+
+
+def test_a_generated_note_landing_on_a_tapped_one_is_still_reported () -> None:
+	"""The case that made #2102 carry an index.  Two notes with equal fields are
+	one member of a set, so a euclidean kick landing on a hand-tapped kick would
+	report nothing while two note-ons fire."""
+
+	recipe, speaker, builder = _watching([Note(0, "kick", index=0)])
+
+	builder.lands = [Note(0, "kick", index=1)]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"kick": [0]}
+
+
+def test_a_note_that_will_not_sound_is_not_drawn () -> None:
+	"""A hit on the glass that makes no sound is a lie the panel would be
+	telling on the app's behalf, which is why #2102 carries the flag."""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, "kick", primary_unmapped=True), Note(6, "snare")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"snare": [1]}
+
+
+def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
+	"""A pool may hold voices a grid does not draw, and a note with no named
+	voice cannot be matched to a row at all."""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, None), Note(6, "clap"), Note(12, "kick")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events[-1][1]["cells"] == {"kick": [2]}
+
+
+def test_an_unchanged_answer_costs_no_frame () -> None:
+	"""A euclidean layer realises the same cells every cycle and a random one
+	does not, so the quiet case stays quiet and the noisy case is as noisy as it
+	truly is."""
+
+	recipe, speaker, builder = _watching()
+
+	builder.lands = [Note(0, "kick")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+
+	for _ in range(3):
+		builder.notes = []
+		recipe.build(builder)
+
+	assert len(speaker.events) == 1, f"the same answer was sent {len(speaker.events)} times"
+
+	builder.notes = []
+	builder.lands = [Note(6, "kick")]
+	recipe.build(builder)
+
+	assert len(speaker.events) == 2
+
+
+def test_a_stack_told_no_pulse_count_says_nothing_at_all () -> None:
+	"""Which is every stack before this, and any composition whose sequencer
+	cannot be read back.  It is a panel that draws no dots, not an error."""
+
+	grid = adapter.StepGrid(Composition(), rows=["kick"], steps=16, beats=4, name="grid")
+	speaker = Speaker({"grid": grid})
+
+	recipe = adapter.Recipe(Composition(), catalogue=CATALOGUE, pitches=ROWS, builds="grid")
+	recipe.attach(speaker)
+
+	builder = Builder()
+	builder.lands = [Note(0, "kick")]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert speaker.events == []
+
+
+def test_a_pattern_that_cannot_be_read_back_is_not_an_error () -> None:
+	"""A composition older than the read-back plays exactly as it did; it just
+	draws nothing."""
+
+	recipe, speaker, _ = _watching()
+
+	class Old:
+		"""A builder from before ``placed()`` existed."""
+
+		def euclidean (self, **arguments: typing.Any) -> None:
+			"""Play, and offer no way to read it back."""
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(Old())
+
+	assert speaker.events == []

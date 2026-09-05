@@ -12,6 +12,7 @@ import typing
 import pytest
 
 import conftest
+import superintendent.protocol
 
 
 playwright_api = pytest.importorskip("playwright.sync_api")
@@ -2646,3 +2647,84 @@ def test_a_stack_offering_no_patterns_still_says_generator (
 	_settled(panel)
 
 	assert panel.locator(".part-foot .offer.add").count() == 0
+
+
+# --- What an algorithm put there, drawn beside what a person tapped (#1925) ---
+
+
+def _realised (panel: typing.Any, fake_app: typing.Any, cells: dict[str, list[int]]) -> None:
+	"""Report a cycle's generated cells the way the app does."""
+
+	fake_app.send(superintendent.protocol.event(
+		"subsequence", "realised", control="grid", cells=cells))
+
+	panel.wait_for_timeout(200)
+
+
+def test_a_generated_step_is_drawn_as_a_dot_not_as_a_face (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Nothing stores it, and next cycle an unseeded generator may put it
+	somewhere else — a face would be claiming the pattern holds something it
+	does not (#1965)."""
+
+	_settled(panel)
+	_realised(panel, fake_app, {"snare": [1]})
+
+	ghost = panel.locator(f'{conftest.cell("grid/snare/1")}.ghost')
+
+	assert ghost.count() == 1, "a generated step was not drawn"
+	assert panel.locator(f'{conftest.cell("grid/snare/1")}.on').count() == 0, \
+		"a generated step was drawn as though the pattern held it"
+
+
+def test_a_generated_step_is_never_kept_as_state (
+	panel: typing.Any, fake_app: typing.Any, service_url: str) -> None:
+	"""An event, never a change.  A person's taps stay the only thing anything
+	stores, which is the whole of #1965.
+
+	A reload is what asks the question: the panel comes back with the service's
+	own copy of everything, so a realised cell that survived one would be a
+	realised cell the service had kept — which is the thing it must never do.
+	"""
+
+	_settled(panel)
+	_realised(panel, fake_app, {"snare": [1]})
+
+	assert panel.locator(".cell.ghost").count() == 1
+
+	panel.goto(service_url)
+	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
+
+	assert panel.locator(".cell.ghost").count() == 0, \
+		"a generated step was kept somewhere and came back"
+
+
+def test_a_generated_step_is_traced_by_an_ordinary_tap (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It needs no gesture of its own: the cell is off, so a tap turns it on,
+	and that is what tracing into a permanent step means."""
+
+	_settled(panel)
+	_realised(panel, fake_app, {"snare": [1]})
+
+	panel.locator(conftest.cell("grid/snare/1")).click()
+
+	asked = fake_app.await_set("grid/snare/1")
+
+	assert asked["v"] is True, "tracing a generated step did not ask for it"
+
+
+def test_a_traced_step_still_says_the_algorithm_wants_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Worth knowing that the note you kept is one it would have played anyway,
+	so the dot stays under the face rather than disappearing."""
+
+	_settled(panel)
+	_realised(panel, fake_app, {"kick": [0]})
+
+	cell = panel.locator(conftest.cell("grid/kick/0"))
+
+	assert "on" in (cell.get_attribute("class") or ""), "the fixture's kick 0 is not lit"
+	assert "ghost" in (cell.get_attribute("class") or ""), \
+		"a traced step stopped saying the algorithm wants it"

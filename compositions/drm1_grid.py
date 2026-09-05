@@ -168,7 +168,6 @@ panel, which is the whole point of the exercise.
 composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
-composition.data["layer"] = {row: [] for row in ROWS}
 composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
 
@@ -208,15 +207,6 @@ def send_setting (name: str, value: typing.Any) -> None:
 	composition.trigger(
 		lambda p, control=control, amount=amount: p.cc(control, amount),
 		channel=BASS_CHANNEL, beats=1 / 24, quantize=0)
-"""A second pattern over the same drum machine, empty until somebody fills it.
-
-Two patterns driving one instrument belong on one page as stacked blocks rather
-than on two pages, which Simon settled as Subroutine #1944.  This is that case
-made real: both write the same ten voices on the same channel, and what you hear
-is the two laid over each other.
-"""
-
-
 @composition.pattern(
 	channel=DRUM_CHANNEL,
 	steps=STEPS,
@@ -235,20 +225,6 @@ def drums (p: typing.Any) -> None:
 
 	_play(p, composition.data["grid"])
 	drum_recipe.build(p)
-
-
-@composition.pattern(
-	channel=DRUM_CHANNEL,
-	steps=STEPS,
-	step_duration=STEP_DURATION,
-	drum_note_map=drm1.VERMONA_DRM1_DRUM_MAP,
-	reschedule_lookahead=1 / 24,
-)
-def layer (p: typing.Any) -> None:
-	"""A second pass over the same machine, built the same way as the first."""
-
-	_play(p, composition.data["layer"])
-	layer_recipe.build(p)
 
 
 @composition.pattern(
@@ -299,11 +275,7 @@ what this rig can show today.
 
 
 def _stack_for (pattern: str, name: str, title: str) -> typing.Any:
-	"""A stack of contributions that build one pattern.
-
-	Both patterns get one, because the point of a shared grid is that several
-	things take from it — a single stack could only ever prove half of it.
-	"""
+	"""A stack of contributions that build one pattern."""
 
 	return superintendent.subsequence_adapter.Recipe(
 		composition,
@@ -317,6 +289,11 @@ def _stack_for (pattern: str, name: str, title: str) -> typing.Any:
 		},
 		builds=pattern,
 		sources=SHARED,
+
+		# So the stack can say which cells it realised, and the panel can draw
+		# them (#1925). The sequencer's number, handed in because the adapter
+		# imports no sequencer — it is duck-typed on whatever this file gives it.
+		pulses_per_beat=subsequence.constants.MIDI_QUARTER_NOTE,
 		data_key=name,
 		name=name,
 		title=title)
@@ -326,7 +303,6 @@ def _stack_for (pattern: str, name: str, title: str) -> typing.Any:
 # by, so `drum_recipe` keeps the name it was born with rather than taking a
 # tidier one: renaming a control silently empties whatever it was holding.
 drum_recipe = _stack_for("grid", "drum_recipe", "DRM1 — generators")
-layer_recipe = _stack_for("layer", "layer_recipe", "DRM1 — generators 2")
 """Generators the panel can stack onto pattern 1, over the notes tapped by hand.
 
 The catalogue is Subsequence's own description of itself, and the ten voices
@@ -351,11 +327,6 @@ link = superintendent.subsequence_adapter.AppLink(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="grid", name="grid", title="DRM1 — pattern 1",
 			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
-		superintendent.subsequence_adapter.StepGrid(
-			composition, rows=ROWS, steps=STEPS, beats=BEATS,
-			data_key="layer", name="layer", title="DRM1 — pattern 2",
-			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")]),
-
 		# A grid with no instrument behind it: no channel, no note map, no
 		# pattern function of its own. It makes no sound until something routes
 		# it, and then it makes that thing's sound (#2108).
@@ -399,16 +370,11 @@ link = superintendent.subsequence_adapter.AppLink(
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			on_change=send_setting),
 		drum_recipe,
-		layer_recipe,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
 		superintendent.subsequence_adapter.Page(
-			"both", parts=["grid", "layer"], title="Both"),
-		superintendent.subsequence_adapter.Page(
 			"pattern_1", parts=["grid"], title="Pattern 1"),
-		superintendent.subsequence_adapter.Page(
-			"pattern_2", parts=["layer"], title="Pattern 2"),
 		superintendent.subsequence_adapter.Page(
 			"bass", parts=["bass"], title="Bass"),
 		superintendent.subsequence_adapter.Page(
@@ -418,8 +384,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Page(
 			"generators", parts=["grid", "drum_recipe"], title="Generators"),
 		superintendent.subsequence_adapter.Page(
-			"shared", parts=["shared", "grid", "layer", "drum_recipe", "layer_recipe"],
-			title="Shared"),
+			"shared", parts=["shared", "grid", "drum_recipe"], title="Shared"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),

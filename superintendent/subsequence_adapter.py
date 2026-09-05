@@ -963,6 +963,7 @@ class Recipe (Control):
 		bounds: dict[str, tuple[float, float]] | None = None,
 		builds: str | None = None,
 		sources: dict[str, collections.abc.Callable[[typing.Any], None]] | None = None,
+		pulses_per_beat: int | None = None,
 		data_key: str = "recipe",
 		name: str = "recipe",
 		title: str | None = None,
@@ -977,6 +978,27 @@ class Recipe (Control):
 		buttons on the pattern it feeds, so a person can see what makes what.
 		Nothing here reads it; it is a fact about the composition that the
 		composition states, like the rows of a grid.
+		"""
+
+		self.pulses_per_beat = pulses_per_beat
+		"""How many pulses a beat is, or None to report nothing.
+
+		**An app's number, not this package's**, which is why it is handed in
+		rather than known: nothing in this module imports the sequencer it talks
+		to, and that is deliberate — the adapter is duck-typed on whatever a
+		composition hands it.
+
+		Given, this stack works out which cells its generators realised each
+		cycle and says so, and a panel can draw them beside the steps a person
+		tapped (#1925).  Withheld, it says nothing and behaves exactly as it did.
+		"""
+
+		self._realised: dict[str, list[int]] = {}
+		"""What was drawn last cycle, so an unchanged answer costs no frame.
+
+		A euclidean layer realises the same cells every cycle; a random one does
+		not.  Comparing here means the quiet case is quiet and the noisy case is
+		as noisy as it truly is.
 		"""
 
 		self.sources = dict(sources or {})
@@ -1014,6 +1036,9 @@ class Recipe (Control):
 			for generator in self.catalogue
 		}
 
+		self.link: "AppLink | None" = None
+		"""How a stack says what it realised, and where it finds the grid it feeds."""
+
 		self._complained: set[str] = set()
 		"""Generators that have already failed once, so a bar does not flood a log.
 
@@ -1021,6 +1046,11 @@ class Recipe (Control):
 		second until it is fixed.  Subsequence took the same decision about its
 		own bounds and for the same reason.
 		"""
+
+	def attach (self, link: "AppLink") -> None:
+		"""Take the link, which is also the register of what else this app offers."""
+
+		self.link = link
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Every generator that can be offered, and what each of them takes."""
@@ -1301,7 +1331,17 @@ class Recipe (Control):
 		wrong failure: one bad layer would silence the part every bar with the
 		reason in a log nobody is reading.  Skipping keeps the rest playing,
 		which is what a person can actually hear and correct.
+
+		**What the stack put there is read back and reported**, so the panel can
+		draw it beside the steps somebody tapped (#1925).  Read once either side
+		of the whole stack rather than around each layer: a person is shown what
+		the algorithms did, not which of them did it, and the read-back cannot
+		say the second anyway (#2102's accepted limit).  Two walks of a couple
+		of dozen notes, against generators that have just run — this is not the
+		expensive thing on this path.
 		"""
+
+		before = self._reads(pattern) if self.pulses_per_beat else None
 
 		for layer in self.layers():
 			if layer["bypassed"]:
@@ -1335,6 +1375,82 @@ class Recipe (Control):
 
 			except Exception as error:
 				self._complain(generator, str(error))
+
+		if before is not None:
+			self._say_what_landed(before, self._reads(pattern), pattern)
+
+	def _reads (self, pattern: typing.Any = None) -> list[typing.Any]:
+		"""What is on the pattern now, or nothing if this build cannot be read.
+
+		A composition older than the read-back, or one whose pattern object is
+		something else entirely, is not an error — it is a panel that draws no
+		dots, and everything else works exactly as before.
+		"""
+
+		if pattern is None:
+			return []
+
+		reader = getattr(pattern, "placed", None)
+
+		return list(reader()) if callable(reader) else []
+
+	def _say_what_landed (
+		self, before: list[typing.Any], after: list[typing.Any], pattern: typing.Any) -> None:
+		"""Report the cells this stack realised, as rows and step numbers.
+
+		Ephemeral and stored nowhere: an event rather than a change, because
+		these notes are not intent and must never be applied as if they were
+		(#1965).  A person's taps remain the only thing anything keeps.
+		"""
+
+		grid = self._target()
+
+		if grid is None or self.link is None or self.pulses_per_beat is None:
+			return
+
+		per_step = self.pulses_per_beat * grid.beats / grid.steps
+
+		if per_step <= 0:
+			return
+
+		known = set(grid.rows)
+		cells: dict[str, list[int]] = {}
+
+		for note in set(after) - set(before):
+			row = getattr(note, "origin", None)
+
+			# A note with no named voice cannot be matched to a row, and one the
+			# primary device will not sound must not be drawn as though it will
+			# — a hit on the glass that makes no sound is a lie.
+			if not isinstance(row, str) or row not in known:
+				continue
+
+			if getattr(note, "primary_unmapped", False):
+				continue
+
+			step = int(getattr(note, "position", 0) // per_step)
+
+			if 0 <= step < grid.steps and step not in cells.setdefault(row, []):
+				cells[row].append(step)
+
+		for row in cells:
+			cells[row].sort()
+
+		if cells == self._realised:
+			return
+
+		self._realised = cells
+		self.link.happened("realised", control=grid.name, cells=cells)
+
+	def _target (self) -> typing.Any:
+		"""The grid this stack builds, if it is one this panel can draw cells on."""
+
+		if self.link is None or self.builds is None:
+			return None
+
+		grid = self.link.controls.get(self.builds)
+
+		return grid if isinstance(grid, StepGrid) else None
 
 	def _arguments (self, generator: str, params: dict[str, typing.Any]) -> dict[str, typing.Any]:
 		"""A layer's parameters as the generator's own call expects them.
@@ -1783,6 +1899,16 @@ class AppLink:
 		self._emit(superintendent.protocol.changed(
 			self.app_name, path, control.applied(rest.split("/"), value), self.version,
 			by="panel", client=client, seq=seq))
+
+	def happened (self, name: str, **fields: typing.Any) -> None:
+		"""Announce something that is true for one cycle and stored nowhere.
+
+		An event rather than a change, and the distinction is the whole of
+		#1965: a change is intent and is kept, an event is what the music did
+		this time round.  Nothing applies one to any control's state.
+		"""
+
+		self._emit(superintendent.protocol.event(self.app_name, name, **fields))
 
 	def report (self, path: str, value: typing.Any) -> None:
 		"""Announce something the app did of its own accord, on the clock loop.

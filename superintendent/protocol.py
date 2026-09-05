@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.8.0"
+CONTRACT_VERSION = "1.9.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -53,6 +53,14 @@ bassline and each add notes of their own (#2108).  It names a ``source`` where a
 generator names a ``generator``, and the stack declares the ``sources`` it may
 take from.  A service too old refuses the layer rather than dropping it, which is
 the right way round: the app would play a route the service was not holding.
+
+1.9.0 adds the ``realised`` event: which cells of a grid the algorithms put
+there this cycle, as ``control`` and ``cells``.  **An event and never a change**,
+which is the whole of #1965 — a change is intent and is kept, and these notes are
+not intent.  Nothing applies one to any control's state, a panel draws them as
+dots beside the steps somebody tapped, and a person's taps remain the only thing
+anything stores.  Sent only when the answer differs from the cycle before, so a
+deterministic stack is silent.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

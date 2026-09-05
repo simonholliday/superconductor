@@ -222,7 +222,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.8.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.9.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -267,7 +267,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.8.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.9.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -398,7 +398,7 @@ function Window ({ rows, visible, cell, children }) {
 		</div>`;
 }
 
-function Grid ({ control, rows, steps, cells, visible, cell, pending, failed, onTap }) {
+function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -416,11 +416,26 @@ function Grid ({ control, rows, steps, cells, visible, cell, pending, failed, on
 					const path = `${control}/${row}/${step}`;
 					const on = (cells[row] || []).includes(step);
 
+					/* A step an algorithm put here this cycle. Drawn as a dot
+					   rather than a face, because it is not one: nothing stores
+					   it and it may be somewhere else next time round.
+					
+					   Tapping it needs no gesture of its own — the cell is off,
+					   so an ordinary tap turns it on, and that *is* tracing it
+					   into a permanent step.
+					
+					   **The dot stays once it has been traced**, and that is not
+					   decoration: a generator that does not skip occupied steps
+					   goes on firing there, so the step is now sounding twice.
+					   Hiding the dot under the face would hide that. */
+					const ghost = ((drawn || {})[row] || []).includes(step);
+
 					return html`
 						<div
 							key=${path}
 							data-path=${path}
-							class=${["cell", on ? "on" : "", pending.has(path) ? "pending" : "",
+							class=${["cell", on ? "on" : "", ghost ? "ghost" : "",
+								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
@@ -2093,6 +2108,7 @@ function Panel () {
 	const [clearing, setClearing] = useState(null);
 	const [moved, setMoved] = useState({});
 	const [touched, setTouched] = useState(null);
+	const [realised, setRealised] = useState({});
 
 	const theme = useTheme();
 
@@ -2317,6 +2333,14 @@ function Panel () {
 				case "event":
 					if (frame.name === "beat") {
 						setAnchor({ beat: frame.beat, at: performance.now(), interval: frame.interval });
+					}
+
+					/* What the algorithms put on a pattern this cycle. Held apart
+					   from every control's state and never merged into it: these
+					   notes are not intent and nothing keeps them (#1965). A
+					   person's taps stay the only thing anything stores. */
+					if (frame.name === "realised" && typeof frame.control === "string") {
+						setRealised((was) => ({ ...was, [frame.control]: frame.cells || {} }));
 					}
 					break;
 			}
@@ -2762,6 +2786,7 @@ function Panel () {
 							<${Grid} control=${one.control} rows=${controls[one.control].rows}
 								steps=${controls[one.control].steps}
 								cells=${(state[appName] || {})[one.control] || {}}
+								drawn=${up ? realised[one.control] : null}
 								visible=${controls[one.control].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
 					${up && one.clear && html`

@@ -522,6 +522,38 @@ html, body {
 	border-color: var(--on-edge);
 }
 
+/* A step an algorithm put here this cycle, drawn as a dot rather than a face.
+ *
+ * **Not a face, because it is not one.** Nothing stores it, and next cycle an
+ * unseeded generator may put it somewhere else — a face would be claiming the
+ * pattern holds something it does not (#1965). A dot says "this is sounding and
+ * nobody wrote it down", which is exactly true.
+ *
+ * Tapping it needs no gesture of its own: the cell is off, so an ordinary tap
+ * turns it on, and that is what tracing is. The dot then sits under a lit face
+ * and says the algorithm still wants that step too.
+ *
+ * Sized by the mark rule: it is read, so it grows with the cell between a floor
+ * and a ceiling. */
+.cell.ghost::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: clamp(5px, calc(var(--cell) * 0.3), 14px);
+	height: clamp(5px, calc(var(--cell) * 0.3), 14px);
+	transform: translate(-50%, -50%);
+	border-radius: 50%;
+	background: var(--on);
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+/* Under the face once it has been traced, rather than gone: the algorithm still
+   wants that step, and it is worth knowing that the note you kept is one it
+   would have played anyway. */
+.cell.on.ghost::after { opacity: 0.28; background: var(--on-ink); }
+
 /* The ring is the request, never the value: the face below it is always what
    the sequencer actually holds. It clears when the change is confirmed. */
 .cell.pending::after {
