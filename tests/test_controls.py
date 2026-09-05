@@ -93,3 +93,187 @@ def test_a_cell_outside_what_the_app_declared_is_refused (path: str) -> None:
 
 	with pytest.raises(superintendent.controls.ControlError):
 		superintendent.controls.apply_change({}, GRID, path, True)
+
+
+RANGED: dict[str, typing.Any] = {
+	"recipe": {"type": "params", "fields": [
+		{"name": "velocity", "kind": "range", "min": 1, "max": 127},
+	]},
+}
+
+
+def test_a_range_takes_two_numbers_in_order () -> None:
+	"""Which is what a generator means by ``velocity=(30, 50)``."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", [30, 50])
+
+	assert state == {"recipe": {"velocity": [30, 50]}}
+
+
+def test_a_range_may_have_both_ends_together () -> None:
+	"""One fixed velocity is a range that has not been opened, not a refusal.
+
+	A generator declaring ``velocity=100`` opens here, so a range that could not
+	hold a pair of equals could not carry its own author's default.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", [100, 100])
+
+	assert state["recipe"]["velocity"] == [100, 100]
+
+
+def test_a_range_arriving_as_a_tuple_is_kept_as_a_list () -> None:
+	"""So the service's copy compares equal to the same value off the wire.
+
+	JSON has no tuple.  Keeping one here would make the app's copy and the
+	service's differ by type while reading identically in a log.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", (30, 50))
+
+	assert state["recipe"]["velocity"] == [30, 50]
+	assert isinstance(state["recipe"]["velocity"], list)
+
+
+@pytest.mark.parametrize("value", [
+	[50, 30],       # out of order
+	[0, 50],        # below the floor
+	[30, 200],      # above the ceiling
+	[30],           # not two
+	[30, 40, 50],   # not two
+	30,             # not a pair at all
+	[True, False],  # booleans are not numbers here
+])
+def test_a_range_that_is_not_two_numbers_in_bounds_is_refused (value: typing.Any) -> None:
+	"""The service keeps the app's state, so a value the app could not have
+	reported has to be refused rather than stored."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change({}, RANGED, "recipe/velocity", value)
+
+
+STACK: dict[str, typing.Any] = {
+	"recipe": {"type": "recipe", "generators": [
+		{"name": "euclidean", "parameters": [
+			{"name": "pulses", "kind": "number", "min": 0, "max": 16},
+			{"name": "velocity", "kind": "range", "min": 1, "max": 127},
+		]},
+		{"name": "thin", "parameters": [
+			{"name": "amount", "kind": "number", "min": 0.0, "max": 1.0},
+		]},
+	]},
+}
+
+
+def _one_layer () -> list[dict[str, typing.Any]]:
+	"""A stack of one, which is what a part has the moment a generator is added."""
+
+	return [{"id": "a", "generator": "euclidean", "params": {"pulses": 7}}]
+
+
+def test_a_stack_is_set_whole_because_its_order_is_part_of_its_value () -> None:
+	"""Adding, removing, bypassing and reordering all change the list itself."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+
+	assert state["recipe"]["layers"] == [
+		{"id": "a", "generator": "euclidean", "bypassed": False, "params": {"pulses": 7}}]
+
+
+def test_the_order_a_stack_is_given_in_is_the_order_it_is_kept_in () -> None:
+	"""A fill that skips where a note already sits depends on what ran before it."""
+
+	state: dict[str, typing.Any] = {}
+	stack = [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "generator": "thin", "params": {}},
+	]
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", stack)
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", list(reversed(stack)))
+
+	assert [layer["id"] for layer in state["recipe"]["layers"]] == ["b", "a"]
+
+
+def test_one_knob_of_one_layer_moves_without_sending_the_stack () -> None:
+	"""Which is what turning a knob does, and it must not overwrite a neighbour."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+	superintendent.controls.apply_change(state, STACK, "recipe/a/velocity", [30, 50])
+
+	assert state["recipe"]["layers"][0]["params"] == {"pulses": 7, "velocity": [30, 50]}
+
+
+def test_a_layer_naming_a_generator_the_app_does_not_offer_is_refused () -> None:
+	"""The catalogue comes from the app, so this can only be a fault in the panel."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{}, STACK, "recipe/layers", [{"id": "a", "generator": "invented", "params": {}}])
+
+
+def test_a_parameter_no_generator_has_is_refused () -> None:
+	"""Validated through the same path an instrument's settings take, so a
+	range or a bound behaves identically wherever it appears."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{}, STACK, "recipe/layers",
+			[{"id": "a", "generator": "thin", "params": {"pulses": 7}}])
+
+
+def test_a_parameter_out_of_its_declared_bounds_is_refused () -> None:
+	"""The service keeps the app's copy; a value the app could not hold is a lie."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{}, STACK, "recipe/layers",
+			[{"id": "a", "generator": "thin", "params": {"amount": 4.0}}])
+
+
+def test_two_layers_may_not_share_an_id () -> None:
+	"""A parameter is addressed by its layer's id, so a repeat makes one of the
+	two unreachable — and which one would depend on the order of a search."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change({}, STACK, "recipe/layers", [
+			{"id": "a", "generator": "euclidean", "params": {}},
+			{"id": "a", "generator": "thin", "params": {}},
+		])
+
+
+def test_a_bad_layer_leaves_the_stack_that_was_there_alone () -> None:
+	"""Checked entire before any of it is kept, so a stack is never half-new."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+			{"id": "a", "generator": "euclidean", "params": {}},
+			{"id": "b", "generator": "invented", "params": {}},
+		])
+
+	assert [layer["id"] for layer in state["recipe"]["layers"]] == ["a"]
+
+
+def test_a_parameter_of_a_layer_that_is_not_there_is_refused () -> None:
+	"""A stale panel asking after a layer somebody else removed."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, STACK, "recipe/gone/pulses", 3)

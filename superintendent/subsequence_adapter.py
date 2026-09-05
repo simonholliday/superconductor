@@ -83,6 +83,19 @@ class Control:
 
 		raise NotImplementedError
 
+	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
+		"""What this control now holds where a request has just landed.
+
+		Nearly always the value that was asked for, because a control stores
+		what it is given.  A stack does not: adding a layer fills in every
+		parameter the generator has a default for, so that the glass shows what
+		is playing rather than only what somebody typed.  The panel has to be
+		told what was actually kept or it draws a layer with nothing in it, and
+		the service's copy drifts from the app's on the first tap.
+		"""
+
+		return value
+
 	def poll (self) -> list[tuple[str, typing.Any]]:
 		"""Anything that changed without the panel asking, as path and value.
 
@@ -391,8 +404,8 @@ class Parameter:
 		name: str,
 		kind: str,
 		label: str | None = None,
-		minimum: float = 0,
-		maximum: float = 127,
+		minimum: float | None = 0,
+		maximum: float | None = 127,
 		step: float = 1,
 		options: collections.abc.Sequence[tuple[str, str]] | None = None,
 		default: typing.Any = None,
@@ -414,8 +427,18 @@ class Parameter:
 		declared: dict[str, typing.Any] = {
 			"name": self.name, "kind": self.kind, "label": self.label or self.name}
 
-		if self.kind == "number":
-			declared.update({"min": self.minimum, "max": self.maximum, "step": self.step})
+		if self.kind in ("number", "range"):
+			declared["step"] = self.step
+
+			# A bound that was never declared is left out rather than sent as
+			# null: a panel drawing a slider needs two ends, and one that has
+			# none should be shown as something a finger can still work — a
+			# stepper — rather than as a slider with invented limits.
+			if self.minimum is not None:
+				declared["min"] = self.minimum
+
+			if self.maximum is not None:
+				declared["max"] = self.maximum
 
 		elif self.kind == "choice":
 			declared["options"] = [{"value": value, "label": label} for value, label in self.options]
@@ -424,6 +447,9 @@ class Parameter:
 
 	def opening (self) -> typing.Any:
 		"""What it holds before anybody has touched it."""
+
+		if self.kind == "range":
+			return self._opening_range()
 
 		if self.default is not None:
 			return self.default
@@ -434,7 +460,85 @@ class Parameter:
 		if self.kind == "choice":
 			return self.options[0][0] if self.options else None
 
-		return self.minimum
+		return self.minimum if self.minimum is not None else 0
+
+	def _opening_range (self) -> list[float]:
+		"""Two numbers, widening a single one rather than refusing it.
+
+		A generator that takes ``int | (int, int)`` declares a scalar default —
+		``euclidean`` opens at velocity 100, not at a pair — so a range control
+		has to be able to start from one number.  Both ends at the same value
+		says *exactly this*, and dragging them apart is how a person asks for
+		variation.  Refusing the scalar would mean no generator could be offered
+		with the velocity its own author chose.
+		"""
+
+		if isinstance(self.default, (list, tuple)) and len(self.default) == 2:
+			return [self.default[0], self.default[1]]
+
+		if isinstance(self.default, bool) or not isinstance(self.default, (int, float)):
+			floor = self.minimum if self.minimum is not None else 0
+
+			return [floor, floor]
+
+		return [self.default, self.default]
+
+
+def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
+	"""Refuse anything a parameter could not hold, saying which and why.
+
+	Shared between an instrument's settings and a generator's, because they are
+	the same four shapes and two copies of this would drift.  A refusal here is
+	a message a person reads on the glass, so each one names the parameter.
+	"""
+
+	if parameter.kind == "switch":
+		if not isinstance(value, bool):
+			raise Refused(f"{parameter.name} is a switch")
+
+		return value
+
+	if parameter.kind == "choice":
+		if value not in [option for option, _ in parameter.options]:
+			raise Refused(f"{parameter.name} has no option called {value}")
+
+		return value
+
+	if parameter.kind == "range":
+		if (not isinstance(value, (list, tuple)) or len(value) != 2
+				or any(isinstance(one, bool) or not isinstance(one, (int, float)) for one in value)):
+			raise Refused(f"{parameter.name} is a range, and takes two numbers")
+
+		if value[0] > value[1]:
+			raise Refused(f"{parameter.name} is two numbers in order")
+
+		_in_bounds(parameter, value[0])
+		_in_bounds(parameter, value[1])
+
+		return [value[0], value[1]]
+
+	if isinstance(value, bool) or not isinstance(value, (int, float)):
+		raise Refused(f"{parameter.name} is a number")
+
+	_in_bounds(parameter, value)
+
+	return value
+
+
+def _in_bounds (parameter: Parameter, value: float) -> None:
+	"""Refuse a number outside whatever bounds this parameter declared, if any.
+
+	Most of a generator's numbers have no bound to declare — a duration in
+	beats, a spacing, the time step of a chaotic system — so an unbounded one
+	is the ordinary case here rather than an oversight, and inventing a range
+	for it would be a guess with a MIDI accent.
+	"""
+
+	if parameter.minimum is not None and value < parameter.minimum:
+		raise Refused(f"{parameter.name} is not below {parameter.minimum}")
+
+	if parameter.maximum is not None and value > parameter.maximum:
+		raise Refused(f"{parameter.name} is not above {parameter.maximum}")
 
 
 class Params (Control):
@@ -555,25 +659,398 @@ class Params (Control):
 	def _checked (self, parameter: Parameter, value: typing.Any) -> typing.Any:
 		"""Refuse anything this setting could not hold, with a reason."""
 
-		if parameter.kind == "switch":
-			if not isinstance(value, bool):
-				raise Refused(f"{parameter.name} is a switch")
+		return checked_value(parameter, value)
 
-			return value
 
-		if parameter.kind == "choice":
-			if value not in [option for option, _ in parameter.options]:
-				raise Refused(f"{parameter.name} has no option called {value}")
+def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
+	"""One entry of a catalogue read back as the thing that checks a value.
 
-			return value
+	The catalogue an app hands in is already in the shape a panel draws, so
+	this is a reading rather than a translation: it exists so that a
+	generator's parameter is refused by exactly the code an instrument's
+	setting is refused by.
+	"""
 
-		if isinstance(value, bool) or not isinstance(value, (int, float)):
-			raise Refused(f"{parameter.name} is a number")
+	return Parameter(
+		name=str(field.get("name", "")),
+		kind=str(field.get("kind", "number")),
+		label=field.get("label"),
+		minimum=field.get("min"),
+		maximum=field.get("max"),
+		step=field.get("step", 1),
+		options=[(one.get("value"), one.get("label", one.get("value")))
+		         for one in field.get("options", [])],
+		default=field.get("default"),
+	)
 
-		if not parameter.minimum <= value <= parameter.maximum:
-			raise Refused(f"{parameter.name} is between {parameter.minimum} and {parameter.maximum}")
 
-		return value
+def offerable (
+	catalogue: collections.abc.Sequence[dict[str, typing.Any]],
+	pitches: collections.abc.Sequence[str],
+	bounds: dict[str, tuple[float, float]] | None = None,
+) -> list[dict[str, typing.Any]]:
+	"""An app's catalogue, with the pitches this composition actually has.
+
+	This is the join the whole arrangement rests on.  The app describing itself
+	says *this parameter is a pitch* and can say no more, because which pitches
+	exist is a fact about a studio; the composition says they are these ten
+	drum voices.  Neither knows the other's half, and this package knows
+	neither — it is handed both (#1465).
+
+	A parameter this panel cannot draw is left out and its generator marked
+	partial, which is the same courtesy the app pays upstream: better to say a
+	generator is not fully drivable than to offer a control that cannot be
+	completed.  A pool of pitches is the common case — one day a multiple
+	choice, today not drawn.
+
+	``bounds`` is the same division applied to numbers.  An app cannot know
+	what a sensible range for ``pulses`` is, because that depends on how many
+	steps the pattern has and the pattern is the composition's; where the
+	composition does know, it says so here and the panel can draw a slider
+	instead of a stepper.
+	"""
+
+	narrowed = bounds or {}
+	offered: list[dict[str, typing.Any]] = []
+
+	for generator in catalogue:
+		fields: list[dict[str, typing.Any]] = []
+		dropped = False
+
+		for field in generator.get("parameters", []):
+			if field.get("kind") in ("number", "range") and field.get("name") in narrowed:
+				low, high = narrowed[str(field.get("name"))]
+				fields.append({**field, "min": low, "max": high})
+				continue
+
+			if field.get("kind") != "pitch":
+				fields.append(field)
+				continue
+
+			if field.get("multiple") or not pitches:
+				dropped = True
+				continue
+
+			fields.append({
+				**{key: held for key, held in field.items() if key != "multiple"},
+				"kind": "choice",
+				"options": [{"value": pitch, "label": pitch} for pitch in pitches],
+			})
+
+		offered.append({
+			**generator,
+			"parameters": fields,
+			"partial": bool(generator.get("partial")) or dropped,
+		})
+
+	return offered
+
+
+def _required (parameters: collections.abc.Sequence[dict[str, typing.Any]]) -> set[str]:
+	"""Which of a generator's parameters have to be given a value.
+
+	Inferred from their order, because the catalogue does not say.  A parameter
+	with no default at all and one whose default is ``None`` both arrive with no
+	``default`` key, and the two want opposite treatment: the first has to be
+	filled in or the call fails, the second has to be left out or the generator
+	is handed a zero where it expected to be told nothing.
+
+	Python requires parameters without defaults to come first, so everything
+	ahead of the first defaulted one is required.  That holds for every
+	generator in the catalogue as it stands.  It would not hold for a
+	keyword-only parameter declared after a defaulted one, which is legal and
+	which nothing here uses — so this is an assumption with a shelf life, and an
+	explicit flag from the app would retire it.
+	"""
+
+	must: set[str] = set()
+
+	for field in parameters:
+		if "default" in field:
+			break
+
+		must.add(str(field.get("name")))
+
+	return must
+
+
+class Recipe (Control):
+	"""An ordered stack of generators that build one pattern.
+
+	A person adds a generator from the glass, tunes it, bypasses it, and moves
+	it up or down the stack; the pattern is rebuilt from the stack every cycle.
+	The order is the musical content as much as the parameters are, because a
+	fill told to skip where a note already sits depends on what ran before it.
+
+	**The stack is the only thing kept.**  What a generator produces is made
+	afresh each cycle and never written down (#1965), so a person's own taps
+	remain the only notes anything stores and no algorithm can erase one.
+
+	This knows the name of no generator.  The catalogue is handed in by the
+	composition, which got it from the app that owns those generators, and the
+	pitches are handed in beside it because only a composition knows what a
+	studio has.
+	"""
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		catalogue: collections.abc.Sequence[dict[str, typing.Any]],
+		pitches: collections.abc.Sequence[str] = (),
+		bounds: dict[str, tuple[float, float]] | None = None,
+		data_key: str = "recipe",
+		name: str = "recipe",
+		title: str | None = None,
+	) -> None:
+		"""Offer a stack over a list the composition keeps."""
+
+		self.composition = composition
+		self.pitches = list(pitches)
+		self.catalogue = offerable(catalogue, self.pitches, bounds)
+		self.data_key = data_key
+		self.name = name
+		self.title = title
+
+		self._offered = {
+			generator.get("name"): {
+				str(field.get("name")): _as_parameter(field)
+				for field in generator.get("parameters", [])
+			}
+			for generator in self.catalogue
+		}
+
+		self._must_have = {
+			generator.get("name"): _required(generator.get("parameters", []))
+			for generator in self.catalogue
+		}
+
+		self._complained: set[str] = set()
+		"""Generators that have already failed once, so a bar does not flood a log.
+
+		A pattern is rebuilt every cycle, so anything said here is said twice a
+		second until it is fixed.  Subsequence took the same decision about its
+		own bounds and for the same reason.
+		"""
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""Every generator that can be offered, and what each of them takes."""
+
+		declared: dict[str, typing.Any] = {"type": "recipe", "generators": self.catalogue}
+
+		if self.title is not None:
+			declared["title"] = self.title
+
+		return declared
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""The stack as it stands, in order."""
+
+		return {"layers": self.layers()}
+
+	def layers (self) -> list[dict[str, typing.Any]]:
+		"""A copy of the stack, so a caller cannot edit it by accident."""
+
+		held = self.composition.data.get(self.data_key) or {}
+
+		return [
+			{
+				"id": str(layer.get("id", "")),
+				"generator": layer.get("generator"),
+				"bypassed": bool(layer.get("bypassed", False)),
+				"params": dict(layer.get("params") or {}),
+			}
+			for layer in held.get("layers") or []
+		]
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Rewrite the stack, or move one parameter of one layer."""
+
+		if rest == ["layers"]:
+			return self._keep_stack(value)
+
+		if len(rest) != 2:
+			raise Refused("that names neither the stack nor one of its parameters")
+
+		return self._keep_parameter(rest[0], rest[1], value)
+
+	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
+		"""The stack as it now stands, or one parameter as it was actually kept.
+
+		A layer is stored with every parameter its generator has, filled from
+		that generator's own defaults, so what was asked for and what is held
+		are different things here in a way they are nowhere else.
+		"""
+
+		if rest == ["layers"]:
+			return self.layers()
+
+		layer = next((one for one in self.layers() if one["id"] == rest[0]), None)
+
+		return layer["params"].get(rest[1]) if layer is not None else value
+
+	def _keep_stack (self, value: typing.Any) -> bool:
+		"""Take a whole stack, checked entire before any of it is kept."""
+
+		if not isinstance(value, list):
+			raise Refused("a stack is a list of layers")
+
+		wanted: list[dict[str, typing.Any]] = []
+		seen: set[str] = set()
+
+		for entry in value:
+			if not isinstance(entry, dict):
+				raise Refused("a layer is an object")
+
+			name = entry.get("id")
+
+			if not isinstance(name, str) or not name:
+				raise Refused("a layer needs an id of its own")
+
+			if name in seen:
+				raise Refused(f"two layers both call themselves {name}")
+
+			seen.add(name)
+
+			generator = entry.get("generator")
+			offered = self._offered.get(generator)
+
+			if offered is None:
+				raise Refused(f"there is no generator called {generator}")
+
+			held = entry.get("params")
+			kept: dict[str, typing.Any] = {}
+
+			for parameter, setting in (held if isinstance(held, dict) else {}).items():
+				if parameter not in offered:
+					raise Refused(f"{generator} has no parameter called {parameter}")
+
+				kept[parameter] = checked_value(offered[parameter], setting)
+
+			wanted.append({
+				"id": name,
+				"generator": generator,
+				"bypassed": bool(entry.get("bypassed", False)),
+				"params": {**self._opening(str(generator)), **kept},
+			})
+
+		if self.layers() == wanted:
+			return False
+
+		self.composition.data.setdefault(self.data_key, {})["layers"] = wanted
+
+		return True
+
+	def _keep_parameter (self, layer_id: str, parameter: str, value: typing.Any) -> bool:
+		"""Move one parameter of one layer, which is what turning a knob does."""
+
+		held = self.composition.data.setdefault(self.data_key, {}).setdefault("layers", [])
+		layer = next((one for one in held if one.get("id") == layer_id), None)
+
+		if layer is None:
+			raise Refused(f"there is no layer called {layer_id}")
+
+		offered = self._offered.get(layer.get("generator"), {})
+
+		if parameter not in offered:
+			raise Refused(f"{layer.get('generator')} has no parameter called {parameter}")
+
+		wanted = checked_value(offered[parameter], value)
+		params = layer.setdefault("params", {})
+
+		if params.get(parameter) == wanted:
+			return False
+
+		params[parameter] = wanted
+
+		return True
+
+	def _opening (self, generator: str) -> dict[str, typing.Any]:
+		"""What a freshly added layer holds before anybody has touched it.
+
+		A parameter with a default of its own starts there, so the glass shows
+		what is playing rather than only what somebody has typed.  A parameter
+		with **no** default is filled only when the generator cannot be called
+		without it — and is otherwise left out entirely, because leaving it out
+		is what tells the generator to decide for itself.
+
+		That distinction is not decoration.  ``ghost_fill(grid=None)`` means
+		*use the pattern's own grid*; ``ghost_fill(grid=0)`` means a grid of no
+		steps, and a layer given the second places nothing at all while looking
+		perfectly well set up on the glass.  Filling every absent default with a
+		number did exactly that.
+		"""
+
+		offered = self._offered.get(generator, {})
+		must = self._must_have.get(generator, set())
+
+		return {
+			name: parameter.opening()
+			for name, parameter in offered.items()
+			if parameter.default is not None or name in must
+		}
+
+	def build (self, pattern: typing.Any) -> None:
+		"""Play the whole stack onto a pattern being built, in order.
+
+		Called from the composition's pattern function, so this runs on the
+		clock loop once a cycle.  It does no I/O and holds no lock; the cost is
+		the generators' own, which is what it would be if they were written out
+		by hand in the same order.
+
+		A layer that will not run is skipped rather than allowed to raise.
+		Subsequence survives a failing rebuild by design — it costs that
+		pattern its cycle, never the clock — but for an instrument that is the
+		wrong failure: one bad layer would silence the part every bar with the
+		reason in a log nobody is reading.  Skipping keeps the rest playing,
+		which is what a person can actually hear and correct.
+		"""
+
+		for layer in self.layers():
+			if layer["bypassed"]:
+				continue
+
+			generator = str(layer["generator"])
+			method = getattr(pattern, generator, None)
+
+			if method is None:
+				self._complain(generator, "this Subsequence has no such generator")
+				continue
+
+			try:
+				method(**self._arguments(generator, layer["params"]))
+
+			except Exception as error:
+				self._complain(generator, str(error))
+
+	def _arguments (self, generator: str, params: dict[str, typing.Any]) -> dict[str, typing.Any]:
+		"""A layer's parameters as the generator's own call expects them.
+
+		A range crosses the wire as a two-item list because JSON has no tuple,
+		and a generator that offers ``int | (int, int)`` reads a list as
+		neither.  So it goes back to a tuple on the way in.
+		"""
+
+		offered = self._offered.get(generator, {})
+
+		return {
+			name: tuple(value) if offered.get(name) is not None
+			and offered[name].kind == "range" and isinstance(value, list)
+			else value
+			for name, value in params.items()
+		}
+
+	def _complain (self, generator: str, why: str) -> None:
+		"""Say once that a layer will not run, not once a bar."""
+
+		if generator in self._complained:
+			return
+
+		self._complained.add(generator)
+
+		LOG.warning(
+			"the %r layer of %r will not run and is being skipped: %s. "
+			"Further failures of this generator are not logged.",
+			generator, self.name, why)
 
 
 class Transport (Control):
@@ -990,7 +1467,8 @@ class AppLink:
 		self.version += 1
 
 		self._emit(superintendent.protocol.changed(
-			self.app_name, path, value, self.version, by="panel", client=client, seq=seq))
+			self.app_name, path, control.applied(rest.split("/"), value), self.version,
+			by="panel", client=client, seq=seq))
 
 	def report (self, path: str, value: typing.Any) -> None:
 		"""Announce something the app did of its own accord, on the clock loop.

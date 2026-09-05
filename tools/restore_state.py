@@ -37,9 +37,17 @@ def _sets (app: str, state: dict) -> list[tuple[str, str, object]]:
 			continue
 
 		for key, value in held.items():
-			if isinstance(value, list):
+			if isinstance(value, list) and all(isinstance(one, int) for one in value):
 				for step in value:
 					asks.append((app, f"{control}/{key}/{step}", True))
+
+			elif isinstance(value, list):
+				# A list that is not a list of step numbers is a value in its
+				# own right — a stack of generators, whose order is part of
+				# what it means — so it goes back whole rather than a member at
+				# a time.  Sending it a member at a time produced paths with a
+				# whole object where a step number belongs.
+				asks.append((app, f"{control}/{key}", value))
 
 			elif isinstance(value, dict):
 				for step, note in value.items():
@@ -63,7 +71,7 @@ async def main () -> None:
 
 	async with websockets.asyncio.client.connect(URL) as socket:
 		await socket.send(json.dumps({
-			"t": "hello", "contract": "1.3.0", "client": "restore",
+			"t": "hello", "contract": "1.4.0", "client": "restore",
 			"page": None, "ver": {}, "token": None}))
 
 		for seq, (app, path, value) in enumerate(asks):

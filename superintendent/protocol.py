@@ -14,14 +14,22 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.3.0"
+CONTRACT_VERSION = "1.4.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
 does not know — so the minor number, not the major one.  1.2.0 adds ``pages`` to
 ``declare`` and to ``manifest``: an app that sends none, and a panel that reads
 none, both behave exactly as they did.  1.3.0 adds ``arrange``, which an app
-that cannot save one answers with a ``nack`` like any other refusal.
+that cannot save one answers with a ``nack`` like any other refusal.  1.4.0 adds
+the ``recipe`` control kind and the ``range`` parameter shape; a service too old
+for either marks the control unsupported and says so on the glass, which is the
+mechanism that already exists for exactly this.
+
+The frames themselves have not changed since 1.3.0.  A stack is added to and
+reordered by setting a path like any other control, which was the point of
+choosing absolute sets: adding a generator from the glass needed no new frame,
+only a value that happens to be a list (#2085).
 """
 
 Frame = dict[str, typing.Any]

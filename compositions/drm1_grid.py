@@ -233,6 +233,7 @@ def drums (p: typing.Any) -> None:
 	"""
 
 	_play(p, composition.data["grid"])
+	drum_recipe.build(p)
 
 
 @composition.pattern(
@@ -281,6 +282,32 @@ def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 			p.hit_steps(row, list(steps), velocity=VELOCITY)
 
 
+drum_recipe = superintendent.subsequence_adapter.Recipe(
+	composition,
+	catalogue=subsequence.generators(),
+	pitches=ROWS,
+	bounds={
+		"pulses": (0, STEPS),
+		"grid": (1, STEPS),
+		"subdivisions": (1, 8),
+		"duration": (0.05, float(BEATS)),
+	},
+	data_key="drum_recipe",
+	name="drum_recipe",
+	title="DRM1 — generators")
+"""Generators the panel can stack onto pattern 1, over the notes tapped by hand.
+
+The catalogue is Subsequence's own description of itself, and the ten voices
+are this rig's — which is the whole division: the app knows a parameter is a
+pitch and cannot know which pitches exist, and only this file knows they are a
+DRM1's (#1465, #2085).  Superintendent is handed both and names neither.
+
+Built *after* the hand grid in the pattern function, deliberately.  A generator
+told to skip a step that already sounds has to see the taps before it runs, and
+the order a stack plays in is the person's to arrange from the glass.
+"""
+
+
 link = superintendent.subsequence_adapter.AppLink(
 	composition,
 	controls=[
@@ -323,6 +350,7 @@ link = superintendent.subsequence_adapter.AppLink(
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
 			on_change=send_setting),
+		drum_recipe,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -338,6 +366,8 @@ link = superintendent.subsequence_adapter.AppLink(
 			"kit", parts=["grid", "bass"], title="Drums + bass"),
 		superintendent.subsequence_adapter.Page(
 			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
+		superintendent.subsequence_adapter.Page(
+			"generators", parts=["grid", "drum_recipe"], title="Generators"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),

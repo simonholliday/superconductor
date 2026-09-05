@@ -32,7 +32,7 @@ async def main () -> None:
 
 	async with websockets.asyncio.client.connect(URL) as socket:
 		await socket.send(json.dumps({
-			"t": "hello", "contract": "1.3.0", "client": "capture",
+			"t": "hello", "contract": "1.4.0", "client": "capture",
 			"page": None, "ver": {}, "token": None}))
 
 		deadline = time.monotonic() + 5

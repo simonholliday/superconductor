@@ -94,7 +94,7 @@ const SETTING_FLOOR = 44;
    the grids beside it are set to — and the fit is told, so a block is measured
    as tall as it will draw. */
 
-const DRAWN = ["step_grid", "note_grid", "params"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 /* The gap between cells, how many of them the row labels span, and the height
@@ -131,7 +131,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.3.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.4.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -176,7 +176,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.3.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.4.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -499,81 +499,318 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
  * The ones worth glass are the parameters an instrument has no knob for at
  * all, which is why this is a block of its own rather than a strip beside a
  * grid: it is the part of the instrument the panel is the only way to reach. */
+/* A step for a number the app declared none for.
+ *
+ * Subsequence sends a step only where the type implies one, so an absent step
+ * means a continuous value and something has to be chosen: a whole number moves
+ * by one and a fractional one by a tenth. It is a guess, and the way to stop
+ * guessing is for the composition to declare bounds — which turns the stepper
+ * into a slider and takes the step from the range. */
+const stepOf = (field, held) => field.step ?? (Number.isInteger(held ?? 0) ? 1 : 0.1);
+
+/* Binary floating point makes 0.1 + 0.2 into something no one wants to read on
+ * a control surface. Six places is far finer than any parameter here. */
+const tidy = (value) => Number(value.toFixed(6));
+
+/* One parameter, in whichever of the four shapes it comes in.
+ *
+ * Shared between an instrument's settings and a generator's, because they are
+ * the same shapes and two copies would drift apart the first time one of them
+ * gained a kind (#2085).
+ *
+ * A number is a slider when the app or the composition said what its ends are,
+ * and a stepper when nobody did. That is not a fallback so much as the ordinary
+ * case: most of a generator's numbers have no natural bound — a duration in
+ * beats, a spacing — and a slider with invented ends would be a lie a finger
+ * could act on. A stepper works with one finger and no keyboard either way. */
+function Setting ({ field, held, onSet }) {
+	const sliding = useRef(null);
+	const bounded = field.min !== undefined && field.max !== undefined;
+
+	const at = (event, box) =>
+		Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+
+	const along = (part) => {
+		const step = stepOf(field, held);
+
+		return tidy(Math.round((field.min + part * (field.max - field.min)) / step) * step);
+	};
+
+	const slide = (event) => {
+		const wanted = along(at(event, event.currentTarget.getBoundingClientRect()));
+
+		if (wanted !== held) onSet(wanted);
+	};
+
+	/* Which end of a range the finger took hold of, decided once on the way
+	   down and then kept: deciding it again on every move would swap ends
+	   under the finger the moment the two crossed. */
+	const slideRange = (event, end) => {
+		const wanted = along(at(event, event.currentTarget.getBoundingClientRect()));
+		const [low, high] = held || [field.min, field.min];
+		const next = end === "low" ? [Math.min(wanted, high), high] : [low, Math.max(wanted, low)];
+
+		if (next[0] !== low || next[1] !== high) onSet(next);
+	};
+
+	const stepper = (value, onChange) => html`
+		<div class="stepper">
+			<button onPointerDown=${(event) => {
+				event.preventDefault();
+				onChange(tidy((value ?? 0) - stepOf(field, value)));
+			}}>−</button>
+			<span>${value ?? 0}</span>
+			<button onPointerDown=${(event) => {
+				event.preventDefault();
+				onChange(tidy((value ?? 0) + stepOf(field, value)));
+			}}>+</button>
+		</div>`;
+
+	if (field.kind === "switch") {
+		return html`
+			<button
+				class=${`switch ${held ? "on" : ""}`}
+				onPointerDown=${(event) => { event.preventDefault(); onSet(!held); }}
+			>${held ? "on" : "off"}</button>`;
+	}
+
+	if (field.kind === "choice") {
+		return html`
+			<div class="choices">
+				${(field.options || []).map((option) => html`
+					<button
+						key=${option.value}
+						class=${option.value === held ? "here" : ""}
+						onPointerDown=${(event) => { event.preventDefault(); onSet(option.value); }}
+					>${option.label || option.value}</button>`)}
+			</div>`;
+	}
+
+	if (field.kind === "range") {
+		const [low, high] = held || [field.min ?? 0, field.min ?? 0];
+
+		if (!bounded) {
+			return html`
+				<div class="pair">
+					${stepper(low, (value) => onSet([Math.min(value, high), high]))}
+					${stepper(high, (value) => onSet([low, Math.max(value, low)]))}
+				</div>`;
+		}
+
+		const span = field.max - field.min;
+		const place = (value) => `${((value - field.min) / span) * 100}%`;
+
+		return html`
+			<div
+				class="dial ranged"
+				onPointerDown=${(event) => {
+					event.preventDefault();
+					event.currentTarget.setPointerCapture(event.pointerId);
+
+					const part = at(event, event.currentTarget.getBoundingClientRect());
+					const wanted = field.min + part * span;
+
+					sliding.current = Math.abs(wanted - low) <= Math.abs(wanted - high)
+						? "low" : "high";
+
+					slideRange(event, sliding.current);
+				}}
+				onPointerMove=${(event) => {
+					if (sliding.current) slideRange(event, sliding.current);
+				}}
+				onPointerUp=${() => { sliding.current = null; }}
+				onPointerCancel=${() => { sliding.current = null; }}
+			>
+				<i style=${{ left: place(low), width: `${((high - low) / span) * 100}%` }}></i>
+				<b style=${{ left: place(low) }}></b>
+				<b style=${{ left: place(high) }}></b>
+				<span>${low} – ${high}</span>
+			</div>`;
+	}
+
+	if (!bounded) return stepper(held, (value) => onSet(value));
+
+	return html`
+		<div
+			class="dial"
+			onPointerDown=${(event) => {
+				event.preventDefault();
+				event.currentTarget.setPointerCapture(event.pointerId);
+				sliding.current = event.pointerId;
+				slide(event);
+			}}
+			onPointerMove=${(event) => {
+				if (sliding.current === event.pointerId) slide(event);
+			}}
+			onPointerUp=${() => { sliding.current = null; }}
+			onPointerCancel=${() => { sliding.current = null; }}
+		>
+			<i style=${{ width: `${((held - field.min) / (field.max - field.min)) * 100}%` }}></i>
+			<span>${held}</span>
+		</div>`;
+}
+
 function Params ({ name, fields, values, cell, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
 
-	const sliding = useRef(null);
-
-	const slide = (event, field) => {
-		const box = event.currentTarget.getBoundingClientRect();
-		const low = field.min ?? 0;
-		const high = field.max ?? 127;
-
-		const part = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
-		const step = field.step || 1;
-		const wanted = Math.round((low + part * (high - low)) / step) * step;
-
-		if (wanted !== values[field.name]) onSet(`${name}/${field.name}`, wanted);
-	};
-
 	return html`
 		<div class="grid params" style=${style}>
-			${fields.map((field) => {
-				const held = values[field.name];
-
-				return html`
-					<div class="row-label" key=${`label-${field.name}`}>${field.label || field.name}</div>
-
-					<div class="setting" key=${field.name} style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-						${field.kind === "switch" && html`
-							<button
-								class=${`switch ${held ? "on" : ""}`}
-								onPointerDown=${(event) => {
-									event.preventDefault();
-									onSet(`${name}/${field.name}`, !held);
-								}}
-							>${held ? "on" : "off"}</button>`}
-
-						${field.kind === "choice" && html`
-							<div class="choices">
-								${(field.options || []).map((option) => html`
-									<button
-										key=${option.value}
-										class=${option.value === held ? "here" : ""}
-										onPointerDown=${(event) => {
-											event.preventDefault();
-											onSet(`${name}/${field.name}`, option.value);
-										}}
-									>${option.label || option.value}</button>`)}
-							</div>`}
-
-						${field.kind === "number" && html`
-							<div
-								class="dial"
-								onPointerDown=${(event) => {
-									event.preventDefault();
-									event.currentTarget.setPointerCapture(event.pointerId);
-									sliding.current = event.pointerId;
-									slide(event, field);
-								}}
-								onPointerMove=${(event) => {
-									if (sliding.current === event.pointerId) slide(event, field);
-								}}
-								onPointerUp=${() => { sliding.current = null; }}
-								onPointerCancel=${() => { sliding.current = null; }}
-							>
-								<i style=${{
-									width: `${((held - (field.min ?? 0))
-										/ ((field.max ?? 127) - (field.min ?? 0))) * 100}%`,
-								}}></i>
-								<span>${held}</span>
-							</div>`}
-					</div>`;
-			})}
+			${fields.map((field) => [
+				html`
+					<div class="row-label" key=${`label-${field.name}`}>
+						${field.label || field.name}
+					</div>`,
+				html`
+					<div class="setting" key=${field.name}
+						style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+						<${Setting} field=${field} held=${values[field.name]}
+							onSet=${(value) => onSet(`${name}/${field.name}`, value)} />
+					</div>`,
+			]).flat()}
 		</div>`;
 }
+
+
+/* A stack of generators that build one pattern, and their parameters.
+ *
+ * The order is musical content rather than presentation: a fill told to skip
+ * where a note already sits depends entirely on what ran before it, so moving a
+ * layer up or down changes what is heard. That is why the arrows are as
+ * prominent as the parameters.
+ *
+ * Nothing here knows the name of a single generator. The list comes from the
+ * app describing itself, joined by the composition to the voices this studio
+ * has (#2085), and this draws whatever arrives — which is the same rule that
+ * keeps drum voices and control-change numbers out of the package.
+ *
+ * A whole stack is sent for anything that changes the list — adding, removing,
+ * bypassing, reordering — and a single parameter is sent on its own. The split
+ * is what lets two people turn different knobs without overwriting each other,
+ * while a structural change genuinely is about the list. */
+function Recipe ({ name, generators, layers, onSet }) {
+	const [adding, setAdding] = useState(false);
+
+	const style = {
+		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
+	};
+
+	const full = { gridColumn: `span ${PARAM_CELLS + 1}` };
+	const known = (generator) => generators.find((one) => one.name === generator);
+	const send = (next) => onSet(`${name}/layers`, next);
+
+	/* An id has to survive a round trip and be unique among its neighbours. The
+	   clock alone is not enough: two taps inside a millisecond are a stutter,
+	   not an impossibility, on a surface meant to be played. */
+	const add = (generator) => {
+		setAdding(false);
+		send([...layers, {
+			id: `l${Date.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36)}`,
+			generator,
+			params: {},
+		}]);
+	};
+
+	const shift = (index, by) => {
+		const to = index + by;
+
+		if (to < 0 || to >= layers.length) return;
+
+		const next = [...layers];
+
+		[next[index], next[to]] = [next[to], next[index]];
+		send(next);
+	};
+
+	const press = (act) => (event) => { event.preventDefault(); act(); };
+
+	return html`
+		<div class="recipe">
+			<div class="grid params" style=${style}>
+				${layers.map((layer, index) => {
+					const offered = known(layer.generator);
+
+					return [
+						html`
+							<div class="layer" key=${`head-${layer.id}`} style=${full}>
+								<button
+									class=${`switch ${layer.bypassed ? "" : "on"}`}
+									title="bypass"
+									onPointerDown=${press(() => send(layers.map((one) =>
+										one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one)))}
+								>${layer.bypassed ? "off" : "on"}</button>
+								<b>${layer.generator}</b>
+								<span class="spacer"></span>
+								<button
+									class="move" disabled=${index === 0}
+									onPointerDown=${press(() => shift(index, -1))}
+								>↑</button>
+								<button
+									class="move" disabled=${index === layers.length - 1}
+									onPointerDown=${press(() => shift(index, 1))}
+								>↓</button>
+								<button
+									class="drop"
+									onPointerDown=${press(() => send(
+										layers.filter((one) => one.id !== layer.id)))}
+								>remove</button>
+							</div>`,
+
+						...(offered
+							? offered.parameters.map((field) => [
+								html`
+									<div class="row-label" key=${`label-${layer.id}-${field.name}`}>
+										${field.label || field.name}
+									</div>`,
+								html`
+									<div class="setting" key=${`${layer.id}-${field.name}`}
+										style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+										<${Setting}
+											field=${field}
+											held=${(layer.params || {})[field.name]}
+											onSet=${(value) =>
+												onSet(`${name}/${layer.id}/${field.name}`, value)} />
+									</div>`,
+							]).flat()
+							: [html`
+								<div class="unsupported" key=${`gone-${layer.id}`} style=${full}>
+									The application no longer offers a generator called
+									<b>${layer.generator}</b>. This layer is not playing, and
+									removing it is the only thing that will change that.
+								</div>`]),
+					];
+				}).flat()}
+			</div>
+
+			${adding
+				? html`
+					<div class="catalogue">
+						<div class="pick">
+							<b>add a generator</b>
+							<span class="spacer"></span>
+							<button onPointerDown=${press(() => setAdding(false))}>close</button>
+						</div>
+						${generators.map((generator) => html`
+							<button
+								key=${generator.name}
+								class=${`offer ${generator.partial ? "partial" : ""}`}
+								disabled=${generator.partial}
+								onPointerDown=${press(() => add(generator.name))}
+							>
+								<b>${generator.name}</b>
+								<i>${generator.partial
+									? "takes something this panel cannot draw yet"
+									: generator.summary}</i>
+							</button>`)}
+					</div>`
+				: html`
+					<button class="offer add" onPointerDown=${press(() => setAdding(true))}>
+						add a generator
+					</button>`}
+		</div>`;
+}
+
 
 /* One part: a titled block holding one control.
  *
@@ -1396,6 +1633,23 @@ function Panel () {
 				steps: PARAM_CELLS, floor: SETTING_FLOOR };
 		}
 
+		/* A stack is as tall as what is in it: a heading for each layer, a row
+		   for each parameter of each layer, and one more for the button that
+		   adds another. It grows as a person builds, which is what makes the
+		   fit re-solve — and that is wanted here, unlike during a drag. */
+		if (kindOf(name) === "recipe") {
+			const held = ((state[appName] || {})[name] || {}).layers || [];
+			const offered = controls[name].generators || [];
+
+			const rows = held.reduce((total, layer) => {
+				const generator = offered.find((one) => one.name === layer.generator);
+
+				return total + 1 + (generator ? generator.parameters.length : 1);
+			}, 1);
+
+			return { name, rows: Math.max(rows, 2), steps: PARAM_CELLS, floor: SETTING_FLOOR };
+		}
+
 		return {
 			name,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
@@ -1544,6 +1798,12 @@ function Panel () {
 							<${Params} name=${name} fields=${controls[name].fields || []}
 								values=${(state[appName] || {})[name] || {}}
 								cell=${size.cell} onSet=${request} />`
+						: kindOf(name) === "recipe"
+						? html`
+							<${Recipe} name=${name}
+								generators=${controls[name].generators || []}
+								layers=${((state[appName] || {})[name] || {}).layers || []}
+								onSet=${request} />`
 						: kindOf(name) === "note_grid"
 						? html`
 							<${NoteGrid} name=${name} control=${controls[name]}
@@ -1560,7 +1820,7 @@ function Panel () {
 								cells=${(state[appName] || {})[name] || {}}
 								visible=${controls[name].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
-					${up && kindOf(name) !== "params" && html`
+					${up && !["params", "recipe"].includes(kindOf(name)) && html`
 						<${Playhead} anchor=${anchor} steps=${controls[name].steps}
 							beats=${controls[name].beats || 4} paused=${transportFields.paused === true} />`}
 				<//>`)}

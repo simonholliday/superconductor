@@ -412,14 +412,21 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	panel.mouse.move(title["x"] + 20, title["y"] + 200, steps=8)
 	panel.mouse.up()
 
-	moved = block.bounding_box()
-	assert moved["y"] > before["y"]
+	assert block.bounding_box()["y"] > before["y"]
 
 	# Leaving is what saves, deliberately: once rather than on every nudge, so a
 	# drag in progress is never half-kept (#2075). A reload before this would
 	# find nothing, and should.
 	panel.locator(".bar .arrange").click()
 	playwright_api.expect(panel.locator(".grid-wrap.arranging")).to_have_count(0, timeout=5_000)
+	_settled(panel)
+
+	# Measured after leaving rather than during. The fit is frozen while a drag
+	# is going on and catches up on the way out (#2072), so a position taken
+	# mid-drag is under a different cell size from every later one — and a
+	# block placed some cells down then lands a few pixels off for a reason
+	# that has nothing to do with what this is testing.
+	moved = block.bounding_box()
 
 	panel.reload()
 	panel.wait_for_selector(".cell", timeout=10_000)
@@ -820,3 +827,163 @@ def test_the_page_does_not_resize_itself_under_a_dragging_finger (panel: typing.
 	panel.mouse.up()
 
 	assert during == before, "the cells stayed where they were while the block moved"
+
+
+def _open_the_stack (panel: typing.Any) -> None:
+	"""Go to the page carrying the generator stack and wait for it to draw."""
+
+	panel.locator(".pages button", has_text="Generators").click()
+	panel.wait_for_selector(".recipe", timeout=5_000)
+	_settled(panel)
+
+
+def test_a_generator_is_added_from_the_glass (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2085: the panel picks from a catalogue the app described itself with.
+
+	Adding sends the whole stack, because adding changes the list rather than a
+	value in it — and the same is true of removing, bypassing and reordering.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator(".offer.add").click()
+	panel.locator(".catalogue .offer", has_text="euclidean").click()
+
+	panel.wait_for_function(
+		"() => window.__sets === undefined || true", timeout=1_000)
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked, "adding a generator asked for nothing"
+	assert [layer["generator"] for layer in asked[-1]["v"]] == ["euclidean", "euclidean"]
+
+
+def test_a_generator_this_panel_cannot_fully_draw_is_shown_but_not_offered (
+	panel: typing.Any) -> None:
+	"""Shown rather than hidden: knowing it exists and why it is out of reach is
+	worth more than a shorter list, and it is what the app itself says."""
+
+	_open_the_stack(panel)
+	panel.locator(".offer.add").click()
+
+	partial = panel.locator(".catalogue .offer", has_text="evolve")
+
+	assert partial.count() == 1
+	assert partial.is_disabled()
+
+
+def test_one_parameter_is_addressed_on_its_own_not_as_the_whole_stack (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Which is what lets two people turn different knobs without one of them
+	overwriting the other's layer."""
+
+	_open_the_stack(panel)
+
+	panel.locator('.part[data-part="stack"] .switch').first.click()
+
+	dial = panel.locator('.part[data-part="stack"] .dial').first
+	box = dial.bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
+
+	moved = [one for one in fake_app.sets if one["path"].startswith("stack/one/")]
+
+	assert moved, "turning a knob addressed no parameter"
+	assert moved[-1]["path"] == "stack/one/pulses"
+
+
+def test_a_number_with_no_declared_bounds_is_worked_with_one_finger (
+	panel: typing.Any) -> None:
+	"""Most of a generator's numbers have no natural range, so this is the
+	ordinary case rather than the odd one.  A slider with invented ends would be
+	a lie a finger could act on; a stepper claims nothing and still works with
+	no keyboard attached."""
+
+	_open_the_stack(panel)
+
+	stepper = panel.locator('.part[data-part="stack"] .stepper')
+
+	assert stepper.count() == 1, "duration has no bounds and should be a stepper"
+
+	for index in range(stepper.locator("button").count()):
+		box = stepper.locator("button").nth(index).bounding_box()
+
+		assert box["width"] >= 44 and box["height"] >= 44, "a stepper button is not reachable"
+
+
+def test_a_range_is_one_bar_with_two_handles (panel: typing.Any) -> None:
+	"""The gap between them is the value, which is the reason to draw it at all
+	rather than print two numbers."""
+
+	_open_the_stack(panel)
+
+	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+
+	assert ranged.count() == 1
+	assert ranged.locator("b").count() == 2
+
+
+def test_a_range_moves_the_end_the_finger_took_hold_of (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Deciding which end on the way down and keeping it: deciding again on
+	every move would swap ends under the finger the moment the two crossed."""
+
+	_open_the_stack(panel)
+
+	ranged = panel.locator('.part[data-part="stack"] .dial.ranged')
+	box = ranged.bounding_box()
+
+	# Held is 40–80 of 1–127, so the left quarter is nearest the low end.
+	panel.mouse.click(box["x"] + box["width"] * 0.1, box["y"] + box["height"] / 2)
+
+	moved = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+
+	assert moved, "the range asked for nothing"
+
+	low, high = moved[-1]["v"]
+
+	assert high == 80, "the end that was not touched moved"
+	assert low < 40, "the end that was touched did not"
+
+
+def test_a_layer_is_moved_up_and_down_the_stack (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The order is musical content: a fill that skips an occupied step depends
+	on what ran before it."""
+
+	_open_the_stack(panel)
+
+	panel.locator(".offer.add").click()
+	panel.locator(".catalogue .offer", has_text="euclidean").click()
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "bypassed": False, "params": {}},
+		{"id": "two", "generator": "euclidean", "bypassed": False, "params": {}},
+	], by="panel")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.part[data-part=stack] .layer').length === 2",
+		timeout=5_000)
+
+	panel.locator('.part[data-part="stack"] .layer').nth(1).locator(".move").first.click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert [layer["id"] for layer in asked[-1]["v"]] == ["two", "one"]
+
+
+def test_a_layer_naming_a_generator_that_has_gone_says_so (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A stored stack outlives the package that defines its generators.  When
+	one is renamed away the layer must say it is not playing, rather than draw
+	an empty set of parameters that looks like it is."""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "withdrawn", "bypassed": False, "params": {}},
+	], by="app")
+
+	panel.wait_for_selector('.part[data-part="stack"] .unsupported', timeout=5_000)
+
+	assert "withdrawn" in panel.locator('.part[data-part="stack"] .unsupported').inner_text()

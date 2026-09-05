@@ -43,11 +43,31 @@ that switch is control-change 65 on channel 6 is the composition's business and
 never this package's, which is the same rule the rows of a grid follow.
 """
 
-PARAMETER_KINDS = ("switch", "number", "choice")
-"""What a parameter can be, and so what a panel knows how to draw."""
+PARAMETER_KINDS = ("switch", "number", "choice", "range")
+"""What a parameter can be, and so what a panel knows how to draw.
+
+A range is two numbers with an order between them, held as ``[low, high]``.  It
+is the shape an algorithm's parameters ask for that an instrument's did not: a
+velocity given as ``(30, 50)`` means a fresh draw between the two on every hit,
+which is most of what makes a generated layer sound played rather than typed.
+"""
 
 
-KINDS = (STEP_GRID, NOTE_GRID, PARAMS, TRANSPORT)
+RECIPE = "recipe"
+"""An ordered stack of generators that build a pattern, with their parameters.
+
+A pattern is made by calling one generator after another, and the order is
+musical rather than incidental: a fill told to skip where a note already sits
+depends entirely on what ran before it.  So a recipe is a *list*, and the order
+of that list is part of its value rather than a presentation detail.
+
+Which generators exist, and what parameters each takes, is declared by the app
+out of its own description of itself.  Nothing in this package names one, which
+is the same rule that keeps drum voices and control-change numbers out of it.
+"""
+
+
+KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT)
 """Every kind of control this version of the service understands.
 
 An app may declare one this service has never heard of — it is older than the
@@ -103,6 +123,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	elif kind == PARAMS:
 		_apply_parameter(state.setdefault(control, {}), declaration, rest, value, path)
 
+	elif kind == RECIPE:
+		_apply_recipe(state.setdefault(control, {}), declaration, rest, value, path)
+
 	elif kind == TRANSPORT:
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
@@ -133,6 +156,26 @@ def _apply_cell (
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
 	_set_cell(grid, row, step, bool(value))
+
+
+def _within (field: dict[str, typing.Any], value: float, name: str) -> None:
+	"""Refuse a number outside whatever bounds were declared for it, if any.
+
+	A generator's parameters often carry no bound at all — a duration in beats,
+	a spacing, the time step of a chaotic system — and 27 of the generators
+	Subsequence describes have at least one.  Inventing a range for those would
+	be a guess with a MIDI accent: 0 to 127 is right for a control change and
+	meaningless for a duration.  So where the app declared no bound none is
+	checked, and the app is left to judge its own argument.
+	"""
+
+	low, high = field.get("min"), field.get("max")
+
+	if low is not None and value < low:
+		raise ControlError(f"{name!r} is not below {low}, and {value!r} is")
+
+	if high is not None and value > high:
+		raise ControlError(f"{name!r} is not above {high}, and {value!r} is")
 
 
 def _apply_parameter (
@@ -168,19 +211,146 @@ def _apply_parameter (
 		if isinstance(value, bool) or not isinstance(value, (int, float)):
 			raise ControlError(f"{name!r} is a number, and {value!r} is not one")
 
-		low, high = field.get("min", 0), field.get("max", 127)
-
-		if not low <= value <= high:
-			raise ControlError(f"{name!r} is between {low} and {high}, and {value!r} is not")
+		_within(field, value, name)
 
 	elif kind == "choice":
 		if value not in [one.get("value") for one in field.get("options", [])]:
 			raise ControlError(f"{name!r} has no option called {value!r}")
 
+	elif kind == "range":
+		if (not isinstance(value, (list, tuple)) or len(value) != 2
+				or any(isinstance(one, bool) or not isinstance(one, (int, float)) for one in value)):
+			raise ControlError(f"{name!r} is a range and takes two numbers, not {value!r}")
+
+		if value[0] > value[1]:
+			raise ControlError(f"{name!r} is two numbers in order, and {value!r} is not")
+
+		_within(field, value[0], name)
+		_within(field, value[1], name)
+
+		# Kept as a list whatever arrived, so the service's copy matches what
+		# the same value becomes after a trip through JSON.  A tuple here and a
+		# list on the wire would compare unequal and never say why.
+		value = [value[0], value[1]]
+
 	else:
 		raise ControlError(f"{name!r} is a {kind!r}, which this version does not know")
 
 	settings[name] = value
+
+
+def _offered (declaration: dict[str, typing.Any], generator: typing.Any) -> dict[str, typing.Any]:
+	"""What one generator of a declared catalogue takes, as a parameter declaration.
+
+	Shaped so that a layer's parameters can go through ``_apply_parameter``
+	unchanged: a generator's parameter and an instrument's setting are the same
+	four shapes, and validating them twice in two places is how the two would
+	come to disagree.
+	"""
+
+	if not isinstance(generator, str):
+		raise ControlError(f"a layer names no generator, and {generator!r} is not one")
+
+	for offered in declaration.get("generators", []):
+		if offered.get("name") == generator:
+			return {"fields": offered.get("parameters", [])}
+
+	raise ControlError(f"this app offers no generator called {generator!r}")
+
+
+def _apply_recipe (
+	recipe: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Rewrite the whole stack, or change one parameter of one layer.
+
+	Two shapes of address, and the length of the path says which.  ``recipe/
+	layers`` carries the stack entire — which is how a layer is added, removed,
+	bypassed or moved, since all four change the list rather than a value in it.
+	``recipe/<layer>/<parameter>`` changes one parameter of one layer, which is
+	what turning a knob does and is by far the commoner of the two.
+
+	The split is worth the second shape.  A whole-stack set for every change
+	would mean two people turning different knobs overwrote each other, while a
+	structural change is rare and genuinely is about the list.
+	"""
+
+	if rest == ["layers"]:
+		recipe["layers"] = _readable_layers(declaration, value, path)
+		return
+
+	if len(rest) != 2:
+		raise ControlError(
+			f"{path!r} names neither a stack as control/layers "
+			f"nor a parameter as control/layer/name")
+
+	layer = next((one for one in recipe.get("layers", []) if one.get("id") == rest[0]), None)
+
+	if layer is None:
+		raise ControlError(f"this stack has no layer called {rest[0]!r}")
+
+	_apply_parameter(
+		layer.setdefault("params", {}), _offered(declaration, layer.get("generator")),
+		rest[1:], value, path)
+
+
+def _readable_layers (
+	declaration: dict[str, typing.Any],
+	value: typing.Any,
+	path: str,
+) -> list[dict[str, typing.Any]]:
+	"""Check a whole stack before any of it is kept.
+
+	Every layer is validated and only then does the stack replace what was
+	there, so a bad entry half way down cannot leave the service holding a
+	stack that is partly old and partly new.
+
+	Strict rather than forgiving, deliberately.  A panel asking to set a
+	parameter no generator has is a fault in the panel and should be told so.
+	Forgiveness belongs where a *stored* recipe is read back, which is a
+	different path and the app's own business: a file written before a
+	generator changed is somebody's work, and a panel's bad request is not.
+	"""
+
+	if not isinstance(value, list):
+		raise ControlError(f"{path!r} takes a list of layers, and {value!r} is not one")
+
+	layers: list[dict[str, typing.Any]] = []
+	seen: set[str] = set()
+
+	for entry in value:
+		if not isinstance(entry, dict):
+			raise ControlError(f"a layer is named by an object, and {entry!r} is not one")
+
+		name = entry.get("id")
+
+		if not isinstance(name, str) or not name:
+			raise ControlError(f"a layer needs an id of its own, and {name!r} is not one")
+
+		if name in seen:
+			raise ControlError(f"two layers both call themselves {name!r}")
+
+		seen.add(name)
+
+		generator = entry.get("generator")
+		offered = _offered(declaration, generator)
+		held = entry.get("params")
+		kept: dict[str, typing.Any] = {}
+
+		for parameter, setting in (held if isinstance(held, dict) else {}).items():
+			_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
+
+		layers.append({
+			"id": name,
+			"generator": generator,
+			"bypassed": bool(entry.get("bypassed", False)),
+			"params": kept,
+		})
+
+	return layers
 
 
 NOTE_FIELDS = ("length", "velocity")

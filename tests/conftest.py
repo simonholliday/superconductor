@@ -33,6 +33,20 @@ CONTROLS: dict[str, typing.Any] = {
 	             {"name": "glide", "kind": "switch", "label": "Glide"},
 	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127, "step": 1},
 	         ]},
+	"stack": {"type": "recipe", "title": "Generators", "generators": [
+		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
+		 "parameters": [
+		     {"name": "pitch", "label": "pitch", "kind": "choice",
+		      "options": [{"value": "kick", "label": "kick"},
+		                  {"value": "snare", "label": "snare"}]},
+		     {"name": "pulses", "label": "pulses", "kind": "number",
+		      "min": 0, "max": 8, "step": 1},
+		     {"name": "velocity", "label": "velocity", "kind": "range",
+		      "min": 1, "max": 127, "step": 1},
+		     {"name": "duration", "label": "duration", "kind": "number", "step": 1},
+		 ]},
+		{"name": "evolve", "summary": "Mutate a sequence.", "partial": True, "parameters": []},
+	]},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.
@@ -48,6 +62,7 @@ PAGES: list[dict[str, typing.Any]] = [
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
 	{"id": "bass", "title": "Bass", "parts": ["bass"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
+	{"id": "stack", "title": "Generators", "parts": ["stack"]},
 ]
 """Two views over the same two grids, one of which carries both.
 
@@ -135,6 +150,11 @@ class FakeApp:
 			{"grid": {"kick": [0, 4], "snare": []}, "second": {"kick": [2]},
 			 "bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
 			 "moog": {"glide": False, "rate": 24},
+			 "stack": {"layers": [
+			     {"id": "one", "generator": "euclidean", "bypassed": False,
+			      "params": {"pitch": "kick", "pulses": 3,
+			                 "velocity": [40, 80], "duration": 1}},
+			 ]},
 			 "transport": {"paused": False, "bpm": 120.0}},
 			self.version, pages)
 

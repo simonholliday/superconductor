@@ -147,3 +147,44 @@ async def test_an_app_going_away_is_shown_on_the_glass () -> None:
 
 	assert glass.of_kind("app")[-1] == {"t": "app", "app": "subsequence", "up": False}
 	assert glass.of_kind("manifest")[-1]["apps"] == {}
+
+
+async def test_a_control_that_appears_after_the_app_declared_reaches_an_open_panel () -> None:
+	"""Adding a generator on the glass changes what an app offers while it runs.
+
+	The app re-declares on the socket it already has, and every panel is sent a
+	fresh manifest.  Nothing about this is new — an arrangement being kept
+	re-declares for the same reason — but #2085 makes it load-bearing rather
+	than incidental, so it is worth a test that says so.
+	"""
+
+	hub, _, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+
+	grown = dict(CONTROLS, recipe={"type": "params", "settings": []})
+
+	await hub.app_declared(superintendent.hub.AppLink(
+		name="subsequence", send=Recorder().send, controls=grown, state={"grid": {}, "recipe": {}}))
+
+	assert set(glass.of_kind("manifest")[-1]["apps"]["subsequence"]) == {"grid", "recipe"}
+
+
+async def test_a_control_that_has_gone_stops_being_offered () -> None:
+	"""Removing a layer has to take its block with it.
+
+	A re-declaration is the whole truth about what an app offers, not an
+	addition to what it offered before.  Without this a generator could be
+	taken off a part and go on being drawn.
+	"""
+
+	hub, _, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+
+	await hub.app_declared(superintendent.hub.AppLink(
+		name="subsequence", send=Recorder().send, controls={}, state={}))
+
+	assert glass.of_kind("manifest")[-1]["apps"]["subsequence"] == {}
