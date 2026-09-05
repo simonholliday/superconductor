@@ -987,3 +987,31 @@ def test_a_layer_naming_a_generator_that_has_gone_says_so (
 	panel.wait_for_selector('.part[data-part="stack"] .unsupported', timeout=5_000)
 
 	assert "withdrawn" in panel.locator('.part[data-part="stack"] .unsupported').inner_text()
+
+
+def test_turning_a_layers_knob_moves_the_control_it_turned (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A stack's parameter has exactly the shape of a grid cell — the control,
+	then two more parts — so a handler reading the path's shape alone sends it
+	to the branch that treats the layer's id as a row and the parameter's name
+	as a step number.
+
+	The knob then moved the music and nothing on the glass: pulses dragged to
+	maximum played sixteen and went on reading five.
+	"""
+
+	_open_the_stack(panel)
+
+	dial = panel.locator('.part[data-part="stack"] .dial').first
+	box = dial.bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * 0.9, box["y"] + box["height"] / 2)
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/one/pulses"][-1]
+
+	assert asked["v"] > 3, "the drag did not ask for a larger value"
+
+	fake_app.confirm(asked["path"], asked["v"], by="panel",
+	                 client=asked["client"], seq=asked["seq"])
+
+	playwright_api.expect(dial.locator("span")).to_have_text(str(asked["v"]), timeout=5_000)

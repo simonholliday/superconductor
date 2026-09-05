@@ -1456,11 +1456,17 @@ function Panel () {
 				case "changed": {
 					/* The face follows the app, whoever moved it.
 					 *
-					 * How to apply it depends on the kind of control, and the
-					 * path says which: three parts address a cell of a grid,
-					 * two a named field. Reading the shape rather than looking
-					 * the kind up keeps this free of the declarations, which a
-					 * handler built once at mount would only ever see empty. */
+					 * How to apply it depends on the kind of control. The shape
+					 * of the path answers that on its own for three of these
+					 * branches, and deliberately so — but not for all of them,
+					 * and the two that need the declaration ask for it. A
+					 * stack's parameter has exactly the shape of a grid cell,
+					 * so shape alone sends it to the wrong branch.
+					 *
+					 * The kind comes from a ref rather than from `controls`:
+					 * this handler is built once at mount, and anything it
+					 * closed over then would be the empty declarations it had
+					 * before any app dialled in. */
 					const [control, ...rest] = frame.path.split("/");
 					const declared = kinds.current.get(`${frame.app}/${control}`);
 
@@ -1481,6 +1487,25 @@ function Panel () {
 							}
 						} else if (rest.length === 1) {
 							app[control] = { ...(app[control] || {}), [rest[0]]: frame.v };
+						} else if (rest.length === 2 && declared && declared.type === "recipe") {
+							/* One parameter of one layer of a stack.
+							
+							   Reading the shape alone is not enough here, and
+							   this is where that stops being true: a stack's
+							   parameter has exactly the shape of a grid cell —
+							   control, then two parts — so without the kind it
+							   lands in the branch below, which reads the second
+							   part as a step number and writes a list under the
+							   layer's id. The knob then moves the music and
+							   nothing on the glass. */
+							const held = { ...(app[control] || {}) };
+
+							held.layers = (held.layers || []).map((layer) =>
+								layer.id === rest[0]
+									? { ...layer, params: { ...(layer.params || {}), [rest[1]]: frame.v } }
+									: layer);
+
+							app[control] = held;
 						} else if (rest.length === 2 && declared && declared.type === "note_grid") {
 							/* Placing or taking away a note, which carries its
 							   own shape rather than being present or absent. */
