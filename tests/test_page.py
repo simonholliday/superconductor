@@ -2572,6 +2572,28 @@ def test_a_routed_grid_takes_from_one_place_and_gives_to_another (
 	assert sorted(drawn) == ["second>stack/one", "stack/one>grid"]
 
 
+def test_a_route_is_named_by_the_two_things_it_joins (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It first reused the generator's shape and read as "shared 1 · Drums" —
+	a generator called *shared*, with a number that meant nothing.  Simon asked
+	what it was, which is the whole answer: a route is not one of several of
+	anything, and the thing worth saying about a connection is what it joins.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	title = panel.locator('.part[data-part="stack/one"] .part-title > b').inner_text()
+
+	assert "→" in title, f"a route is not named by its ends: {title!r}"
+	assert title.lower().startswith("second"), title
+	assert title.lower().endswith("drums"), title
+
+	# The number stays in the data, where it identifies the layer, and says
+	# nothing here.
+	assert "1" not in title, f"a route is numbered on the glass: {title!r}"
+
+
 def test_a_routed_grid_says_where_it_takes_from (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""A routed grid has nothing to tune — what it plays is what is drawn on it

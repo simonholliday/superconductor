@@ -1348,6 +1348,13 @@ html, body {
 	touch-action: none;
 }
 
+/* A route is a connection rather than an instrument, and says so by being the
+ * quietest block on the page: it has no notes and nothing to tune, and the two
+ * things worth reading on it are already in its name. */
+.part.route .part-title > b { font-weight: 500; }
+
+.part.route { box-shadow: 0 0 0 1px var(--edge); }
+
 /* --- The lines between a contribution and the pattern it feeds ------------
  *
  * The moment a stack became several windows that move freely, nothing on the

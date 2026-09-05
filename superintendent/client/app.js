@@ -1094,7 +1094,7 @@ function Footer ({ onAdd, adds, onClear }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1158,7 +1158,7 @@ function Part ({ title, about, name, at, cell, depth, locked, onMove, onRaise, o
 
 	return html`
 		<section
-			class="part" data-part=${name} style=${place}
+			class=${`part ${flavour || ""}`} data-part=${name} style=${place}
 			${/* Anywhere on the block, not only its handle: a person turning a knob
 			     on a generator is asking the same question a person dragging it is
 			     — what does this feed? — so the same line brightens (#2109). It is
@@ -2497,10 +2497,22 @@ function Panel () {
 					   the whole of its life — a neighbour being removed never
 					   moves it. The pattern is named beside it so that a line
 					   crossing another line is not the only thing on the glass
-					   saying what feeds what. */
-					title: `${tidied(routed ? (layer.source || "?") : (layer.generator || "?"))}`
-						+ (layer.index ? ` ${layer.index}` : "")
-						+ (builds ? ` · ${named(builds)}` : ""),
+					   saying what feeds what.
+					
+					   **A route is named by its two ends instead**, and Simon is
+					   why: reusing the generator's shape gave "shared 1 · DRM1 —
+					   pattern 2", which reads as a generator called *shared*, and
+					   he asked what it was. It is not one of several of anything
+					   — it is a connection, and the thing worth saying about a
+					   connection is what it joins. The number stays in the data,
+					   where it identifies the layer; it just says nothing here. */
+					title: routed
+						? `${named(layer.source || "?")} → ${builds ? named(builds) : "?"}`
+						: `${tidied(layer.generator || "?")}`
+							+ (layer.index ? ` ${layer.index}` : "")
+							+ (builds ? ` · ${named(builds)}` : ""),
+
+					routed,
 
 					rows: routed ? 2 : 1 + (generator ? generator.parameters.length : 1),
 					steps: PARAM_CELLS,
@@ -2701,6 +2713,7 @@ function Panel () {
 		>
 			${drawn.map((one) => html`
 				<${Part} key=${one.key} name=${one.key} title=${one.title} about=${one.about}
+					flavour=${one.routed ? "route" : ""}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
