@@ -134,7 +134,7 @@ class FakeApp:
 				if frame["t"] == "set":
 					self.sets.append(frame)
 
-				elif frame["t"] == "arrange":
+				elif frame["t"] == "layout":
 					self.arrangements[str(frame.get("page"))] = list(frame.get("parts") or [])
 
 					await socket_.send(superintendent.protocol.encode(self._declaration()))

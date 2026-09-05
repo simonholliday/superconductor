@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.4.0"
+CONTRACT_VERSION = "1.5.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -26,10 +26,15 @@ the ``recipe`` control kind and the ``range`` parameter shape; a service too old
 for either marks the control unsupported and says so on the glass, which is the
 mechanism that already exists for exactly this.
 
-The frames themselves have not changed since 1.3.0.  A stack is added to and
-reordered by setting a path like any other control, which was the point of
-choosing absolute sets: adding a generator from the glass needed no new frame,
-only a value that happens to be a list (#2085).
+1.5.0 renames ``arrange`` to ``layout``.  The frame is unchanged in every
+other respect; the word was the problem.  *Arrangement* is a musical term in a
+package that talks to a sequencer, and it was being used here for where a block
+sits on a screen — a collision worth the rename while there is one app and one
+panel to keep in step.
+
+A stack is added to and reordered by setting a path like any other control,
+which was the point of choosing absolute sets: adding a generator from the
+glass needed no new frame, only a value that happens to be a list (#2085).
 """
 
 Frame = dict[str, typing.Any]
@@ -124,8 +129,8 @@ def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = N
 	        "page": page, "pages": pages or []}
 
 
-def arrange (app: str, page: str, parts: list[Frame], client: str, seq: int) -> Frame:
-	"""A panel handing back a page's arrangement for the app to keep.
+def layout (app: str, page: str, parts: list[Frame], client: str, seq: int) -> Frame:
+	"""A panel handing back where a page's parts sit, for the app to keep.
 
 	``parts`` is every part on that page as ``{name, x, y}``, in the order they
 	are stacked — first drawn to last drawn, so the last entry is the one on
@@ -134,11 +139,12 @@ def arrange (app: str, page: str, parts: list[Frame], client: str, seq: int) -> 
 	that carried pixels would be one person's screen imposed on another's
 	(#2078).
 
-	Sent when arranging is left rather than while it is going on, so a drag in
-	progress is never half-saved (#2075).
+	Sent when a drag ends rather than while it is going on, so a layout in
+	motion is never half-saved (#2075).  It used to be sent on leaving a mode,
+	which did the same job more coarsely and needed the mode to exist.
 	"""
 
-	return {"t": "arrange", "app": app, "page": page, "parts": parts,
+	return {"t": "layout", "app": app, "page": page, "parts": parts,
 	        "client": client, "seq": seq}
 
 

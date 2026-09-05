@@ -69,6 +69,29 @@ function rememberedPage () {
  * 44 px is the size the proof-of-concept was tested at, with taps landing where
  * intended and palm rejection working (#1998), so it is the one named "tested".
  * The others are offered without evidence and the label says so. */
+const LOCK_KEY = "superintendent.layout-locked";
+
+/* Whether the layout is held still. Remembered, because a person who works
+   with it unlocked should not have to say so again every time they reload —
+   Simon's own words were that they may choose to leave it unlocked all the
+   time. Locked is the default: an unintended drag costs a layout, and a
+   deliberate one costs a tap. */
+function rememberedLock () {
+	try {
+		return localStorage.getItem(LOCK_KEY) !== "no";
+	} catch (error) {
+		return true;
+	}
+}
+
+function rememberLock (locked) {
+	try {
+		localStorage.setItem(LOCK_KEY, locked ? "yes" : "no");
+	} catch (error) {
+		/* A browser that will not remember is not a browser that cannot work. */
+	}
+}
+
 const SIZE_KEY = "superintendent.cell-size";
 
 const SIZES = [
@@ -148,7 +171,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.4.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.5.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -193,7 +216,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.4.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.5.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -216,12 +239,12 @@ class Link {
 		return this.send({ t: "set", app, path, v: value, seq }) ? seq : null;
 	}
 
-	/* A page's whole arrangement, handed back to the app that owns the page.
+	/* Where a page's parts sit, handed back to the app that owns the page.
 	 * Positions in lattice cells and no sizes, in the order the parts are
 	 * stacked — so the last entry is the one on top (#2078). */
-	arrange (app, page, parts) {
+	layout (app, page, parts) {
 		const seq = ++this.seq;
-		return this.send({ t: "arrange", app, page, parts, client: clientId, seq }) ? seq : null;
+		return this.send({ t: "layout", app, page, parts, client: clientId, seq }) ? seq : null;
 	}
 }
 
@@ -940,7 +963,7 @@ function Recipe ({ name, generators, layers, onSet }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, name, at, cell, depth, arranging, onMove, onRaise, children }) {
+function Part ({ title, name, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -954,7 +977,7 @@ function Part ({ title, name, at, cell, depth, arranging, onMove, onRaise, child
 	   finger even when the finger leaves it, which it will: a block dragged
 	   quickly is always behind the hand for a frame. */
 	const grab = (event) => {
-		if (!arranging) return;
+		if (locked) return;
 
 		event.preventDefault();
 		event.currentTarget.setPointerCapture(event.pointerId);
@@ -966,6 +989,7 @@ function Part ({ title, name, at, cell, depth, arranging, onMove, onRaise, child
 		};
 
 		onRaise(name);
+		onHold(true);
 	};
 
 	/* A cell at a time, measured from where the finger started rather than
@@ -980,11 +1004,25 @@ function Part ({ title, name, at, cell, depth, arranging, onMove, onRaise, child
 		const x = Math.max(0, from.x + Math.round((event.clientX - from.fromX) / pitch));
 		const y = Math.max(0, from.y + Math.round((event.clientY - from.fromY) / pitch));
 
-		if (!at || x !== at.x || y !== at.y) onMove(name, x, y);
+		if (!at || x !== at.x || y !== at.y) {
+			from.moved = true;
+			onMove(name, x, y);
+		}
 	};
 
+	/* Kept on the way up rather than on leaving a mode, because there is no
+	   longer a mode to leave. Same guarantee as before and finer: a drag in
+	   motion is never half-saved, and an accidental nudge is one write rather
+	   than twenty (#2075). */
 	const release = (event) => {
-		if (held.current && held.current.pointer === event.pointerId) held.current = null;
+		if (!held.current || held.current.pointer !== event.pointerId) return;
+
+		const moved = held.current.moved;
+
+		held.current = null;
+		onHold(false);
+
+		if (moved) onSettled();
 	};
 
 	return html`
@@ -1298,7 +1336,7 @@ function acrossAtTestedSize () {
 	return Math.max(1, Math.floor(window.innerWidth / (tested + GAP)));
 }
 
-function useCellSize (blocks, layout, arranging) {
+function useCellSize (blocks, layout, dragging) {
 	const [choice, setChoice] = useState(() => {
 		try {
 			return localStorage.getItem(SIZE_KEY) || DEFAULT_SIZE;
@@ -1320,11 +1358,11 @@ function useCellSize (blocks, layout, arranging) {
 	 * page while it was still being made, by nearly half in one measurement.
 	 * Simon settled the principle in #2072: a page that no longer fits scrolls,
 	 * it does not rearrange or resize itself. So the fit uses the arrangement as
-	 * it stood when arranging began, and catches up once when it is left, which
+	 * it stood when the drag began, and catches up once when it ends, which
 	 * is also when the arrangement is saved (#2075). */
 	const solving = useRef(layout);
 
-	if (!arranging) solving.current = layout;
+	if (!dragging) solving.current = layout;
 
 	const choose = useCallback((key) => {
 		setChoice(key);
@@ -1413,7 +1451,7 @@ function useCellSize (blocks, layout, arranging) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, JSON.stringify(blocks), arranging ? "held" : JSON.stringify(layout)]);
+	}, [choice, JSON.stringify(blocks), dragging ? "held" : JSON.stringify(layout)]);
 
 	/* Both written from here, so the stylesheet never has to work out a row
 	   height of its own and then disagree with the fit about it. */
@@ -1479,7 +1517,8 @@ function Panel () {
 	const [service, setService] = useState(null);
 	const [pages, setPages] = useState([]);
 	const [chosen, setChosen] = useState(rememberedPage);
-	const [arranging, setArranging] = useState(false);
+	const [locked, setLocked] = useState(rememberedLock);
+	const [dragging, setDragging] = useState(false);
 	const [moved, setMoved] = useState({});
 
 	const link = useRef(null);
@@ -1863,7 +1902,17 @@ function Panel () {
 	/* Asked for before the page can return early, because a hook must be. It is
 	   given every block's shape and where each one sits, because an arrangement
 	   is only as large as its furthest corner. */
-	const size = useCellSize(blocks, layout, arranging);
+	const size = useCellSize(blocks, layout, dragging);
+
+	/* Where every block on this page has ended up, sent to the app that owns
+	   the page. Called when a finger lifts from a block that actually moved. */
+	const keep = () => {
+		if (!appName || !link.current) return;
+
+		link.current.layout(appName, pageId, stacked
+			.filter((name) => layout[name])
+			.map((name) => ({ name, x: layout[name].x, y: layout[name].y })));
+	};
 
 	/* Both halves have to be known before they can disagree: a page served
 	   without a stamp, or a service too old to send one, is not evidence of
@@ -1894,22 +1943,15 @@ function Panel () {
 					fields=${transportFields} up=${up} onSet=${request} />`}
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<button
-				class=${`arrange ${arranging ? "latched" : ""}`}
+				class=${`latch ${locked ? "" : "open"}`}
+				title=${locked ? "the layout is held still" : "blocks can be moved"}
 				onPointerDown=${(event) => {
 					event.preventDefault();
-
-					/* Sent on the way out rather than while dragging, so a drag
-					 * in progress is never half-saved, and so an accidental
-					 * nudge is one write rather than twenty (#2075). */
-					if (arranging && appName && link.current) {
-						link.current.arrange(appName, pageId, stacked.map((name) => ({
-							name, x: layout[name].x, y: layout[name].y })));
-					}
-
-					setArranging(!arranging);
+					setLocked(!locked);
+					rememberLock(!locked);
 				}}
-			>${arranging ? "DONE" : "ARRANGE"}</button>
-			${arranging && html`
+			>${locked ? "🔒" : "🔓"} LAYOUT</button>
+			${!locked && html`
 				<${Inventory} names=${stacked} titles=${Object.fromEntries(
 					gridNames.map((name) => [name, controls[name].title]))}
 					onRaise=${(who) => rearrange(who, null)} />`}
@@ -1922,13 +1964,15 @@ function Panel () {
 			</span>
 			<${Build} service=${service} stale=${stale} />
 		</div>
-		<div class=${`grid-wrap ${up ? "" : "absent"} ${arranging ? "arranging" : ""}`} ref=${size.wrap}>
+		<div class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"}`} ref=${size.wrap}>
 			${gridNames.map((name) => html`
 				<${Part} key=${name} name=${name} title=${controls[name].title}
 					at=${layout[name]} cell=${size.cell} depth=${stacked.indexOf(name)}
-					arranging=${arranging}
+					locked=${locked}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
-					onRaise=${(who) => rearrange(who, null)}>
+					onRaise=${(who) => rearrange(who, null)}
+					onHold=${setDragging}
+					onSettled=${keep}>
 					${controls[name].unsupported
 						? html`
 							<div class="unsupported">

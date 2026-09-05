@@ -1567,11 +1567,11 @@ class AppLink:
 			if frame["t"] == "set":
 				self._cross(frame)
 
-			elif frame["t"] == "arrange":
-				await self._keep_arrangement(frame)
+			elif frame["t"] == "layout":
+				await self._keep_layout(frame)
 
-	async def _keep_arrangement (self, frame: superintendent.protocol.Frame) -> None:
-		"""Write a page's arrangement down, and tell every panel it landed.
+	async def _keep_layout (self, frame: superintendent.protocol.Frame) -> None:
+		"""Write a page's layout down, and tell every panel it landed.
 
 		Handled on the link thread and never crossed onto the clock loop: this
 		writes a file, and a file write has no business on the path that

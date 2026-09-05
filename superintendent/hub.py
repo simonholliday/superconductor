@@ -157,8 +157,8 @@ class Hub:
 				LOG.warning("panel %s could not be written to; dropping it", panel.client, exc_info=True)
 				self.panel_left(panel)
 
-	async def arrange_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
-		"""Pass a page's arrangement to the app that declared the page.
+	async def layout_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
+		"""Pass a page's layout to the app that declared the page.
 
 		Handled exactly as a tap is, and for the same reason: the app is the
 		authority.  A page set belongs to the composition that sent it, so the

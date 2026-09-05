@@ -6,6 +6,7 @@ covered and correct. Each test below is one of those bugs, or the shape of one.
 """
 
 import re
+import time
 import typing
 
 import pytest
@@ -314,28 +315,54 @@ def test_parts_are_placed_on_the_lattice_and_their_steps_line_up (
 		"the same step of each pattern sits at the same offset within its block")
 
 
-def test_arranging_is_latched_and_a_tap_outside_it_still_plays (
+def test_the_latch_holds_the_layout_still_and_never_the_music (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
-	"""The latch is the only thing between a stray finger and somebody's layout,
-	so it has to be entered deliberately and leave the music alone until it is."""
+	"""It used to be a mode: either you moved blocks or you played, never both,
+	and the cells stopped answering while it was on.
 
-	assert panel.locator(".grid-wrap.arranging").count() == 0
+	There was never a reason for the exclusion. The handle is the title bar,
+	which carries no controls, so a drag and a tap cannot mean the same thing.
+	What the latch is for is *unintended* movement — so it holds the layout
+	still, and the grid goes on playing on both sides of it.
+	"""
+
+	assert panel.locator(".grid-wrap.unlocked").count() == 0, "locked by default"
 
 	panel.locator(conftest.cell("grid/snare/1")).click()
 	fake_app.await_set("grid/snare/1")
 
-	panel.locator(".bar .arrange").click()
+	panel.locator(".bar .latch").click()
+	playwright_api.expect(panel.locator(".grid-wrap.unlocked")).to_have_count(1, timeout=5_000)
 
-	playwright_api.expect(panel.locator(".grid-wrap.arranging")).to_have_count(1, timeout=5_000)
-	assert panel.eval_on_selector(".grid-wrap.arranging .grid", "el => getComputedStyle(el).pointerEvents") == "none"
+	# The whole change, in one assertion.
+	panel.locator(conftest.cell("grid/snare/3")).click()
+	fake_app.await_set("grid/snare/3")
+
+
+def test_a_locked_layout_does_not_move_under_a_drag (panel: typing.Any) -> None:
+	"""Which is what the padlock is for: a stray finger on a title bar costs
+	nothing until somebody says it may."""
+
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="grid"]')
+	before = block.bounding_box()
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 220, title["y"] + 205, steps=8)
+	panel.mouse.up()
+
+	assert block.bounding_box() == before, "the block moved while the layout was locked"
 
 
 def test_a_block_is_dragged_by_its_title_a_cell_at_a_time (panel: typing.Any) -> None:
 	"""#2078: the title bar is the only surface of a block that is not a control,
 	and a drag snaps to the lattice rather than to the pixel."""
 
-	panel.locator(".bar .arrange").click()
-	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
 
 	block = panel.locator('.part[data-part="grid"]')
 	before = block.bounding_box()
@@ -363,8 +390,8 @@ def test_a_block_may_be_dragged_over_another_and_the_last_moved_is_on_top (
 	"""Overlap is legal, which is what deletes collision resolution — and what
 	makes an inventory necessary, since a covered block cannot be grabbed."""
 
-	panel.locator(".bar .arrange").click()
-	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
 
 	def depth (part: str) -> int:
 		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
@@ -385,8 +412,8 @@ def test_the_inventory_brings_a_buried_block_back (panel: typing.Any) -> None:
 	"""The one hazard overlap introduces: a block covered completely cannot be
 	taken hold of, because a title bar is the only handle it has."""
 
-	panel.locator(".bar .arrange").click()
-	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
 
 	def depth (part: str) -> int:
 		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
@@ -400,8 +427,8 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	"""Until it can be sent to the composition that owns the page (#2077), a
 	layout that vanished on reload would not be a layout."""
 
-	panel.locator(".bar .arrange").click()
-	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
 
 	block = panel.locator('.part[data-part="grid"]')
 	before = block.bounding_box()
@@ -417,8 +444,8 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	# Leaving is what saves, deliberately: once rather than on every nudge, so a
 	# drag in progress is never half-kept (#2075). A reload before this would
 	# find nothing, and should.
-	panel.locator(".bar .arrange").click()
-	playwright_api.expect(panel.locator(".grid-wrap.arranging")).to_have_count(0, timeout=5_000)
+	panel.locator(".bar .latch").click()
+	playwright_api.expect(panel.locator(".grid-wrap.unlocked")).to_have_count(0, timeout=5_000)
 	_settled(panel)
 
 	# Measured after leaving rather than during. The fit is frozen while a drag
@@ -822,8 +849,8 @@ def test_the_page_does_not_resize_itself_under_a_dragging_finger (panel: typing.
 	before = panel.evaluate(
 		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
 
-	panel.locator(".bar .arrange").click()
-	panel.wait_for_selector(".grid-wrap.arranging", timeout=5_000)
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
 
 	title = panel.locator('.part[data-part="second"] .part-title').bounding_box()
 	panel.mouse.move(title["x"] + 20, title["y"] + 5)
@@ -1253,3 +1280,58 @@ def test_type_follows_the_grid_a_person_chose (panel: typing.Any) -> None:
 	assert small["label"] == small["value"], "a value is not the size of its own label"
 	assert large["label"] == large["value"], "a value is not the size of its own label"
 	assert large["label"] > small["label"], "the words did not follow the grid"
+
+
+def test_a_layout_is_kept_when_the_finger_lifts (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It used to be kept on leaving a mode. With no mode to leave, the end of
+	the drag is the moment — the same guarantee, finer: a layout in motion is
+	never half-saved, and an accidental nudge is one write rather than twenty.
+	"""
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_settled(panel)
+
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 20, title["y"] + 205, steps=8)
+
+	assert "all" not in fake_app.arrangements, "kept while the finger was still down"
+
+	panel.mouse.up()
+
+	# The frame crosses two sockets and lands on the app's own thread, so this
+	# waits for it rather than assuming it has arrived.
+	deadline = time.monotonic() + 5
+
+	while "all" not in fake_app.arrangements and time.monotonic() < deadline:
+		time.sleep(0.05)
+
+	kept = fake_app.arrangements.get("all")
+
+	assert kept, "nothing was kept when the finger lifted"
+	assert {one["name"] for one in kept} >= {"grid", "second"}
+
+
+def test_a_drag_that_moves_nothing_writes_nothing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A tap on a title bar is not a layout change, and should not cost a write
+	to the composition's file."""
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_settled(panel)
+
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	# Long enough that a write would have landed if one had been sent.
+	time.sleep(0.5)
+
+	assert "all" not in fake_app.arrangements

@@ -219,10 +219,10 @@ def test_an_arrangement_is_carried_to_the_app_that_owns_the_page () -> None:
 			panel.send_json(superintendent.protocol.hello("panel-1", "both"))
 			_read_until(panel, "manifest")
 
-			panel.send_json(superintendent.protocol.arrange(
+			panel.send_json(superintendent.protocol.layout(
 				"subsequence", "both", [{"name": "grid", "x": 3, "y": 1}], "panel-1", 7))
 
-			carried = _read_until(app, "arrange")
+			carried = _read_until(app, "layout")
 
 	assert carried["page"] == "both"
 	assert carried["parts"] == [{"name": "grid", "x": 3, "y": 1}]
@@ -238,7 +238,7 @@ def test_an_arrangement_for_an_app_that_is_gone_is_refused_with_a_reason () -> N
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superintendent.protocol.hello("panel-1", "both"))
 
-		panel.send_json(superintendent.protocol.arrange(
+		panel.send_json(superintendent.protocol.layout(
 			"nobody", "both", [{"name": "grid", "x": 0, "y": 0}], "panel-1", 1))
 
 		refusal = _read_until(panel, "nack")

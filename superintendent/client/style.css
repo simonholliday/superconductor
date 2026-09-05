@@ -541,14 +541,18 @@ html, body {
 	margin-left: 0.4rem;
 }
 
-/* Arranging.
+/* The layout latch.
  *
- * A latch, not a gesture: outside it every touch is a control, and that is the
- * only thing standing between a stray finger and somebody's layout. It is also
- * what lets a title bar mean two different things without ambiguity — a place
- * to take hold of the page while playing, a place to take hold of the block
- * while arranging. */
-.bar .arrange {
+ * It was a mode: either you could move blocks or you could play, never both,
+ * and the cells stopped answering while it was on. There was never a good
+ * reason for the exclusion — the handle is the title bar, which carries no
+ * controls, so a drag and a tap can never mean the same thing. What the latch
+ * is actually for is *unintended* movement, and a padlock says that where a
+ * mode did not.
+ *
+ * Unlocked, a person moves blocks and plays at the same time, and may leave it
+ * that way for good. */
+.bar .latch {
 	min-height: 44px;
 	padding: 0 0.9rem;
 	border-radius: 8px;
@@ -562,28 +566,23 @@ html, body {
 	touch-action: none;
 }
 
-.bar .arrange.latched {
+.bar .latch.open {
 	background: var(--ring);
 	border-color: var(--ring);
 	color: #06121d;
 	font-weight: 700;
 }
 
-/* While it is latched the cells stop answering, so a drag that strays across a
-   grid cannot switch a step on its way past. */
-.grid-wrap.arranging .grid { pointer-events: none; }
-
-.grid-wrap.arranging .part-title {
+/* A title bar that will move says so, and stops scrolling the page while it is
+   doing it. The grid underneath goes on answering: that is the whole change. */
+.grid-wrap.unlocked .part-title {
 	background: var(--ring);
 	color: #06121d;
 	cursor: grab;
-
-	/* The one place a swipe must not scroll while arranging, because here it
-	   is moving a block instead. */
 	touch-action: none;
 }
 
-.grid-wrap.arranging .part { box-shadow: 0 0 0 1px var(--ring), 0 10px 28px rgba(0, 0, 0, 0.55); }
+.grid-wrap.unlocked .part { box-shadow: 0 0 0 1px var(--ring), 0 10px 28px rgba(0, 0, 0, 0.55); }
 
 /* The way back to a block that is completely covered, which overlap makes
    possible and nothing else would answer. */

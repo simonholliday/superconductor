@@ -126,8 +126,8 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 			elif kind == "set":
 				await hub.set_requested(panel, frame)
 
-			elif kind == "arrange":
-				await hub.arrange_requested(panel, frame)
+			elif kind == "layout":
+				await hub.layout_requested(panel, frame)
 
 			elif kind == "ping":
 				await panel.send(superintendent.protocol.pong(float(frame.get("ts", 0.0))))
