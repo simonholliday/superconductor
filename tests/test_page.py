@@ -2473,3 +2473,28 @@ def test_a_finger_still_selects_nothing_and_gets_no_menu (
 
 	finally:
 		context.close()
+
+
+def test_a_contributions_number_is_still_there_after_a_reload (
+	panel: typing.Any, fake_app: typing.Any, service_url: str) -> None:
+	"""Where it was not, and nothing said so.
+
+	A panel that is connected when a stack changes reads the number off the
+	``changed`` frame, which carries what the app said.  A panel that arrives
+	afterwards reads the service's copy — and the service rebuilds a layer from
+	a list of fields it names, which did not name this one.  So the number
+	appeared, and came back missing, and both halves looked right from where
+	they were being tested.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	assert "2" in panel.locator('.part[data-part="stack/two"] .part-title').inner_text()
+
+	panel.goto(service_url)
+	panel.wait_for_selector(".recipe", timeout=10_000)
+	_settled(panel)
+
+	assert "2" in panel.locator('.part[data-part="stack/two"] .part-title').inner_text(), \
+		"the number was lost on the way through the service"

@@ -189,6 +189,39 @@ def test_a_stack_is_set_whole_because_its_order_is_part_of_its_value () -> None:
 		 "bypassed": False, "params": {"pulses": 7}}]
 
 
+def test_a_layers_number_survives_the_service () -> None:
+	"""The number a person reads on a window, which the app hands out.
+
+	This list is a whitelist, and a field it does not name is dropped — which
+	does not show until a panel reloads, because until then the panel is reading
+	the ``changed`` frame and that carries what the app actually said.  So the
+	numbers appeared on the glass, and came back without them.  Anything added
+	to a layer has to be added there too, and this is what says so.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+		{"id": "a", "generator": "euclidean", "index": 3, "params": {}}])
+
+	assert state["recipe"]["layers"][0]["index"] == 3
+
+
+def test_a_layer_with_no_number_is_not_given_one_here () -> None:
+	"""It is the app's to hand out.  Inventing one would put a number on the
+	glass that the app has never heard of and would not keep."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+		{"id": "a", "generator": "euclidean", "params": {}},
+		{"id": "b", "generator": "euclidean", "index": 0, "params": {}},
+		{"id": "c", "generator": "euclidean", "index": "two", "params": {}},
+	])
+
+	assert all("index" not in layer for layer in state["recipe"]["layers"])
+
+
 def test_the_order_a_stack_is_given_in_is_the_order_it_is_kept_in () -> None:
 	"""A fill that skips where a note already sits depends on what ran before it."""
 

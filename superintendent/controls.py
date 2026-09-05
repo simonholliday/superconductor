@@ -412,13 +412,30 @@ def _readable_layers (
 		for parameter, setting in (held if isinstance(held, dict) else {}).items():
 			_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
 
-		layers.append({
+		layer: dict[str, typing.Any] = {
 			"id": name,
 			"kind": kind,
 			"generator": generator,
 			"bypassed": bool(entry.get("bypassed", False)),
 			"params": kept,
-		})
+		}
+
+		# The number the app gave this layer, which is what a person reads on
+		# its window. Held and never checked: it is the app's to hand out and
+		# nothing here has an opinion about it.
+		#
+		# **Kept rather than rebuilt, because this list is a whitelist.** A field
+		# the service does not name is dropped, and a dropped field is not
+		# missing anywhere a panel can see until that panel reloads — until then
+		# it is reading the `changed` frame, which carries what the app actually
+		# said. So the fault hides: the numbers appeared, and came back without
+		# them. Anything added to a layer has to be added here too.
+		number = entry.get("index")
+
+		if isinstance(number, int) and not isinstance(number, bool) and number > 0:
+			layer["index"] = number
+
+		layers.append(layer)
 
 	return layers
 
