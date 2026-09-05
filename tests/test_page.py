@@ -2589,7 +2589,7 @@ def test_the_head_of_an_arrow_silences_the_link (
 	_open_the_stack(panel)
 	_route(panel, fake_app)
 
-	panel.locator('[data-join="second>grid"] path').click()
+	panel.locator('[data-join="second>grid"] circle.node').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -2599,7 +2599,7 @@ def test_the_head_of_an_arrow_silences_the_link (
 	fake_app.confirm("stack/layers", asked[-1]["v"], by="panel")
 	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
 
-	panel.locator('[data-join="second>grid"] path').click()
+	panel.locator('[data-join="second>grid"] circle.node').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -2639,10 +2639,14 @@ def test_a_silenced_link_is_dashed_and_hollow (
 
 	assert drawn["dashes"] not in ("none", ""), f"a silenced link is not dashed: {drawn}"
 
-	# Hollow, which is what every toggle here says when it is off.
-	for part in ("head", "node"):
-		assert drawn[part]["fill"] == "none", f"a silenced {part} is still filled: {drawn}"
-		assert drawn[part]["stroke"] != "none", f"a silenced {part} has no outline: {drawn}"
+	# The arrow goes hollow, which is what every toggle here says when it is off.
+	assert drawn["head"]["fill"] == "none", f"a silenced head is still filled: {drawn}"
+	assert drawn["head"]["stroke"] != "none", f"a silenced head has no outline: {drawn}"
+
+	# And its switch keeps its surface and its edge, because it is still a
+	# target: off is the surface alone, never the absence of one.
+	assert drawn["node"]["fill"] != "none", f"a silenced switch lost its surface: {drawn}"
+	assert drawn["node"]["stroke"] != "none", f"a silenced switch lost its edge: {drawn}"
 
 
 def test_only_the_head_of_an_arrow_takes_a_tap (
@@ -2665,8 +2669,8 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
 			lines: parts(".join line"),
 			anchors: parts(".join circle.anchor"),
-			switches: parts(".join.switchable path, .join.switchable circle.node"),
-			marks: parts(".join:not(.switchable) path"),
+			switches: parts(".join.switchable circle.node"),
+			marks: parts(".join path"),
 		};
 	}""")
 
@@ -3095,7 +3099,7 @@ def test_the_switch_on_a_line_is_big_enough_to_find (
 		'[data-join="second>grid"] circle.node',
 		"one => one.getBoundingClientRect().width"))
 
-	assert across >= row * 0.5, f"the switch on a line is {across}px against a {row}px row"
+	assert across >= row, f"the switch on a line is {across}px against a {row}px row"
 
 
 def test_every_toggle_says_off_the_same_way (
@@ -3187,10 +3191,91 @@ def test_silencing_a_route_leaves_its_source_alone (
 
 	before = panel.locator('.part[data-part="second"] .part-foot .switch').inner_text().strip()
 
-	panel.locator('[data-join="second>grid"] path').click()
+	panel.locator('[data-join="second>grid"] circle.node').click()
 
 	asked = [one["path"] for one in fake_app.sets]
 
 	assert "second/enabled" not in asked, f"silencing a route touched its source: {asked}"
 	assert panel.locator(
 		'.part[data-part="second"] .part-foot .switch').inner_text().strip() == before
+
+
+def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "How can we ensure a user can visually identify what is a touch
+	target, and what is not?"
+
+	A borderless button is a button nobody finds; a bordered label is a button
+	that does nothing when pressed.  So every target is a filled shape with an
+	edge, and nothing else is.
+
+	Found by `touch-action: none`, which every target already had to declare —
+	a target must not scroll the page out from under the finger using it — so
+	the marker is honest rather than invented for this test.  SVG says surface
+	and edge as fill and stroke, so both are asked in both languages.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	bare = panel.evaluate("""() => {
+		const empty = (paint) => !paint || paint === "none" || paint === "rgba(0, 0, 0, 0)";
+		const wrong = [];
+
+		for (const one of document.querySelectorAll("*")) {
+			const shape = getComputedStyle(one);
+
+			if (shape.touchAction !== "none") continue;
+
+			const named = (one.className.baseVal !== undefined
+				? one.className.baseVal : one.className) || one.tagName.toLowerCase();
+
+			const surface = !empty(shape.backgroundColor) || !empty(shape.fill);
+			const edge = parseFloat(shape.borderTopWidth) > 0
+				|| (!empty(shape.stroke) && parseFloat(shape.strokeWidth) > 0);
+
+			if (!surface || !edge) {
+				wrong.push(named + (surface ? "" : " (no surface)") + (edge ? "" : " (no edge)"));
+			}
+		}
+
+		return [...new Set(wrong)];
+	}""")
+
+	assert bare == [], f"these can be touched and do not look like it: {bare}"
+
+
+def test_a_target_is_at_least_one_row_in_both_directions (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The other half: if a thing cannot be given that much room, it must not be
+	touchable.  A target smaller than a finger is a target a finger misses, and
+	on this surface the finger is the only input there is."""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	small = panel.evaluate("""() => {
+		const row = parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue("--row"));
+		const wrong = [];
+
+		for (const one of document.querySelectorAll("*")) {
+			if (getComputedStyle(one).touchAction !== "none") continue;
+
+			const box = one.getBoundingClientRect();
+
+			// Chrome keeps a fixed 44; the lattice follows the person's cell.
+			const floor = one.closest(".bar, .sheet, .menu .options") ? 44 : row;
+
+			if (box.width + 0.5 < floor || box.height + 0.5 < floor) {
+				const named = (one.className.baseVal !== undefined
+					? one.className.baseVal : one.className) || one.tagName.toLowerCase();
+
+				wrong.push(`${named} ${Math.round(box.width)}x${Math.round(box.height)} < ${floor}`);
+			}
+		}
+
+		return [...new Set(wrong)];
+	}""")
+
+	assert small == [], f"these can be touched and are too small to hit: {small}"

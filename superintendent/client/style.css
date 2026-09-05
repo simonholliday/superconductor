@@ -360,10 +360,6 @@ html, body {
 .part-title .close {
 	flex: none;
 	width: max(24px, var(--cell));
-	margin-right: calc(var(--pad) * -1);
-	border: none;
-	border-radius: 6px;
-	background: transparent;
 	color: var(--ink-quiet);
 	line-height: 1;
 }
@@ -382,6 +378,43 @@ html, body {
 	font-style: normal;
 	color: var(--ink);
 	font-variant-numeric: tabular-nums;
+}
+
+/* --- What a touch target looks like, and how to tell one from a mark --------
+ *
+ * Simon: "How can we ensure a user can visually identify what is a touch
+ * target, and what is not? Let's establish some visual rules."
+ *
+ * **A target has a surface and an edge. A mark has neither.**
+ *
+ * A thing you can touch is drawn as a filled shape with a border and a corner
+ * on it. A thing you only read — a row label, a fact beside a title, a lamp, a
+ * connecting line, an anchor, the dot an algorithm left — has no background and
+ * no border, and sits directly on whatever is behind it. Nothing in between: a
+ * borderless button is a button nobody finds, and a bordered label is a button
+ * that does nothing when pressed.
+ *
+ * **A target is at least one row across in both directions** — one row on the
+ * lattice, 44px in chrome. Smaller than that it is not a target; if a thing
+ * cannot be given that much room, it must not be touchable.
+ *
+ * **A target declares `touch-action: none`.** It already had to: a target must
+ * not scroll the page out from under the finger that is using it (#2073). That
+ * declaration is therefore the honest marker of what is touchable, and it is
+ * how `tests/test_page.py` finds every target on the page and holds it to the
+ * two rules above — including the ones drawn in SVG, where a surface is a fill
+ * and an edge is a stroke.
+ *
+ * On for a toggle is the accent filling that surface; off is the surface and
+ * its edge alone. That is the same sentence in a fourth place. */
+
+.part-title .close,
+.part-body .switch,
+.part-foot .switch {
+	min-width: var(--row);
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	border-radius: 8px;
 }
 
 /* --- What size a control is, and it is never the control's own decision ------
@@ -1435,9 +1468,14 @@ html, body {
  * target is unmistakable. Filled while the link is sounding; the arrow is
  * punched out of it in the page's own ground, which is what makes it read as
  * one object rather than two stacked marks. */
+/* A surface and an edge, like every other target — in the terms SVG has for
+   them. Filled with the accent while the link is sounding, which is what every
+   toggle here says when it is on. */
 .join circle.node {
 	fill: var(--ring);
-	fill-opacity: 0.9;
+	fill-opacity: 1;
+	stroke: var(--ring);
+	stroke-width: var(--mark-hair);
 }
 
 /* The head of a line that carries a switch is punched out of its disc; the head
@@ -1471,8 +1509,15 @@ html, body {
    not a target — so the head could be tapped to silence a link and then only on
    its two-pixel outline to bring it back. Caught by the test that turns one off
    and on again, which is why that test does both. */
-.join.switchable circle.node,
-.join.switchable path { pointer-events: all; cursor: pointer; }
+/* The disc is the control and the arrow is what is written on it, so the disc
+   takes the pointer and the arrow takes nothing. One target, not two stacked. */
+.join.switchable circle.node {
+	pointer-events: all;
+	touch-action: none;
+	cursor: pointer;
+}
+
+.join path { pointer-events: none; }
 
 /* A silenced link, said twice over: the line goes dashed and the head goes
    hollow.
@@ -1490,18 +1535,18 @@ html, body {
    filled thing is sounding and an outlined one is not. The colour stays the
    thing's own — a link is the accent because a link is a connection — because
    what has to be identical is the *sentence*, not the hue. */
+/* Off is the surface and its edge alone, which is what a toggle on a block says
+   too — the panel colour under an edge, with the accent kept for the mark. */
 .join.off circle.node {
-	fill: none;
-	stroke: var(--ring);
-	stroke-width: var(--mark-hair);
-	stroke-opacity: 0.55;
+	fill: var(--panel);
+	stroke-opacity: 0.6;
 }
 
 .join.off path {
 	fill: none;
 	stroke: var(--ring);
 	stroke-width: var(--mark-hair);
-	stroke-opacity: 0.55;
+	stroke-opacity: 0.7;
 }
 
 .join.off circle.anchor { fill-opacity: 0.2; }

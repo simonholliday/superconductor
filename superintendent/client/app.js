@@ -64,13 +64,14 @@ const ARROW = { floor: 15, share: 0.5, ceiling: 30 };
  * gathered on its edge merge into a smudge that says nothing — Simon found that
  * with three of them. At the middle they are as far apart as the lines are. */
 
-const NODE = 0.7;
-/* How large the switch on a line is, as a share of its arrowhead.
+const NODE = 1.5;
+/* How large the switch on a line is, against its arrowhead — and never smaller
+ * than a control on the lattice, which is the floor that actually binds.
  *
- * Large enough to hold the head inside it, which is what makes it read as one
- * object rather than a mark with a halo. It was a bare triangle and it *was*
- * already a switch — Simon asked whether it should become one, which is the
- * finding: an affordance nobody can see is not an affordance. */
+ * It was a bare triangle, then a disc the size of one. Simon twice: it is not
+ * big enough and it does not look like a target. Both are the same rule said
+ * from two sides — **a target is at least one row across and has a surface and
+ * an edge** — and a switch on a line is a control like any other. */
 
 const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
 /* How large the dot is where a line meets a block.
@@ -1484,9 +1485,12 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 						     switch lives in its own block. */ ""}
 						${flip && html`
 							<circle
-								class="node" cx=${middle.x} cy=${middle.y} r=${arrow * NODE}
+								class="node" cx=${middle.x} cy=${middle.y}
+								r=${Math.max(controlRow(cell), arrow * NODE) / 2}
 								onPointerDown=${flip} />`}
-						<path d=${head} onPointerDown=${flip} />
+						${/* Drawn over the switch and taking nothing: the disc is the
+						     control and the arrow is what is written on it. */ ""}
+						<path d=${head} />
 						${/* Both ends, because either could be the one read wrongly.
 						     Inert: an anchor says where a line stops and nothing else,
 						     and every live target on this overlay is one the grid
