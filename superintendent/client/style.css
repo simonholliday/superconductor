@@ -1,3 +1,30 @@
+/* Barlow Condensed, bundled and served by this package's own service.
+ *
+ * **A panel is lettered, not typeset.** Every machine the people arriving here
+ * already own says what its controls do in condensed uppercase with the letters
+ * opened up — an 808, a console, a rack unit — and that lettering is most of
+ * why those objects read as equipment rather than as software. It is also the
+ * cheapest thing on the list: no assets beyond this one, no layout change, no
+ * new component.
+ *
+ * **Bundled rather than fetched.** The panel is a Raspberry Pi on a LAN with
+ * the service, and a face pulled from a CDN is a face that is missing the first
+ * time the room has no internet — on the one surface that has no keyboard to
+ * work around it with. 22KB of latin subset, served from the same origin as
+ * everything else, reaching nothing.
+ *
+ * SIL Open Font License 1.1, which is compatible with this project's own
+ * licence; the text is in `licences/barlow.txt`. `font-display: swap` so the
+ * panel is legible in the system face before this one lands, rather than blank.
+ */
+@font-face {
+	font-family: "Barlow Condensed";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("/client/fonts/barlow-condensed-600-latin.woff2") format("woff2");
+}
+
 /* The surface is read at two very different angles — upright like a monitor and
    flat like a table — so contrast is kept high and nothing depends on a hue
    that shifts when the panel is tilted away from you.
@@ -21,8 +48,22 @@
 :root {
 	color-scheme: light dark;
 
-	--ground: light-dark(#eef0f3, #101114);
-	--panel: light-dark(#ffffff, #17191e);
+	/* Four surfaces, and they have to be told apart.
+	 *
+	 * A desk, a chassis on it, a bar across the top of that, and the controls
+	 * raised off it. They were all here already and the steps between them were
+	 * three or four points wide — and in the light theme two of them were the
+	 * same white, so a block sat on the page with nothing but a shadow saying
+	 * where it began. Depth is what makes a thing read as equipment rather than
+	 * as a drawing of equipment, and it costs nothing but choosing the numbers
+	 * further apart.
+	 *
+	 * The order is inverted between the themes on purpose. On a dark panel the
+	 * chassis is *lighter* than the desk and a control lighter again, the way a
+	 * lit object is; on a light one the chassis is near-white and the desk
+	 * behind it is grey, the way a cream machine sits on a dark bench. */
+	--ground: light-dark(#dfe2e7, #0f1114);
+	--panel: light-dark(#ffffff, #20242c);
 	--edge: light-dark(#d3d8df, #2a2e37);
 	--ink: light-dark(#171a1f, #e8eaee);
 	--ink-quiet: light-dark(#586069, #878d99);
@@ -37,13 +78,13 @@
 	--on-edge: light-dark(#8a5600, #ffd166);
 	--ring: light-dark(#1c6fe0, #4dabf7);
 	--playhead: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
-	--accent-beat: light-dark(#e2e6ec, #21252d);
+	--accent-beat: light-dark(#dde2ea, #2b313b);
 
 	/* A title bar's own ground. A window says it is a window by having a bar
 	   that is not the body — that is how every windowed system has done it, and
 	   without it a grip has nothing to belong to. Close to `--panel` on purpose:
 	   this is a division, not a decoration. */
-	--title-ground: light-dark(#f2f4f7, #1d2027);
+	--title-ground: light-dark(#ecEEf2, #272c35);
 
 	/* A switch's lever, and **pale in both themes on purpose.** Every other
 	   colour here flips with the theme; this one cannot, because it has to sit
@@ -117,7 +158,29 @@
 	   step five of another (#2078). The text ellipsises when three cells is
 	   not enough for it, which at the compact size it will not be. */
 	--label: calc(var(--cell) * 3 + var(--gap) * 2);
-	--part: light-dark(#ffffff, #14161a);
+	--part: light-dark(#f7f8fa, #171a20);
+
+	/* Three faces, and each has a job the other two do badly.
+	 *
+	 *   `--face-panel`   what is written *on* the equipment: control labels,
+	 *                    block titles, buttons. Condensed and uppercased, so a
+	 *                    long name fits a narrow control without shrinking the
+	 *                    type — which is the actual reason panels are lettered
+	 *                    this way, and not a stylistic one.
+	 *   `--face-body`    sentences. Anything a person reads rather than scans:
+	 *                    an option's description, a notice, a refusal. Condensed
+	 *                    uppercase is unreadable at that length.
+	 *   `--face-figures`  numbers that line up — a tempo, a velocity, a note
+	 *                    name. Tabular by default, because a figure that moves
+	 *                    when it changes reads as a different figure.
+	 *
+	 * The fallbacks are real stacks rather than a bare `sans-serif`: the bundled
+	 * face is swapped in when it lands, and what stands in until then has to be
+	 * legible on a machine nobody here has seen (#2049). */
+	--face-panel: "Barlow Condensed", "Roboto Condensed", "Liberation Sans Narrow",
+		ui-sans-serif, system-ui, sans-serif;
+	--face-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	--face-figures: ui-monospace, "SF Mono", "Cascadia Mono", "Liberation Mono", monospace;
 
 	/* A control's row: as many whole cells as it takes to stay pressable.
 	   Written by the client, which works it out once and tells both the fit
@@ -211,7 +274,7 @@ html, body {
 	height: 100%;
 	background: var(--ground);
 	color: var(--ink);
-	font: 500 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	font: 500 16px/1.4 var(--face-body);
 
 	/* Pinch and double-tap zoom are still the browser's to claim and are still
 	   refused here; panning is not, and used to be refused with them.
@@ -351,9 +414,10 @@ html, body {
 	border-bottom: 1px solid var(--edge);
 
 	color: var(--ink-quiet);
+	font-family: var(--face-panel);
 	font-size: var(--type-title);
 	font-weight: 600;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.09em;
 	text-transform: uppercase;
 	white-space: nowrap;
 }
@@ -486,78 +550,105 @@ html, body {
  * surface, and refuses a group that does not agree with itself. That is what
  * makes this a rule rather than a paragraph. */
 
-.part-title button {
-	min-width: max(24px, var(--cell));
-	min-height: max(24px, var(--cell));
+/* **In a cascade layer, so specificity stops deciding this.**
+ *
+ * These rules are two class names deep and a purpose class is one, so a purpose
+ * that set anything these also set lost in silence — no error, no failing test,
+ * a slide switch drawn exactly one row square because it asked for a width and
+ * was overruled. A screenshot found it, which is not a mechanism.
+ *
+ * An unlayered rule beats a layered one whatever its specificity, so this is the
+ * floor and everything else in the stylesheet stands on it. The rule that a
+ * purpose may not change a control's height or type is enforced where it always
+ * was — by a test that refuses any other rule naming a button and setting its
+ * own geometry — rather than by hoping the cascade lands the right way up. */
+@layer surface {
 
-	/* **Centred, and the surface says so.** The alignment is here because it is
-	   the one property this rule did not name, and a purpose class filled the
-	   silence: `.offer` set `text-align: left` for the two-line options in a
-	   sheet, was reused on a footer button, and "add a contribution" came out
-	   left-aligned beside a centred toggle. Simon found it, as he found the
-	   last two. A rule that states height and type and stops is a rule with a
-	   hole in it. */
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.4rem;
-
-	padding: 0 0.4rem;
-	border: 1px solid var(--edge);
-	border-radius: 8px;
-	background: var(--panel);
-	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-title);
-	touch-action: none;
-}
-
-.part-body button,
-.part-foot button {
-	min-width: var(--row);
-	min-height: var(--row);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.4rem;
-	padding: 0 0.7rem;
-	border: 1px solid var(--edge);
-	border-radius: 8px;
-	background: var(--panel);
-	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-body);
-	touch-action: none;
-}
-
-.bar button,
-.sheet button,
-.menu .options button,
-.sizes .choices button,
-.theme .choices button {
-	min-width: 44px;
-	min-height: 44px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.4rem;
-	padding: 0 0.8rem;
-	border: 1px solid var(--edge);
-	border-radius: 8px;
-	background: var(--panel);
-	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
-	touch-action: none;
-}
-
-/* A popover hangs off a block but is not on it. Written after the lattice rule
-   above so it wins, because a menu opened from inside a part is a descendant of
-   one and would otherwise take the part's size. */
-.part-body .menu .options button,
-.part-foot .menu .options button {
-	min-height: 44px;
-	font-size: var(--type-chrome);
+	.part-title button {
+		min-width: max(24px, var(--cell));
+		min-height: max(24px, var(--cell));
+	
+		/* **Centred, and the surface says so.** The alignment is here because it is
+		   the one property this rule did not name, and a purpose class filled the
+		   silence: `.offer` set `text-align: left` for the two-line options in a
+		   sheet, was reused on a footer button, and "add a contribution" came out
+		   left-aligned beside a centred toggle. Simon found it, as he found the
+		   last two. A rule that states height and type and stops is a rule with a
+		   hole in it. */
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+	
+		padding: 0 0.4rem;
+		border: 1px solid var(--edge);
+		border-radius: 8px;
+		background: var(--panel);
+		color: var(--ink-quiet);
+		font: inherit;
+		font-family: var(--face-panel);
+		font-size: var(--type-title);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.09em;
+		touch-action: none;
+	}
+	
+	.part-body button,
+	.part-foot button {
+		min-width: var(--row);
+		min-height: var(--row);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		padding: 0 0.7rem;
+		border: 1px solid var(--edge);
+		border-radius: 8px;
+		background: var(--panel);
+		color: var(--ink-quiet);
+		font: inherit;
+		font-family: var(--face-panel);
+		font-size: var(--type-body);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.09em;
+		touch-action: none;
+	}
+	
+	.bar button,
+	.sheet button,
+	.menu .options button,
+	.sizes .choices button,
+	.theme .choices button {
+		min-width: 44px;
+		min-height: 44px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+		padding: 0 0.8rem;
+		border: 1px solid var(--edge);
+		border-radius: 8px;
+		background: var(--panel);
+		color: var(--ink-quiet);
+		font: inherit;
+		font-family: var(--face-panel);
+		font-size: var(--type-chrome);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.09em;
+		touch-action: none;
+	}
+	
+	/* A popover hangs off a block but is not on it. Written after the lattice rule
+	   above so it wins, because a menu opened from inside a part is a descendant of
+	   one and would otherwise take the part's size. */
+	.part-body .menu .options button,
+	.part-foot .menu .options button {
+		min-height: 44px;
+		font-size: var(--type-chrome);
+	}
 }
 
 
@@ -673,7 +764,17 @@ html, body {
 	z-index: 1;
 	background: var(--part);
 	color: var(--ink-quiet);
+
+	/* Lettered like everything else printed on the chassis. A row label is the
+	   clearest case of the thing this face exists for: "hihat 1 closed" beside
+	   a cell, in a column that has to stay narrow, where a condensed face buys
+	   two or three characters before anything has to be trimmed. */
+	font-family: var(--face-panel);
 	font-size: var(--type-body);
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+
 	white-space: nowrap;
 	overflow: hidden;
 
@@ -1192,6 +1293,30 @@ html, body {
 	background-repeat: repeat-x;
 }
 
+/* A legend: the word printed on the chassis beside a control.
+ *
+ * **The control shows the state and the legend says what the state is about**,
+ * which is two jobs and therefore two things. Putting the word inside the switch
+ * was tried and is what made the rocker fail — a switch has room for a state or
+ * for a sentence, not for both. Every machine these users own solves it this
+ * way, and it is why they can tell at a glance what an unlabelled toggle would
+ * leave them guessing at.
+ *
+ * A mark, not a target: no surface, no edge, and it never takes a tap (#2107). */
+.legend {
+	flex: none;
+	align-self: center;
+	padding-left: 0.15rem;
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-body);
+	font-weight: 600;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	user-select: none;
+}
+
 /* A glyph takes its size from the control around it, as a mark must (#2107) —
    never from a rule that names the glyph. `currentColor` so a purpose changing a
    control's colour takes the icon with it. */
@@ -1226,9 +1351,15 @@ html, body {
 .note-row .hint,
 .note-row.idle .row-label { color: var(--ink-quiet); }
 
-/* A note name is read as much as a drum voice is, and wants its figures to line
-   up. Everything else about it is the one label rule. */
-.grid.notes .row-label { font-variant-numeric: tabular-nums; }
+/* A note name is a name and a number, so it is set in figures rather than in
+   the panel face: C#2 and D2 have to line up under one another, and a condensed
+   face bought for narrow words does not do that. Already uppercase by its own
+   nature, so nothing is lost. */
+.grid.notes .row-label {
+	font-family: var(--face-figures);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
 
 /* How hard each note is struck. One bar to a step, aligned with the grid above
    so a column is a moment in both. */
@@ -1404,7 +1535,7 @@ html, body {
 	line-height: 1.5;
 }
 
-.unsupported b { color: var(--ink); font-family: ui-monospace, monospace; }
+.unsupported b { color: var(--ink); font-family: var(--face-figures); }
 
 /* A touch target that is not on the lattice keeps a fixed comfortable size.
  *
@@ -1462,7 +1593,7 @@ html, body {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--ink);
-	font-family: ui-monospace, monospace;
+	font-family: var(--face-figures);
 	font-size: var(--type-body);
 }
 
@@ -1566,9 +1697,18 @@ html, body {
 	text-align: left;
 }
 
-.option b { font-family: ui-monospace, monospace; font-size: var(--type-chrome); }
+.option b {
+	font-family: var(--face-figures);
+	font-size: var(--type-chrome);
+	text-transform: none;
+	letter-spacing: 0;
+}
 
 .option i {
+	font-family: var(--face-body);
+	font-weight: 500;
+	text-transform: none;
+	letter-spacing: 0;
 	color: var(--ink-quiet);
 	font-style: normal;
 	font-size: var(--type-chrome-quiet);
@@ -1827,7 +1967,7 @@ html, body {
 	line-height: 1.5;
 }
 
-.orphan b { color: var(--ink); font-family: ui-monospace, monospace; }
+.orphan b { color: var(--ink); font-family: var(--face-figures); }
 
 /* --- A sheet -------------------------------------------------------------
  *

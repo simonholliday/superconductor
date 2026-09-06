@@ -2494,7 +2494,7 @@ def test_a_theme_outlives_a_reload (panel: typing.Any, service_url: str) -> None
 	panel.wait_for_selector(".cell", timeout=10_000)
 
 	assert _ground(panel) == chosen
-	assert "light" in panel.locator(".theme > button").inner_text()
+	assert "light" in panel.locator(".theme > button").inner_text().lower()
 
 
 def _at_size (panel: typing.Any, label: str, cell: str) -> None:
@@ -3024,7 +3024,7 @@ def test_a_route_is_unmade_where_it_was_made (
 
 	offered = panel.locator(".sheet .offer").first
 
-	assert "tap to stop" in offered.inner_text(), offered.inner_text()
+	assert "tap to stop" in offered.inner_text().lower(), offered.inner_text()
 
 	offered.click()
 
@@ -3461,7 +3461,11 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 		# The surface rules are the only ones allowed to say it, and they are
 		# named here rather than matched by a prefix so that a fourth cannot be
 		# added by accident.
-		if selector.replace("\n", " ") in SURFACE_RULES:
+		# Normalised, because the surface rules live in a cascade layer now and
+		# every selector in one carries the layer's indentation.
+		flattened = ", ".join(part.strip() for part in selector.split(","))
+
+		if flattened in SURFACE_RULES:
 			continue
 
 		if "min-height" in body or re.search(r"(?<!-)\bheight:", body) or "font-size" in body:

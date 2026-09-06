@@ -1575,6 +1575,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
 			     thing is the action a hand reaches for soonest and the one that
 			     has to be found without reading. */ ""}
 			${onLive !== undefined && html`
+				<span class="legend">live</span>
 				<${Toggle} on=${live}
 					title=${live ? "silence this" : "bring this back"} onFlip=${onLive} />`}
 			${onAdd && html`
@@ -3480,7 +3481,7 @@ function Panel () {
 						return html`
 							<button
 								key=${stack}
-								class=${`offer ${already ? "here" : ""}`}
+								class=${`offer option ${already ? "here" : ""}`}
 								onPointerDown=${(event) => {
 									event.preventDefault();
 
