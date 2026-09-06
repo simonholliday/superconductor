@@ -31,10 +31,10 @@ CONTROLS: dict[str, typing.Any] = {
 	           "velocity_range": [1, 127]},
 	"bass": {"type": "note_grid", "rows": ["D2", "C#2", "C2"], "steps": 8, "beats": 2,
 	         "visible_rows": 2,
-	         "mono": True, "default_length": 1, "default_velocity": 100,
+	         "voices": 1, "default_length": 1, "default_velocity": 100,
 	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
 	"fine": {"type": "note_grid", "rows": ["D2", "C2"], "steps": 4, "beats": 1,
-	         "mono": False, "divisions": 4, "default_length": 4, "default_velocity": 100,
+	         "voices": None, "divisions": 4, "default_length": 4, "default_velocity": 100,
 	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine"},
 	"moog": {"type": "params", "title": "Moog",
 	         "fields": [

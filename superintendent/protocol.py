@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.13.0"
+CONTRACT_VERSION = "1.14.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,14 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.14.0 replaces a note grid's ``mono`` flag with ``voices``, a count of how many
+notes the instrument sounds at once — ``null`` for as many as you like, ``1`` for
+what ``mono`` meant.  Voicing is not a boolean and never was: of the fourteen
+instruments measured in #2125 one is switchable between 1, 2 and 4 voices *from
+the glass*, and another drops from 32 notes to 16 when an effect is on.  Nothing
+on the panel ever read ``mono`` — the rule is the app's and is enforced there —
+so this costs a panel nothing and gives one something to say when a part is full.
 
 1.13.0 makes each realised cell an object rather than a velocity: ``{"v": 100,
 "from": "l7x2"}``, where ``from`` is the id of the stack layer that put the note

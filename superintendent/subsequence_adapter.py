@@ -450,12 +450,22 @@ class NoteGrid (Control):
 	that a row called ``C2`` is a pitch: the composition maps row names to notes
 	exactly as it maps drum voices to them.
 
-	``mono`` is the composition's statement that the instrument sounds one note
-	at a time.  It is enforced here rather than left to the instrument, because
-	an instrument choosing between simultaneous notes by its own key-priority
-	setting would leave the glass showing notes that never sound.  Enforced by
-	**extent** and not by starting position: a note beginning part-way through
-	another is exactly the case the instrument would have to arbitrate (#2114).
+	``voices`` is how many notes the instrument sounds at once, and it is the
+	composition's to state because only the composition knows what is plugged in.
+	``None`` — the default — means as many as you like.  ``1`` is a monophonic
+	synth, ``4`` a Matriarch in its four-voice mode, ``10`` a drum machine with a
+	voice to a part.  Voicing is not a boolean and never was: of the fourteen
+	instruments measured in #2125, one is switchable between 1, 2 and 4 *from the
+	glass*, and another drops from 32 notes to 16 when an effect is on.
+
+	It is enforced here rather than left to the instrument, because an instrument
+	choosing between simultaneous notes by its own key-priority setting would
+	leave the glass showing notes that never sound.  Enforced by **extent** and
+	not by starting position: a note beginning part-way through another is
+	exactly the case the instrument would have to arbitrate (#2114).
+
+	``mono=True`` is kept as a spelling of ``voices=1``, so a composition written
+	before there was a count does not have to change.
 
 	``divisions`` is how many addressable positions make up one drawn cell, and
 	the composition is the one that says.  One — the default — means a position
@@ -479,6 +489,7 @@ class NoteGrid (Control):
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		pattern: str | None = None,
 		mono: bool = False,
+		voices: int | None = None,
 		divisions: int = 1,
 		default_length: int = 1,
 		default_velocity: int = 100,
@@ -495,7 +506,20 @@ class NoteGrid (Control):
 		self.title = title
 		self.about = list(about)
 		self.pattern = pattern
-		self.mono = mono
+		if mono:
+			if voices is not None and voices != 1:
+				raise ValueError(
+					"mono=True is a spelling of voices=1 and cannot be given "
+					f"beside voices={voices}")
+
+			voices = 1
+
+		if voices is not None and voices < 1:
+			raise ValueError("an instrument sounds at least one note at a time")
+
+		self.voices = voices
+		"""How many notes may sound at once, or None for as many as you like."""
+
 		self.divisions = divisions
 		self.default_length = default_length
 		"""How long a note is when it is placed, in this grid's own positions.
@@ -534,7 +558,7 @@ class NoteGrid (Control):
 
 		declared: dict[str, typing.Any] = {
 			"type": "note_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
-			"mono": self.mono, "divisions": self.divisions,
+			"voices": self.voices, "divisions": self.divisions,
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
 			"max_length": self.positions, "velocity_range": [1, 127]}
 
@@ -607,7 +631,7 @@ class NoteGrid (Control):
 
 			notes[step] = {"length": self.default_length, "velocity": self.default_velocity}
 
-			self._keep_mono(grid, row, int(step), self.default_length)
+			self._keep_voices(grid, row, int(step), self.default_length)
 
 			return True
 
@@ -647,11 +671,11 @@ class NoteGrid (Control):
 		notes[step][field] = wanted
 
 		# Lengthening reaches over notes that were clear of it a moment ago, so
-		# a monophonic part has to be re-checked here and not only where a note
-		# is placed. Velocity changes nothing about when a note sounds, so this
+		# a counted part has to be re-checked here and not only where a note is
+		# placed. Velocity changes nothing about when a note sounds, so this
 		# asks about the extent it now has either way and finds nothing to do.
 		if field == "length":
-			self._keep_mono(grid, row, int(step), wanted)
+			self._keep_voices(grid, row, int(step), wanted)
 
 		return True
 
@@ -727,43 +751,108 @@ class NoteGrid (Control):
 
 		return self.rows_now() if rest == ["rows"] else value
 
-	def _keep_mono (self, grid: dict[str, typing.Any], keep: str, at: int, span: int) -> None:
-		"""Take away any note this one would sound over, and say so.
+	def _keep_voices (self, grid: dict[str, typing.Any], keep: str, at: int, span: int) -> None:
+		"""Take notes away until no more than the instrument's voices sound, and say so.
 
-		**By extent, not by starting position** (#2114). A note beginning
-		part-way through another is exactly the case a monophonic instrument
-		would have to arbitrate by its own key priority, which is what ``mono``
-		exists to keep off the glass — and once a note can be dragged around,
-		overlapping without sharing a start is the ordinary case rather than a
-		corner of one.
+		**By extent, not by starting position** (#2114).  A note beginning
+		part-way through another is exactly the case the instrument would have to
+		arbitrate by its own key priority, which is what a voice count exists to
+		keep off the glass — and once a note can be dragged around, overlapping
+		without sharing a start is the ordinary case rather than a corner of one.
 
-		The panel asked for one thing and two changed, so the second is reported
-		in its own right — otherwise a cell would go dark on the glass with
-		nothing on the wire to explain it.
+		**The note just placed always survives.**  It is the one the panel asked
+		for, and last-note priority is what a monophonic synth does with the same
+		situation.  Among the rest the earliest-starting goes first, because it is
+		the one the player has most likely moved on from.
+
+		The panel asked for one thing and several changed, so each of the others
+		is reported in its own right — otherwise a cell would go dark on the glass
+		with nothing on the wire to explain it.
 		"""
 
-		if not self.mono:
+		if self.voices is None:
 			return
 
-		for row in self.rows:
-			if row == keep:
-				continue
+		# One at a time, re-asking after each: taking a note away can leave the
+		# part inside its count everywhere, and guessing how many to remove up
+		# front is how a grid loses a note it could have kept.
+		while True:
+			crowded = self._crowded(grid, keep, at, span)
 
-			notes = grid.get(row) or {}
+			if crowded is None:
+				return
 
-			for step in [held for held in notes if _overlaps(at, span, int(held), notes[held])]:
-				del notes[step]
+			row, step = crowded
 
-				if self.link is not None:
-					self.link.report(f"{self.name}/{row}/{step}", False)
+			del grid[row][step]
+
+			if self.link is not None:
+				self.link.report(f"{self.name}/{row}/{step}", False)
 
 			# Dropped once its last note goes, as removing one by hand already
 			# does. Nothing on the wire differs either way — the snapshot filters
 			# empty rows — but this is the second copy of that rule, and a test
 			# found them disagreeing the moment there was a second way in.
-			if not notes:
+			if not grid[row]:
 				grid.pop(row, None)
 
+	def _crowded (
+		self,
+		grid: dict[str, typing.Any],
+		keep: str,
+		at: int,
+		span: int,
+	) -> tuple[str, str] | None:
+		"""The note to take away first, or ``None`` when nothing sounds too thickly.
+
+		**Asked position by position rather than by counting what overlaps the new
+		note**, because two notes can each overlap it without overlapping one
+		another: a long note laid across two short ones in different rows is three
+		notes and never three at once.  Counting the overlaps would take one away
+		for nothing, and on a four-voice part that is a chord quietly losing a
+		finger.
+
+		Notes in the row being kept are not counted, which is what the monophonic
+		rule did before there was a count — a row is one pitch, and a pitch does
+		not compete with itself.  Two overlapping notes in one row are a retrigger
+		rather than two voices, and an instrument that disagrees is a question for
+		#2143 rather than a silent change here.
+		"""
+
+		if self.voices is None:
+			return None
+
+		sounding: list[tuple[int, int, str, str, int]] = []
+
+		for order, row in enumerate(self.rows):
+			if row == keep:
+				continue
+
+			for step, note in (grid.get(row) or {}).items():
+				if _overlaps(at, span, int(step), note):
+					sounding.append(
+						(int(step), order, row, step, max(1, int(note.get("length", 1)))))
+
+		# The note being kept holds a voice for the whole of its own extent, so
+		# whatever else sounds there shares what is left.
+		room = self.voices - 1
+
+		# Nothing can be over the count at a single position if the whole extent
+		# is within it, and this is the answer almost every time.
+		if len(sounding) <= room:
+			return None
+
+		for position in range(at, at + span):
+			here = [entry for entry in sounding if entry[0] <= position < entry[0] + entry[4]]
+
+			if len(here) > room:
+				# Earliest first, and the row order breaks a tie so that the same
+				# grid always loses the same note.
+				chosen = min(here)
+
+				return chosen[2], chosen[3]
+
+		return None
 
 class Parameter:
 	"""One setting of an instrument, in one of the three shapes a panel can draw.

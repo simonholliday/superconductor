@@ -135,11 +135,18 @@ page. Only the pitches scroll: the velocity lane and the playhead stay put,
 because a column is a moment in time and scrolling up and down does not change
 the time.
 
-A part declared `mono` holds one note to a step, and placing a second takes the
-first away. That is enforced by the application rather than left to the
-instrument: a monophonic synth handed two notes at once chooses between them by
-its own note-priority setting, which the panel cannot see — so the glass would
-show two notes while one sounded.
+A part declares how many `voices` its instrument has, and no more than that many
+notes sound at once: one for a monophonic synth, four for a Moog Matriarch in its
+four-voice mode, and nothing at all for a part with no limit worth stating.
+Placing a note that would exceed the count takes an earlier one away, newest
+first, and each one taken is reported so the glass never goes dark unexplained.
+
+That is enforced by the application rather than left to the instrument: a
+monophonic synth handed two notes at once chooses between them by its own
+note-priority setting, which the panel cannot see — so the glass would show two
+notes while one sounded. It is counted by *extent* rather than by starting
+position, because a note beginning part-way through another is exactly the case
+the instrument would have to arbitrate.
 
 Rows are names, as they are everywhere here. `compositions/drm1_grid.py` builds
 them from note names and hands the same list to Subsequence as a note map, so

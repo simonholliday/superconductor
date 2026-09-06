@@ -86,7 +86,7 @@ def _notes () -> typing.Any:
 	composition = Composition()
 	grid = adapter.NoteGrid(
 		composition, rows=["C2", "C#2", "D2"], steps=8, beats=2,
-		data_key="bass", name="bass", mono=False)
+		data_key="bass", name="bass", voices=None)
 
 	composition.data["bass"] = {"C2": {"0": {"length": 1, "velocity": 100}}}
 

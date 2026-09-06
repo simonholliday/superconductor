@@ -14,7 +14,7 @@ import superintendent.subsequence_adapter as adapter
 
 DECLARED: dict[str, typing.Any] = {
 	"type": "note_grid", "rows": ["C2", "C#2", "D2"], "steps": 8, "beats": 2,
-	"mono": True, "default_length": 1, "default_velocity": 100}
+	"voices": 1, "default_length": 1, "default_velocity": 100}
 
 
 class FakeComposition:
@@ -41,8 +41,9 @@ class FakeLink:
 
 
 def _grid (
-	mono: bool = True,
+	voices: int | None = 1,
 	divisions: int = 1,
+	rows: list[str] | None = None,
 ) -> tuple[adapter.NoteGrid, FakeComposition, FakeLink]:
 	"""A three-row, eight-step pattern with a link listening to it."""
 
@@ -50,8 +51,8 @@ def _grid (
 	link = FakeLink()
 
 	grid = adapter.NoteGrid(
-		composition, rows=["C2", "C#2", "D2"], steps=8, beats=2,
-		data_key="bass", name="bass", mono=mono, divisions=divisions)
+		composition, rows=rows or ["C2", "C#2", "D2"], steps=8, beats=2,
+		data_key="bass", name="bass", voices=voices, divisions=divisions)
 
 	grid.attach(typing.cast(typing.Any, link))
 
@@ -132,7 +133,7 @@ def test_a_monophonic_part_keeps_one_note_to_a_step_and_says_which_it_took () ->
 	would go dark with nothing on the wire to explain it.
 	"""
 
-	grid, composition, link = _grid(mono=True)
+	grid, composition, link = _grid(voices=1)
 
 	grid.apply(["C2", "4"], True)
 	grid.apply(["D2", "4"], True)
@@ -147,13 +148,145 @@ def test_a_monophonic_part_keeps_one_note_to_a_step_and_says_which_it_took () ->
 def test_a_polyphonic_part_keeps_both () -> None:
 	"""The same grid without the constraint, which is a chord."""
 
-	grid, composition, link = _grid(mono=False)
+	grid, composition, link = _grid(voices=None)
 
 	grid.apply(["C2", "4"], True)
 	grid.apply(["D2", "4"], True)
 
 	assert set(composition.data["bass"]["C2"]) == {"4"}
 	assert set(composition.data["bass"]["D2"]) == {"4"}
+	assert link.reported == []
+
+
+def test_a_four_voice_part_holds_four_notes_and_drops_the_earliest_for_a_fifth () -> None:
+	"""The count is the whole point: one is a Minitaur, four is a Matriarch.
+
+	All five start together here, so the row order is what breaks the tie — and
+	it has to break it the same way every time, or a grid loses a different note
+	depending on which dict order it was built in.
+	"""
+
+	rows = ["C2", "C#2", "D2", "D#2", "E2"]
+	grid, composition, link = _grid(voices=4, rows=rows)
+
+	for row in rows:
+		grid.apply([row, "4"], True)
+
+	held = {row for row in rows if "4" in composition.data["bass"].get(row, {})}
+
+	assert held == {"C#2", "D2", "D#2", "E2"}
+	assert link.reported == [("bass/C2/4", False)]
+
+
+def test_notes_that_overlap_the_new_one_but_not_each_other_are_all_kept () -> None:
+	"""Counting the overlaps would take one away for nothing.
+
+	A long note laid across two short ones in different rows is three notes and
+	never three at once.  On a four-voice part that mistake is a chord quietly
+	losing a finger, which is why the rule asks position by position rather than
+	counting what the new note reaches over.
+	"""
+
+	grid, composition, link = _grid(voices=2)
+
+	grid.apply(["C#2", "0"], True)
+	grid.apply(["D2", "4"], True)
+	grid.apply(["C2", "0"], True)
+
+	grid.apply(["C2", "0", "length"], 8)
+
+	assert "0" in composition.data["bass"]["C#2"]
+	assert "4" in composition.data["bass"]["D2"]
+	assert link.reported == []
+
+
+def test_one_voice_clears_every_note_a_lengthened_one_reaches_over () -> None:
+	"""The same shape as the test above, and the opposite answer.
+
+	Two notes that do not overlap each other still both have to go when only one
+	may sound, which is what proves the rule re-asks after each removal rather
+	than deciding up front how many to take.
+	"""
+
+	grid, composition, link = _grid(voices=1)
+
+	grid.apply(["C#2", "0"], True)
+	grid.apply(["D2", "4"], True)
+	grid.apply(["C2", "0"], True)
+
+	grid.apply(["C2", "0", "length"], 8)
+
+	assert "C#2" not in composition.data["bass"]
+	assert "D2" not in composition.data["bass"]
+	assert set(link.reported) == {("bass/C#2/0", False), ("bass/D2/4", False)}
+
+
+def test_the_earliest_note_goes_first_and_the_later_one_stays () -> None:
+	"""Last-note priority, which is what the instrument would have done.
+
+	The note just placed always survives — it is the one the panel asked for —
+	and among the rest the earliest goes, because it is the one the player has
+	most likely moved on from.
+	"""
+
+	grid, composition, link = _grid(voices=2)
+
+	grid.apply(["C#2", "0"], True)
+	grid.apply(["C#2", "0", "length"], 4)
+	grid.apply(["D2", "2"], True)
+	grid.apply(["D2", "2", "length"], 4)
+
+	grid.apply(["C2", "3"], True)
+
+	assert "C#2" not in composition.data["bass"]
+	assert "2" in composition.data["bass"]["D2"]
+	assert "3" in composition.data["bass"]["C2"]
+	assert link.reported == [("bass/C#2/0", False)]
+
+
+def test_mono_is_a_spelling_of_one_voice () -> None:
+	"""Kept so a composition written before there was a count does not change."""
+
+	composition = FakeComposition()
+
+	grid = adapter.NoteGrid(
+		composition, rows=["C2", "D2"], steps=8, data_key="bass", name="bass", mono=True)
+
+	assert grid.voices == 1
+	assert grid.declaration()["voices"] == 1
+
+
+def test_mono_beside_a_count_that_disagrees_is_refused_at_the_composition () -> None:
+	"""Two spellings of one number is how they come to disagree.
+
+	Raised where the part is built rather than the moment a note is placed,
+	because a composition is read once and a grid is played all evening.
+	"""
+
+	with pytest.raises(ValueError, match="spelling of voices=1"):
+		adapter.NoteGrid(
+			typing.cast(typing.Any, FakeComposition()), rows=["C2"],
+			data_key="bass", name="bass", mono=True, voices=2)
+
+
+def test_a_part_with_no_voices_is_refused () -> None:
+	"""An instrument that sounds nothing is a mistake, not a configuration."""
+
+	with pytest.raises(ValueError, match="at least one note"):
+		adapter.NoteGrid(
+			typing.cast(typing.Any, FakeComposition()), rows=["C2"],
+			data_key="bass", name="bass", voices=0)
+
+
+def test_a_part_that_states_no_count_keeps_everything () -> None:
+	"""The default, and what an instrument nobody has measured yet declares."""
+
+	grid, composition, link = _grid(voices=None)
+
+	for row in ["C2", "C#2", "D2"]:
+		grid.apply([row, "4"], True)
+
+	assert grid.declaration()["voices"] is None
 	assert link.reported == []
 
 
@@ -201,7 +334,7 @@ def test_the_declaration_says_what_a_note_may_be () -> None:
 	declared = grid.declaration()
 
 	assert declared["type"] == "note_grid"
-	assert declared["mono"] is True
+	assert declared["voices"] == 1
 	assert declared["max_length"] == 8
 	assert declared["velocity_range"] == [1, 127]
 
@@ -264,12 +397,12 @@ def test_a_monophonic_part_clears_a_note_it_would_sound_over () -> None:
 
 	Clearing by starting position alone let a note beginning part-way through
 	another survive in a different row — which is exactly the case a Minitaur
-	would have to arbitrate by its own key priority, and exactly what ``mono``
+	would have to arbitrate by its own key priority, and exactly what a voice count
 	exists to keep off the glass. Rare while every note was a step long; the
 	ordinary case once a note can be dragged about.
 	"""
 
-	grid, composition, link = _grid(mono=True)
+	grid, composition, link = _grid(voices=1)
 
 	grid.apply(["C2", "0"], True)
 	grid.apply(["C2", "0", "length"], 4)
@@ -283,7 +416,7 @@ def test_a_monophonic_part_clears_a_note_it_would_sound_over () -> None:
 def test_lengthening_a_note_clears_what_it_now_reaches_over () -> None:
 	"""Because a note that was clear of another a moment ago is not any more."""
 
-	grid, composition, link = _grid(mono=True)
+	grid, composition, link = _grid(voices=1)
 
 	grid.apply(["C2", "0"], True)
 	grid.apply(["D2", "3"], True)
@@ -300,7 +433,7 @@ def test_a_note_ending_where_the_next_begins_is_a_line_and_not_a_clash () -> Non
 	"""Half-open on the right, which is the shape a person draws by filling
 	consecutive steps."""
 
-	grid, composition, link = _grid(mono=True)
+	grid, composition, link = _grid(voices=1)
 
 	grid.apply(["C2", "0"], True)
 	grid.apply(["C2", "0", "length"], 2)
@@ -314,7 +447,7 @@ def test_a_note_ending_where_the_next_begins_is_a_line_and_not_a_clash () -> Non
 def test_changing_a_velocity_disturbs_nothing () -> None:
 	"""It says nothing about when a note sounds, so it clears nothing."""
 
-	grid, composition, link = _grid(mono=True)
+	grid, composition, link = _grid(voices=1)
 
 	grid.apply(["C2", "0"], True)
 	grid.apply(["C2", "0", "length"], 4)
