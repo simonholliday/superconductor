@@ -147,6 +147,61 @@ def test_clearing_a_grid_leaves_the_mute_where_it_was () -> None:
 	assert grid.snapshot()["enabled"] is False, "clearing the rows turned the grid back on"
 
 
+CATALOGUE: list[dict[str, typing.Any]] = [
+	{
+		"name": "chord",
+		"summary": "Sound several pitches together.",
+		"partial": False,
+		"parameters": [
+			{"name": "pitches", "label": "pitches", "kind": "pitch", "multiple": True},
+			{"name": "velocity", "label": "velocity", "kind": "range",
+			 "min": 1, "max": 127, "default": 100},
+		],
+	},
+]
+
+
+def _stack () -> typing.Any:
+	"""A stack with one chord generator on it, the shape #2150 was measured on."""
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=["C2", "E2", "G2"], name="recipe")
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "chord", "params": {}}])
+
+	return recipe
+
+
+def test_several_pitches_reach_the_service_as_the_app_holds_them () -> None:
+	"""The new value shape of 1.15.0, across the join that keeps catching this.
+
+	A list is the first parameter value that is neither a scalar nor a fixed pair,
+	and the service copies it rather than keeping the caller's — so "equal" here
+	is doing real work rather than comparing an object with itself.
+	"""
+
+	_agree(_stack(), ["a", "pitches"], ["G2", "C2"])
+
+
+def test_a_pitch_pool_the_app_would_refuse_does_not_reach_the_service_either () -> None:
+	"""Both halves say no, and this is the assertion that they say it together.
+
+	The adapter is what the panel talks to and the service is what a reloading
+	panel reads, so a value one accepts and the other refuses is exactly the
+	disagreement this file exists to catch.
+	"""
+
+	stack = _stack()
+
+	with pytest.raises(adapter.Refused):
+		stack.apply(["a", "pitches"], ["C2", "F#9"])
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{"recipe": stack.snapshot()}, {"recipe": stack.declaration()},
+			"recipe/a/pitches", ["C2", "F#9"])
+
+
 def test_a_whole_grid_write_is_answered_with_rows_and_not_the_snapshot () -> None:
 	"""The fault itself, named.
 

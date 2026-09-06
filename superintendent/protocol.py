@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.14.0"
+CONTRACT_VERSION = "1.15.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,25 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.15.0 adds ``choices`` to a parameter's kinds: several of a pool, held as a list
+in the order the panel sent, where ``choice`` is one of it.  It is a kind of its
+own rather than a flag on ``choice``, on the same reasoning that makes ``range``
+a kind rather than a ``number`` carrying a pair — a kind settles the shape of a
+value, and one meaning a string here and a list there settles nothing.
+
+It is worth a version because of what it was costing: a pitch parameter taking
+*several* pitches had nowhere to go, so the adapter dropped it and marked its
+generator partial, and **twenty-two of thirty-three generators arrived that
+way** — not a random two thirds but every chord and melody writer in the
+catalogue (#2150).  A panel too old to draw the kind refuses the control rather
+than guessing, as 1.8.0 does for the same reason.
+
+The same version stops ``partial`` conflating two different facts.  It was set
+both by an app calling its own generator partial and by this package failing to
+draw a parameter, and a panel could not tell them apart; the parameters this
+package could not draw are now named in ``undrawn``, and only the second is
+anything anybody here can fix.
 
 1.14.0 replaces a note grid's ``mono`` flag with ``voices``, a count of how many
 notes the instrument sounds at once — ``null`` for as many as you like, ``1`` for

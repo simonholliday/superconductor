@@ -1385,6 +1385,105 @@ def test_a_generator_is_added_from_the_glass (panel: typing.Any, fake_app: typin
 	assert [layer["generator"] for layer in asked[-1]["v"]] == ["euclidean", "euclidean"]
 
 
+def _open_a_chord (panel: typing.Any, fake_app: typing.Any) -> typing.Any:
+	"""A stack holding one generator that names several pitches, drawn and open."""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "chord", "bypassed": False,
+		 "params": {"pitches": ["kick"], "shape": ["up"]}},
+	], by="panel")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 1", timeout=5_000)
+
+	part = panel.locator('.part[data-part="stack/one"]')
+	part.locator(".switch").first.click()
+
+	return part
+
+
+def test_a_long_pool_of_pitches_takes_several_from_one_menu (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2150 on the glass.
+
+	A pitch parameter that takes several pitches had nowhere to go, so the
+	adapter dropped it and marked its generator partial — twenty-two of the
+	thirty-three a real panel is offered, and every chord and melody writer among
+	them.  This is the drawing that ends that.
+	"""
+
+	part = _open_a_chord(panel, fake_app)
+
+	picker = part.locator('.setting[data-field="pitches"] .picker')
+
+	# Lower-cased because the panel letters its controls in capitals, which is a
+	# surface rule rather than anything this test is about.
+	assert "kick" in picker.inner_text().lower()
+
+	picker.click()
+	panel.wait_for_selector(".options", timeout=5_000)
+	panel.locator(".options button", has_text="snare").click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "stack/one/pitches"]
+
+	assert sent, "picking a second pitch asked for nothing"
+	assert sent[-1]["v"] == ["kick", "snare"]
+
+
+def test_a_pool_menu_stays_open_while_several_are_picked (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Picking several and shutting after the first would be a choice wearing a
+	plural.  It closes the way it opened, on its own trigger."""
+
+	part = _open_a_chord(panel, fake_app)
+
+	part.locator('.setting[data-field="pitches"] .picker').click()
+	panel.wait_for_selector(".options", timeout=5_000)
+	panel.locator(".options button", has_text="snare").click()
+
+	assert panel.locator(".options").count() == 1, "the menu shut after one pick"
+
+	part.locator('.setting[data-field="pitches"] .picker').click()
+
+	playwright_api.expect(panel.locator(".options")).to_have_count(0, timeout=5_000)
+
+
+def test_a_short_pool_is_drawn_flat_and_a_second_tap_takes_one_back_out (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Few enough to take in at a glance are laid out flat, as a choice's are.
+
+	And picking is a toggle rather than a replacement, which is the whole
+	difference between this and the kind it is the plural of.
+	"""
+
+	part = _open_a_chord(panel, fake_app)
+	buttons = part.locator('.setting[data-field="shape"] .choices button')
+
+	assert buttons.count() == 2
+
+	buttons.filter(has_text="down").click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "stack/one/shape"]
+
+	assert sent[-1]["v"] == ["up", "down"]
+
+	# Confirmed, because the panel's face is the app's value and never its own
+	# guess — without this the second tap would be toggling against ["up"] still.
+	fake_app.confirm("stack/one/shape", ["up", "down"], by="panel")
+	panel.wait_for_function(
+		"() => document.querySelectorAll("
+		"'.part[data-part=\"stack/one\"] .setting[data-field=\"shape\"] .here').length === 2",
+		timeout=5_000)
+
+	buttons.filter(has_text="up").click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "stack/one/shape"]
+
+	assert sent[-1]["v"] == ["down"], "a second tap did not take the pitch back out"
+
+
 def test_a_generator_this_panel_cannot_fully_draw_is_shown_but_not_offered (
 	panel: typing.Any) -> None:
 	"""Shown rather than hidden: knowing it exists and why it is out of reach is

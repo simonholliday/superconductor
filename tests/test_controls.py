@@ -141,6 +141,76 @@ def test_a_range_arriving_as_a_tuple_is_kept_as_a_list () -> None:
 	assert isinstance(state["recipe"]["velocity"], list)
 
 
+SEVERAL: dict[str, typing.Any] = {
+	"recipe": {"type": "params", "fields": [
+		{"name": "pitches", "kind": "choices", "role": "pitch", "options": [
+			{"value": "kick", "label": "kick"},
+			{"value": "snare", "label": "snare"},
+			{"value": "clap", "label": "clap"},
+		]},
+	]},
+}
+
+
+def test_choices_takes_several_of_the_pool_and_keeps_the_order () -> None:
+	"""Which is what a chord generator means by three pitches.
+
+	The order is kept rather than sorted, because the pitches of a chord are not
+	a set: a generator handed a root first is entitled to use that.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", ["snare", "kick"])
+
+	assert state == {"recipe": {"pitches": ["snare", "kick"]}}
+
+
+def test_choices_may_be_empty () -> None:
+	"""Nothing chosen is a state a person passes through on the way to choosing.
+
+	Whether a generator with no pitches is worth running is the app's business;
+	this validates the shape of a value and not the wisdom of it.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", [])
+
+	assert state["recipe"]["pitches"] == []
+
+
+def test_choices_keeps_its_own_list_rather_than_the_caller_s () -> None:
+	"""For the reason a range is copied: the service's copy is the service's.
+
+	Holding the list that arrived would let a later edit of it change the
+	service's idea of what the app reported, without anything on the wire.
+	"""
+
+	state: dict[str, typing.Any] = {}
+	sent = ["kick", "snare"]
+
+	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", sent)
+	sent.append("clap")
+
+	assert state["recipe"]["pitches"] == ["kick", "snare"]
+
+
+@pytest.mark.parametrize("value", [
+	"kick",                     # one of them is not several of them
+	["kick", "cowbell"],        # not in the pool
+	["kick", "kick"],           # twice says nothing once does not
+	[["kick"]],                 # a value a set could not even hold
+	None,
+])
+def test_choices_that_are_not_several_of_the_pool_are_refused (value: typing.Any) -> None:
+	"""The service keeps the app's state, so a value the app could not have
+	reported has to be refused rather than stored."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change({}, SEVERAL, "recipe/pitches", value)
+
+
 @pytest.mark.parametrize("value", [
 	[50, 30],       # out of order
 	[0, 50],        # below the floor

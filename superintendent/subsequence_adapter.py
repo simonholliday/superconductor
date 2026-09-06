@@ -902,7 +902,7 @@ class Parameter:
 			if self.maximum is not None:
 				declared["max"] = self.maximum
 
-		elif self.kind == "choice":
+		elif self.kind in ("choice", "choices"):
 			declared["options"] = [{"value": value, "label": label} for value, label in self.options]
 
 		return declared
@@ -921,6 +921,15 @@ class Parameter:
 
 		if self.kind == "choice":
 			return self.options[0][0] if self.options else None
+
+		if self.kind == "choices":
+			# **The first option, as a list of one** — the same answer a choice
+			# gives, wearing the shape a choices holds.  A required parameter has
+			# to open at something usable, and opening at nothing would place a
+			# chord generator on the stack that sounds nothing while its picker
+			# says "choose"; opening at everything would be a decision the person
+			# has not made.  One is the smallest thing that plays.
+			return [self.options[0][0]] if self.options else []
 
 		return self.minimum if self.minimum is not None else 0
 
@@ -950,8 +959,14 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 	"""Refuse anything a parameter could not hold, saying which and why.
 
 	Shared between an instrument's settings and a generator's, because they are
-	the same four shapes and two copies of this would drift.  A refusal here is
+	the same five shapes and two copies of this would drift.  A refusal here is
 	a message a person reads on the glass, so each one names the parameter.
+
+	**Every kind offered has to appear here as well as in the declaration.**  The
+	panel is answered by this and a panel that reloads is answered by the
+	service's own copy, so a kind that is declared but not accepted here is one
+	the service takes and the app refuses — which was exactly what happened when
+	``choices`` was added, and what `tests/test_seam.py` caught.
 	"""
 
 	if parameter.kind == "switch":
@@ -978,6 +993,27 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 		_in_bounds(parameter, value[1])
 
 		return [value[0], value[1]]
+
+	if parameter.kind == "choices":
+		if not isinstance(value, list):
+			raise Refused(f"{parameter.name} takes several options as a list")
+
+		allowed = [option for option, _ in parameter.options]
+		taken: list[typing.Any] = []
+
+		for one in value:
+			# Membership before the duplicate check, so a value JSON can carry
+			# but a set cannot hold is refused by name rather than raising an
+			# unhashable TypeError from underneath.
+			if one not in allowed:
+				raise Refused(f"{parameter.name} has no option called {one}")
+
+			if one in taken:
+				raise Refused(f"{parameter.name} was given {one} twice")
+
+			taken.append(one)
+
+		return taken
 
 	if isinstance(value, bool) or not isinstance(value, (int, float)):
 		raise Refused(f"{parameter.name} is a number")
@@ -1197,11 +1233,20 @@ def offerable (
 	drum voices.  Neither knows the other's half, and this package knows
 	neither — it is handed both (#1465).
 
-	A parameter this panel cannot draw is left out and its generator marked
-	partial, which is the same courtesy the app pays upstream: better to say a
-	generator is not fully drivable than to offer a control that cannot be
-	completed.  A pool of pitches is the common case — one day a multiple
-	choice, today not drawn.
+	A parameter this panel cannot draw is left out, its name recorded in
+	``undrawn`` and its generator marked partial — the same courtesy the app pays
+	upstream: better to say a generator is not fully drivable than to offer a
+	control that cannot be completed.  **The two reasons are kept apart**, because
+	``partial`` alone conflates "this generator is inherently partial" with "this
+	panel could not draw one of its parameters", and only the second is anything
+	anybody here can fix.
+
+	A pitch parameter taking *several* pitches becomes a ``choices``.  It used to
+	be dropped, and it was not a rare shape: twenty-two of thirty-three generators
+	arrived partial for want of it, and they were not a random two thirds but
+	every chord and melody writer in the catalogue (#2150).  Nothing had noticed
+	because the only stack on the rig builds a drum pattern, where one voice is
+	all you want.
 
 	``bounds`` is the same division applied to numbers.  An app cannot know
 	what a sensible range for ``pulses`` is, because that depends on how many
@@ -1215,7 +1260,7 @@ def offerable (
 
 	for generator in catalogue:
 		fields: list[dict[str, typing.Any]] = []
-		dropped = False
+		undrawn: list[str] = []
 
 		for field in generator.get("parameters", []):
 			if field.get("kind") in ("number", "range") and field.get("name") in narrowed:
@@ -1227,8 +1272,8 @@ def offerable (
 				fields.append(field)
 				continue
 
-			if field.get("multiple") or not pitches:
-				dropped = True
+			if not pitches:
+				undrawn.append(str(field.get("name")))
 				continue
 
 			# **What it was stays with it.**  A pitch becomes a choice here and
@@ -1240,16 +1285,24 @@ def offerable (
 			# than any one pattern has rows.  Saying it costs a word.
 			fields.append({
 				**{key: held for key, held in field.items() if key != "multiple"},
-				"kind": "choice",
+				"kind": "choices" if field.get("multiple") else "choice",
 				"role": "pitch",
 				"options": [{"value": pitch, "label": pitch} for pitch in pitches],
 			})
 
-		offered.append({
+		one = {
 			**generator,
 			"parameters": fields,
-			"partial": bool(generator.get("partial")) or dropped,
-		})
+			"partial": bool(generator.get("partial")) or bool(undrawn),
+		}
+
+		# Only when there is something to say. An empty list on every generator
+		# is a field a reader has to check before believing, and thirty-three of
+		# them is noise around the one that matters.
+		if undrawn:
+			one["undrawn"] = undrawn
+
+		offered.append(one)
 
 	return offered
 

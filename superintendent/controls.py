@@ -53,13 +53,24 @@ Settled on 2026-09-06 (#2140); the client's own hard-coded 127 was removed under
 the same rule.
 """
 
-PARAMETER_KINDS = ("switch", "number", "choice", "range")
+PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices")
 """What a parameter can be, and so what a panel knows how to draw.
 
 A range is two numbers with an order between them, held as ``[low, high]``.  It
 is the shape an algorithm's parameters ask for that an instrument's did not: a
 velocity given as ``(30, 50)`` means a fresh draw between the two on every hit,
 which is most of what makes a generated layer sound played rather than typed.
+
+``choices`` is several of a pool where ``choice`` is one of it, held as a list in
+the order the panel sent.  **It is a kind of its own rather than a flag on
+``choice``**, on the same reasoning that makes ``range`` a kind rather than a
+``number`` that carries a pair: a kind settles the shape of a value, and one that
+means a string here and a list there has stopped settling anything — every reader
+would then have to check a second field before it knew what it was holding.
+
+The order is kept because it can matter: the pitches of a chord are not a set,
+and a generator handed a root first is entitled to use that.  Duplicates are
+refused, because two of one pitch in a pool says nothing a single one does not.
 """
 
 
@@ -341,6 +352,30 @@ def _apply_parameter (
 		# the same value becomes after a trip through JSON.  A tuple here and a
 		# list on the wire would compare unequal and never say why.
 		value = [value[0], value[1]]
+
+	elif kind == "choices":
+		if not isinstance(value, list):
+			raise ControlError(f"{name!r} takes several options as a list, and {value!r} is not one")
+
+		allowed = [one.get("value") for one in field.get("options", [])]
+		taken: list[typing.Any] = []
+
+		for one in value:
+			# Membership before anything else, so a value JSON can carry but a
+			# set cannot hold — an object, a list — is refused by name rather
+			# than raising an unhashable TypeError out of a dedupe.
+			if one not in allowed:
+				raise ControlError(f"{name!r} has no option called {one!r}")
+
+			if one in taken:
+				raise ControlError(f"{name!r} was given {one!r} twice")
+
+			taken.append(one)
+
+		# Copied rather than kept, for the reason a range is: the service's copy
+		# must equal what the same value becomes after a trip through JSON, and
+		# holding the caller's own list would let a later edit change ours.
+		value = taken
 
 	else:
 		raise ControlError(f"{name!r} is a {kind!r}, which this version does not know")

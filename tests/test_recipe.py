@@ -144,18 +144,30 @@ def test_a_pitch_becomes_the_voices_this_composition_actually_has () -> None:
 	assert [one["value"] for one in pitch["options"]] == ROWS
 
 
-def test_a_parameter_this_panel_cannot_draw_marks_its_generator_partial () -> None:
-	"""A pool of pitches wants a multiple choice, which is not drawn yet.
+def test_a_pitch_parameter_that_takes_several_becomes_a_choices () -> None:
+	"""The plural of the join above, and the whole of #2150.
 
-	Saying the generator is not fully drivable is better than offering a
-	control that cannot be completed — the same courtesy the app pays upstream.
+	This shape used to be dropped and its generator marked partial, which cost
+	twenty-two of the thirty-three generators a real panel is offered — not a
+	random two thirds, but every chord and melody writer in the catalogue, since
+	those are exactly the ones that name more than one voice.
 	"""
 
 	recipe, _ = _recipe()
 	evolve = next(one for one in recipe.declaration()["generators"] if one["name"] == "evolve")
+	pitches = evolve["parameters"][0]
 
-	assert evolve["partial"] is True
-	assert [one["name"] for one in evolve["parameters"]] == ["drift"]
+	assert evolve["partial"] is False
+	assert "undrawn" not in evolve
+
+	assert pitches["kind"] == "choices"
+	assert pitches["role"] == "pitch"
+	assert [one["value"] for one in pitches["options"]] == ROWS
+
+	# The flag that made it a plural has done its work and does not travel: a
+	# panel reads the kind, and a second way of saying the same thing is a second
+	# way for the two to disagree.
+	assert "multiple" not in pitches
 
 
 def test_a_composition_with_no_pitches_offers_no_pitch_parameter () -> None:
@@ -166,6 +178,48 @@ def test_a_composition_with_no_pitches_offers_no_pitch_parameter () -> None:
 
 	assert euclidean["partial"] is True
 	assert [one["name"] for one in euclidean["parameters"]] == ["pulses", "velocity"]
+
+
+def test_a_generator_says_which_parameters_this_panel_could_not_draw () -> None:
+	"""``partial`` alone conflated two different facts.
+
+	It was set both by an app calling its own generator partial and by this
+	package failing to draw one of its parameters, and a panel could not tell
+	them apart — which matters, because only the second is anything anybody here
+	can fix.
+	"""
+
+	recipe = adapter.Recipe(Composition(), catalogue=CATALOGUE, pitches=[])
+
+	offered = {one["name"]: one for one in recipe.declaration()["generators"]}
+
+	assert offered["euclidean"]["undrawn"] == ["pitch"]
+	assert offered["evolve"]["undrawn"] == ["pitches"]
+
+
+def test_a_layer_opens_its_pitch_pool_at_one_pitch_rather_than_a_number () -> None:
+	"""A required parameter has to open at something the generator can use.
+
+	Falling through to the numeric default gave it ``0``, which is not a list and
+	not a pitch — a chord generator on the stack, apparently configured, holding
+	a value nothing would accept if it were sent again.  One pitch is the same
+	answer a single choice gives, wearing the shape a pool holds.
+	"""
+
+	recipe, composition = _recipe()
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "evolve", "params": {}}])
+
+	assert recipe.layers()[0]["params"]["pitches"] == [ROWS[0]]
+
+
+def test_a_generator_with_nothing_dropped_carries_no_undrawn_at_all () -> None:
+	"""An empty list on every generator is a field a reader has to check first,
+	and thirty-three of them is noise around the one that matters."""
+
+	recipe, _ = _recipe()
+
+	assert all("undrawn" not in one for one in recipe.declaration()["generators"])
 
 
 def test_a_new_layer_opens_at_the_generators_own_defaults () -> None:

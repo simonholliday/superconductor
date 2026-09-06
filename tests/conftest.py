@@ -60,6 +60,17 @@ CONTROLS: dict[str, typing.Any] = {
 		      "min": 0, "max": 1},
 		 ]},
 		{"name": "evolve", "summary": "Mutate a sequence.", "partial": True, "parameters": []},
+		# Two pools, because the panel draws a short one flat and a long one
+		# behind a menu, and the line between them is where a drawing bug hides.
+		{"name": "chord", "summary": "Sound several pitches together.", "partial": False,
+		 "parameters": [
+		     {"name": "pitches", "label": "pitches", "kind": "choices", "role": "pitch",
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
+		     {"name": "shape", "label": "shape", "kind": "choices",
+		      "options": [{"value": "up", "label": "up"},
+		                  {"value": "down", "label": "down"}]},
+		 ]},
 	]},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }

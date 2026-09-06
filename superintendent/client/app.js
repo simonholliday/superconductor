@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.14.0";
+const CONTRACT = "1.15.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1328,6 +1328,19 @@ function Setting ({ field, held, onSet }) {
 
 		setOpen(true);
 	};
+
+	/* Both a choice and a choices open the same menu in the same place, so the
+	   placement is written once. Two copies of this drifted apart in an earlier
+	   life of the settings panel and only the one being looked at was fixed. */
+	const menuStyle = () => ({
+		left: `${where.left}px`,
+		minWidth: `${where.minWidth}px`,
+		maxHeight: `${where.maxHeight}px`,
+		...(where.top !== undefined
+			? { top: `${where.top}px` }
+			: { bottom: `${where.bottom}px` }),
+	});
+
 	const bounded = field.min !== undefined && field.max !== undefined;
 
 	const at = (event, box) =>
@@ -1461,14 +1474,7 @@ function Setting ({ field, held, onSet }) {
 					<div
 						role="group"
 						class="options"
-						style=${{
-							left: `${where.left}px`,
-							minWidth: `${where.minWidth}px`,
-							maxHeight: `${where.maxHeight}px`,
-							...(where.top !== undefined
-								? { top: `${where.top}px` }
-								: { bottom: `${where.bottom}px` }),
-						}}
+						style=${menuStyle()}
 					>
 						${options.map((option) => html`
 							<button
@@ -1480,6 +1486,70 @@ function Setting ({ field, held, onSet }) {
 									setOpen(false);
 								}}
 							>${option.label || option.value}</button>`)}
+					</div>`}
+			</div>`;
+	}
+
+	if (field.kind === "choices") {
+		const options = field.options || [];
+		const chosen = Array.isArray(held) ? held : [];
+
+		/* **Several of a pool, where a choice is one of it.** Every chord and
+		   melody writer in Subsequence's catalogue asks for one, and until the
+		   panel could draw it twenty-two of thirty-three generators arrived with
+		   a parameter missing — not a random two thirds, but exactly the ones
+		   that write more than a single voice (#2150).
+
+		   Picking is a toggle rather than a replacement, and the order kept is
+		   the order they were picked: the pitches of a chord are not a set, and
+		   a generator handed a root first is entitled to use that. */
+		const toggle = (value) => onSet(
+			chosen.includes(value)
+				? chosen.filter((one) => one !== value)
+				: [...chosen, value]);
+
+		const labelOf = (value) => {
+			const option = options.find((one) => one.value === value);
+
+			return option ? option.label || option.value : value;
+		};
+
+		const option = (value, label) => html`
+			<button
+				key=${value}
+				class=${chosen.includes(value) ? "here" : ""}
+				onPointerDown=${(event) => { event.preventDefault(); toggle(value); }}
+			>${label}</button>`;
+
+		if (options.length <= CHOICE_BUTTONS) {
+			return html`
+				<div class="choices">
+					${options.map((one) => option(one.value, one.label || one.value))}
+				</div>`;
+		}
+
+		/* **The menu does not close on a pick**, because picking several and
+		   shutting after the first would be a choice wearing a plural. It closes
+		   the way it opened, on its own trigger — which is what the open state on
+		   the picker is already saying. */
+		return html`
+			<div class="menu">
+				<button
+					ref=${trigger}
+					class=${`picker ${open ? "open" : ""}`}
+					onPointerDown=${(event) => {
+						event.preventDefault();
+						open ? setOpen(false) : show();
+					}}
+				>${chosen.length === 0
+					? "choose"
+					: chosen.length <= 2
+						? chosen.map(labelOf).join(", ")
+						: `${labelOf(chosen[0])} +${chosen.length - 1}`}<i>▾</i></button>
+
+				${open && where && html`
+					<div role="group" class="options" style=${menuStyle()}>
+						${options.map((one) => option(one.value, one.label || one.value))}
 					</div>`}
 			</div>`;
 	}
@@ -1556,7 +1626,7 @@ function Params ({ name, fields, values, cell, onSet }) {
 						${field.label || field.name}
 					</div>`,
 				html`
-					<div class="setting" key=${field.name}
+					<div class="setting" key=${field.name} data-field=${field.name}
 						style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
 						<${Setting} field=${field} held=${values[field.name]}
 							onSet=${(value) => onSet(`${name}/${field.name}`, value)} />
@@ -1644,7 +1714,7 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 								${field.label || field.name}
 							</div>`,
 						html`
-							<div class="setting" key=${field.name}
+							<div class="setting" key=${field.name} data-field=${field.name}
 								style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
 								<${Setting}
 									field=${field}
