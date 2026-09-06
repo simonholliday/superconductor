@@ -86,21 +86,7 @@
 	   this is a division, not a decoration. */
 	--title-ground: light-dark(#ecEEf2, #272c35);
 
-	/* A switch's lever, and **pale in both themes on purpose.** Every other
-	   colour here flips with the theme; this one cannot, because it has to sit
-	   on two grounds that do not flip together — a near-black track when the
-	   switch is off in the dark theme, and a bright amber one when it is on in
-	   either. A colour taken from the panel goes dark on that amber and reads
-	   as a hole punched in the button rather than as a cap sitting on it, which
-	   is exactly what the first attempt did. An 808's buttons are pale against
-	   its chassis for the same reason. */
-	--lever: light-dark(#fbfbfc, #e9ecf1);
-	--lever-edge: light-dark(#8d949f, #9aa2ae);
 
-	/* What a raised thing casts. A pair like everything else (#2112) — the test
-	   that says so caught this written as a bare `rgba()` inside a shadow, which
-	   is the one place a colour does not look like a colour. */
-	--lift: light-dark(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.45));
 
 	/* A hairline that has to be seen rather than merely be there: the outline
 	   that says a block can be picked up. `--edge` is a separator and reads as
@@ -1410,69 +1396,64 @@ html, body {
 	min-height: var(--row);
 }
 
-/* A slide switch, and there is one of it.
+/* A rocker, drawn the way the options artifact drew it and Simon approved it.
  *
- * **Two words side by side was the wrong answer and Simon saw it immediately.**
- * The rule says on is the accent filling the surface, so a lit switch was
- * already amber all over — and marking which end was thrown then meant a second
- * fill *inside* the first. Two ambers touching read as neither: not a switch, a
- * button with a stain on it.
+ * **The container stays neutral and one end is filled.** That single detail is
+ * what two earlier attempts got wrong: filling the whole surface *and* marking
+ * an end meant a fill inside a fill, and two ambers touching read as neither.
+ * Here the surface is the frame, the ends are what is in it, and only one of
+ * them is ever lit — so the rule still holds exactly, on is the accent, and
+ * there is nothing for it to fight.
  *
- * A slide switch has no such conflict, because **the state and the position are
- * carried by different things**. The track is the surface, so it fills with the
- * accent and goes on saying the one sentence every toggle here says. The lever
- * says which way it is thrown by *being somewhere*, which costs no colour at
- * all. It is also the thing on the chassis of every machine these users own,
- * and it needs no word to be read.
+ * **Two ends, and each one sets rather than flips.** Pressing ON twice is on;
+ * a flip pressed twice is where you started. On a surface with no feedback but
+ * itself, that is worth more than the word "toggle" suggests — and it is why
+ * every machine these users own is built this way.
  *
- * The lever takes the ink that belongs to whatever it is sitting on — `--ink`
- * over the panel, `--on-ink` over the accent — because those two tokens exist
- * precisely to be legible against those two grounds, in both themes. A single
- * fixed colour cannot be: the track goes from near-black to bright amber in the
- * dark theme, and nothing reads well on both. */
+ * Off is filled too, in a neutral. The alternative is an off state that is a
+ * word and nothing else, which is a label, not a switch — and the rule that
+ * matters is that **the accent means sounding**, not that off must be bare. */
 .switch {
-	position: relative;
-
-	/* `width`, not `min-width`: the surface rule above is two classes deep and
-	   would outrank this without a word (see its own note). `flex: none` because
-	   a footer is a flex row and an explicit width is only a suggestion in one. */
-	width: calc(var(--row) * 1.75);
+	display: inline-flex;
+	align-items: stretch;
 	flex: none;
+	overflow: hidden;
+	border: 1px solid var(--edge-strong);
+	border-radius: 8px;
+	background: var(--panel);
+}
 
-	padding: 0;
+/* One row each, so both ends are a full target however small the panel is set
+   (#2107) — which is also why a rocker is two rows wide and a button is one. */
+.switch .end {
+	flex: 1 1 0;
+	min-width: var(--row);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: var(--ink-quiet);
+	opacity: 0.6;
+}
 
-	/* The track is a slot, so it is recessed rather than level with the panel.
-	   Off is still not the accent — which is the whole of the rule — it is
-	   simply not pretending a slot is a surface. */
+.switch .end + .end { border-left: 1px solid var(--edge); }
+
+/* The end that is pressed. Neutral for off, the accent for on, which is the
+   sentence every other toggle on this surface says. */
+.switch .no[aria-pressed="true"] {
 	background: var(--accent-beat);
-	border-color: var(--edge-strong);
+	color: var(--ink);
+	opacity: 1;
 }
 
-.switch > i {
-	position: absolute;
-	top: 12%;
-	bottom: 12%;
-	left: 5%;
-	width: 45%;
-	border-radius: max(3px, calc(var(--row) * 0.1));
-	background: var(--lever);
-	border: 1px solid var(--lever-edge);
-	box-shadow: 0 1px 2px var(--lift);
-	transition: left 90ms ease-out;
-}
-
-/* On is the accent filling the surface — the same sentence as every other
-   toggle here, and the thing a test checks from across the room. */
-.switch.on {
+.switch .yes[aria-pressed="true"] {
 	background: var(--on);
-	border-color: var(--on-edge);
+	color: var(--on-ink);
+	opacity: 1;
 }
 
-.switch.on > i { left: 50%; }
-
-@media (prefers-reduced-motion: reduce) {
-	.switch > i { transition: none; }
-}
+/* Lit from across the room: the frame takes the accent's edge so the whole
+   control reads as live, without a second fill inside the first. */
+.switch.on { border-color: var(--on-edge); }
 
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 

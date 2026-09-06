@@ -1484,14 +1484,31 @@ function Orphan ({ builds }) {
  * cannot use it — SVG has no button — but it says the same sentence, which is
  * the half that has to be identical: filled is sounding, outlined is not. */
 function Toggle ({ on, title, onFlip }) {
-	return html`
+	/* Two ends, and each one **sets** rather than flips. A rocker on a machine
+	   is pressed on the side you want, and that is worth more here than the
+	   word "toggle" suggests: a set is absolute, so pressing ON twice is ON,
+	   where a flip pressed twice is where you started. On glass, with no
+	   feedback but the panel itself, that difference is the whole of it.
+
+	   It also means a tap is unambiguous where a slide switch's was not — Simon
+	   read a control that moved under his finger as one that had not
+	   responded. */
+	const end = (want, word) => html`
 		<button
-			class=${`switch ${on ? "on" : ""}`}
-			title=${title}
-			role="switch"
-			aria-checked=${on ? "true" : "false"}
-			onPointerDown=${(event) => { event.preventDefault(); onFlip(!on); }}
-		><i></i></button>`;
+			type="button"
+			class=${`end ${want ? "yes" : "no"}`}
+			aria-pressed=${on === want ? "true" : "false"}
+			onPointerDown=${(event) => {
+				event.preventDefault();
+				if (on !== want) onFlip(want);
+			}}
+		>${word}</button>`;
+
+	return html`
+		<div class=${`switch ${on ? "on" : ""}`} role="group" title=${title}
+			data-on=${on ? "true" : "false"}>
+			${end(false, "off")}${end(true, "on")}
+		</div>`;
 }
 
 

@@ -3245,35 +3245,14 @@ def test_the_playhead_is_not_drawn_before_it_has_somewhere_to_be (
 		"a playhead with no beat to stand on is still on the glass"
 
 
-def _lever (panel: typing.Any, selector: str) -> float:
-	"""How far along its track a slide switch's lever sits, 0 to 1.
+def _pressed_end (panel: typing.Any, selector: str) -> str:
+	"""Which end of a rocker is pressed: "off", "on", or "neither"."""
 
-	Waits for it to stop moving first.  The lever slides over 90ms, and a test
-	that confirmed a change and measured immediately was reading a point part
-	way through the throw — 60% of the way across, which is neither end and
-	which no state ever puts it at.
-	"""
+	return panel.eval_on_selector(selector, """one => {
+		const down = one.querySelector('.end[aria-pressed="true"]');
 
-	panel.wait_for_function(
-		"""(selector) => {
-			const one = document.querySelector(selector);
-			const track = one.getBoundingClientRect();
-			const lever = one.querySelector("i").getBoundingClientRect();
-			const at = (lever.left + lever.width / 2 - track.left) / track.width;
-			const still = Math.abs(at - (window.__lever ?? -1)) < 0.001;
-
-			window.__lever = at;
-
-			return still;
-		}""",
-		arg=selector, timeout=5_000, polling=50)
-
-	return float(panel.eval_on_selector(selector, """one => {
-		const track = one.getBoundingClientRect();
-		const lever = one.querySelector("i").getBoundingClientRect();
-
-		return (lever.left + lever.width / 2 - track.left) / track.width;
-	}"""))
+		return down ? down.textContent.trim() : "neither";
+	}""")
 
 
 def test_a_block_can_be_silenced_from_its_own_footer (
@@ -3287,14 +3266,11 @@ def test_a_block_can_be_silenced_from_its_own_footer (
 
 	assert switch.count() == 1, "a pattern cannot be silenced"
 
-	# A slide switch says which way it is thrown by where its lever is, so that
-	# is what gets measured. A word would only have said the state to somebody
-	# who already knew whether the word was the state or the action.
-	assert switch.get_attribute("aria-checked") == "true"
-
-	thrown = _lever(panel, '.part[data-part="grid"] .part-foot .switch')
-
-	assert thrown > 0.5, f"a live switch is thrown left: the lever sits at {thrown:.0%}"
+	# A rocker names both of its states and presses one of them, so the pressed
+	# end is the reading. Each end *sets* rather than flips, which is why
+	# pressing ON twice is on rather than back where it started.
+	assert switch.get_attribute("data-on") == "true"
+	assert _pressed_end(panel, '.part[data-part="grid"] .part-foot .switch') == "on"
 
 	switch.click()
 
@@ -3320,11 +3296,8 @@ def test_a_silenced_block_says_so_from_across_the_room (
 
 	assert dimmed < lit, f"a silenced block is drawn like a live one: {dimmed} against {lit}"
 	assert panel.locator(
-		'.part[data-part="grid"] .part-foot .switch').get_attribute("aria-checked") == "false"
-
-	thrown = _lever(panel, '.part[data-part="grid"] .part-foot .switch')
-
-	assert thrown < 0.5, f"a silenced switch is thrown right: the lever sits at {thrown:.0%}"
+		'.part[data-part="grid"] .part-foot .switch').get_attribute("data-on") == "false"
+	assert _pressed_end(panel, '.part[data-part="grid"] .part-foot .switch') == "off"
 
 
 def test_silencing_a_block_does_not_empty_it (
@@ -3554,33 +3527,51 @@ def test_every_toggle_says_off_the_same_way (
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
-	filled = panel.evaluate("""() => {
-		const shape = (one) => {
-			const seen = getComputedStyle(one);
+	# **The accent is the sentence, and where it is drawn is the shape.** A
+	# rocker carries it on the end that is pressed, and the switch on a line
+	# carries it on the disc itself — because a line has no room for two ends.
+	# So this asks whether the accent is *present*, not which element holds it,
+	# which is the only form of the question both shapes can answer.
+	accent = panel.evaluate("""() => {
+		const lit = (one) => {
+			const wanted = getComputedStyle(document.documentElement)
+				.getPropertyValue("--on").trim();
+			const paint = (el) => {
+				const seen = getComputedStyle(el);
 
-			return seen.backgroundColor !== "rgba(0, 0, 0, 0)" ? "filled" : "outlined";
+				return [seen.backgroundColor, seen.fill].join(" ");
+			};
+
+			const swatch = document.createElement("span");
+			swatch.style.color = wanted;
+			document.body.appendChild(swatch);
+			const resolved = getComputedStyle(swatch).color;
+			swatch.remove();
+
+			return [one, ...one.querySelectorAll("*")].some((el) => paint(el).includes(resolved));
 		};
 
 		return {
-			live: shape(document.querySelector('.part[data-part="stack/one"] .switch.on')),
-			mute: shape(document.querySelector('.part[data-part="grid"] .part-foot .switch.on')),
+			live: lit(document.querySelector('.part[data-part="stack/one"] .switch')),
+			mute: lit(document.querySelector('.part[data-part="grid"] .part-foot .switch')),
 		};
 	}""")
 
-	assert set(filled.values()) == {"filled"}, f"a live toggle is not filled: {filled}"
+	assert accent == {"live": True, "mute": True}, f"a live toggle is not lit: {accent}"
 
-	# And off is the outline, in both places.
+	# And a silenced one shows no accent at all, in both places.
 	fake_app.confirm("grid/enabled", False, by="panel")
 	panel.wait_for_selector(".part.silent", timeout=5_000)
 
-	off = panel.eval_on_selector(
-		'.part[data-part="grid"] .part-foot .switch',
+	assert _pressed_end(panel, '.part[data-part="grid"] .part-foot .switch') == "off", \
+		"a silenced block's rocker is not pressed off"
+
+	still = panel.eval_on_selector(
+		'.part[data-part="grid"] .part-foot .switch .yes',
 		"one => getComputedStyle(one).backgroundColor")
 
-	assert off != panel.eval_on_selector(
-		'.part[data-part="stack/one"] .switch.on',
-		"one => getComputedStyle(one).backgroundColor"), \
-		"an off toggle is drawn like a live one"
+	assert still == "rgba(0, 0, 0, 0)", \
+		f"a silenced toggle still carries the accent: {still}"
 
 
 def test_a_switch_lives_with_the_thing_it_switches (
@@ -3651,6 +3642,14 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 	a target must not scroll the page out from under the finger using it — so
 	the marker is honest rather than invented for this test.  SVG says surface
 	and edge as fill and stroke, so both are asked in both languages.
+
+	**One member of a group takes its edge from the group's frame.**  A rocker
+	is one framed control with two ends and a divider between them, which is
+	how the machines this panel is drawn after build one — and giving each end
+	a border of its own would draw a box inside a box.  The rule's purpose is
+	that a target must be findable, and inside a frame with a divider it is; so
+	a group states that it is one, and its members are held to the surface
+	alone.
 	"""
 
 	_open_the_stack(panel)
@@ -3669,7 +3668,13 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 				? one.className.baseVal : one.className) || one.tagName.toLowerCase();
 
 			const surface = !empty(shape.backgroundColor) || !empty(shape.fill);
-			const edge = parseFloat(shape.borderTopWidth) > 0
+
+			const framed = one.parentElement
+				&& one.parentElement.getAttribute("role") === "group"
+				&& parseFloat(getComputedStyle(one.parentElement).borderTopWidth) > 0;
+
+			const edge = framed
+				|| parseFloat(shape.borderTopWidth) > 0
 				|| (!empty(shape.stroke) && parseFloat(shape.strokeWidth) > 0);
 
 			if (!surface || !edge) {
