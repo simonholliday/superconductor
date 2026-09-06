@@ -31,6 +31,9 @@ CONTROLS: dict[str, typing.Any] = {
 	         "visible_rows": 2,
 	         "mono": True, "default_length": 1, "default_velocity": 100,
 	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
+	"fine": {"type": "note_grid", "rows": ["D2", "C2"], "steps": 4, "beats": 1,
+	         "mono": False, "divisions": 4, "default_length": 4, "default_velocity": 100,
+	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine"},
 	"moog": {"type": "params", "title": "Moog",
 	         "fields": [
 	             {"name": "glide", "kind": "switch", "label": "Glide"},
@@ -69,7 +72,11 @@ a title and one does not, so both halves of that are drawn every run.
 PAGES: list[dict[str, typing.Any]] = [
 	{"id": "all", "title": "All", "parts": ["grid", "second"]},
 	{"id": "drums", "title": "Drums", "parts": ["grid"]},
-	{"id": "bass", "title": "Bass", "parts": ["bass"]},
+	# Beside the bass rather than on a page of its own: seven pages is one more
+	# than `PAGE_BUTTONS`, and the row of named buttons gives way to previous
+	# and next — which is correct behaviour and takes every test that reaches a
+	# page by its name down with it.
+	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
 	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack"]},
 	{"id": "alone", "title": "Stack alone", "parts": ["stack"]},
@@ -86,6 +93,12 @@ STATE: dict[str, typing.Any] = {
 	"grid": {"kick": [0, 4], "snare": []},
 	"second": {"kick": [2]},
 	"bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
+	# A step divided into four, so a note can sit and end between two of them:
+	# a quarter-step note on the boundary, and one starting halfway through the
+	# next step. Geometry measured in whole cells cannot tell either of them
+	# from a note on the step, which is exactly what went wrong.
+	"fine": {"C2": {"0": {"length": 1, "velocity": 100},
+	                "6": {"length": 2, "velocity": 100}}},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
 	"stack": {"layers": [
 		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,

@@ -591,6 +591,24 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 	const positions = steps * divisions;
 	const pitch = cell + GAP;
 	const unit = pitch / divisions;
+	/* What a position is worth to a *drag*, averaged over whole cells. Right at
+	   every cell boundary, a little out between them, and the snap absorbs the
+	   difference — which is why the drawing below cannot use it. */
+
+	const inCell = cell / divisions;
+	/* What a position is worth *inside* a cell, which is a different number and
+	   the reason the subdivision marks were landing off-centre.
+
+	   A step boundary is where a cell begins, and a step occupies the cell plus
+	   the gap after it — so measuring a position as a fraction of `cell + GAP`
+	   is right for anything that crosses a boundary and wrong for everything
+	   that does not. At a 44px cell it put the half-step mark at 24px, which is
+	   two pixels right of the 22px a person reads as the middle. Simon saw it
+	   at 1/32 and named the gap as the cause.
+
+	   So the two are used for different things and neither is a rounding of the
+	   other: a boundary is `step * pitch`, and a position within a step is that
+	   plus a share of the cell's own ink. */
 
 	const drag = useRef(null);
 	const [ghost, setGhost] = useState(null);
@@ -753,11 +771,24 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 	   nobody can resolve is a mark that says nothing — so the cell keeps its own
 	   edges and the snap goes on working unannounced. They are marks and never
 	   targets: read, never hit (#2107). */
-	const subs = snap < divisions && snap * unit >= 6;
+	const subs = snap < divisions && snap * inCell >= 6;
+
+	/* Where a position sits along the row, in the lattice's own pixels: whole
+	   cells at the pitch, and the remainder across the cell's ink. */
+	const xAt = (at) => Math.floor(at / divisions) * pitch + (at % divisions) * inCell;
+
+	/* The same for a note's right-hand end, where a position landing exactly on
+	   a boundary means the end of the cell before it rather than the start of
+	   the one after — otherwise every note finishing on a step would be drawn a
+	   gap too long, reaching into the lane that says the two cells are
+	   separate. */
+	const xEnd = (at) => (at % divisions === 0
+		? Math.floor(at / divisions) * pitch - GAP
+		: xAt(at));
 
 	const barStyle = (at, span, step) => ({
-		left: `${(at - step * divisions) * unit - 1}px`,
-		width: `${span * unit - GAP}px`,
+		left: `${xAt(at) - step * pitch - 1}px`,
+		width: `${xEnd(at + span) - xAt(at)}px`,
 	});
 
 	return html`
@@ -797,8 +828,8 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 						>
 							${subs && html`
 								<i class="subs" style=${{
-									backgroundSize: `${snap * unit}px 100%`,
-									backgroundPositionX: `${-((step * divisions) % snap) * unit}px`,
+									backgroundSize: `${snap * inCell}px 100%`,
+									backgroundPositionX: `${-((step * divisions) % snap) * inCell}px`,
 								}}></i>`}
 							${beginning.map((one) => html`
 								<div

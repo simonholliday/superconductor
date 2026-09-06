@@ -537,7 +537,7 @@ def test_a_note_is_taken_away_by_a_second_tap_and_not_the_first (
 
 	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
 
-	panel.wait_for_selector(".grid.notes .note.chosen", timeout=5_000)
+	panel.wait_for_selector('.part[data-part="bass"] .grid.notes .note.chosen', timeout=5_000)
 	assert not [frame for frame in fake_app.sets if frame.get("path") == "bass/C2/0"], \
 		"the first tap asked the sequencer for nothing"
 
@@ -641,7 +641,8 @@ def test_the_snap_selector_offers_what_the_grid_can_hold (panel: typing.Any) -> 
 	_open_the_bass(panel)
 
 	offered = panel.eval_on_selector_all(
-		'.note-controls .note-row:first-child button', "els => els.map(el => el.dataset.snap)")
+		'.part[data-part="bass"] .note-controls .note-row:first-child button',
+		"els => els.map(el => el.dataset.snap)")
 
 	assert offered == ["1/4", "1/8", "1/16"], f"the snap row offered {offered}"
 
@@ -651,7 +652,8 @@ def test_the_snap_starts_at_one_drawn_cell (panel: typing.Any) -> None:
 
 	_open_the_bass(panel)
 
-	assert panel.locator('.note-controls button[data-snap="1/16"].on').count() == 1
+	assert panel.locator(
+		'.part[data-part="bass"] .note-controls button[data-snap="1/16"].on').count() == 1
 
 
 def test_a_selected_note_takes_its_length_from_a_named_value (
@@ -666,7 +668,7 @@ def test_a_selected_note_takes_its_length_from_a_named_value (
 	_open_the_bass(panel)
 
 	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
-	panel.locator('.note-controls button[data-length="1/4"]').click()
+	panel.locator('.part[data-part="bass"] .note-controls button[data-length="1/4"]').click()
 
 	assert fake_app.await_set("bass/C2/0/length")["v"] == 4
 
@@ -677,11 +679,11 @@ def test_the_note_row_says_nothing_is_selected_until_something_is (
 
 	_open_the_bass(panel)
 
-	assert panel.locator(".note-controls .note-row.idle").count() == 1
+	assert panel.locator('.part[data-part="bass"] .note-controls .note-row.idle').count() == 1
 
 	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
 
-	assert panel.locator(".note-controls .note-row.idle").count() == 0
+	assert panel.locator('.part[data-part="bass"] .note-controls .note-row.idle').count() == 0
 
 
 def test_dragging_a_note_moves_it (
@@ -711,7 +713,7 @@ def test_a_drag_that_goes_nowhere_is_still_a_tap (
 
 	_drag(panel, conftest.cell("bass/C2/0"), dx=3)
 
-	panel.wait_for_selector(".grid.notes .note.chosen", timeout=5_000)
+	panel.wait_for_selector('.part[data-part="bass"] .grid.notes .note.chosen', timeout=5_000)
 	assert not [frame for frame in fake_app.sets if frame.get("path").startswith("bass/")], \
 		"a wobble asked the sequencer for nothing"
 
@@ -762,13 +764,108 @@ def test_zooming_right_out_stops_the_grid_taking_taps (
 		"nothing was asked for from a view that cannot be aimed at"
 
 
+def _open_the_fine_grid (panel: typing.Any) -> None:
+	"""Go to the page carrying a grid that divides a step."""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="fine"] .grid.notes', timeout=5_000)
+	_settled(panel)
+
+
+def test_a_note_inside_a_step_is_drawn_across_the_cell_and_not_the_gap (
+	panel: typing.Any) -> None:
+	"""Simon found this at 1/32: the marks did not line up with the cells.
+
+	A step boundary is where a cell begins, and a step occupies the cell *plus*
+	the gap after it — so a position measured as a fraction of ``cell + GAP`` is
+	right for anything crossing a boundary and wrong for everything that does
+	not. It put the half-step two pixels right of where a person reads the
+	middle, which at a whole step is invisible and at a thirty-second is the
+	only thing there is to look at.
+
+	The fixture's fine grid divides a step into four and holds a note at
+	position 6 — halfway through the second step — running half a step. So it
+	must begin at the middle of that cell and end exactly on its right edge.
+	"""
+
+	_open_the_fine_grid(panel)
+
+	drawn = panel.evaluate("""() => {
+		const cell = document.querySelector('.cell[data-path="fine/C2/4"]');
+		const note = cell.querySelector('.note');
+		const box = cell.getBoundingClientRect();
+		const bar = note.getBoundingClientRect();
+
+		return { left: bar.left - box.left, right: box.right - bar.right, width: box.width };
+	}""")
+
+	middle = drawn["width"] / 2
+
+	assert abs(drawn["left"] - middle) <= 1.5, (
+		f"a note halfway through a step began {drawn['left']}px into a "
+		f"{drawn['width']}px cell, and the middle is {middle}px")
+	assert abs(drawn["right"]) <= 1.5, (
+		f"a note ending on a step boundary stopped {drawn['right']}px short of "
+		f"the cell edge — reaching into the lane that separates two cells")
+
+
+def test_a_note_shorter_than_a_step_is_that_fraction_of_the_cell (
+	panel: typing.Any) -> None:
+	"""The other half of the same arithmetic, and the one that would catch a
+	width measured over the gap: a quarter-step note is a quarter of the ink,
+	not a quarter of the ink and the lane after it."""
+
+	_open_the_fine_grid(panel)
+
+	drawn = panel.evaluate("""() => {
+		const cell = document.querySelector('.cell[data-path="fine/C2/0"]');
+		return {
+			cell: cell.getBoundingClientRect().width,
+			note: cell.querySelector('.note').getBoundingClientRect().width,
+		};
+	}""")
+
+	assert abs(drawn["note"] - drawn["cell"] / 4) <= 1.5, (
+		f"a quarter-step note was {drawn['note']}px of a {drawn['cell']}px cell")
+
+
+def test_the_subdivision_marks_are_spaced_across_the_cell (panel: typing.Any) -> None:
+	"""Which is what Simon was actually looking at when he reported it.
+
+	At 1/32 on a grid dividing a step into four, the marks fall every two
+	positions — so exactly one of them lands in each cell, at its middle. Spaced
+	over ``cell + GAP`` instead it sat past the middle, and a mark that does not
+	agree with the cell it is drawn in is worse than no mark at all.
+	"""
+
+	_open_the_fine_grid(panel)
+
+	panel.locator('.part[data-part="fine"] button[data-snap="1/32"]').click()
+	panel.wait_for_selector('.part[data-part="fine"] .subs', timeout=5_000)
+
+	spacing = panel.evaluate("""() => {
+		const cell = document.querySelector('.cell[data-path="fine/C2/0"]');
+		const marks = cell.querySelector('.subs');
+
+		return {
+			period: parseFloat(getComputedStyle(marks).backgroundSize),
+			cell: cell.getBoundingClientRect().width,
+		};
+	}""")
+
+	assert abs(spacing["period"] - spacing["cell"] / 2) <= 0.5, (
+		f"marks every {spacing['period']}px in a {spacing['cell']}px cell, "
+		f"which puts them at {spacing['period'] / spacing['cell']:.0%} across "
+		f"rather than the half")
+
+
 def test_the_velocity_lane_shapes_the_note_in_its_column (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""A lane rather than a dial: the whole dynamic shape is visible at once."""
 
 	_open_the_bass(panel)
 
-	bar = panel.locator('.lane .bar[data-velocity="0"]').bounding_box()
+	bar = panel.locator('.part[data-part="bass"] .lane .bar[data-velocity="0"]').bounding_box()
 
 	panel.mouse.move(bar["x"] + bar["width"] / 2, bar["y"] + 2)
 	panel.mouse.down()
