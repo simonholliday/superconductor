@@ -139,11 +139,11 @@ async def test_the_service_keeps_its_own_copy_so_a_late_panel_sees_the_grid () -
 async def test_an_app_going_away_is_shown_on_the_glass () -> None:
 	"""A control nobody can reach must not look reachable."""
 
-	hub, _, _ = await _hub_with_app()
+	hub, app, _ = await _hub_with_app()
 	glass = Recorder()
 
 	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
-	await hub.app_left("subsequence")
+	await hub.app_left(app)
 
 	assert glass.of_kind("app")[-1] == {"t": "app", "app": "subsequence", "up": False}
 	assert glass.of_kind("manifest")[-1]["apps"] == {}
@@ -188,3 +188,80 @@ async def test_a_control_that_has_gone_stops_being_offered () -> None:
 		name="subsequence", send=Recorder().send, controls={}, state={}))
 
 	assert glass.of_kind("manifest")[-1]["apps"]["subsequence"] == {}
+
+
+async def test_a_reconnecting_app_is_not_erased_by_its_own_old_socket () -> None:
+	"""The window every restart of a composition opens.
+
+	An app that reconnects declares on its new socket, and the old socket's
+	close arrives afterwards — the adapter's client gives up after about ten
+	seconds while the service can take minutes of TCP keepalive to notice a
+	corpse, so this ordering is the ordinary one rather than a corner.  Removing
+	by name took the *live* app away with the dead one, every control greyed out,
+	and nothing recovered: the app believes it is connected and will not declare
+	again.
+
+	Nothing covered a reconnection at all.  Re-declaring under one name was
+	tested; closing the first link afterwards was not, and that is the whole
+	defect.
+	"""
+
+	hub, first, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+
+	# The composition comes back on a socket of its own.
+	second = superintendent.hub.AppLink(
+		name="subsequence", send=Recorder().send,
+		controls=CONTROLS, state={"grid": {"kick": [2]}})
+
+	await hub.app_declared(second)
+
+	# And only now does the service notice the socket that died.
+	await hub.app_left(first)
+
+	assert hub.apps.get("subsequence") is second, \
+		"the old socket closing took the live app away with it"
+
+	assert glass.of_kind("manifest")[-1]["apps"] != {}, \
+		"every control was greyed out while the app was connected"
+
+	assert not [one for one in glass.of_kind("app") if one["up"] is False], \
+		"the glass was told the app had gone while it was here"
+
+
+async def test_an_app_that_really_goes_away_still_goes_away () -> None:
+	"""The other half, so the guard above cannot be satisfied by never removing."""
+
+	hub, app, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.app_left(app)
+
+	assert "subsequence" not in hub.apps
+	assert glass.of_kind("app")[-1]["up"] is False
+
+
+async def test_two_panels_reporting_one_name_are_two_registrations () -> None:
+	"""A panel is its socket, not its name.
+
+	`PanelLink` compares by identity for this reason: what a socket closing has
+	to remove is its own registration, and two browsers may perfectly well
+	report the same client string.
+	"""
+
+	hub = superintendent.hub.Hub(page={"name": "grid"})
+
+	one = superintendent.hub.PanelLink(client="panel", send=Recorder().send)
+	two = superintendent.hub.PanelLink(client="panel", send=Recorder().send)
+
+	await hub.panel_joined(one)
+	await hub.panel_joined(two)
+
+	assert len(hub.panels) == 2
+
+	hub.panel_left(one)
+
+	assert hub.panels == [two], "closing one socket removed the wrong registration"

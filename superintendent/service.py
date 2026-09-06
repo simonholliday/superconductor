@@ -107,6 +107,20 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 			kind = frame["t"]
 
 			if kind == "hello":
+				# **A hello on a socket that has already said one is a resync,
+				# not a second panel.** The client re-sends it on waking,
+				# because a hidden tab's timers are throttled to once a minute
+				# and it cannot be left to notice by itself. Every one of those
+				# built another link and appended it, and nothing took the
+				# previous one away: after N wakes every frame — every change,
+				# every manifest, every beat, every realised cycle twice a
+				# second — went down the one socket N+1 times, growing for the
+				# life of the connection and completely silent, because the
+				# frames are idempotent and the page stays correct while the
+				# wire and the render loop degrade.
+				if panel is not None:
+					hub.panel_left(panel)
+
 				panel = superintendent.hub.PanelLink(
 					client=str(frame.get("client", "panel")), send=_sender(websocket))
 
@@ -191,7 +205,7 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 
 	finally:
 		if app is not None:
-			await hub.app_left(app.name)
+			await hub.app_left(app)
 
 
 def _sender (websocket: starlette.websockets.WebSocket) -> superintendent.hub.Sender:

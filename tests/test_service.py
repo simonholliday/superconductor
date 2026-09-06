@@ -271,3 +271,54 @@ def test_a_control_this_service_is_too_old_for_is_declared_as_such () -> None:
 
 	assert offered["mystery"]["unsupported"] == "hologram"
 	assert "unsupported" not in offered["grid"], "a kind it does know is left alone"
+
+
+def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
+	"""The client re-sends `hello` on waking, and it must not join twice.
+
+	A hidden tab's timers are throttled to about once a minute, so a panel
+	coming back cannot be left to its own stale timer to notice; it says hello
+	again on the socket it already has.  Every one of those built a fresh
+	`PanelLink` and appended it, and nothing removed the previous one — so after
+	N wakes every frame went down the one socket N+1 times.
+
+	Silent, which is what makes it worth a test: the frames are idempotent, so
+	the page stays perfectly correct while the wire and the render loop degrade,
+	and it only stops when the socket finally closes.  A kiosk panel on a wall
+	wakes every time the screen does.
+	"""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			for _ in range(3):
+				panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+				_read_until(panel, "manifest")
+
+			app.send_json(superintendent.protocol.event("subsequence", "beat", beat=7, interval=0.5))
+
+			# **Fenced by a pong**, because the question is *how many* beats
+			# arrive and there is no other way to know when to stop reading. A
+			# broadcast goes to every registration; a pong is written to the one
+			# link that asked. So the pong is always last and always single, and
+			# whatever beats turn up before it are all of them.
+			panel.send_json({"t": "ping", "ts": 99.0})
+
+			beats = 0
+
+			for _ in range(12):
+				frame = panel.receive_json()
+
+				if frame["t"] == "event" and frame.get("beat") == 7:
+					beats += 1
+
+				if frame["t"] == "pong":
+					break
+
+			else:
+				raise AssertionError("no pong arrived to fence the count")
+
+			assert beats == 1, f"one beat was delivered {beats} times after three hellos"

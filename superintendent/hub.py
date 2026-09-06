@@ -41,9 +41,17 @@ class AppLink:
 	"""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class PanelLink:
-	"""One browser on the glass."""
+	"""One browser on the glass.
+
+	**Compared by identity, deliberately.** Two panels may report the same
+	client name, and what `panel_left` has to remove is *this socket's*
+	registration rather than one that merely looks like it.  It happened to work
+	before only because the sender is a fresh closure per socket and so no two
+	links were ever equal — a property of a different module, holding by
+	accident.
+	"""
 
 	client: str
 	send: Sender
@@ -100,15 +108,32 @@ class Hub:
 
 		LOG.info("app %r declared %d control(s) at version %d", app.name, len(app.controls), app.version)
 
-	async def app_left (self, name: str) -> None:
-		"""Forget an app and grey it out on every panel."""
+	async def app_left (self, app: AppLink) -> None:
+		"""Forget an app and grey it out on every panel.
 
-		self.apps.pop(name, None)
+		**Only if this is still the link that is registered.** An app that
+		reconnects declares on its new socket before the old one is noticed to
+		have died — the adapter's client gives up after about ten seconds while
+		the service can take minutes of TCP keepalive to see a corpse — and
+		popping by name then removed the *live* app.  Every control greyed out
+		and nothing recovered, because the app believes it is connected and will
+		not declare again.  Two copies of a composition running at once did it
+		too, which `tools/play_loudly.py` makes easy to do by accident.
+
+		`panel_left` has always compared the object; this is the same rule for
+		the other kind of link.
+		"""
+
+		if self.apps.get(app.name) is not app:
+			LOG.debug("app %r closed a socket that had already been replaced", app.name)
+			return
+
+		del self.apps[app.name]
 
 		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
-		await self.to_panels(superintendent.protocol.app_presence(name, False))
+		await self.to_panels(superintendent.protocol.app_presence(app.name, False))
 
-		LOG.info("app %r disconnected", name)
+		LOG.info("app %r disconnected", app.name)
 
 	def _declarations (self) -> dict[str, dict[str, typing.Any]]:
 		"""What every connected app says it can be controlled by.
