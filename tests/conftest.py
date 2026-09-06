@@ -235,6 +235,17 @@ class FakeApp:
 			"subsequence", "beat", beat=beat, ts=0.0, interval=interval,
 			steps=steps, beats=beats))
 
+	def realised (self, control: str, cells: dict) -> None:
+		"""Say what the algorithms put on a grid this cycle.
+
+		An event and never a change (#1965): nothing stores it, and a panel that
+		joins afterwards has nowhere to read it from — which is exactly why it
+		has to stop being drawn the moment it stops being true.
+		"""
+
+		self.send(superintendent.protocol.event(
+			"subsequence", "realised", control=control, cells=cells))
+
 	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
 		"""Refuse a request, the way an app that cannot do it does."""
 

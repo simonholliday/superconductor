@@ -2318,12 +2318,12 @@ function Transport ({ control, name, fields, up, anchor, onSet }) {
 					><${Icon} of="pause" filled /></button>
 				</div>`}
 
-			<div class="lcd">
+			<div class="lcd count">
 				<span class="lcd-value">${reading || "\u2014"}</span>
 				<span class="lcd-label">bar · beat · step</span>
 			</div>
 
-			<div class="lcd small">
+			<div class="lcd">
 				<span class="lcd-value">
 					${typeof bpm === "number" ? bpm.toFixed(bpm % 1 ? 1 : 0) : "\u2014"}</span>
 				<span class="lcd-label">tempo · bpm</span>
@@ -3055,6 +3055,29 @@ function Panel () {
 
 						return { ...was, [frame.app]: app };
 					});
+
+					/* **A dot means "an algorithm put this here *this cycle*",
+					 * and a held clock has no cycle.**
+					 *
+					 * Simon: the Euclidean feeding the kick is off and its dots
+					 * are still on the grid, never changing. They were, because
+					 * `realised` is an event sent once a cycle (#1965) and the
+					 * transport was paused — so the last set the panel received
+					 * stayed on the glass, outliving the thing that put it
+					 * there and then outliving the generator itself.
+					 *
+					 * Cleared when the clock is held, and again whenever a stack
+					 * changes: bypassing a generator makes every dot it
+					 * contributed a statement about a cycle that will not
+					 * happen. Both heal themselves on the next cycle, which is
+					 * exactly what a thing nothing stores should do. */
+					if (frame.path.endsWith("/paused") && frame.v === true) {
+						setRealised({});
+					}
+
+					if (frame.path.endsWith("/layers")) {
+						setRealised({});
+					}
 
 					/* Answered in substance: the app now holds what was asked
 					 * for, whether it credits this panel or not. A transport's

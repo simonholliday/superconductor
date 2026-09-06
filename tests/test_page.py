@@ -122,17 +122,17 @@ def test_the_counter_says_which_bar_beat_and_step (
 	# Held, so the reading is the beat itself rather than an extrapolation —
 	# which is what makes this measurable at all.
 	fake_app.beat(0)
-	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("001·1·1", timeout=5_000)
+	playwright_api.expect(panel.locator(".lcd.count .lcd-value")).to_have_text("001·1·1", timeout=5_000)
 
 	fake_app.beat(1)
-	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("001·2·1", timeout=5_000)
+	playwright_api.expect(panel.locator(".lcd.count .lcd-value")).to_have_text("001·2·1", timeout=5_000)
 
 	# Two beats to a bar in this fixture, so beat 2 is where the second begins.
 	fake_app.beat(2)
-	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("002·1·1", timeout=5_000)
+	playwright_api.expect(panel.locator(".lcd.count .lcd-value")).to_have_text("002·1·1", timeout=5_000)
 
 	fake_app.beat(9)
-	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("005·2·1", timeout=5_000)
+	playwright_api.expect(panel.locator(".lcd.count .lcd-value")).to_have_text("005·2·1", timeout=5_000)
 
 
 def test_there_is_no_stop_key_because_the_app_declares_no_stop (
@@ -148,13 +148,85 @@ def test_there_is_no_stop_key_because_the_app_declares_no_stop (
 	assert panel.locator(".transport .tkey").count() == 2, "the transport has a third key"
 
 
+def test_a_dot_stops_being_drawn_when_it_stops_being_true (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Simon: the Euclidean feeding the kick is off, and its dots are still on
+	the grid, never changing.
+
+	They were.  A dot means "an algorithm put this here *this cycle*", and it
+	arrives as an event sent once a cycle (#1965) — so with the transport held
+	there is no cycle, nothing new arrives, and the last set the panel received
+	stays on the glass.  It outlived the cycle that put it there and then
+	outlived the generator itself.
+
+	Two things end it, and both heal on the next cycle: holding the clock, and
+	changing the stack — because bypassing a generator makes every dot it
+	contributed a statement about a cycle that will not happen.
+	"""
+
+	_settled(panel)
+
+	fake_app.realised("grid", {"kick": {"2": 100, "6": 90}})
+	panel.wait_for_selector('.part[data-part="grid"] .cell.ghost', timeout=5_000)
+
+	fake_app.confirm("transport/paused", True, by="app")
+
+	playwright_api.expect(
+		panel.locator('.part[data-part="grid"] .cell.ghost')).to_have_count(0, timeout=5_000)
+
+
+def test_changing_a_stack_takes_its_dots_with_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The other half, and the one that matters while the clock is running: a
+	generator switched off has not played the notes still drawn under it."""
+
+	_open_the_stack(panel)
+
+	fake_app.realised("grid", {"kick": {"1": 100}})
+	panel.wait_for_selector('.part[data-part="grid"] .cell.ghost', timeout=5_000)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": True, "params": {}},
+	], by="app")
+
+	playwright_api.expect(
+		panel.locator('.part[data-part="grid"] .cell.ghost')).to_have_count(0, timeout=5_000)
+
+
+def test_everything_on_the_bar_is_one_height (panel: typing.Any) -> None:
+	"""Simon: "I'd like to see consistent heights and spacing between items
+	where possible."
+
+	Two readouts set at two type sizes came out two heights, which he spotted at
+	a glance.  A display sits on the chrome surface like anything else: its
+	contents fit it rather than deciding it.
+	"""
+
+	_settled(panel)
+
+	tall = panel.evaluate("""() => {
+		const out = {};
+
+		for (const one of document.querySelectorAll(".bar button, .bar .lcd")) {
+			const at = Math.round(one.getBoundingClientRect().height);
+
+			out[at] = out[at] || [];
+			out[at].push(one.className || one.tagName);
+		}
+
+		return out;
+	}""")
+
+	assert len(tall) == 1, f"the bar draws its controls at {sorted(tall)}px: {tall}"
+
+
 def test_the_tempo_reading_follows_the_app (panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""So a ramp or a poke from elsewhere shows, not just what was last tapped."""
 
 	fake_app.confirm("transport/bpm", 137.5, by="app")
 
 	playwright_api.expect(
-		panel.locator(".lcd.small .lcd-value")).to_contain_text("137.5", timeout=5_000)
+		panel.locator(".lcd:not(.count) .lcd-value")).to_contain_text("137.5", timeout=5_000)
 
 
 def test_a_refused_request_says_why_and_gives_the_cell_back (

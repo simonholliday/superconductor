@@ -190,6 +190,11 @@
 	--face-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 	--face-figures: ui-monospace, "SF Mono", "Cascadia Mono", "Liberation Mono", monospace;
 
+	/* Two gaps for the header and no third: things that belong together, and
+	   the space between one group and the next. */
+	--bar-tight: 0.3rem;
+	--bar-loose: 0.85rem;
+
 	/* A control's row: as many whole cells as it takes to stay pressable.
 	   Written by the client, which works it out once and tells both the fit
 	   and this stylesheet, so the two cannot disagree. The value below is only
@@ -344,8 +349,15 @@ html, body {
 	   gave the whole document a horizontal scrollbar, which is the same fault
 	   the playhead had and a different cause. */
 	flex-wrap: wrap;
-	row-gap: 0.4rem;
-	gap: 0.75rem;
+
+	/* **One gap between groups and one inside them**, and nothing in between.
+	   Simon: "I'd like to see consistent heights and spacing between items
+	   where possible. Grouping of items, and larger spacing between groups, is
+	   acceptable" — which is the rule, and the bar was carrying four different
+	   numbers instead. A group is set from `--bar-tight`; the bar itself is the
+	   only thing that uses `--bar-loose`. */
+	row-gap: var(--bar-loose);
+	gap: var(--bar-loose);
 	padding: 0.6rem 0.9rem;
 	border-bottom: 1px solid var(--edge);
 	color: var(--ink-quiet);
@@ -1001,7 +1013,9 @@ html, body {
 /* The transport. Sized for a finger with no keyboard: nothing here is smaller
    than the grid's own cells, and the silence button is deliberately the
    largest thing on the page, because it is the one control wanted in a hurry. */
-.transport { display: flex; align-items: center; gap: 0.7rem; }
+/* Each of these is a group, so each is set at the tight gap and the bar's own
+   gap does the separating. */
+.transport { display: flex; align-items: center; gap: var(--bar-tight); }
 
 .transport button {
 	background: var(--panel);
@@ -1061,10 +1075,19 @@ html, body {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 0.15rem;
-	padding: 0.3rem 0.75rem;
+	justify-content: center;
+	gap: 0.1rem;
+
+	/* **The same height as every other thing on this bar.** Two readouts set at
+	   two type sizes came out two heights, which Simon spotted immediately —
+	   the chrome surface says 44px and a display is on that surface like
+	   anything else. Its contents fit it rather than deciding it. */
+	height: 44px;
+	box-sizing: border-box;
+
+	padding: 0 0.75rem;
 	border: 1px solid var(--edge-strong);
-	border-radius: 6px;
+	border-radius: 8px;
 	background: var(--sunk);
 	box-shadow: inset 0 2px 5px var(--sunk-shadow);
 }
@@ -1072,14 +1095,17 @@ html, body {
 .lcd-value {
 	font-family: var(--face-figures);
 	font-variant-numeric: tabular-nums;
-	font-size: var(--type-display);
+	font-size: var(--type-chrome);
 	font-weight: 500;
 	line-height: 1;
 	color: var(--on);
 	letter-spacing: 0.02em;
 }
 
-.lcd.small .lcd-value { font-size: var(--type-chrome); }
+/* The counter is the one thing on the bar allowed to be bigger than the bar's
+   own type, because on every machine these users own it is the largest thing in
+   the transport. It still sits in a 44px box like everything else. */
+.lcd.count .lcd-value { font-size: var(--type-display); }
 
 .lcd-label {
 	font-family: var(--face-panel);
@@ -1089,7 +1115,7 @@ html, body {
 	color: var(--ink-faint);
 }
 
-.tempo { display: flex; align-items: center; gap: 0.3rem; }
+.tempo { display: flex; align-items: center; gap: var(--bar-tight); }
 
 /* Choosing the size.
  *
@@ -1191,7 +1217,7 @@ html, body {
 /* Moving between pages. Drawn like the grid's own cells, because a hand that
    has learned to tap a row of those has already learned this — and sized for a
    finger regardless of how small the cells themselves are set. */
-.pages { display: flex; align-items: center; gap: 0.3rem; }
+.pages { display: flex; align-items: center; gap: var(--bar-tight); }
 
 .pages button {
 	min-width: 44px;
