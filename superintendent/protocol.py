@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.12.0"
+CONTRACT_VERSION = "1.13.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -88,6 +88,16 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.13.0 makes each realised cell an object rather than a velocity: ``{"v": 100,
+"from": "l7x2"}``, where ``from`` is the id of the stack layer that put the note
+there.  A routed grid's notes and a generator's arrived under the same mark and
+could not be told apart, so a person looking for the generator behind a note
+found none — because there was none, and the note had come from a pattern routed
+in.  The panel already holds the layers, so it reads the *kind* from those and
+this only has to say which one; a second copy of the kind on the wire is a second
+copy that could disagree.  The adapter now reads the pattern once per layer
+rather than twice per cycle, which is one list copy each on a stack four deep.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

@@ -3275,11 +3275,17 @@ def test_a_stack_offering_no_patterns_still_says_generator (
 
 
 def _realised (panel: typing.Any, fake_app: typing.Any,
-               cells: dict[str, dict[str, int]]) -> None:
-	"""Report a cycle's generated cells the way the app does."""
+               cells: dict[str, dict[str, int]], source: str = "one",
+               sources: dict[str, str] | None = None) -> None:
+	"""Report a cycle's generated cells the way the app does.
 
-	fake_app.send(superintendent.protocol.event(
-		"subsequence", "realised", control="grid", cells=cells))
+	Through the fixture rather than building the frame here.  Two places knowing
+	the wire's shape is two places to update, and this one silently kept sending
+	the pre-1.13.0 shape after the other had moved on — so the dots drew at one
+	size whatever the velocity, and only a test that measured them said so.
+	"""
+
+	fake_app.realised("grid", cells, source=source, sources=sources)
 
 	panel.wait_for_timeout(200)
 
@@ -3399,6 +3405,50 @@ def test_closing_a_window_does_not_drag_it (panel: typing.Any, fake_app: typing.
 	assert [layer["id"] for layer in asked[-1]["v"]] == ["one"], "the close did not remove it"
 	assert panel.locator('.part[data-part="stack/one"]').bounding_box() == before, \
 		"closing one block moved another"
+
+
+def test_a_routed_note_is_drawn_apart_from_an_invented_one (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "I still see a dot on the 15th step of the hihat 1 open lane — and
+	there is no generator linked to it at all, enabled or otherwise."
+
+	There was not, and there never had been: the note came from the grid routed
+	into that pattern.  The dot was truthful and unreadable — a routed grid's
+	notes and an algorithm's wore the same mark, so the only way to find out
+	what had put one there was to read the wire.
+
+	A round dot is something made up this cycle and kept nowhere.  A square is a
+	note somebody wrote down, which is what it is on the grid it came from and
+	what a cell looks like here.
+	"""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "made", "generator": "euclidean", "index": 1, "bypassed": False, "params": {}},
+		{"id": "sent", "kind": "pattern", "source": "second", "index": 2,
+		 "bypassed": False, "params": {}},
+	], by="app")
+
+	_settled(panel)
+
+	# One event, because one report is one cycle: a second would replace the
+	# first rather than add to it, which is what makes it a report at all.
+	_realised(panel, fake_app,
+	          {"kick": {"1": 100}, "snare": {"1": 100}},
+	          sources={"kick": "made", "snare": "sent"})
+
+	def corner (path: str) -> float:
+		return float(panel.eval_on_selector(
+			conftest.cell(path),
+			"one => parseFloat(getComputedStyle(one, '::after').borderTopLeftRadius)"))
+
+	invented = corner("grid/kick/1")
+	routed = corner("grid/snare/1")
+
+	assert panel.locator('.part[data-part="grid"] .cell.ghost.routed').count() == 1
+	assert routed < invented / 2, \
+		f"a routed note is drawn like an invented one: {routed}px against {invented}px"
 
 
 def test_a_quiet_generated_note_is_drawn_smaller_than_a_loud_one (

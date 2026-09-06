@@ -1509,6 +1509,13 @@ class Recipe (Control):
 
 		before = self._reads(pattern) if self.pulses_per_beat else None
 
+		# **Read between the layers, not only around them.** A dot could say
+		# that *something* put a note there and not what — so Simon went looking
+		# for a generator behind a note the routed grid had contributed, and
+		# there was none to find. Reading after each layer costs one list copy
+		# per layer instead of two per cycle, on a stack that is four deep.
+		landed: list[tuple[str, list[typing.Any]]] = []
+
 		for layer in self.layers():
 			if layer["bypassed"]:
 				continue
@@ -1535,6 +1542,9 @@ class Recipe (Control):
 				except Exception as error:
 					self._complain(source, str(error))
 
+				if before is not None:
+					landed.append((str(layer["id"]), self._reads(pattern) or []))
+
 				continue
 
 			generator = str(layer["generator"])
@@ -1550,10 +1560,11 @@ class Recipe (Control):
 			except Exception as error:
 				self._complain(generator, str(error))
 
-		after = self._reads(pattern) if before is not None else None
+			if before is not None:
+				landed.append((str(layer["id"]), self._reads(pattern) or []))
 
-		if before is not None and after is not None:
-			self._say_what_landed(before, after)
+		if before is not None:
+			self._say_what_landed(before, landed)
 
 	def _reads (self, pattern: typing.Any) -> list[typing.Any] | None:
 		"""What is on the pattern now, or None if it cannot be read at all.
@@ -1570,12 +1581,21 @@ class Recipe (Control):
 
 		return list(reader()) if callable(reader) else None
 
-	def _say_what_landed (self, before: list[typing.Any], after: list[typing.Any]) -> None:
-		"""Report the cells this stack realised, as rows and step numbers.
+	def _say_what_landed (
+		self,
+		before: list[typing.Any],
+		landed: list[tuple[str, list[typing.Any]]],
+	) -> None:
+		"""Report the cells this stack realised, as rows and step numbers, and
+		**which layer put each one there**.
 
 		Ephemeral and stored nowhere: an event rather than a change, because
 		these notes are not intent and must never be applied as if they were
 		(#1965).  A person's taps remain the only thing anything keeps.
+
+		Carrying the layer is what lets a panel tell a note a routed grid
+		contributed from one an algorithm invented — which are different things
+		wearing the same mark until now, and Simon read the first as the second.
 		"""
 
 		grid = self._target()
@@ -1589,9 +1609,29 @@ class Recipe (Control):
 			return
 
 		known = set(grid.rows)
-		cells: dict[str, dict[str, int]] = {}
+		cells: dict[str, dict[str, typing.Any]] = {}
+		seen = set(before)
 
-		for note in set(after) - set(before):
+		for layer, after in landed:
+			fresh = set(after) - seen
+			seen = set(after)
+
+			self._gather(cells, fresh, layer, known, per_step, grid.steps)
+
+		self._report_cells(cells)
+
+	def _gather (
+		self,
+		cells: dict[str, dict[str, typing.Any]],
+		fresh: set[typing.Any],
+		layer: str,
+		known: set[str],
+		per_step: float,
+		steps: int,
+	) -> None:
+		"""Fold one layer's new notes into the cells being reported."""
+
+		for note in fresh:
 			row = getattr(note, "origin", None)
 
 			# A note with no named voice cannot be matched to a row, and one the
@@ -1605,7 +1645,7 @@ class Recipe (Control):
 
 			step = int(getattr(note, "position", 0) // per_step)
 
-			if not 0 <= step < grid.steps:
+			if not 0 <= step < steps:
 				continue
 
 			# **How hard, not only whether.** A ghost fill is quiet by its whole
@@ -1617,7 +1657,18 @@ class Recipe (Control):
 			# sound at the weight of the louder.
 			loud = int(getattr(note, "velocity", 0) or 0)
 			held = cells.setdefault(row, {})
-			held[str(step)] = max(held.get(str(step), 0), loud)
+			standing = held.get(str(step))
+
+			if standing is None or loud > int(standing.get("v", 0)):
+				held[str(step)] = {"v": loud, "from": layer}
+
+	def _report_cells (self, cells: dict[str, dict[str, typing.Any]]) -> None:
+		"""Send what the stack realised, once a cycle and unconditionally."""
+
+		grid = self._target()
+
+		if grid is None or self.link is None:
+			return
 
 		# **Every cycle, including one that says the same as the last.**
 		#

@@ -261,7 +261,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.12.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.13.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -306,7 +306,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.12.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.13.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -475,7 +475,7 @@ function BeatStrip ({ steps, beats, tight }) {
 		</div>`;
 }
 
-function Grid ({ control, rows, steps, beats, cells, drawn, visible, cell, pending, failed, onTap }) {
+function Grid ({ control, rows, steps, beats, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -509,15 +509,25 @@ function Grid ({ control, rows, steps, beats, cells, drawn, visible, cell, pendi
 					const struck = ((drawn || {})[row] || {})[step];
 					const ghost = struck !== undefined;
 
+					/* **What put it there, not only that something did.** A
+					   routed grid's notes and an algorithm's wore the same mark,
+					   so Simon went looking for a generator behind a note the
+					   route had contributed and found none. A route's note is
+					   drawn square, because it is a note somebody wrote down on
+					   another grid and squares are what a written note looks
+					   like here; an invented one stays round. */
+					const routed = ghost && kinds && kinds[struck.from] === "pattern";
+
 					return html`
 						<div
 							key=${path}
 							data-path=${path}
 							class=${["cell", on ? "on" : "", ghost ? "ghost" : "",
+								routed ? "routed" : "",
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
-							style=${ghost ? { "--struck": weightOf(struck) } : null}
+							style=${ghost ? { "--struck": weightOf(struck.v) } : null}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
 				})}
@@ -3501,6 +3511,15 @@ function Panel () {
 	/* An id has to survive a round trip and be unique among its neighbours. The
 	   clock alone is not enough: two taps inside a millisecond are a stutter
 	   rather than an impossibility on a surface meant to be played. */
+	/* What kind of thing each layer of a grid's stack is, by its id. */
+	const layerKinds = (control) => {
+		const stack = stackFor(control);
+		const layers = stack ? ((state[appName] || {})[stack] || {}).layers || [] : [];
+
+		return Object.fromEntries(
+			layers.map((layer) => [layer.id, layer.kind === "pattern" ? "pattern" : "generator"]));
+	};
+
 	const addLayer = (stack, layer) => {
 		const held = ((state[appName] || {})[stack] || {}).layers || [];
 
@@ -3718,6 +3737,12 @@ function Panel () {
 								beats=${controls[one.control].beats || 4}
 								cells=${(state[appName] || {})[one.control] || {}}
 								drawn=${up ? realised[one.control] : null}
+								${/* Which layer is a route and which is a
+								     generator, so a dot can say which put it
+								     there. Read from the stack rather than sent
+								     with the event: the panel already holds the
+								     layers, and a second copy could disagree. */ ""}
+								kinds=${layerKinds(one.control)}
 								visible=${controls[one.control].visible_rows} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
 					${up && one.clear && html`

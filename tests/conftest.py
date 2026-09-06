@@ -235,7 +235,8 @@ class FakeApp:
 			"subsequence", "beat", beat=beat, ts=0.0, interval=interval,
 			steps=steps, beats=beats))
 
-	def realised (self, control: str, cells: dict) -> None:
+	def realised (self, control: str, cells: dict, source: str = "one",
+	              sources: dict[str, str] | None = None) -> None:
 		"""Say what the algorithms put on a grid this cycle.
 
 		An event and never a change (#1965): nothing stores it, and a panel that
@@ -243,8 +244,20 @@ class FakeApp:
 		has to stop being drawn the moment it stops being true.
 		"""
 
+		# Written as `{row: {step: velocity}}` because that is what a test is
+		# usually about, and wrapped here into the shape the wire carries since
+		# contract 1.13.0 — each cell says how hard *and* which layer put it
+		# there, so a routed grid's note can be told from a generator's.
+		# One event carries a whole cycle, and a cycle is several layers — so a
+		# row may name the layer that produced it. Sending two events instead
+		# would not do: each replaces the control's cells entirely, which is
+		# what a cycle's report is.
 		self.send(superintendent.protocol.event(
-			"subsequence", "realised", control=control, cells=cells))
+			"subsequence", "realised", control=control,
+			cells={
+				row: {step: {"v": loud, "from": (sources or {}).get(row, source)}
+				      for step, loud in steps.items()}
+				for row, steps in cells.items()}))
 
 	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
 		"""Refuse a request, the way an app that cannot do it does."""

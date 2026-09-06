@@ -722,6 +722,28 @@ def _watching (places: list[Note] | None = None) -> tuple[adapter.Recipe, Speake
 	return recipe, speaker, Builder(places)
 
 
+def _weights (cells: dict) -> dict:
+	"""A realised report with the velocities alone, for the tests that are about
+	the velocities.
+
+	Each cell is ``{"v": ..., "from": ...}`` since contract 1.13.0, because a
+	dot has to be able to say which layer put it there — a routed grid's note
+	and a generator's wore the same mark and could not be told apart.  Where a
+	test is about neither, saying so once here beats repeating the wrapper in
+	every assertion.
+	"""
+
+	return {row: {step: held["v"] for step, held in steps.items()}
+	        for row, steps in cells.items()}
+
+
+def _sources (cells: dict) -> dict:
+	"""The same report with the layers alone."""
+
+	return {row: {step: held["from"] for step, held in steps.items()}
+	        for row, steps in cells.items()}
+
+
 def test_a_stack_says_which_cells_its_generators_realised () -> None:
 	"""So the panel can draw them beside the steps somebody tapped (#1925).
 
@@ -736,9 +758,17 @@ def test_a_stack_says_which_cells_its_generators_realised () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events == [
-		("realised", {"control": "grid",
-		              "cells": {"kick": {"0": 110, "15": 90}, "snare": {"2": 40}}})]
+	assert len(speaker.events) == 1
+	assert speaker.events[0][0] == "realised"
+	assert speaker.events[0][1]["control"] == "grid"
+
+	cells = speaker.events[0][1]["cells"]
+
+	assert _weights(cells) == {"kick": {"0": 110, "15": 90}, "snare": {"2": 40}}
+
+	# And every one of them names the layer that put it there, which is what a
+	# dot needs to say whether an algorithm invented it or a route brought it.
+	assert _sources(cells) == {"kick": {"0": "a", "15": "a"}, "snare": {"2": "a"}}
 
 
 def test_what_was_already_there_is_not_reported_as_realised () -> None:
@@ -753,7 +783,7 @@ def test_what_was_already_there_is_not_reported_as_realised () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": {"2": 100}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"kick": {"2": 100}}
 
 
 def test_a_generated_note_landing_on_a_tapped_one_is_still_reported () -> None:
@@ -768,7 +798,7 @@ def test_a_generated_note_landing_on_a_tapped_one_is_still_reported () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 100}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"kick": {"0": 100}}
 
 
 def test_a_note_that_will_not_sound_is_not_drawn () -> None:
@@ -782,7 +812,7 @@ def test_a_note_that_will_not_sound_is_not_drawn () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"snare": {"1": 100}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"snare": {"1": 100}}
 
 
 def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
@@ -796,7 +826,7 @@ def test_a_note_naming_no_row_of_this_grid_is_left_alone () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": {"2": 100}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"kick": {"2": 100}}
 
 
 def test_every_cycle_says_what_it_realised_even_when_it_is_the_same () -> None:
@@ -876,7 +906,7 @@ def test_how_hard_a_note_was_played_travels_with_it () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 127, "1": 30}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"kick": {"0": 127, "1": 30}}
 
 
 def test_two_contributions_on_one_step_report_the_louder () -> None:
@@ -890,7 +920,7 @@ def test_two_contributions_on_one_step_report_the_louder () -> None:
 	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
 	recipe.build(builder)
 
-	assert speaker.events[-1][1]["cells"] == {"kick": {"0": 115}}
+	assert _weights(speaker.events[-1][1]["cells"]) == {"kick": {"0": 115}}
 
 
 def test_a_grid_switched_off_contributes_nothing_where_it_is_routed () -> None:

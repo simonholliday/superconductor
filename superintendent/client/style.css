@@ -918,6 +918,24 @@ html, body {
    would have played anyway. */
 .cell.on.ghost::after { opacity: 0.28; background: var(--on-ink); }
 
+/* **A note a route brought, rather than one an algorithm invented.**
+ *
+ * They wore the same mark until now, and Simon went looking for a generator
+ * behind a note the routed grid had contributed — there was none to find,
+ * because it was never a generator's note. A round dot is something made up
+ * this cycle and kept nowhere; a square is a note somebody wrote down, which is
+ * exactly what it is on the grid it came from and what a cell looks like here.
+ *
+ * The shape carries it rather than a colour, because #2112 keeps the palette
+ * tight and because presence is the primary reading — at the smallest cell both
+ * are a mark saying "something sounds here that is not yours", and the
+ * distinction is there to be found when it is looked for. */
+.cell.ghost.routed::after {
+	border-radius: max(1px, calc(var(--cell) * 0.05));
+	width: calc(clamp(4px, calc(var(--cell) * 0.5), 24px) * var(--struck, 1));
+	height: calc(clamp(4px, calc(var(--cell) * 0.5), 24px) * var(--struck, 1));
+}
+
 /* The ring is the request, never the value: the face below it is always what
    the sequencer actually holds. It clears when the change is confirmed. */
 .cell.pending::after {
