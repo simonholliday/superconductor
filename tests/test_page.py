@@ -3593,6 +3593,80 @@ def test_silencing_a_block_does_not_empty_it (
 	assert panel.locator('.part[data-part="grid"] .cell.on').count() == before
 
 
+def test_every_size_and_face_on_the_page_is_one_the_scale_names (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, asking for a last pass: "weed out any accidental inconsistencies
+	in styling ... the font size for the bar/beat/step numbers is larger than
+	for the BPM number and I don't see a reason for this."
+
+	There was not one, and he found it by eye.  The scale says six sizes and
+	nothing outside them, and the faces say three — but neither was checked, so
+	anything that inherited from the document or set a size by hand simply
+	joined the set.  A hint below the note grid was drawing at the document's
+	own 16px, and a stepper's value, a sheet's headings, the lamp and the build
+	line had all quietly fallen back to the body face.
+
+	**What a thing is decides its face**: lettering on the equipment, a
+	sentence, or a figure.  What it does decides its size, out of six.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+
+	# A sheet as well, so the chrome that only exists while something is open is
+	# measured rather than assumed.
+	panel.locator('.part[data-part="grid"] .part-foot button.add').click()
+	panel.wait_for_selector(".sheet .option", timeout=5_000)
+
+	adrift = panel.evaluate("""() => {
+		const root = getComputedStyle(document.documentElement);
+		const probe = document.createElement("span");
+
+		document.body.appendChild(probe);
+
+		const resolve = (name) => {
+			probe.style.font = "";
+			probe.style.fontSize = root.getPropertyValue(name);
+
+			return getComputedStyle(probe).fontSize;
+		};
+
+		const sizes = new Set(["--type-display", "--type-chrome", "--type-chrome-quiet",
+			"--type-title", "--type-body", "--type-note"].map(resolve));
+
+		/* Normalised, because a stack written across two lines in the
+		   stylesheet comes back with its newline and the computed one does
+		   not. */
+		const tidy = (stack) => stack.replace(/\s+/g, " ").trim();
+
+		const faces = new Set(["--face-panel", "--face-body", "--face-figures"]
+			.map((name) => tidy(root.getPropertyValue(name))));
+
+		probe.remove();
+
+		const out = { sizes: [], faces: [] };
+
+		for (const el of document.querySelectorAll("body *")) {
+			const box = el.getBoundingClientRect();
+
+			if (!box.width || !box.height) continue;
+			if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+
+			const seen = getComputedStyle(el);
+			const named = el.tagName.toLowerCase() + "."
+				+ ((el.className.baseVal ?? el.className ?? "").toString().split(" ")[0] || "-");
+
+			if (!sizes.has(seen.fontSize)) out.sizes.push(named + " at " + seen.fontSize);
+			if (!faces.has(tidy(seen.fontFamily))) out.faces.push(named + " in " + seen.fontFamily);
+		}
+
+		return { sizes: [...new Set(out.sizes)], faces: [...new Set(out.faces)] };
+	}""")
+
+	assert adrift["sizes"] == [], f"these are set outside the type scale: {adrift['sizes']}"
+	assert adrift["faces"] == [], f"these are set in a face nobody declared: {adrift['faces']}"
+
+
 SURFACE_RULES = {
 	".part-title button",
 	".part-body button, .part-foot button",

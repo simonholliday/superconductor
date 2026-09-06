@@ -367,7 +367,16 @@ html, body {
 .bar .title { color: var(--ink); font-weight: 600; font-size: var(--type-chrome); }
 .bar .spacer { flex: 1; }
 
-.lamp { display: inline-flex; align-items: center; gap: 0.4rem; }
+/* A word on the bar among lettered controls, so it is lettered too. */
+.lamp {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	font-family: var(--face-panel);
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
 .lamp::before {
 	content: "";
 	width: 0.6rem; height: 0.6rem;
@@ -1113,17 +1122,19 @@ html, body {
 .lcd-value {
 	font-family: var(--face-figures);
 	font-variant-numeric: tabular-nums;
-	font-size: var(--type-chrome);
+	font-size: var(--type-display);
 	font-weight: 500;
 	line-height: 1;
 	color: var(--on);
 	letter-spacing: 0.02em;
 }
 
-/* The counter is the one thing on the bar allowed to be bigger than the bar's
-   own type, because on every machine these users own it is the largest thing in
-   the transport. It still sits in a 44px box like everything else. */
-.lcd.count .lcd-value { font-size: var(--type-display); }
+/* **Both readouts at one size**, and the counter is the primary one by being
+   first and wider rather than by being taller. Simon: the counter's figures are
+   larger than the tempo's and there is no reason for it — and there was not. A
+   size is a role, and these two are one role: a number the transport is
+   reporting. The type scale already says labels and values share a size for the
+   same reason. */
 
 .lcd-label {
 	font-family: var(--face-panel);
@@ -1216,8 +1227,11 @@ html, body {
 
 /* What is running. Quiet by design — it is provenance, not a control, and it
    earns its place in the bar only by costing no glass at all. */
+/* A version and a build hash: identifiers made of figures, and read character
+   by character when they are read at all. */
 .bar .build {
 	color: var(--ink-quiet);
+	font-family: var(--face-figures);
 	font-size: var(--type-chrome-quiet);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
@@ -1516,6 +1530,13 @@ html, body {
 	flex: none;
 }
 
+/* Prose, so the body face — and on the type scale, which it was not: it took
+   16px straight from the document and was the only text on the page doing so. */
+.note-row .hint {
+	font-family: var(--face-body);
+	font-size: var(--type-note);
+}
+
 .note-row .hint,
 .note-row.idle .row-label { color: var(--ink-quiet); }
 
@@ -1774,6 +1795,7 @@ html, body {
  * told to skip where a note already sits depends on what ran before it. */
 .grid.params .layer .place {
 	color: var(--ink-quiet);
+	font-family: var(--face-figures);
 	font-size: var(--type-note);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
@@ -1815,7 +1837,11 @@ html, body {
 	background: var(--panel);
 	color: var(--ink);}
 
+/* A figure, so it is set in figures and lines up as one. It was taking the body
+   face by inheritance, which is what a number does when nobody says otherwise. */
 .stepper span {
+	font-family: var(--face-figures);
+	font-variant-numeric: tabular-nums;
 	min-width: 4rem;
 	text-align: center;
 	color: var(--ink);
@@ -2190,12 +2216,19 @@ html, body {
 	box-shadow: 0 18px 48px var(--shadow-far);
 }
 
+/* A sheet's title and its section headings are lettering, not prose: they name
+   things rather than say them. Only the line under each option is a sentence,
+   and that is the one thing here left in the body face. */
 .sheet-body header {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.2rem 0.4rem 0.5rem;
 	color: var(--ink);
+	font-family: var(--face-panel);
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
 	font-size: var(--type-chrome);
 }
 
@@ -2210,6 +2243,7 @@ html, body {
 .sheet-body h4 {
 	margin: 0.6rem 0 0.1rem;
 	color: var(--ink-quiet);
+	font-family: var(--face-panel);
 	font-size: var(--type-chrome-quiet);
 	font-weight: 600;
 	letter-spacing: 0.06em;
