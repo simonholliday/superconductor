@@ -1865,17 +1865,28 @@ function sidesOf (box) {
  * somewhere off the block entirely. */
 function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
 	if (level === null) {
+		const leaving = sidesOf(from);
+		const arriving = sidesOf(to);
 		let best = null;
 
-		for (const a of sidesOf(from)) {
-			for (const b of sidesOf(to)) {
-				const away = Math.hypot(b.x - a.x, b.y - a.y);
+		for (let one = 0; one < leaving.length; one += 1) {
+			for (let two = 0; two < arriving.length; two += 1) {
+				const away = Math.hypot(
+					arriving[two].x - leaving[one].x, arriving[two].y - leaving[one].y);
 
-				if (!best || away < best.away) best = { a, b, away };
+				if (!best || away < best.away) best = { one, two, away };
 			}
 		}
 
-		return [best.a, best.b];
+		return {
+			a: leaving[best.one], b: arriving[best.two],
+
+			/* Which side of which block each end came to rest on. Nothing here
+			   uses it; `fanTerminals` does, and it cannot work the answer out
+			   afterwards from a point alone — a point on a corner belongs to
+			   two sides and a point on an overlapped block to none. */
+			ends: { a: best.one, b: best.two },
+		};
 	}
 
 	/* Whichever pair of facing sides is shorter, which for two blocks side by
@@ -1892,10 +1903,108 @@ function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
 	   the pattern it belongs to, with no new control at all. */
 	const out = (slots - 1 - slot) * anchor * 2.6;
 
-	return [
-		{ x: leftward ? from.x + from.w : from.x, y: from.y + from.h / 2 },
-		{ x: leftward ? to.x - out : to.x + to.w + out, y: held },
-	];
+	return {
+		a: { x: leftward ? from.x + from.w : from.x, y: from.y + from.h / 2 },
+		b: { x: leftward ? to.x - out : to.x + to.w + out, y: held },
+
+		/* The source end leaves by the middle of a side like any other line, so
+		   it joins whatever fan is on that edge. The destination end is already
+		   spread — outward, by its lug — and must not be moved a second time by
+		   a rule that spreads along instead. */
+		ends: { a: leftward ? 1 : 3, b: null },
+	};
+}
+
+/* Several cables meeting one block edge, spread along it.
+ *
+ * Every end was the middle of a side, so a grid feeding three patterns put
+ * three plugs on one point. That was tolerable while a cable could only be
+ * looked at; once either end could be dragged (#2119) it stopped being: two
+ * fittings on the same spot are one fitting as far as a finger is concerned,
+ * and which cable came away was whichever the document happened to hit first.
+ *
+ * Simon described the answer before the problem was filed — "the first is
+ * connected, it is simply in the centre of the edge; when I add a second, there
+ * are two adjacent patch points, equidistant on the edge". So terminals are not
+ * drawn until a cable needs one, and the set of them stays centred on the edge
+ * as it grows, which is what makes a second cable *push* the first aside rather
+ * than appear beside it in some vacant socket.
+ *
+ * **Along the edge, not outward from it.** A generator's lugs queue outward
+ * from the block (`anchorsFor`), because they all arrive at one voice's level
+ * and moving them along would be a lie about which row they write. A route
+ * arrives at the block rather than at a row, so its edge is free — and the two
+ * fans being perpendicular is worth having, because it keeps the two kinds of
+ * connection telling themselves apart at yet another glance.
+ *
+ * **Order means something at a destination and nothing at a source.** Routes
+ * into one pattern are stack layers of that pattern and run in order, so they
+ * are laid out in it; a grid sends the same notes down every cable it feeds, so
+ * at the source end the order is chosen to keep the cables from crossing —
+ * sorted by where the far block sits along the same axis.
+ *
+ * **A fan that will not fit stops offering targets.** The pitch is clamped to
+ * the edge, and where that leaves a terminal less than a control row of its
+ * own, the whole cable's fittings become marks — the same trade #2107 makes on
+ * a cable too short to hold three of them, for the same reason. */
+function fanTerminals (laid, inset, row) {
+	const groups = new Map();
+
+	laid.forEach((line, order) => {
+		for (const end of ["a", "b"]) {
+			const side = line.ends[end];
+
+			if (side === null || side === undefined) continue;
+
+			const key = `${end === "a" ? line.from : line.to}\u0000${side}`;
+
+			if (!groups.has(key)) groups.set(key, []);
+
+			groups.get(key).push({ line, end, order });
+		}
+	});
+
+	for (const held of groups.values()) {
+		const first = held[0];
+		const side = first.line.ends[first.end];
+
+		/* A left or a right edge runs down the page and a top or a bottom one
+		   across it, which is the only thing the rest of this needs to know. */
+		const upright = side === 1 || side === 3;
+		const box = first.end === "a" ? first.line.boxes.from : first.line.boxes.to;
+
+		const along = (one) => {
+			const far = one.end === "a" ? one.line.boxes.to : one.line.boxes.from;
+
+			return upright ? far.y + far.h / 2 : far.x + far.w / 2;
+		};
+
+		held.sort((one, two) => {
+			/* A mixed edge — a block sending and receiving on the same side —
+			   is rare and has to be settled somehow: what arrives comes first,
+			   so a destination's order stays the stack's whatever else is
+			   sharing the edge with it. */
+			if ((one.end === "b") !== (two.end === "b")) return one.end === "b" ? -1 : 1;
+
+			return one.end === "b" ? one.order - two.order : along(one) - along(two);
+		});
+
+		const many = held.length;
+		const want = row * 1.3;
+		const usable = Math.max(0, (upright ? box.h : box.w) - inset * 2);
+		const pitch = many > 1 ? Math.min(want, usable / (many - 1)) : want;
+
+		held.forEach((one, place) => {
+			const shift = (place - (many - 1) / 2) * pitch;
+			const at = one.line[one.end];
+
+			one.line[one.end] = upright
+				? { x: at.x, y: at.y + shift }
+				: { x: at.x + shift, y: at.y };
+
+			if (pitch < row) one.line.crowded = true;
+		});
+	}
 }
 
 /* The lines joining each contribution to the pattern it feeds.
@@ -1967,7 +2076,8 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				return at.y + at.h / 2;
 			};
 
-			const next = [];
+			const inset = marked(cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling);
+			const laid = [];
 
 			for (const join of joins) {
 				const from = where.get(join.from);
@@ -1976,13 +2086,18 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				if (!from || !to) continue;
 
 				const level = join.row ? levelOf(join.to, join.row) : null;
-				const [a, b] = anchorsFor(
-					from, to, level,
-					marked(cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling),
-					join.slot || 0, join.slots || 1);
+				const found = anchorsFor(
+					from, to, level, inset, join.slot || 0, join.slots || 1);
 
-				next.push({ ...join, a, b });
+				laid.push({ ...join, ...found, boxes: { from, to } });
 			}
+
+			/* In two passes, because where one cable's end goes depends on how
+			   many others reached the same edge — which is not known until they
+			   have all been placed once. */
+			fanTerminals(laid, inset, controlRow(cell));
+
+			const next = laid.map(({ boxes, ends, ...line }) => line);
 
 			/* Compared before it is kept. This runs from an observer as well as
 			   from the effect, and a fresh array every time would re-render the
@@ -2100,7 +2215,8 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				   commoner act and it was there first; the fittings go back to
 				   being marks until there is room, and shrink visibly, so the
 				   change is something seen rather than discovered by pressing. */
-				const holdable = !line.wired && span >= controlRow(cell) * 3.2;
+				const holdable = !line.wired && !line.crowded
+					&& span >= controlRow(cell) * 3.2;
 				const fitting = holdable ? grip : jack;
 
 				const live = touched === line.from || touched === line.to;
@@ -2109,7 +2225,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 					: null;
 
 				return html`
-					<g key=${`${line.from}>${line.to}`}
+					<g key=${`${line.from}>${line.to}/${line.layer || ""}`}
 						class=${`join ${line.wired ? "wired" : "patched"} `
 							+ `${holdable ? "holdable " : ""}`
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`

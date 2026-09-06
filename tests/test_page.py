@@ -3451,6 +3451,92 @@ def test_a_cable_put_back_where_it_was_is_still_one_cable (
 	assert routes[0]["source"] == "second"
 
 
+def _two_routes (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Route the second grid into the pattern twice, so two cables meet one edge."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		 "bypassed": False, "params": {}},
+		{"id": "two", "kind": "pattern", "source": "second", "index": 2,
+		 "bypassed": False, "params": {}},
+	], by="app")
+
+	panel.wait_for_function(
+		"""() => document.querySelectorAll(".join.patched .collar").length === 2""",
+		timeout=5_000)
+	_joins_settled(panel)
+
+
+def _terminals (panel: typing.Any, selector: str) -> list[dict[str, float]]:
+	"""Where each of these fittings sits, measured against the overlay itself.
+
+	Not against the viewport.  The overlay is inside the scrolled content and
+	moves with it, so a reading taken before a cable is added and one taken
+	after are only comparable if both are relative to something that moved the
+	same way.
+	"""
+
+	return panel.evaluate("""(selector) => {
+		const svg = document.querySelector(".joins").getBoundingClientRect();
+
+		return [...document.querySelectorAll(selector)].map((one) => {
+			const box = one.getBoundingClientRect();
+
+			return { x: box.x + box.width / 2 - svg.x, y: box.y + box.height / 2 - svg.y };
+		});
+	}""", selector)
+
+
+def test_two_cables_on_one_edge_get_a_terminal_each (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2134.  Simon: "the first is connected, it is simply in the centre of the
+	edge.  When I add a second, there are two adjacent patch points, equidistant
+	on the edge."
+
+	Every end used to be the middle of a side, so a grid feeding two patterns
+	put both plugs on one point.  That was tolerable while a cable could only be
+	looked at; once either end could be dragged it stopped being, because two
+	fittings on one spot are one fitting to a finger and whichever the document
+	hit first is the one that came away.
+
+	Two things are asserted, and the second is the half that is easy to lose: a
+	terminal each, *and* the pair still centred on the edge — so a second cable
+	pushes the first aside rather than appearing beside it in some vacant socket
+	while the first stays put.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_apart(panel, "grid", dx=0, dy=420)
+
+	alone = _terminals(panel, ".join.patched .collar")
+
+	assert len(alone) == 1, f"one route, {len(alone)} plugs: {alone}"
+
+	_two_routes(panel, fake_app)
+
+	plugs = _terminals(panel, ".join.patched .collar")
+	sockets = _terminals(panel, ".join.patched .socket")
+
+	assert len(plugs) == 2 and len(sockets) == 2, f"{len(plugs)} plugs, {len(sockets)} sockets"
+
+	row = panel.evaluate(
+		"""() => parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue("--row"))""")
+
+	for pair, what in ((plugs, "plug"), (sockets, "socket")):
+		away = ((pair[0]["x"] - pair[1]["x"]) ** 2 + (pair[0]["y"] - pair[1]["y"]) ** 2) ** 0.5
+
+		assert away >= row - 0.5, (
+			f"two {what}s sharing an edge are {away:.1f}px apart, "
+			f"against a {row}px row: {pair}")
+
+	middle = {axis: (plugs[0][axis] + plugs[1][axis]) / 2 for axis in ("x", "y")}
+
+	assert abs(middle["x"] - alone[0]["x"]) < 1.5 and abs(middle["y"] - alone[0]["y"]) < 1.5, \
+		f"a second cable moved the pair off the centre of the edge: {middle} was {alone[0]}"
+
+
 def test_a_route_is_unmade_where_it_was_made (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The head of the arrow silences a route; this is what takes it away.  One
