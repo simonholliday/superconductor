@@ -656,7 +656,17 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 	const unit = cell / divisions;
 
 	const drag = useRef(null);
+
+	/* **Kept twice, on purpose.** The state draws it; the ref decides with it.
+	   A handler closes over the state as it was when that render attached it,
+	   so a move and a release in the same frame left `finish` reading `null` and
+	   the gesture asking for nothing — a note drawn out and let go quickly kept
+	   the length it was placed at. Latent since the drag was written and only
+	   ever surfaced by making the page a frame faster. */
+	const wanted = useRef(null);
 	const [ghost, setGhost] = useState(null);
+
+	const shade = (next) => { wanted.current = next; setGhost(next); };
 
 	/* One drawn cell at each end, so every grip is a full row across as the
 	   target rule demands — and both grips plus the middle need three cells
@@ -728,7 +738,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 			const down = Math.round(dy / controlRow(cell));
 			const where = rows.indexOf(held.row);
 
-			setGhost({
+			shade({
 				row: rows[Math.max(0, Math.min(rows.length - 1, where + down))],
 				at: snapped(held.at + across, snap, positions - held.span + 1),
 				span: held.span,
@@ -742,7 +752,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 
 			if (edge >= stop) return;
 
-			setGhost({ row: held.row, at: edge, span: stop - edge });
+			shade({ row: held.row, at: edge, span: stop - edge });
 			return;
 		}
 
@@ -750,7 +760,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 		   finger and the note keeps where it starts. */
 		const edge = snapped(held.at + held.span + across, snap, positions + 1);
 
-		setGhost({ row: held.row, at: held.at, span: Math.max(snap, edge - held.at) });
+		shade({ row: held.row, at: held.at, span: Math.max(snap, edge - held.at) });
 	};
 
 	const finish = (event) => {
@@ -758,8 +768,10 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 
 		if (!held || held.pointer !== event.pointerId) return;
 
+		const want = wanted.current;
+
 		drag.current = null;
-		setGhost(null);
+		shade(null);
 
 		if (!held.moved) {
 			/* A tap. The first selects — which the press already did — and a
@@ -772,8 +784,6 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 
 			return;
 		}
-
-		const want = ghost;
 
 		if (!want) return;
 
@@ -802,7 +812,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 	const cancel = (event) => {
 		if (drag.current && drag.current.pointer === event.pointerId) {
 			drag.current = null;
-			setGhost(null);
+			shade(null);
 		}
 	};
 
@@ -1626,7 +1636,7 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
+function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet }) {
 	if (!onAdd && !onSend && !onClear && onLive === undefined) return null;
 
 	return html`
@@ -1658,6 +1668,23 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
 					onPointerDown=${(event) => { event.preventDefault(); onSend(); }}
 				><${Icon} of="send" />send to…</button>`}
 			<span class="spacer"></span>
+			${/* **The outlet: take a cable from here and drop it on the block it
+			     should feed.** Simon's, and it is the gesture a person who has
+			     patched anything already has — where "send to…" beside it asks
+			     the same question as a list. That list stays, because two blocks
+			     on different pages cannot be dragged between and a person should
+			     never be stranded; the cable is the near way and the list is the
+			     one that always works. */ ""}
+			${outlet && html`
+				<span class="legend">out</span>
+				<button
+					class="outlet"
+					title="drag a cable to the pattern this should feed"
+					onPointerDown=${outlet.onStart}
+					onPointerMove=${outlet.onMove}
+					onPointerUp=${outlet.onEnd}
+					onPointerCancel=${outlet.onEnd}
+				><i></i></button>`}
 			${onClear && html`
 				<button
 					class="clear"
@@ -1678,7 +1705,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1742,7 +1769,8 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, o
 
 	return html`
 		<section
-			class=${`part ${flavour || ""}`} data-part=${name} style=${place}
+			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
+			style=${place}
 			${/* Anywhere on the block, not only its handle: a person turning a knob
 			     on a generator is asking the same question a person dragging it is
 			     — what does this feed? — so the same line brightens (#2109). It is
@@ -1875,7 +1903,7 @@ function anchorsFor (from, to, level, anchor) {
  *
  * It takes no pointer events at all, so a line drawn across a grid cannot cost
  * a tap. */
-function Connections ({ box, joins, touched, cell, when, onFlip }) {
+function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 	const [drawn, setDrawn] = useState([]);
 
 	useLayoutEffect(() => {
@@ -1978,8 +2006,30 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 		     cable's sag hangs below the lower of its two ends, and a jack is
 		     centred on an endpoint and so spills by its own radius. */ ""}
 		<svg class="joins"
-			width=${Math.ceil(extent.x + jack) + 1}
-			height=${Math.ceil(extent.y + jack + SAG_CEILING) + 1}>
+			width=${Math.ceil(Math.max(extent.x, patching ? patching.at.x : 0) + jack) + 1}
+			height=${Math.ceil(
+				Math.max(extent.y, patching ? patching.at.y : 0) + jack + SAG_CEILING) + 1}>
+			${/* The cable in the air, drawn from the outlet it was taken from to
+			     wherever the finger is. Not a join yet — nothing has been asked
+			     of the app — so it carries the ring's colour, which is what this
+			     surface uses for a request that has not landed (#2046). */ ""}
+			${patching && (() => {
+				const span = Math.hypot(patching.at.x - patching.a.x, patching.at.y - patching.a.y);
+				const dip = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
+				const reach = (patching.at.x - patching.a.x) * 0.25;
+
+				return html`
+					<g class="join loose">
+						<path class="cable" d=${`M ${patching.a.x} ${patching.a.y}`
+							+ ` C ${patching.a.x + reach} ${patching.a.y + dip}`
+							+ ` ${patching.at.x - reach} ${patching.at.y + dip}`
+							+ ` ${patching.at.x} ${patching.at.y}`} />
+						<circle class="collar" cx=${patching.a.x} cy=${patching.a.y} r=${jack} />
+						<circle class="plug" cx=${patching.a.x} cy=${patching.a.y} r=${jack * 0.46} />
+						<circle class="plug" cx=${patching.at.x} cy=${patching.at.y}
+							r=${jack * 0.46} />
+					</g>`;
+			})()}
 			${drawn.map((line) => {
 				/* **A cable, because that is what this is.** A person who
 				   patches a modular, a mixer or a stage box already knows that
@@ -3339,6 +3389,94 @@ function Panel () {
 
 	const pinch = usePinch(size.cell, size.choose);
 
+	/* An id has to survive a round trip and be unique among its neighbours. The
+	   clock alone is not enough: two taps inside a millisecond are a stutter
+	   rather than an impossibility on a surface meant to be played. */
+	const addLayer = (stack, layer) => {
+		const held = ((state[appName] || {})[stack] || {}).layers || [];
+
+		request(`${stack}/layers`, [...held, {
+			id: `l${Date.now().toString(36)}`
+				+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+			...layer,
+		}]);
+	};
+
+	/* --- Patching one block into another by dragging a cable ---------------
+	 *
+	 * Simon: "add a contribution is not an intuitive way to connect items ... I
+	 * wonder whether we might simply drag a cable out from a designated output
+	 * terminal to the input terminal of the target?"
+	 *
+	 * **The destination is the whole block, not a second small jack.** On glass
+	 * a big target beats a precise one every time, and a person dragging a lead
+	 * is looking at where it is going rather than at a fitting on it. So there
+	 * is one new control — the outlet — and everything that can receive says so
+	 * by lighting up while a cable is in the air.
+	 *
+	 * It replaces "send to…", which asked the same question as a list. What it
+	 * does not replace is adding a *generator*: that is creating a thing, not
+	 * connecting two that already exist, and no cable can be dragged from
+	 * something that is not on the glass yet. */
+	const patch = useRef(null);
+	const [patching, setPatching] = useState(null);
+
+	const wrapPoint = (event) => {
+		const wrap = size.wrap.current;
+
+		if (!wrap) return { x: 0, y: 0 };
+
+		const outer = wrap.getBoundingClientRect();
+
+		return {
+			x: event.clientX - outer.left + wrap.scrollLeft,
+			y: event.clientY - outer.top + wrap.scrollTop,
+		};
+	};
+
+	const beginPatch = (from, event) => {
+		event.preventDefault();
+		event.currentTarget.setPointerCapture(event.pointerId);
+
+		const at = wrapPoint(event);
+
+		patch.current = { from, pointer: event.pointerId };
+		setPatching({ from, a: at, at });
+	};
+
+	const movePatch = (event) => {
+		if (!patch.current || patch.current.pointer !== event.pointerId) return;
+
+		const at = wrapPoint(event);
+
+		setPatching((held) => (held ? { ...held, at } : held));
+	};
+
+	const endPatch = (event) => {
+		const held = patch.current;
+
+		if (!held || held.pointer !== event.pointerId) return;
+
+		patch.current = null;
+		setPatching(null);
+
+		/* Where the finger let go, whatever is under it. The pointer is
+		   captured by the outlet, so the events all arrive here and the only
+		   way to know what was landed on is to ask the document. */
+		const under = document.elementFromPoint(event.clientX, event.clientY);
+		const block = under && under.closest("[data-takes]");
+		const stack = block && block.getAttribute("data-takes");
+
+		if (!stack || stack === held.from) return;
+
+		/* Refused rather than sent: a stack says which sources it will take,
+		   and a cable dropped somewhere that cannot hold it should come away
+		   in the hand rather than produce a `nack` a moment later. */
+		if (!(controls[stack].sources || []).includes(held.from)) return;
+
+		addLayer(stack, { kind: "pattern", source: held.from });
+	};
+
 	/* Where every block on this page has ended up, sent to the app that owns
 	   the page. Called when a finger lifts from a block that actually moved. */
 	const keep = () => {
@@ -3403,7 +3541,7 @@ function Panel () {
 		</div>
 		<div
 			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"} ${
-				size.cell < OVERVIEW_AT ? "overview" : ""}`}
+				size.cell < OVERVIEW_AT ? "overview" : ""} ${patching ? "patching" : ""}`}
 			ref=${size.wrap}
 			...${pinch}
 		>
@@ -3412,6 +3550,12 @@ function Panel () {
 					flavour=${one.live === false ? "silent" : ""}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
+					${/* Which stack a cable dropped on this block would go into.
+					     The whole block is the target, not a fitting on it: on
+					     glass a big one beats a precise one, and a person
+					     dragging a lead is looking at where it is going. */ ""}
+					takes=${one.add && (controls[one.add].sources || []).length
+						? one.add : null}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}
 					onHold=${setDragging}
@@ -3421,6 +3565,11 @@ function Panel () {
 						one.layers.filter((held) => held.id !== one.layer.id)) : null}
 					footer=${html`
 						<${Footer}
+							outlet=${one.sends ? {
+								onStart: (event) => beginPatch(one.control, event),
+								onMove: movePatch,
+								onEnd: endPatch,
+							} : null}
 							onAdd=${one.add ? () => setAdding(one.add) : null}
 							adds=${one.add && (controls[one.add].sources || []).length
 								? "add source" : "add generator"}
@@ -3471,7 +3620,7 @@ function Panel () {
 			${/* Told what could have moved a line, because measuring is what this
 			     does and nothing else in the page will tell it. */ ""}
 			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
-				onFlip=${flip}
+				patching=${patching} onFlip=${flip}
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
 
@@ -3483,14 +3632,7 @@ function Panel () {
 			   millisecond are a stutter rather than an impossibility on a
 			   surface meant to be played. */
 			const added = (layer) => {
-				const held = ((state[appName] || {})[adding] || {}).layers || [];
-
-				request(`${adding}/layers`, [...held, {
-					id: `l${Date.now().toString(36)}`
-						+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-					...layer,
-				}]);
-
+				addLayer(adding, layer);
 				setAdding(null);
 			};
 

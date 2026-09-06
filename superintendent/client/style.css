@@ -1997,6 +1997,54 @@ html, body {
 
 .join.off.live .cable { stroke-opacity: 0.85; }
 
+/* The outlet: the end of the block a cable is taken from.
+ *
+ * A target like any other — a surface and an edge, one row across (#2107) — and
+ * inside it the ring of a socket, so it reads as the thing a lead comes out of
+ * rather than as another button with a mark on it. */
+.outlet {
+	width: var(--row);
+	flex: none;
+	padding: 0;
+	cursor: grab;
+}
+
+.outlet > i {
+	display: block;
+	width: 44%;
+	aspect-ratio: 1;
+	border-radius: 999px;
+	border: max(2px, calc(var(--row) * 0.06)) solid var(--ring);
+	background: var(--ground);
+}
+
+.outlet:active { cursor: grabbing; }
+
+/* A cable in the air, and the blocks that will take it.
+ *
+ * **Everything that can receive says so while a lead is out**, which is the
+ * half of the gesture a list never had to answer: with "send to…" the choices
+ * were the list, and with a cable in your hand the choices have to be on the
+ * glass. Dimmed rather than lit — the page carries on being the page, and what
+ * changes is that some of it is now a destination. */
+.grid-wrap.patching .part { opacity: 0.45; transition: opacity 120ms ease-out; }
+
+.grid-wrap.patching .part[data-takes] {
+	opacity: 1;
+	box-shadow: 0 0 0 max(2px, calc(var(--cell) * 0.05)) var(--ring),
+		0 6px 18px var(--shadow-near);
+}
+
+/* Nothing on the page takes a pointer while a cable is being dragged: the
+   outlet has capture, and a block lighting up as a destination must not also be
+   a grid a finger is about to play. */
+.grid-wrap.patching .part-body,
+.grid-wrap.patching .part-foot,
+.grid-wrap.patching .part-title { pointer-events: none; }
+
+.join.loose .cable { stroke-opacity: 1; stroke-dasharray: none; }
+.join.loose .plug { fill-opacity: 1; }
+
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 
 .orphan {

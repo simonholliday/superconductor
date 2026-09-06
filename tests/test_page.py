@@ -2887,6 +2887,70 @@ def _route (panel: typing.Any, fake_app: typing.Any) -> None:
 	_settled(panel)
 
 
+def test_a_cable_dragged_from_an_outlet_makes_the_route (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "with the new patch cable design — I wonder whether we might
+	simply drag a cable out from a designated output terminal to the input
+	terminal of the target?"
+
+	The destination is the whole block rather than a fitting on it: on glass a
+	big target beats a precise one, and a person dragging a lead is looking at
+	where it is going.  So the drop lands anywhere on the pattern.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	outlet = panel.locator('.part[data-part="second"] .outlet')
+
+	assert outlet.count() == 1, "a grid that can feed a pattern has no outlet"
+
+	outlet.scroll_into_view_if_needed()
+	take = outlet.bounding_box()
+	drop = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + take["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(drop["x"] + drop["width"] / 2, drop["y"] + drop["height"] / 2, steps=12)
+
+	# While a lead is in the air, everything that could take it says so.
+	assert panel.locator(".grid-wrap.patching").count() == 1, "the page does not say a cable is out"
+	assert panel.locator(".join.loose .cable").count() == 1, "no cable is drawn in the air"
+
+	panel.mouse.up()
+
+	asked = fake_app.await_set("stack/layers")
+	routes = [layer for layer in asked["v"] if layer.get("kind") == "pattern"]
+
+	assert len(routes) == 1, f"the drag asked for {asked['v']}"
+	assert routes[0]["source"] == "second"
+
+
+def test_a_cable_dropped_on_nothing_comes_away_in_the_hand (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A lead let go over the page asks for nothing, and neither does one
+	dropped on a block that cannot hold it — a refusal a moment later would be
+	the app answering a question the panel should not have put."""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	outlet = panel.locator('.part[data-part="second"] .outlet')
+	outlet.scroll_into_view_if_needed()
+	take = outlet.bounding_box()
+
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + take["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + 300, steps=10)
+	panel.mouse.up()
+
+	panel.wait_for_timeout(400)
+
+	assert not [frame for frame in fake_app.sets if frame.get("path") == "stack/layers"], \
+		"a cable dropped on nothing still made a route"
+	assert panel.locator(".grid-wrap.patching").count() == 0, "the page still thinks a cable is out"
+
+
 def test_a_grid_can_be_routed_into_a_pattern_from_the_glass (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The sheet offers the patterns this stack may take from alongside the
