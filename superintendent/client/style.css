@@ -741,7 +741,16 @@ html, body {
 	top: 0;
 	bottom: 0;
 	left: 0;
-	width: 22px;
+
+	/* **A row across, and edged**, because it is a target: `app.js` gives it a
+	   pointer handler and captures the pointer, and a finger landing anywhere
+	   on it moves the view. It was a fixed 22px at every cell size with no
+	   border at all — a target that neither looked like one nor could reliably
+	   be hit, and the only reason no test said so is that both target rules
+	   were checked on one page with nothing open, and a scroll strip renders
+	   only for a control declaring `visible_rows`. */
+	width: var(--row);
+	border: 1px solid var(--edge);
 	border-radius: 4px;
 	background: var(--wash);
 	touch-action: none;
@@ -1150,14 +1159,20 @@ html, body {
  *
  * Deliberately fixed at a comfortable target and never scaled by --cell: the
  * one control a person needs after picking a size too small to work is this
- * one, so it must not shrink along with everything else. */
+ * one, so it must not shrink along with everything else.
+ *
+ * **The chrome surface says that**, and this used to say it again — the same
+ * 44px, written here as well, and unlayered so it beat the layer that meant it.
+ * Two rules holding one number is how they come to disagree, and a purpose
+ * quietly winning a size is the fault the layer exists to prevent even when the
+ * number it wins with is the right one. */
 .sizes, .theme { position: relative; display: flex; align-items: center; }
 
 .sizes > button, .theme > button {
-	min-width: 44px;
 	background: var(--panel);
 	color: var(--ink-quiet);
-	touch-action: none;}
+	touch-action: none;
+}
 
 .sizes > button.open, .theme > button.open { color: var(--ink); border-color: var(--ring); }
 
@@ -1248,15 +1263,16 @@ html, body {
 
 /* Moving between pages. Drawn like the grid's own cells, because a hand that
    has learned to tap a row of those has already learned this — and sized for a
-   finger regardless of how small the cells themselves are set. */
+   finger regardless of how small the cells themselves are set, which the chrome
+   surface rule is what says. */
 .pages { display: flex; align-items: center; gap: var(--bar-tight); }
 
 .pages button {
-	min-width: 44px;
 	background: var(--panel);
 	color: var(--ink-quiet);
 	white-space: nowrap;
-	touch-action: none;}
+	touch-action: none;
+}
 
 /* The page you are on is filled rather than outlined, the way a held transport
    is: it is a state you are in, not an action you can take. */
@@ -1566,7 +1582,12 @@ html, body {
 
 .lane .row-label { position: static; }
 
-.lane .bar {
+/* A column of the velocity lane. Named for what it shows rather than for its
+   shape: the header is `.bar` too, and `closest(".bar")` cannot tell a velocity
+   column from the chrome at the top of the page — which is not hypothetical,
+   because a rule test asking "is this in chrome?" was answered yes for these
+   and measured them against the wrong floor. */
+.lane .weight {
 	position: relative;
 	display: flex;
 	align-items: flex-end;
@@ -1577,9 +1598,9 @@ html, body {
 	overflow: hidden;
 }
 
-.lane .bar.downbeat { background: var(--accent-beat); }
+.lane .weight.downbeat { background: var(--accent-beat); }
 
-.lane .bar i {
+.lane .weight i {
 	display: block;
 	width: 100%;
 	background: var(--on);
@@ -1832,16 +1853,21 @@ html, body {
 	gap: 0.3rem;
 }
 
+/* Colour and nothing else. It said `min-width: 44px` — unlayered, so it beat
+   `.part-body button`'s `min-width: var(--row)` outright whatever the
+   specificity, and a stepper's plus and minus came out 44px wide beside a 60 or
+   96px row at the larger sizes. The comment on `.move` above records this exact
+   fault being fixed there and it was left here. A surface decides a control's
+   size; a purpose says what colour it is. */
 .stepper button {
-	min-width: 44px;
 	background: var(--panel);
-	color: var(--ink);}
+	color: var(--ink);
+}
 
 /* A figure, so it is set in figures and lines up as one. It was taking the body
    face by inheritance, which is what a number does when nobody says otherwise. */
 .stepper span {
 	font-family: var(--face-figures);
-	font-variant-numeric: tabular-nums;
 	min-width: 4rem;
 	text-align: center;
 	color: var(--ink);

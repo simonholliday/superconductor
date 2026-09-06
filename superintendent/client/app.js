@@ -1027,7 +1027,7 @@ function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell
 					<div
 						key=${`vel-${step}`}
 						data-velocity=${step}
-						class=${`bar ${step % beatEvery(steps, beats) === 0 ? "downbeat" : ""}`}
+						class=${`weight ${step % beatEvery(steps, beats) === 0 ? "downbeat" : ""}`}
 						onPointerDown=${(event) => {
 							event.preventDefault();
 							event.currentTarget.setPointerCapture(event.pointerId);

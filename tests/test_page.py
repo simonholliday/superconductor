@@ -994,7 +994,7 @@ def test_the_velocity_lane_shapes_the_note_in_its_column (
 
 	_open_the_bass(panel)
 
-	bar = panel.locator('.part[data-part="bass"] .lane .bar[data-velocity="0"]').bounding_box()
+	bar = panel.locator('.part[data-part="bass"] .lane .weight[data-velocity="0"]').bounding_box()
 
 	panel.mouse.move(bar["x"] + bar["width"] / 2, bar["y"] + 2)
 	panel.mouse.down()
@@ -1011,7 +1011,7 @@ def test_the_lane_does_nothing_where_there_is_no_note (
 
 	_open_the_bass(panel)
 
-	bar = panel.locator('.lane .bar[data-velocity="5"]').bounding_box()
+	bar = panel.locator('.lane .weight[data-velocity="5"]').bounding_box()
 
 	panel.mouse.move(bar["x"] + bar["width"] / 2, bar["y"] + 2)
 	panel.mouse.down()
@@ -2278,7 +2278,7 @@ def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 	_joins_settled(panel)
 
 	return panel.evaluate(
-		"""(join) => {
+		r"""(join) => {
 			const wrap = document.querySelector('.grid-wrap');
 			const outer = wrap.getBoundingClientRect();
 			const at = (name) => {
@@ -3967,7 +3967,7 @@ def test_every_size_and_face_on_the_page_is_one_the_scale_names (
 	panel.locator('.part[data-part="grid"] .part-foot button.add').click()
 	panel.wait_for_selector(".sheet .option", timeout=5_000)
 
-	adrift = panel.evaluate("""() => {
+	adrift = panel.evaluate(r"""() => {
 		const root = getComputedStyle(document.documentElement);
 		const probe = document.createElement("span");
 
@@ -4046,9 +4046,18 @@ def _button_sizes (panel: typing.Any) -> dict[str, dict[str, set]]:
 			const at = surface(one);
 			const shape = getComputedStyle(one);
 
-			seen[at] = seen[at] || { sizes: [], floors: [], faces: [], who: [] };
+			seen[at] = seen[at] || {
+				sizes: [], floors: [], widths: [], faces: [], who: [] };
 			seen[at].sizes.push(shape.fontSize);
 			seen[at].floors.push(shape.minHeight);
+
+			/* **And the width, which this could not see.** A surface sets both
+			   floors; only the height was collected, so `.stepper button`'s own
+			   `min-width: 44px` sat unlayered — beating the layer outright —
+			   and came out half a row wide beside its neighbours at Large and
+			   Huge, with three tests looking at it and each blind for a
+			   different reason. */
+			seen[at].widths.push(shape.minWidth);
 
 			/* **The family too.** A purpose that resets the font takes the panel
 			   face off with it, and both halves of this test were blind to that:
@@ -4058,7 +4067,7 @@ def _button_sizes (panel: typing.Any) -> dict[str, dict[str, set]]:
 			seen[at].faces.push(shape.fontFamily);
 
 			seen[at].who.push(one.className + "|" + shape.fontSize
-				+ "|" + shape.minHeight + "|" + shape.fontFamily);
+				+ "|" + shape.minHeight + "|" + shape.minWidth + "|" + shape.fontFamily);
 		}
 
 		return seen;
@@ -4094,6 +4103,8 @@ def test_a_control_takes_its_size_from_the_surface_it_sits_on (
 			f"{at} draws buttons at {sorted(set(seen['sizes']))}: {sorted(set(seen['who']))}"
 		assert len(set(seen["floors"])) == 1, \
 			f"{at} floors buttons at {sorted(set(seen['floors']))}: {sorted(set(seen['who']))}"
+		assert len(set(seen["widths"])) == 1, \
+			f"{at} floors button widths at {sorted(set(seen['widths']))}: {sorted(set(seen['who']))}"
 		assert len(set(seen["faces"])) == 1, \
 			f"{at} letters buttons in {sorted(set(seen['faces']))}: {sorted(set(seen['who']))}"
 
@@ -4151,7 +4162,15 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 		if flattened in SURFACE_RULES:
 			continue
 
-		if "min-height" in body or re.search(r"(?<!-)\bheight:", body) or "font-size" in body:
+		# `min-width` is in this list because it was not, and that is how
+		# `.stepper button { min-width: 44px }` sat unlayered for as long as it
+		# did — beating the surface rule outright and coming out half-size
+		# beside its neighbours at Large and Huge. A rule that states height and
+		# type and stops is a rule with a hole in it, which is the same sentence
+		# the docstring above already had to be written for once.
+		if ("min-height" in body or "min-width" in body or "font-size" in body
+				or re.search(r"(?<!-)\bheight:", body)
+				or re.search(r"(?<!-)\bwidth:", body)):
 			loose.append(selector)
 
 	assert loose == [], f"these name a button and set its own size: {loose}"
@@ -4351,6 +4370,74 @@ def test_silencing_a_route_leaves_its_source_alone (
 		'.part[data-part="second"] .part-foot .switch').inner_text().strip() == before
 
 
+def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) -> list[str]:
+	"""Run one measurement over every state that puts a target on the glass.
+
+	**Both target rules used to be checked in exactly one state**: the
+	Generators page, layout locked, nothing open.  Everything behind a popover,
+	behind the latch, or on another page was unenforced — and that is where the
+	violations were.  A rule with a hole in its test is worse than no rule,
+	because it is trusted.
+
+	Each state is named, so a failure says where it was found rather than only
+	what.
+	"""
+
+	found = []
+
+	def note (where: str) -> None:
+		for one in look(panel):
+			found.append(f"{where}: {one}")
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+	note("the stack page")
+
+	# A sheet, which is its own surface.
+	panel.locator('.part[data-part="grid"] .part-foot .offer.add').click()
+	panel.wait_for_selector(".sheet .offer", timeout=5_000)
+	note("a sheet open")
+	panel.locator(".sheet header button").click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	# A popover on the bar.
+	panel.locator(".sizes > button").click()
+	panel.wait_for_selector(".sizes .choices button", timeout=5_000)
+	note("the size popover open")
+	panel.locator(".sizes > button").click()
+	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
+
+	# The inventory, which only exists while the layout is unlocked.
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+	# Waited for by name, because a state that renders nothing checks nothing
+	# and would report a clean pass for the wrong reason.
+	panel.wait_for_selector(".inventory button", timeout=5_000)
+	note("the layout unlocked")
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", state="detached", timeout=5_000)
+
+	# A menu inside a block, which is a popover sitting on the lattice rather
+	# than on the chrome. The generator's pitch has six voices behind one; the
+	# Moog's two-option field draws buttons instead and has no menu at all.
+	menu = panel.locator('.part[data-part="stack/one"] .menu')
+
+	menu.locator("button").first.click()
+	panel.wait_for_selector('.part[data-part="stack/one"] .menu .options', timeout=5_000)
+	note("a menu open in a block")
+	panel.keyboard.press("Escape")
+
+	# A windowed grid, whose scroll strip is a target and renders only for a
+	# control declaring `visible_rows`.
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector(".window .track", timeout=5_000)
+	_settled(panel)
+	note("the bass page")
+
+	return sorted(set(found))
+
+
 def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Simon: "How can we ensure a user can visually identify what is a touch
@@ -4374,29 +4461,69 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 	alone.
 	"""
 
-	_open_the_stack(panel)
-	_two_generators(panel, fake_app)
-
-	bare = panel.evaluate("""() => {
+	bare = _in_every_state(panel, fake_app, lambda page: page.evaluate(r"""() => {
 		const empty = (paint) => !paint || paint === "none" || paint === "rgba(0, 0, 0, 0)";
+
+		/* **An edge is what a person sees, not which property drew it.**
+		
+		   Two ways to draw one here. A border, which must actually be visible —
+		   `border: 1px solid transparent` satisfied a width check while showing
+		   nothing at all, and a target nobody can find is exactly what this rule
+		   exists to stop. Or a spread ring, `0 0 0 1px`, which is how a block
+		   draws its frame; a drop shadow is not an edge, so the ring is matched
+		   rather than the presence of any shadow. */
+		const edged = (shape) =>
+			(parseFloat(shape.borderTopWidth) > 0 && !empty(shape.borderTopColor))
+			|| /0px 0px 0px [\d.]+px/.test(shape.boxShadow);
+
 		const wrong = [];
+
+		/* A scrim is not a target. The whole glass behind a sheet takes a tap to
+		   dismiss it, which is a region rather than a control: there is nothing
+		   to find, and drawing an edge round the viewport would say there was. */
+		const scrim = (one) => one.classList.contains("sheet");
+
+		/* A piano roll's ground is bounded by the lattice it is part of. A step
+		   grid's cells are pads and are drawn as pads, with a gap between them;
+		   a note grid's cells touch on purpose, and what a finger is aiming at
+		   there is a bar drawn across them. */
+		const roll = (one) => one.classList.contains("cell") && one.closest(".grid.notes");
 
 		for (const one of document.querySelectorAll("*")) {
 			const shape = getComputedStyle(one);
 
 			if (shape.touchAction !== "none") continue;
+			if (scrim(one) || roll(one)) continue;
 
 			const named = (one.className.baseVal !== undefined
 				? one.className.baseVal : one.className) || one.tagName.toLowerCase();
 
 			const surface = !empty(shape.backgroundColor) || !empty(shape.fill);
 
-			const framed = one.parentElement
-				&& one.parentElement.getAttribute("role") === "group"
-				&& parseFloat(getComputedStyle(one.parentElement).borderTopWidth) > 0;
+			/* **A member of a framed container takes the container's edge.**
+			
+			   The rocker is why this exists — one framed control with two ends
+			   and a divider, which is how the machines this panel is drawn
+			   after build one, and giving each end its own border would draw a
+			   box inside a box. The same is true of a popover: a floating,
+			   bordered surface is the thing a person finds, and the rows inside
+			   it are read as a list. And of a block's title bar, which is the
+			   handle for the block and is bounded by the block.
+			
+			   The containers are named rather than matched by "has a border",
+			   because almost everything here is inside something bordered and a
+			   loose version of this rule would exempt the page. */
+			const frames = '[role="group"], .options, .choices, .part';
+			const parent = one.parentElement;
+			const frame = parent && getComputedStyle(parent);
 
-			const edge = framed
-				|| parseFloat(shape.borderTopWidth) > 0
+			const framed = parent && parent.matches(frames) && edged(frame);
+
+			/* **An invisible edge is not an edge.** `border: 1px solid
+			   transparent` satisfied a width test while showing nothing on the
+			   glass, which is precisely the thing this rule exists to stop:
+			   a target a person cannot find. */
+			const edge = framed || edged(shape)
 				|| (!empty(shape.stroke) && parseFloat(shape.strokeWidth) > 0);
 
 			if (!surface || !edge) {
@@ -4405,7 +4532,7 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 		}
 
 		return [...new Set(wrong)];
-	}""")
+	}"""))
 
 	assert bare == [], f"these can be touched and do not look like it: {bare}"
 
@@ -4416,10 +4543,7 @@ def test_a_target_is_at_least_one_row_in_both_directions (
 	touchable.  A target smaller than a finger is a target a finger misses, and
 	on this surface the finger is the only input there is."""
 
-	_open_the_stack(panel)
-	_two_generators(panel, fake_app)
-
-	small = panel.evaluate("""() => {
+	small = _in_every_state(panel, fake_app, lambda page: page.evaluate("""() => {
 		const row = parseFloat(
 			getComputedStyle(document.documentElement).getPropertyValue("--row"));
 		const wrong = [];
@@ -4441,7 +4565,7 @@ def test_a_target_is_at_least_one_row_in_both_directions (
 		}
 
 		return [...new Set(wrong)];
-	}""")
+	}"""))
 
 	assert small == [], f"these can be touched and are too small to hit: {small}"
 
@@ -4517,7 +4641,7 @@ def test_a_velocity_lane_marks_the_same_beats_as_the_grid_above_it (
 			strip: run.map((colour, step) => [step, colour])
 				.filter(([step, colour]) => step === 0 || colour !== run[step - 1])
 				.map(([step]) => step),
-			lane: [...block.querySelectorAll(".lane .bar")]
+			lane: [...block.querySelectorAll(".lane .weight")]
 				.map((one, index) => [index, one.classList.contains("downbeat")])
 				.filter(([, on]) => on)
 				.map(([step]) => step),
