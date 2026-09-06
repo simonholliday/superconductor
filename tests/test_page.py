@@ -3224,6 +3224,58 @@ def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
 	assert panel.locator('.part[data-part="grid"] .part-foot .offer.send').count() == 0
 
 
+def test_the_playhead_is_not_drawn_before_it_has_somewhere_to_be (
+	panel: typing.Any) -> None:
+	"""Simon: "those small marks on the left edge need to go — I've seen them
+	before and they are inconsistent and distracting."
+
+	They were one thing, not several: the playhead.  It is positioned by a frame
+	loop that does nothing until the first beat gives it an anchor, and until
+	then it kept whatever CSS left it — two pixels wide, full height, against
+	the block's left edge, which the gaps between rows chopped into a column of
+	little marks beside every pattern.
+
+	The fixture's app sends no beats, so this is exactly that state.
+	"""
+
+	_settled(panel)
+
+	assert panel.locator(".playhead").count() > 0, "the fixture draws no playhead at all"
+	assert panel.locator(".playhead:not([hidden])").count() == 0, \
+		"a playhead with no beat to stand on is still on the glass"
+
+
+def _lever (panel: typing.Any, selector: str) -> float:
+	"""How far along its track a slide switch's lever sits, 0 to 1.
+
+	Waits for it to stop moving first.  The lever slides over 90ms, and a test
+	that confirmed a change and measured immediately was reading a point part
+	way through the throw — 60% of the way across, which is neither end and
+	which no state ever puts it at.
+	"""
+
+	panel.wait_for_function(
+		"""(selector) => {
+			const one = document.querySelector(selector);
+			const track = one.getBoundingClientRect();
+			const lever = one.querySelector("i").getBoundingClientRect();
+			const at = (lever.left + lever.width / 2 - track.left) / track.width;
+			const still = Math.abs(at - (window.__lever ?? -1)) < 0.001;
+
+			window.__lever = at;
+
+			return still;
+		}""",
+		arg=selector, timeout=5_000, polling=50)
+
+	return float(panel.eval_on_selector(selector, """one => {
+		const track = one.getBoundingClientRect();
+		const lever = one.querySelector("i").getBoundingClientRect();
+
+		return (lever.left + lever.width / 2 - track.left) / track.width;
+	}"""))
+
+
 def test_a_block_can_be_silenced_from_its_own_footer (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Simon asked for one on every item, and the panel had none: silencing one
@@ -3235,11 +3287,14 @@ def test_a_block_can_be_silenced_from_its_own_footer (
 
 	assert switch.count() == 1, "a pattern cannot be silenced"
 
-	# A rocker shows both of its ends, so the words are not the state — which
-	# one is thrown is. That is the whole reason it replaced a button whose
-	# label you had to already know how to read.
+	# A slide switch says which way it is thrown by where its lever is, so that
+	# is what gets measured. A word would only have said the state to somebody
+	# who already knew whether the word was the state or the action.
 	assert switch.get_attribute("aria-checked") == "true"
-	assert switch.inner_text().split() == ["off", "on"], "both ends are named"
+
+	thrown = _lever(panel, '.part[data-part="grid"] .part-foot .switch')
+
+	assert thrown > 0.5, f"a live switch is thrown left: the lever sits at {thrown:.0%}"
 
 	switch.click()
 
@@ -3266,6 +3321,10 @@ def test_a_silenced_block_says_so_from_across_the_room (
 	assert dimmed < lit, f"a silenced block is drawn like a live one: {dimmed} against {lit}"
 	assert panel.locator(
 		'.part[data-part="grid"] .part-foot .switch').get_attribute("aria-checked") == "false"
+
+	thrown = _lever(panel, '.part[data-part="grid"] .part-foot .switch')
+
+	assert thrown < 0.5, f"a silenced switch is thrown right: the lever sits at {thrown:.0%}"
 
 
 def test_silencing_a_block_does_not_empty_it (

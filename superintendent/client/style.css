@@ -45,6 +45,22 @@
 	   this is a division, not a decoration. */
 	--title-ground: light-dark(#f2f4f7, #1d2027);
 
+	/* A switch's lever, and **pale in both themes on purpose.** Every other
+	   colour here flips with the theme; this one cannot, because it has to sit
+	   on two grounds that do not flip together — a near-black track when the
+	   switch is off in the dark theme, and a bright amber one when it is on in
+	   either. A colour taken from the panel goes dark on that amber and reads
+	   as a hole punched in the button rather than as a cap sitting on it, which
+	   is exactly what the first attempt did. An 808's buttons are pale against
+	   its chassis for the same reason. */
+	--lever: light-dark(#fbfbfc, #e9ecf1);
+	--lever-edge: light-dark(#8d949f, #9aa2ae);
+
+	/* What a raised thing casts. A pair like everything else (#2112) — the test
+	   that says so caught this written as a bare `rgba()` inside a shadow, which
+	   is the one place a colour does not look like a colour. */
+	--lift: light-dark(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.45));
+
 	/* A hairline that has to be seen rather than merely be there: the outline
 	   that says a block can be picked up. `--edge` is a separator and reads as
 	   part of the surface; this reads as a state. */
@@ -450,7 +466,14 @@ html, body {
  * asks for each time.
  *
  * A purpose may still change a control's **colour**, its **width**, and what is
- * written on it. It may not change its height or its type. There are three
+ * written on it. It may not change its height or its type.
+ *
+ * **Width is set with `width`, never `min-width`.** These rules are two class
+ * names deep and a purpose is one, so a purpose that tries to raise `min-width`
+ * loses the cascade in silence — the slide switch came out exactly one row
+ * square, which is to say a button, and only a screenshot said so. `width` is a
+ * property these rules never touch, so it cannot be outranked; the floor below
+ * stays a floor. There are three
  * surfaces and that is the whole of the rule:
  *
  *   a title bar — title type, one cell tall, because a title has its own scale
@@ -734,6 +757,12 @@ html, body {
 	border-radius: max(2px, calc(var(--cell) * 0.09));
 	border: max(2px, calc(var(--cell) * 0.07)) solid var(--ring);
 }
+
+/* Absent until it has somewhere to be, rather than parked at the left edge.
+   `position: absolute` does not carry a `display`, so the attribute's own rule
+   is the one that hides it, and it is written here rather than trusted to a
+   user-agent default. */
+.playhead[hidden] { display: none; }
 
 .playhead {
 	position: absolute;
@@ -1250,73 +1279,69 @@ html, body {
 	min-height: var(--row);
 }
 
-/* A rocker, and there is one of it.
+/* A slide switch, and there is one of it.
  *
- * **It says what the two states are before it is touched**, which a button
- * reading "on" only says afterwards — you have to already know whether the word
- * is the state or the action. Every console, drum machine and amplifier Simon's
- * users own settles that by showing both ends and pressing one down, and it
- * costs a word of width to do the same.
+ * **Two words side by side was the wrong answer and Simon saw it immediately.**
+ * The rule says on is the accent filling the surface, so a lit switch was
+ * already amber all over — and marking which end was thrown then meant a second
+ * fill *inside* the first. Two ambers touching read as neither: not a switch, a
+ * button with a stain on it.
  *
- * One button, not two. A rocker is one control with two ends, and drawing it as
- * two targets would be two targets for one value — which is the shape #2107
- * exists to prevent. Tapping either end flips it, as tapping it always has.
+ * A slide switch has no such conflict, because **the state and the position are
+ * carried by different things**. The track is the surface, so it fills with the
+ * accent and goes on saying the one sentence every toggle here says. The lever
+ * says which way it is thrown by *being somewhere*, which costs no colour at
+ * all. It is also the thing on the chassis of every machine these users own,
+ * and it needs no word to be read.
  *
- * The rule about fills still holds exactly: **on is the accent filling the
- * surface**. Off fills nothing with the accent; the muted block under "off" is a
- * mark saying which end is down, and it is the same grey as a separator. */
+ * The lever takes the ink that belongs to whatever it is sitting on — `--ink`
+ * over the panel, `--on-ink` over the accent — because those two tokens exist
+ * precisely to be legible against those two grounds, in both themes. A single
+ * fixed colour cannot be: the track goes from near-black to bright amber in the
+ * dark theme, and nothing reads well on both. */
 .switch {
-	min-width: max(calc(var(--row) * 1.9), 4.6rem);
-	padding: 2px;
-	gap: 0;
-	overflow: hidden;
-	background: var(--panel);
-	color: var(--ink-quiet);
-	letter-spacing: 0.04em;
+	position: relative;
+
+	/* `width`, not `min-width`: the surface rule above is two classes deep and
+	   would outrank this without a word (see its own note). `flex: none` because
+	   a footer is a flex row and an explicit width is only a suggestion in one. */
+	width: calc(var(--row) * 1.75);
+	flex: none;
+
+	padding: 0;
+
+	/* The track is a slot, so it is recessed rather than level with the panel.
+	   Off is still not the accent — which is the whole of the rule — it is
+	   simply not pretending a slot is a surface. */
+	background: var(--accent-beat);
+	border-color: var(--edge-strong);
 }
 
 .switch > i {
-	flex: 1 1 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	align-self: stretch;
-	border-radius: 5px;
-	font-style: normal;
-	color: var(--ink-quiet);
-	opacity: 0.55;
+	position: absolute;
+	top: 12%;
+	bottom: 12%;
+	left: 5%;
+	width: 45%;
+	border-radius: max(3px, calc(var(--row) * 0.1));
+	background: var(--lever);
+	border: 1px solid var(--lever-edge);
+	box-shadow: 0 1px 2px var(--lift);
+	transition: left 90ms ease-out;
 }
 
-/* **The whole surface carries the state, and the ends say which way it is
-   thrown.** Filling only one end was tried and a test caught it within the
-   minute: from across a room half a control filled reads as a small mark inside
-   a pale block, not as a lit switch, and "a silenced block says so from across
-   the room" is a property somebody wrote a test for on purpose. So on is the
-   accent filling the surface — the same sentence as every other toggle here —
-   and the rocker's two ends are read at arm's length, where they are the thing
-   that says what off would even mean. */
+/* On is the accent filling the surface — the same sentence as every other
+   toggle here, and the thing a test checks from across the room. */
 .switch.on {
 	background: var(--on);
 	border-color: var(--on-edge);
-	color: var(--on-ink);
 }
 
-/* The end that is down: brought up out of the surface it sits on, in whichever
-   direction that surface goes. */
-.switch:not(.on) > i:first-child {
-	background: var(--accent-beat);
-	color: var(--ink);
-	opacity: 1;
-}
+.switch.on > i { left: 50%; }
 
-.switch.on > i:last-child {
-	background: var(--on-edge);
-	color: var(--on-ink);
-	opacity: 1;
-	font-weight: 700;
+@media (prefers-reduced-motion: reduce) {
+	.switch > i { transition: none; }
 }
-
-.switch.on > i:first-child { color: var(--on-ink); opacity: 0.5; }
 
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 

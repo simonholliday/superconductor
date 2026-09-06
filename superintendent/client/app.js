@@ -1491,7 +1491,7 @@ function Toggle ({ on, title, onFlip }) {
 			role="switch"
 			aria-checked=${on ? "true" : "false"}
 			onPointerDown=${(event) => { event.preventDefault(); onFlip(!on); }}
-		><i>off</i><i>on</i></button>`;
+		><i></i></button>`;
 }
 
 
@@ -2079,6 +2079,15 @@ function Playhead ({ anchor, steps, beats, paused }) {
 
 				bar.current.style.width = `${width}px`;
 				bar.current.style.transform = `translateX(${left + step * pitch}px)`;
+
+				/* Shown only once it has somewhere to be. Until the first beat
+				   arrives there is no anchor, so nothing above runs and the bar
+				   kept its CSS position — parked against the block's left edge,
+				   two pixels wide and full height, which the gaps between rows
+				   chopped into a column of little marks down the side of every
+				   pattern. Simon saw them twice and read them as leftovers,
+				   which is exactly what they were. */
+				bar.current.hidden = false;
 			}
 
 			frame = requestAnimationFrame(move);
@@ -2088,7 +2097,7 @@ function Playhead ({ anchor, steps, beats, paused }) {
 		return () => cancelAnimationFrame(frame);
 	}, [steps, beats]);
 
-	return html`<div class="playhead" ref=${bar}></div>`;
+	return html`<div class="playhead" hidden ref=${bar}></div>`;
 }
 
 /* Pause and tempo.
