@@ -199,6 +199,22 @@ class FakeApp:
 		return superintendent.protocol.declare(
 			"subsequence", CONTROLS, self.state, self.version, pages)
 
+	def redeclare (self, controls: dict[str, typing.Any],
+	               pages: list[dict[str, typing.Any]] | None = None) -> None:
+		"""Declare again with a different set of controls.
+
+		An app may redeclare at any time on the socket it already has — keeping
+		an arrangement does it, and adding a generator does it — so this is the
+		ordinary way to put a differently-shaped control in front of the panel
+		without reshaping the fixture for every test that shares it.
+		"""
+
+		self.version += 1
+
+		self.send(superintendent.protocol.declare(
+			"subsequence", controls, self.state, self.version,
+			PAGES if pages is None else pages))
+
 	def send (self, frame: superintendent.protocol.Frame) -> None:
 		"""Put one frame on the wire from the app's side."""
 

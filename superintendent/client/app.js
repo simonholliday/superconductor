@@ -368,21 +368,46 @@ function Window ({ rows, visible, cell, tight, children }) {
 	/* Where the window sits on what it is looking at, as two fractions. */
 	const [view, setView] = useState({ from: 0, span: 1 });
 
+	/* The same fraction, kept where an effect can read it without depending on
+	   it. A resize has to know where the window was *before* the resize, and
+	   state read through the dependency list would either be stale by design or
+	   make the effect run again for its own answer. */
+	const at = useRef(0);
+	const opened = useRef(false);
+
 	const measure = useCallback(() => {
 		const box = seen.current;
 
 		if (!box || !box.scrollHeight) return;
 
-		setView({
-			from: box.scrollTop / box.scrollHeight,
-			span: box.clientHeight / box.scrollHeight,
-		});
+		at.current = box.scrollTop / box.scrollHeight;
+
+		setView({ from: at.current, span: box.clientHeight / box.scrollHeight });
 	}, []);
 
 	useEffect(() => {
-		/* Opened at the bottom, which on a grid drawn high to low is the lowest
-		   notes — where a bass line lives. */
-		if (windowed && seen.current) seen.current.scrollTop = seen.current.scrollHeight;
+		const box = seen.current;
+
+		if (!windowed) { opened.current = false; measure(); return; }
+		if (!box) return;
+
+		if (!opened.current) {
+			/* Opened at the bottom, which on a grid drawn high to low is the
+			   lowest notes — where a bass line lives. **On opening, and only
+			   then.** `cell` is in this effect's dependencies, so every step of
+			   a pinch, every change of the size setting and every re-fit was
+			   also throwing the window back to its lowest rows: a person
+			   zooming in on the top of a pattern watched it run away from them
+			   at each step. Opening at the bottom is a mount behaviour and the
+			   dependency list had quietly made it a resize behaviour too. */
+			box.scrollTop = box.scrollHeight;
+			opened.current = true;
+
+		} else {
+			/* A resize keeps what was being looked at. The content has just
+			   changed height, so the same fraction is the same music. */
+			box.scrollTop = at.current * box.scrollHeight;
+		}
 
 		measure();
 	}, [windowed, rows, cell, measure]);
@@ -450,6 +475,18 @@ function Window ({ rows, visible, cell, tight, children }) {
 		</div>`;
 }
 
+/* Where a beat begins, worked out from what the app declared rather than
+ * assumed to be every fourth step.
+ *
+ * It has been every fourth step in every grid so far, which is exactly why it
+ * was worth not writing down: 4/4 with a step to the sixteenth is a fact about
+ * a rig, and this package is not allowed to know one (#1465). Three of the five
+ * places that mark a beat derived it and two wrote down 4 — so a grid of twelve
+ * over three beats would have had a note grid marking one column and its own
+ * velocity lane marking another, which is the kind of disagreement nobody
+ * reports because neither looks wrong on its own. */
+const beatEvery = (steps, beats) => Math.max(1, Math.round(steps / Math.max(1, beats)));
+
 /* Four colours across a bar, one to a beat, in the TR-808's own run.
  *
  * **This is the most recognisable thing a step sequencer does** and it is worth
@@ -467,7 +504,7 @@ function Window ({ rows, visible, cell, tight, children }) {
  * of twelve over three beats groups in fours as readily as sixteen over four,
  * and neither is written down here. */
 function BeatStrip ({ steps, beats, tight }) {
-	const per = Math.max(1, Math.round(steps / Math.max(1, beats)));
+	const per = beatEvery(steps, beats);
 
 	return html`
 		<div
@@ -532,7 +569,8 @@ function Grid ({ control, rows, steps, beats, cells, drawn, kinds, visible, cell
 								routed ? "routed" : "",
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
-								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+								step % beatEvery(steps, beats) === 0 ? "downbeat" : ""]
+								.filter(Boolean).join(" ")}
 							style=${ghost ? { "--struck": weightOf(struck.v) } : null}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
@@ -709,15 +747,25 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 		event.preventDefault();
 
 		const at = positionIn(event, step);
-		const found = noteAt(notes[row], at);
+		const put = snapped(at, snap, positions);
+
+		/* **Where the finger landed, or where the snap would put a note** —
+		   either counts as pressing an existing one.
+		
+		   `snapped` rounds, so it can round *up* onto a position where a note
+		   already starts. Asking only about the landing then read as empty
+		   ground, and placing there rewrote that note's length with the current
+		   snap: the `true` set is a no-op on the app, but the `/length` set
+		   beside it is not. Reachable on a grid keeping six positions to a step
+		   — press position 5 with a snap of 6 and the note at 6 is shortened by
+		   somebody who aimed at the gap before it. */
+		const found = noteAt(notes[row], at) || noteAt(notes[row], put);
 
 		event.currentTarget.setPointerCapture(event.pointerId);
 
 		if (!found) {
 			/* Placed on the landing, at the snap's own length, and selected so
 			   the length values below act on what was just drawn. */
-			const put = snapped(at, snap, positions);
-
 			onSet(`${name}/${row}/${put}`, true);
 			onSet(`${name}/${row}/${put}/length`, snap);
 			onSelect({ row, at: put });
@@ -851,10 +899,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 		width: `${span * unit}px`,
 	});
 
-	/* Where a beat begins, worked out from what the app declared rather than
-	   assumed to be every fourth step. It has been every fourth step in every
-	   grid so far, which is exactly why it was worth not writing down. */
-	const per = Math.max(1, Math.round(steps / Math.max(1, beats)));
+	const per = beatEvery(steps, beats);
 
 	return html`
 		<${BeatStrip} steps=${steps} beats=${beats} tight />
@@ -927,7 +972,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
  *
  * It edits the note in that column and does nothing where there is none —
  * a velocity with no note is not a state the sequencer could report. */
-function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, tight, onSet }) {
+function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell, tight, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -982,7 +1027,7 @@ function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, tight
 					<div
 						key=${`vel-${step}`}
 						data-velocity=${step}
-						class=${`bar ${step % 4 === 0 ? "downbeat" : ""}`}
+						class=${`bar ${step % beatEvery(steps, beats) === 0 ? "downbeat" : ""}`}
 						onPointerDown=${(event) => {
 							event.preventDefault();
 							event.currentTarget.setPointerCapture(event.pointerId);
@@ -1085,8 +1130,8 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 			notes=${notes} cell=${cell} window=${control.visible_rows}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
-		<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} divisions=${divisions}
-			tight
+		<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
+			divisions=${divisions} tight
 			cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
 			selected=${selected} note=${note}
@@ -2771,12 +2816,6 @@ function useCellSize (blocks, layout, dragging) {
 
 			if (!box || !blocks.length) return;
 
-			const first = box.querySelector(".part");
-			const inside = first && first.querySelector(".grid");
-			const title = first && first.querySelector(".part-title");
-
-			if (!first || !inside || !title) return;
-
 			const outer = box.getBoundingClientRect();
 			const shape = getComputedStyle(box);
 
@@ -2785,13 +2824,60 @@ function useCellSize (blocks, layout, dragging) {
 				height: outer.height - parseFloat(shape.paddingTop) - parseFloat(shape.paddingBottom) - FIT_SLACK,
 			};
 
-			/* The part of a block that does not scale, measured rather than
-			   enumerated: what is left of it once the grid inside and the
-			   title bar above are taken away. */
-			const chrome = {
-				x: first.getBoundingClientRect().width - inside.getBoundingClientRect().width,
-				y: first.getBoundingClientRect().height - inside.getBoundingClientRect().height
-					- title.getBoundingClientRect().height,
+			/* The size everything on the glass is drawn at right now, asked of
+			   the stylesheet because that is what the measurements below are
+			   measurements of. */
+			const drawn = parseFloat(
+				getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+
+			if (!Number.isFinite(drawn) || drawn <= 0) return;
+
+			/* **The part of a block that does not scale — one block at a time.**
+			 *
+			 * It used to be measured from whichever part came first in the DOM
+			 * and then applied to every block on the page, which is only right
+			 * when they are all the same shape. A note grid carries a velocity
+			 * lane, a settings strip and a footer; a params block has no footer
+			 * at all. First block a note grid and everything else was
+			 * over-measured, so the fit chose a smaller cell than it needed to;
+			 * first block a params block and the note grid was under-measured
+			 * and overflowed the box the fit was solving for. Silent both ways,
+			 * and which way round depended on arrangement order — which a
+			 * person changes by dragging.
+			 *
+			 * **Chrome is the residue**: what a block measures, less what the
+			 * model already counts for it at the size it is drawn at. Defining
+			 * it that way rather than as "everything but the grid and the
+			 * title" also settles the note grid's double count — its lane and
+			 * its settings strip are *already* in `block.rows` (`LANE_CELLS +
+			 * NOTE_CONTROL_CELLS`), so subtracting the model's own arithmetic
+			 * subtracts them exactly once. Whatever `blockSize` will add back,
+			 * this took away. */
+			const chromeOf = new Map();
+
+			for (const part of box.querySelectorAll(".part[data-part]")) {
+				const named = blocks.find((one) => one.name === part.dataset.part);
+
+				if (!named) continue;
+
+				const whole = part.getBoundingClientRect();
+				const modelled = blockSize(named, drawn, { x: 0, y: 0 });
+
+				chromeOf.set(named.name, {
+					x: whole.width - modelled.width,
+					y: whole.height - modelled.height,
+				});
+			}
+
+			if (!chromeOf.size) return;
+
+			/* A block on the page that has not been drawn yet has nothing of
+			   its own to measure. The largest residue measured stands in for
+			   it, because over-measuring costs a smaller cell and
+			   under-measuring overflows the glass. */
+			const spare = {
+				x: Math.max(...[...chromeOf.values()].map((one) => one.x)),
+				y: Math.max(...[...chromeOf.values()].map((one) => one.y)),
 			};
 
 			const fits = (candidate) => {
@@ -2799,7 +2885,7 @@ function useCellSize (blocks, layout, dragging) {
 
 				return blocks.every((block) => {
 					const at = solving.current[block.name] || { x: 0, y: 0 };
-					const size = blockSize(block, candidate, chrome);
+					const size = blockSize(block, candidate, chromeOf.get(block.name) || spare);
 
 					return at.x * pitch + size.width <= room.width
 						&& at.y * pitch + size.height <= room.height;
@@ -3398,7 +3484,18 @@ function Panel () {
 
 		/* A ring that is never confirmed must not sit there for ever: after
 		 * five seconds the request is abandoned and the face — which was
-		 * always the truth — is all that is left. */
+		 * always the truth — is all that is left.
+		 *
+		 * **The one it replaces is cleared first.** Overwriting the map entry
+		 * left the earlier timer running and unreachable, and every frame of a
+		 * dial drag, a range drag, a velocity drag and every path in the
+		 * reconnect re-send loop sends two on one path before the first is
+		 * answered. Five seconds later the orphan fires: it flashes a control
+		 * whose request succeeded as refused, and — worse, because it is not
+		 * merely cosmetic — it drops the ring of whatever request is in flight
+		 * on that path at the time. */
+		clearTimeout(expiries.current.get(path));
+
 		expiries.current.set(path, setTimeout(() => { drop(path); flashFailure(path); }, PENDING_EXPIRES));
 	}, [drop, flashFailure]);
 

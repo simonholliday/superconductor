@@ -4444,3 +4444,239 @@ def test_a_target_is_at_least_one_row_in_both_directions (
 	}""")
 
 	assert small == [], f"these can be touched and are too small to hit: {small}"
+
+
+# --- Where a beat begins is the app's to say (#1465) --------------------------
+
+
+def test_a_step_grid_marks_the_beat_the_app_declared (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Not every fourth step, which is a fact about a rig rather than about a grid.
+
+	Three of the five places that mark a beat derived it from `steps` and
+	`beats`; two wrote down 4.  Nothing caught it because every grid this
+	fixture declares is four steps to the beat — which is exactly the reason the
+	assumption was worth not writing down, and exactly why the test has to
+	change the ratio rather than trust the default.
+	"""
+
+	_settled(panel)
+
+	def marked () -> list[int]:
+		return panel.evaluate("""() => [...document.querySelectorAll(
+			'.part[data-part="second"] .cell')]
+			.map((one, index) => [index % 8, one.classList.contains("downbeat")])
+			.filter(([, on]) => on)
+			.map(([step]) => step);""")
+
+	assert sorted(set(marked())) == [0, 4], f"eight steps over two beats: {marked()}"
+
+	# The same grid, told it is four beats long. Nothing else about it changes.
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"second": {**conftest.CONTROLS["second"], "beats": 4},
+	})
+
+	_settled(panel)
+
+	playwright_api.expect(panel.locator(
+		'.part[data-part="second"] .cell.downbeat')).to_have_count(4, timeout=5_000)
+
+	assert sorted(set(marked())) == [0, 2, 4, 6], (
+		f"eight steps over four beats should mark every second one: {marked()}")
+
+
+def test_a_velocity_lane_marks_the_same_beats_as_the_grid_above_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A note grid derived its beat and its own velocity lane wrote down 4.
+
+	Neither looks wrong on its own, which is why this asserts that the two
+	agree rather than asserting a number: whatever the strip says, the lane
+	under the same pattern has to say it too.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	_settled(panel)
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"bass": {**conftest.CONTROLS["bass"], "beats": 4},
+	})
+
+	_settled(panel)
+
+	agreed = panel.evaluate("""() => {
+		const block = document.querySelector('.part[data-part="bass"]');
+
+		/* The strip colours each beat in the 808's four-colour run, so where
+		   one beat ends and the next begins is where that colour changes. */
+		const run = [...block.querySelectorAll(".beats .beat")].map(
+			(one) => [...one.classList].find((name) => /^b[1-9]$/.test(name)));
+
+		return {
+			strip: run.map((colour, step) => [step, colour])
+				.filter(([step, colour]) => step === 0 || colour !== run[step - 1])
+				.map(([step]) => step),
+			lane: [...block.querySelectorAll(".lane .bar")]
+				.map((one, index) => [index, one.classList.contains("downbeat")])
+				.filter(([, on]) => on)
+				.map(([step]) => step),
+		};
+	}""")
+
+	assert agreed["lane"], f"the lane marked no beat at all: {agreed}"
+
+	assert agreed["lane"] == agreed["strip"], (
+		f"the lane and the strip above it disagree about where a beat is: {agreed}")
+
+	assert agreed["lane"] == [0, 2, 4, 6], (
+		f"eight steps over four beats should mark every second bar: {agreed}")
+
+
+def test_a_press_that_snaps_onto_a_note_does_not_rewrite_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Aiming at the gap before a note must not shorten the note.
+
+	`snapped` rounds, so a press on empty ground can round *up* onto a position
+	where a note already starts.  Asking only about where the finger landed read
+	that as empty, and placing there sent a `/length` for the note that was
+	already there — the `true` beside it is a no-op on the app, but the length
+	is not, so a note quietly took the current snap as its length.
+
+	Reachable wherever a step holds more than one position, which is the whole
+	point of `divisions`: this fixture's `fine` grid keeps four.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	_settled(panel)
+
+	# A note starting one whole step in, and deliberately not the length the
+	# snap would give it — otherwise the defect writes the value that is already
+	# there and nothing can see it.
+	fake_app.confirm("fine/rows", {"C2": {"4": {"length": 2, "velocity": 100}}})
+	_settled(panel)
+
+	before = len(fake_app.sets)
+
+	# The last quarter of step 0, which is position 3: empty ground, and one the
+	# default snap of a whole step rounds up to position 4.
+	cell = panel.locator('.part[data-part="fine"] [data-path="fine/C2/0"]')
+	box = cell.bounding_box()
+
+	panel.mouse.move(box["x"] + box["width"] * 0.88, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	panel.wait_for_timeout(400)
+
+	asked = [one["path"] for one in fake_app.sets[before:]]
+
+	assert not [path for path in asked if path.startswith("fine/C2/4")], (
+		f"pressing the gap before a note wrote to it: {asked}")
+
+	# And it selected that note rather than doing nothing at all, which is the
+	# other way this assertion could be satisfied.
+	playwright_api.expect(
+		panel.locator('.part[data-part="fine"] .note.chosen')).to_have_count(1, timeout=5_000)
+
+
+def test_a_confirmed_request_never_flashes_as_refused (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A ring's abandon timer must not outlive the request that set it.
+
+	`request()` overwrote the timer in the map without clearing the one already
+	there, so any second set on a path before the first was answered — every
+	frame of a dial drag, every path in the reconnect re-send — left a timer
+	running that nothing could reach.  Five seconds later it flashed a control
+	whose request had succeeded as refused, and dropped the ring of whatever was
+	in flight on that path by then.
+
+	This waits out the full five seconds on purpose.  There is no shorter way to
+	observe a timer that should not exist, and the alternative — trusting that
+	one `clearTimeout` is in the right place — is what let it through.
+	"""
+
+	_settled(panel)
+
+	path = "grid/kick/1"
+	cell = panel.locator(conftest.cell(path))
+
+	# Two sets on one path before either is answered, then an answer to the
+	# second. Nothing should be left waiting.
+	cell.click()
+	cell.click()
+
+	asked = [one for one in fake_app.sets if one["path"] == path]
+
+	assert len(asked) >= 2, f"two taps sent {len(asked)} requests"
+
+	fake_app.confirm(path, asked[-1]["v"], client=asked[-1].get("client"), seq=asked[-1].get("seq"))
+
+	playwright_api.expect(panel.locator(".cell.pending")).to_have_count(0, timeout=5_000)
+
+	try:
+		panel.wait_for_selector(".cell.failed", timeout=7_000)
+
+	except playwright_api.TimeoutError:
+		return
+
+	raise AssertionError("an orphaned timer flashed a confirmed request as refused")
+
+
+def test_every_block_lands_inside_the_glass_at_the_fitted_size (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""What *fit the glass* claims, asserted rather than trusted.
+
+	The fit searches for the largest cell at which every part still lands inside
+	the box, and the only thing that made that search wrong was the measurement
+	it searched with: the part of a block that does not scale was measured from
+	whichever part came first in the DOM and applied to all of them.  A note
+	grid carries a velocity lane, a settings strip and a footer; a params block
+	has no footer at all.  So the answer depended on arrangement order, which a
+	person changes by dragging.
+
+	**This one did not fail against the commit that fixed it, and says so.**  It
+	was written to, with a params block declared first and a note grid second —
+	the ordering where the block measured has the least chrome of any kind and
+	the one measured *for* has the most.  It still fitted: the note grid's rows
+	were over-counted by as much as its chrome was under-measured, and the two
+	errors cancelled.  So this is a guard on the property rather than evidence
+	about the defect, and a reader should not mistake it for the second.  The
+	measurement is right now for a reason that can be read in `fit`; what this
+	holds down is the claim `fits()` makes.
+	"""
+
+	# **A params block first and a note grid second**, which is the ordering that
+	# breaks it: the block measured has the least chrome of any kind, and the one
+	# measured *for* has the most — a velocity lane, a settings strip and a
+	# footer. The other way round the error is conservative and invisible, which
+	# is why the pages this fixture ships could not tell the difference.
+	fake_app.redeclare(conftest.CONTROLS, [
+		{"id": "mixed", "title": "Mixed", "parts": ["moog", "bass"]},
+	])
+
+	panel.wait_for_selector('.part[data-part="bass"]', timeout=10_000)
+	_settled(panel)
+
+	over = panel.evaluate("""() => {
+		const box = document.querySelector(".grid-wrap");
+		const shape = getComputedStyle(box);
+		const outer = box.getBoundingClientRect();
+
+		const room = {
+			right: outer.right - parseFloat(shape.paddingRight),
+			bottom: outer.bottom - parseFloat(shape.paddingBottom),
+		};
+
+		return [...document.querySelectorAll(".part[data-part]")].map((part) => {
+			const at = part.getBoundingClientRect();
+
+			return {
+				part: part.dataset.part,
+				right: Math.round(at.right - room.right),
+				bottom: Math.round(at.bottom - room.bottom),
+			};
+		}).filter((one) => one.right > 1 || one.bottom > 1);
+	}""")
+
+	assert over == [], f"the fit left blocks hanging off the glass: {over}"
