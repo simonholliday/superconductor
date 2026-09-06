@@ -339,3 +339,62 @@ def test_the_service_bounds_a_note_by_the_positions_a_grid_declared () -> None:
 	with pytest.raises(superintendent.controls.ControlError, match="48 positions wide"):
 		superintendent.controls.apply_change(
 			state, {"bass": declared}, "bass/C2/48", True)
+
+
+# --- the mute, which a step grid had and this did not ----------------------
+
+def test_a_pitched_grid_can_be_silenced () -> None:
+	"""Simon reported this three times as "the control does nothing".
+
+	It was never the control.  ``NoteGrid.apply`` had no branch for ``enabled``,
+	so the path fell through to "that does not name a note" — the panel sent the
+	change, the app refused it, and the face, which always follows the app,
+	never moved.  A switch that does nothing, with the reason in a ``nack``
+	nobody reads.
+
+	The step grid beside it had the branch, which is why every check I ran
+	passed: I was testing the grid that worked.
+	"""
+
+	grid, _, _ = _grid()
+
+	assert grid.apply(["enabled"], False) is True
+	assert grid.enabled is False
+
+	assert grid.apply(["enabled"], False) is False, "an absolute set applied twice is one change"
+
+	assert grid.apply(["enabled"], True) is True
+	assert grid.enabled is True
+
+
+def test_a_silenced_pitched_grid_says_so_in_its_snapshot () -> None:
+	"""Or a panel arriving afterwards draws a live switch over a muted part."""
+
+	grid, composition, _ = _grid()
+
+	grid.apply(["C2", "0"], True)
+	grid.apply(["enabled"], False)
+
+	held = grid.snapshot()
+
+	assert held["enabled"] is False
+	assert held["C2"] == {"0": {"length": 1, "velocity": 100}}
+
+
+def test_silencing_a_pitched_grid_mutes_the_pattern_it_drives () -> None:
+	"""A mute in the sense a mixer means it: the notes stay and stop sounding."""
+
+	composition = FakeComposition()
+	muted: list[str] = []
+	composition.mute = muted.append          # type: ignore[attr-defined]
+	composition.unmute = lambda name: muted.remove(name)  # type: ignore[attr-defined]
+
+	grid = adapter.NoteGrid(
+		composition, rows=["C2"], steps=8, beats=2,
+		data_key="bass", name="bass", pattern="bass")
+
+	grid.apply(["enabled"], False)
+	assert muted == ["bass"]
+
+	grid.apply(["enabled"], True)
+	assert muted == []

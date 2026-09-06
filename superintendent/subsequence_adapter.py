@@ -85,6 +85,15 @@ class Control:
 	glance without teaching anything a new word.
 	"""
 
+	composition: typing.Any
+	"""The composition this control reads and writes.  Declared here because the
+	mute below needs it and every control has one."""
+
+	pattern: str | None = None
+	"""Which of the composition's patterns this control drives, if any.  A grid
+	belonging to no instrument drives none and is silenced by contributing
+	nothing (#2108)."""
+
 	enabled: bool = True
 	"""Whether this control is contributing anything at all.
 
@@ -171,6 +180,38 @@ class Control:
 		because otherwise the panel is showing a guess that pressing it cannot
 		correct.
 		"""
+
+
+	def _keep_enabled (self, value: typing.Any) -> bool:
+		"""Silence this control, or bring it back.
+
+		A pattern is muted through the composition's own mute rather than by
+		emptying anything: the notes stay where they are and stop being heard,
+		which is what a mute is and what makes it reversible without loss.
+
+		A composition too old to have one is not an error.  The flag is still
+		kept and still honoured everywhere this package does the playing — a
+		routed grid stops contributing — so what is lost is only the half that
+		was never this package's to do.
+		"""
+
+		wanted = bool(value)
+
+		if wanted == self.enabled:
+			return False
+
+		self.enabled = wanted
+
+		if self.pattern is not None:
+			switch = getattr(self.composition, "unmute" if wanted else "mute", None)
+
+			if callable(switch):
+				switch(self.pattern)
+
+			else:
+				LOG.warning("this composition cannot mute %r", self.pattern)
+
+		return True
 
 
 class StepGrid (Control):
@@ -288,37 +329,6 @@ class StepGrid (Control):
 		"""
 
 		return self.snapshot() if rest == ["rows"] else value
-
-	def _keep_enabled (self, value: typing.Any) -> bool:
-		"""Silence this control, or bring it back.
-
-		A pattern is muted through the composition's own mute rather than by
-		emptying anything: the notes stay where they are and stop being heard,
-		which is what a mute is and what makes it reversible without loss.
-
-		A composition too old to have one is not an error.  The flag is still
-		kept and still honoured everywhere this package does the playing — a
-		routed grid stops contributing — so what is lost is only the half that
-		was never this package's to do.
-		"""
-
-		wanted = bool(value)
-
-		if wanted == self.enabled:
-			return False
-
-		self.enabled = wanted
-
-		if self.pattern is not None:
-			switch = getattr(self.composition, "unmute" if wanted else "mute", None)
-
-			if callable(switch):
-				switch(self.pattern)
-
-			else:
-				LOG.warning("this composition cannot mute %r", self.pattern)
-
-		return True
 
 	def snapshot (self) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.
@@ -495,16 +505,36 @@ class NoteGrid (Control):
 
 		return declared
 
-	def snapshot (self) -> dict[str, dict[str, dict[str, int]]]:
-		"""Every note as it stands, copied so nothing shares a dict with the loop."""
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""Every note as it stands, copied so nothing shares a dict with the loop.
+
+		The mute travels with the rows, as a step grid's does: a panel arriving
+		after one was silenced has no other way to learn it, and would draw the
+		switch live over a pattern that is not.
+		"""
 
 		grid = self.composition.data.get(self.data_key) or {}
 
-		return {row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
-		        for row in self.rows if grid.get(row)}
+		held: dict[str, typing.Any] = {
+			row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
+			for row in self.rows if grid.get(row)}
+
+		held["enabled"] = self.enabled
+
+		return held
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one note, absolutely rather than by toggling."""
+
+		# **The mute, and it was missing here while a step grid had it.** A note
+		# grid fell straight through to "that does not name a note", so the panel
+		# sent the change, the app refused it, and the face — which always
+		# follows the app — never moved. On the glass that is a switch that does
+		# nothing, with the reason in a `nack` nobody was reading. Simon reported
+		# it three times before he happened to say which grid it was on, and the
+		# one I kept testing was the step grid, where it worked.
+		if rest == ["enabled"]:
+			return self._keep_enabled(value)
 
 		if rest == ["rows"]:
 			return self._keep_rows(value)
