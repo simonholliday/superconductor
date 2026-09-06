@@ -14,10 +14,30 @@ device names live in your own files, never in here.
 
 ## Status
 
-A working proof of concept, not a release. What runs today is one page holding
-one step grid and a transport, driving a drum machine from a step pattern in
-[Subsequence](https://github.com/simonholliday/subsequence). It has been played
-on real hardware; it has not been used by anyone but its author.
+A working proof of concept, not a release. It has been played on real hardware;
+it has not been used by anyone but its author.
+
+What runs today: as many pages as an application declares, holding step grids,
+pitched note grids with sub-step timing, an instrument's own settings, stacks of
+generators that contribute to a pattern, and a transport with a bar-beat-step
+counter. Blocks are arranged by dragging and the arrangement is kept by the
+application. A generator is wired to the pattern it builds; a grid that belongs
+to no instrument is patched into as many patterns as you like by dragging a
+cable from its outlet. Everything below documents one of those.
+
+**One thing to know before you play anything into it.** A pattern you edit on
+the glass lives in the running composition and nothing writes it down, so
+restarting that composition throws away every note you tapped. Until that is
+settled there are two tools for it, and the habit is to run the first before
+restarting anything:
+
+```
+python tools/capture_state.py      # before
+python tools/restore_state.py      # after
+```
+
+A restore is additive and cannot clear, so a composition that seeds an opening
+pattern comes back with that pattern *plus* whatever was captured.
 
 ## What it needs
 
@@ -172,9 +192,8 @@ a name brings that block back to the top.
 Tap **DONE** to leave. Outside the latch every touch is a control again, which
 is what stops a stray finger rearranging a page mid-performance.
 
-Leaving is also when the arrangement is saved — once, rather than on every
-nudge — and it is saved to the application that declared the page, not to your
-browser. For a composition using `PageStore` that means a file beside the
+An arrangement is saved when you lift your finger from a block that moved, and
+it is saved to the application that declared the page, not to your browser. For a composition using `PageStore` that means a file beside the
 composition itself, so a piece and the way you look at it travel together:
 
 ```python

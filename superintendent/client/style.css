@@ -593,30 +593,44 @@ html, body {
  * own geometry — rather than by hoping the cascade lands the right way up. */
 @layer surface {
 
-	.part-title button {
-		min-width: max(24px, var(--cell));
-		min-height: max(24px, var(--cell));
-	
-		/* **Centred, and the surface says so.** The alignment is here because it is
-		   the one property this rule did not name, and a purpose class filled the
-		   silence: `.offer` set `text-align: left` for the two-line options in a
-		   sheet, was reused on a footer button, and "add a contribution" came out
-		   left-aligned beside a centred toggle. Simon found it, as he found the
-		   last two. A rule that states height and type and stops is a rule with a
-		   hole in it. */
+	/* **What every control on this panel looks like**, said once.
+	 *
+	 * The three surfaces below differ in exactly two things — how large a
+	 * control is and how much air it has — and everything else was written out
+	 * three times, twenty-odd declarations and a nine-line comment apiece. Three
+	 * copies of one intention is three places for it to drift, and drift here is
+	 * a control that looks like it belongs to a different instrument.
+	 *
+	 * **Centred, and the surface says so.** The alignment is here because it is
+	 * the one property these rules did not name, and a purpose class filled the
+	 * silence: `.offer` set `text-align: left` for the two-line options in a
+	 * sheet, was reused on a footer button, and "add a contribution" came out
+	 * left-aligned beside a centred toggle. Simon found it, as he found the last
+	 * two. A rule that states height and type and stops is a rule with a hole in
+	 * it.
+	 *
+	 * This one names no size at all, which is what keeps it out of the argument
+	 * the layer exists to settle: a surface decides how large a control is, and
+	 * there are exactly three surfaces that may. */
+	.part-title button,
+	.part-body button,
+	.part-foot button,
+	.bar button,
+	.sheet button,
+	.menu .options button,
+	.sizes .choices button,
+	.theme .choices button {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-	
-		padding: 0 0.4rem;
+
 		border: 1px solid var(--edge);
 		border-radius: 8px;
 		background: var(--panel);
 		color: var(--ink-quiet);
 		font: inherit;
 		font-family: var(--face-panel);
-		font-size: var(--type-title);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.09em;
@@ -628,35 +642,27 @@ html, body {
 		line-height: 1;
 		touch-action: none;
 	}
-	
+
+	/* A block's title bar: as large as a cell, because it is drawn on the
+	   lattice and reads as part of it. */
+	.part-title button {
+		min-width: max(24px, var(--cell));
+		min-height: max(24px, var(--cell));
+		padding: 0 0.4rem;
+		font-size: var(--type-title);
+	}
+
+	/* The lattice: a control is one row, whatever the person set that to. */
 	.part-body button,
 	.part-foot button {
 		min-width: var(--row);
 		min-height: var(--row);
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
 		padding: 0 0.7rem;
-		border: 1px solid var(--edge);
-		border-radius: 8px;
-		background: var(--panel);
-		color: var(--ink-quiet);
-		font: inherit;
-		font-family: var(--face-panel);
 		font-size: var(--type-body);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.09em;
-
-		/* Tight, so centring centres the letters rather than the line box.
-		   Inherited 1.4 leaves descender room that uppercase never uses, and
-		   the text sits visibly high in the control — which Simon spotted in
-		   the settings block, where a column of them makes it obvious. */
-		line-height: 1;
-		touch-action: none;
 	}
-	
+
+	/* Chrome: a fixed finger, because it is not part of the music and has no
+	   business shrinking with it. */
 	.bar button,
 	.sheet button,
 	.menu .options button,
@@ -664,30 +670,10 @@ html, body {
 	.theme .choices button {
 		min-width: 44px;
 		min-height: 44px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
 		padding: 0 0.8rem;
-		border: 1px solid var(--edge);
-		border-radius: 8px;
-		background: var(--panel);
-		color: var(--ink-quiet);
-		font: inherit;
-		font-family: var(--face-panel);
 		font-size: var(--type-chrome);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.09em;
-
-		/* Tight, so centring centres the letters rather than the line box.
-		   Inherited 1.4 leaves descender room that uppercase never uses, and
-		   the text sits visibly high in the control — which Simon spotted in
-		   the settings block, where a column of them makes it obvious. */
-		line-height: 1;
-		touch-action: none;
 	}
-	
+
 	/* A popover hangs off a block but is not on it. Written after the lattice rule
 	   above so it wins, because a menu opened from inside a part is a descendant of
 	   one and would otherwise take the part's size. */
@@ -775,10 +761,6 @@ html, body {
 	background: var(--ink);
 	opacity: 0.75;
 }
-
-/* The strip carries the texture where there is one, so a label under it would
-   only be drawing the same idea twice. */
-.window.windowed .row-label { background-image: none; }
 
 /* One scrollbar, and it is ours. The browser's own is a second bar on a
    desktop and an overlay that fades on a touch panel — neither of which is a
@@ -1200,7 +1182,6 @@ html, body {
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--ink);
-	text-align: left;
 	white-space: nowrap;
 	touch-action: none;}
 
@@ -1831,7 +1812,6 @@ html, body {
    not be a different width in one place — that is how "on" and "send to" came to
    disagree in the first place. */
 
-.grid.params .layer .spacer { flex: 1; }
 
 /* Square, and the square is the person's cell. These carried a 44px width
    floor from when a control had a height floor: at the compact size that left
@@ -2001,7 +1981,6 @@ html, body {
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--ink);
-	text-align: left;
 	white-space: nowrap;
 	touch-action: none;}
 

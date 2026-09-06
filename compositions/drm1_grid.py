@@ -140,6 +140,12 @@ not become a different setting.
 """
 
 BASS_VELOCITY = 100
+"""What a note is when it is first placed: at a middling weight.
+
+Velocity reaches the Minitaur only through its two sensitivity parameters, which
+default to half — CC 89 for the filter and CC 90 for the amplifier (#2081).  A
+velocity lane that appears to do nothing is that, not this.
+"""
 
 BASS_DIVISIONS = int(subsequence.constants.MIDI_QUARTER_NOTE * STEP_DURATION)
 """How many places a note may start within one step of the bass pattern.
@@ -157,12 +163,6 @@ them with ``PatternBuilder.note`` rather than ``hit_steps``.
 
 BASS_LENGTH = BASS_DIVISIONS
 """One step, counted in the positions above rather than in steps."""
-"""What a note is when it is first placed: one step long, at a middling weight.
-
-Velocity reaches the Minitaur only through its two sensitivity parameters, which
-default to half — CC 89 for the filter and CC 90 for the amplifier (#2081).  A
-velocity lane that appears to do nothing is that, not this.
-"""
 
 
 # --- The pattern the composition starts with ------------------------------
@@ -415,20 +415,19 @@ link = superintendent.subsequence_adapter.AppLink(
 		pathlib.Path(__file__).with_suffix(".pages.json")),
 	url=SERVICE_URL,
 )
-"""Three views over the same two patterns, and where their arrangement is kept.
+"""Six views over this rig, and where their arrangement is kept.
 
-The arrangement file sits beside this one and is written by the adapter when
-somebody leaves arrange mode on the panel.  It is data rather than code because
-there is no safe way to write a dragged block back into a Python file, and it is
-beside the composition rather than inside the service because a page set belongs
-to the piece that declared it (Subroutine #2075).
+The arrangement file sits beside this one and is written by the adapter when a
+finger lifts from a block that moved.  It is data rather than code because there
+is no safe way to write a dragged block back into a Python file, and it is beside
+the composition rather than inside the service because a page set belongs to the
+piece that declared it (Subroutine #2075).
 
-
-Each pattern appears on two of them — once beside the other, side by side on a
-wide panel, and once with the whole glass to itself — which is the case worth having: see how they play
-together, then take one on its own to work on it closely.  Nothing keeps the
-two views of a pattern in step, because nothing has to: both draw the grid the
-composition holds.
+Every pattern appears on more than one of them — once with the whole glass to
+itself and once beside whatever it plays against — which is the case worth
+having: see how they play together, then take one on its own to work on it
+closely.  Nothing keeps two views of a pattern in step, because nothing has to:
+both draw the grid the composition holds.
 """
 
 

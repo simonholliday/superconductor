@@ -150,8 +150,14 @@ def test_the_client_speaks_the_contract_python_does () -> None:
 	them, so the only thing keeping them together is this."""
 
 	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
-	spoken = {line.split('contract: "')[1].split('"')[0]
-	          for line in source.splitlines() if 'contract: "' in line}
+
+	# Both spellings, so moving the literal into a constant cannot make this
+	# test pass by finding nothing — an empty set would otherwise equal an empty
+	# set and say the two languages agree about nothing at all.
+	spoken = set(re.findall(r'contract: "([^"]+)"', source)) \
+		| set(re.findall(r'CONTRACT = "([^"]+)"', source))
+
+	assert spoken, "the client names no contract version anywhere"
 
 	assert spoken == {superintendent.protocol.CONTRACT_VERSION}, (
 		f"the client says {spoken} and Python says {superintendent.protocol.CONTRACT_VERSION!r}")

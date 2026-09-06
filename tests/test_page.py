@@ -4017,6 +4017,9 @@ def test_every_size_and_face_on_the_page_is_one_the_scale_names (
 
 
 SURFACE_RULES = {
+	".part-title button, .part-body button, .part-foot button, .bar button,"
+	" .sheet button, .menu .options button, .sizes .choices button,"
+	" .theme .choices button",
 	".part-title button",
 	".part-body button, .part-foot button",
 	".bar button, .sheet button, .menu .options button, .sizes .choices button,"

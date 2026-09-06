@@ -33,9 +33,13 @@ async def main () -> None:
 	held: dict[str, dict] = {}
 
 	async with websockets.asyncio.client.connect(URL) as socket:
-		await socket.send(json.dumps({
-			"t": "hello", "contract": "1.5.0", "client": "capture",
-			"page": None, "ver": {}, "token": None}))
+		# Built rather than spelled out, so it cannot go stale. Three tools wrote
+		# the contract by hand and drifted three separate ways — two said 1.1.0
+		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
+		# advice for spotting a stale process is to read the contract off a
+		# socket. Nothing checks it today, which is exactly why it drifted.
+		await socket.send(superintendent.protocol.encode(
+			superintendent.protocol.hello("capture", None)))
 
 		deadline = time.monotonic() + 5
 

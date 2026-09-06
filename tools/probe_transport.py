@@ -11,6 +11,8 @@ import time
 
 import websockets.asyncio.client
 
+import superintendent.protocol
+
 
 URL = "ws://127.0.0.1:8090/ws/panel"
 
@@ -55,8 +57,13 @@ async def await_change (ws, path, value, limit=5.0):
 
 async def main ():
 	async with websockets.asyncio.client.connect(URL) as ws:
-		await ws.send(json.dumps({"t": "hello", "contract": "1.1.0", "client": "transport-test",
-		                          "page": "grid", "ver": {}, "token": None}))
+		# Built rather than spelled out, so it cannot go stale. Three tools wrote
+		# the contract by hand and drifted three separate ways — two said 1.1.0
+		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
+		# advice for spotting a stale process is to read the contract off a
+		# socket. Nothing checks it today, which is exactly why it drifted.
+		await ws.send(superintendent.protocol.encode(
+			superintendent.protocol.hello("transport-test", "grid")))
 
 		greeting = []
 		await collect(ws, 2.5, greeting)

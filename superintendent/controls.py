@@ -490,6 +490,7 @@ def _readable_layers (
 
 
 NOTE_FIELDS = ("length", "velocity")
+"""What a note carries besides being there at all."""
 
 
 def _positions (declaration: dict[str, typing.Any]) -> int:

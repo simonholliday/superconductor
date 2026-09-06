@@ -25,41 +25,36 @@
 	],
 	"minitaur": [
 		{
-			"name": "bass",
-			"x": 0,
-			"y": 0
+			"name": "minitaur",
+			"x": 38,
+			"y": 1
 		},
 		{
-			"name": "minitaur",
-			"x": 20,
-			"y": 0
+			"name": "bass",
+			"x": 14,
+			"y": 2
 		}
 	],
 	"generators": [
 		{
-			"name": "grid",
-			"x": 34,
-			"y": 5
-		},
-		{
 			"name": "drum_recipe/probe",
-			"x": 21,
+			"x": 14,
 			"y": 1
 		},
 		{
-			"name": "drum_recipe/lmto9a02ipm2",
-			"x": 19,
-			"y": 19
-		},
-		{
-			"name": "drum_recipe/lmto9msrruk1",
-			"x": 7,
-			"y": 17
-		},
-		{
 			"name": "drum_recipe/lmtoemgmm2oj",
-			"x": 2,
-			"y": 5
+			"x": 3,
+			"y": 10
+		},
+		{
+			"name": "grid",
+			"x": 30,
+			"y": 4
+		},
+		{
+			"name": "drum_recipe/lmto9a02ipm2",
+			"x": 15,
+			"y": 16
 		}
 	],
 	"shared": [
@@ -70,23 +65,23 @@
 		},
 		{
 			"name": "drum_recipe/lmto9a02ipm2",
-			"x": 2,
+			"x": 3,
 			"y": 10
 		},
 		{
-			"name": "drum_recipe/lmtoemgmm2oj",
-			"x": 13,
-			"y": 18
+			"name": "shared",
+			"x": 31,
+			"y": 1
 		},
 		{
-			"name": "shared",
-			"x": 25,
-			"y": 15
+			"name": "drum_recipe/lmtoemgmm2oj",
+			"x": 4,
+			"y": 21
 		},
 		{
 			"name": "grid",
-			"x": 51,
-			"y": 2
+			"x": 31,
+			"y": 17
 		}
 	]
 }

@@ -15,6 +15,23 @@ import { html, render, useState, useEffect, useLayoutEffect, useRef, useCallback
 
 const PING_EVERY = 2000;
 const STALE_AFTER = 6000;
+const CONTRACT = "1.13.0";
+/* The protocol version this client speaks, in one place.
+ *
+ * It cannot be shared with Python, so a test asserts the two agree — but it can
+ * at least be written once here rather than spelled by hand at each greeting. */
+
+/* The greeting, written once.
+ *
+ * It was written out twice — on opening a socket and again on waking — with the
+ * contract version spelled by hand in both. A test does catch a divergence from
+ * Python, so this was a maintenance nuisance rather than a hazard; but the same
+ * literal repeated is exactly what the tools got wrong three separate ways. */
+const greeting = () => ({
+	t: "hello", contract: CONTRACT, client: clientId,
+	page: rememberedPage(), ver: {}, token: null,
+});
+
 const RECONNECT_FLOOR = 250;
 const RECONNECT_CEILING = 5000;
 const PENDING_EXPIRES = 5000;
@@ -267,7 +284,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.13.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send(greeting());
 		};
 
 		this.socket.onmessage = (message) => {
@@ -312,7 +329,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.13.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send(greeting());
 			return;
 		}
 
