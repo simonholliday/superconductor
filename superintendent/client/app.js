@@ -518,7 +518,7 @@ function BeatStrip ({ steps, beats, tight }) {
 		</div>`;
 }
 
-function Grid ({ control, rows, steps, beats, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
+function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -571,7 +571,7 @@ function Grid ({ control, rows, steps, beats, cells, drawn, kinds, visible, cell
 								failed.has(path) ? "failed" : "",
 								step % beatEvery(steps, beats) === 0 ? "downbeat" : ""]
 								.filter(Boolean).join(" ")}
-							style=${ghost ? { "--struck": weightOf(struck.v) } : null}
+							style=${ghost ? { "--struck": weightOf(struck.v, weights) } : null}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
 				})}
@@ -978,7 +978,7 @@ function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
 	};
 
-	const [low, high] = range || [1, 127];
+	const [low, high] = range;
 	const holding = useRef(null);
 
 	/* The note beginning in this drawn cell, wherever inside it that is: with
@@ -1117,6 +1117,9 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 	const values = useMemo(() => valuesFor(perBeat), [perBeat]);
 	const snaps = useMemo(() => snapsFor(perBeat), [perBeat]);
 
+	const hasWeights = Array.isArray(control.velocity_range)
+		&& control.velocity_range.length === 2;
+
 	const [snap, setSnap] = useState(divisions);
 	const [selected, setSelected] = useState(null);
 
@@ -1130,9 +1133,16 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 			notes=${notes} cell=${cell} window=${control.visible_rows}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
-		<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
-			divisions=${divisions} tight
-			cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />
+		${/* **Drawn only where the app said what a weight means.** The lane's
+		     whole job is to show one, and it read `|| [1, 127]` — a MIDI number
+		     invented by the panel for an app that had not offered one, which
+		     would draw every note somewhere on a scale nobody declared. A grid
+		     that says nothing gets no lane, the same way one that declares no
+		     divisions is honestly offered sixteenths and nothing finer. */ ""}
+		${hasWeights && html`
+			<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
+				divisions=${divisions} tight
+				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
 			selected=${selected} note=${note}
 			onLength=${(length) => onSet(`${name}/${selected.row}/${selected.at}/length`, length)}
@@ -1189,10 +1199,24 @@ const tidy = (value) => Number(value.toFixed(6));
  * a mark that is not there. A floor of a third, so the quietest note is still
  * something rather than nothing: this says *how hard*, and a note that cannot be
  * seen has stopped saying anything at all. */
-const weightOf = (velocity) => {
-	const held = Math.min(127, Math.max(0, Number(velocity) || 0));
+const weightOf = (velocity, range) => {
+	/* **The scale is the app's**, and without one there is nothing to say. This
+	   divided by a hard-coded 127 — a MIDI number, in a package whose own
+	   `controls.py` says it carries no MIDI at all and leaves what a value
+	   means to the composition. An app that declares its range gets marks drawn
+	   in proportion to it; one that does not gets marks all the same size,
+	   because "how hard" is a question this panel then cannot answer and must
+	   not appear to. */
+	if (!range || range.length !== 2) return "1.000";
 
-	return (0.34 + 0.66 * (held / 127)).toFixed(3);
+	const [low, high] = range;
+	const span = high - low;
+
+	if (!(span > 0)) return "1.000";
+
+	const held = Math.min(high, Math.max(low, Number(velocity) || low));
+
+	return (0.34 + 0.66 * ((held - low) / span)).toFixed(3);
 };
 
 /* One parameter, in whichever of the four shapes it comes in.
@@ -2480,12 +2504,25 @@ function Playhead ({ anchor, steps, beats, paused }) {
 function Transport ({ control, name, fields, up, anchor, onSet }) {
 	const paused = fields.paused === true;
 	const bpm = fields.bpm;
-	const [low, high] = control.tempo_range || [40, 240];
+	/* **No invented bounds.** This read `|| [40, 240]`, and `nudge` clamps to
+	   whatever it finds — so an app declaring no range could not be taken
+	   outside 40 to 240 BPM from the glass, with nothing on the panel saying
+	   why or that a limit existed at all. 40 to 240 is a fact about the kind of
+	   music this rig plays, which is exactly the sort of thing #2049 says must
+	   not be written down here. An app that has bounds declares them and they
+	   are honoured; one that does not gets no clamp, and refuses what it cannot
+	   do with a reason the panel can show. */
+	const [low, high] = control.tempo_range || [];
 	const canPause = (control.fields || []).includes("paused");
 
 	const nudge = (by) => {
 		if (typeof bpm !== "number") return;
-		onSet(`${name}/bpm`, Math.min(high, Math.max(low, Math.round((bpm + by) * 10) / 10)));
+
+		const wanted = Math.round((bpm + by) * 10) / 10;
+
+		onSet(`${name}/bpm`, Math.min(
+			high === undefined ? wanted : high,
+			Math.max(low === undefined ? wanted : low, wanted)));
 	};
 
 	/* **The counter is the largest thing here**, because on every machine these
@@ -3706,7 +3743,9 @@ function Panel () {
 			   playing, which is what every grid did before there was a switch. */
 			live: ((state[appName] || {})[name] || {}).enabled !== false,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-				+ (kindOf(name) === "note_grid" ? LANE_CELLS + NOTE_CONTROL_CELLS : 0) + 1,
+				+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
+				+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
+					? LANE_CELLS : 0) + 1,
 			steps: controls[name].steps,
 		});
 	}
@@ -4168,6 +4207,10 @@ function Panel () {
 							<${Grid} control=${one.control} rows=${controls[one.control].rows}
 								steps=${controls[one.control].steps}
 								beats=${controls[one.control].beats || 4}
+								${/* What a realised cell's weight is measured
+								     against, which is the app's to say and not
+								     this panel's to assume. */ ""}
+								weights=${controls[one.control].velocity_range}
 								cells=${(state[appName] || {})[one.control] || {}}
 								drawn=${up ? realised[one.control] : null}
 								${/* Which layer is a route and which is a

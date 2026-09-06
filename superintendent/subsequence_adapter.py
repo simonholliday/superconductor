@@ -271,7 +271,16 @@ class StepGrid (Control):
 		"""Rows, width, how long one time round takes, and what to call it."""
 
 		declared: dict[str, typing.Any] = {
-			"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats}
+			"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
+
+			# **What a weight means, said by the app rather than assumed by the
+			# panel.** A step grid's own cells carry no velocity (#2046), but the
+			# cells a generator realises on it do — and the panel draws each one
+			# at the weight it was played. It was dividing by a hard-coded 127,
+			# which is a MIDI number in a package that carries no MIDI; a note
+			# grid already declared this and a step grid did not, so the one that
+			# said nothing was the one being guessed at.
+			"velocity_range": [1, 127]}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows

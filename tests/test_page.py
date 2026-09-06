@@ -4804,3 +4804,70 @@ def test_every_block_lands_inside_the_glass_at_the_fitted_size (
 	}""")
 
 	assert over == [], f"the fit left blocks hanging off the glass: {over}"
+
+
+# --- What the app did not declare, the panel does not invent (#2049) ---------
+
+
+def test_a_tempo_with_no_declared_range_is_not_clamped_by_the_panel (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""40 to 240 BPM is a fact about the music a rig plays, not about a transport.
+
+	It was written into the client as a fallback, and `nudge` clamps to whatever
+	it finds — so an app declaring no range could not be taken outside those
+	bounds from the glass, with nothing saying why or that a limit existed.  An
+	app that has bounds declares them; one that does not refuses what it cannot
+	do, with a reason the panel already knows how to show.
+	"""
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"transport": {"type": "transport", "fields": ["paused", "bpm"]},
+	})
+
+	_settled(panel)
+
+	fake_app.confirm("transport/bpm", 260.0)
+	_settled(panel)
+
+	before = len(fake_app.sets)
+
+	panel.locator(".tempo button", has_text="+5").click()
+
+	asked = [one for one in fake_app.sets[before:] if one["path"] == "transport/bpm"]
+
+	assert asked, "the panel sent nothing"
+	assert asked[-1]["v"] > 260.0, (
+		f"the panel clamped a tempo to a range nobody declared: asked for {asked[-1]['v']}")
+
+
+def test_a_grid_that_declares_no_weight_scale_draws_every_mark_the_same (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	""""How hard" is a question this panel cannot answer without being told.
+
+	It divided by a hard-coded 127 — a MIDI number, in a package whose own
+	`controls.py` says it carries no MIDI and leaves what a value means to the
+	composition.  An app that declares its range gets marks in proportion to it;
+	one that does not gets marks all the same size, rather than a scale invented
+	on its behalf.
+	"""
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"grid": {one: held for one, held in conftest.CONTROLS["grid"].items()
+		         if one != "velocity_range"},
+	})
+
+	_settled(panel)
+	_realised(panel, fake_app, {"kick": {"1": 127}, "snare": {"1": 20}})
+
+	def across (path: str) -> float:
+		return float(panel.eval_on_selector(
+			conftest.cell(path),
+			"one => parseFloat(getComputedStyle(one, '::after').width)"))
+
+	loud = across("grid/kick/1")
+	quiet = across("grid/snare/1")
+
+	assert abs(loud - quiet) < 0.5, (
+		f"a panel told nothing about weight drew {loud}px and {quiet}px")
