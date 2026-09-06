@@ -1921,7 +1921,7 @@ function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
  *
  * It takes no pointer events at all, so a line drawn across a grid cannot cost
  * a tap. */
-function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
+function Connections ({ box, joins, touched, cell, when, patching, onFlip, patchable }) {
 	const [drawn, setDrawn] = useState([]);
 
 	useLayoutEffect(() => {
@@ -2010,6 +2010,11 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 
 	const jack = marked(cell, JACK.floor, JACK.share, JACK.ceiling);
 
+	/* What a fitting is worth when it can be taken hold of: half a control row,
+	   so the whole disc is a row across (#2107). A lug is `jack` and stays a
+	   mark, because a hard-wired line cannot be moved. */
+	const grip = controlRow(cell) / 2;
+
 	/* Large enough to hold every line and no larger. Every endpoint sits on the
 	   edge of a block, so this can never be wider than the blocks already are —
 	   which matters, because an overlay that outgrew them would scroll the page
@@ -2086,6 +2091,18 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 					y: (line.a.y + line.b.y) / 2 + (line.wired ? 0 : dip * 0.75),
 				};
 
+				/* **Three row-sized targets need a cable long enough to hold
+				   them.** Two blocks side by side make a lead forty pixels
+				   long, and the switch and both fittings landed on the same
+				   spot — measured on the rig, not guessed at. #2107 settles it:
+				   a thing that cannot be given a row across must not be
+				   touchable. The switch stays, because silencing a route is the
+				   commoner act and it was there first; the fittings go back to
+				   being marks until there is room, and shrink visibly, so the
+				   change is something seen rather than discovered by pressing. */
+				const holdable = !line.wired && span >= controlRow(cell) * 3.2;
+				const fitting = holdable ? grip : jack;
+
 				const live = touched === line.from || touched === line.to;
 				const flip = line.control && onFlip
 					? (event) => { event.preventDefault(); onFlip(line); }
@@ -2094,6 +2111,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 				return html`
 					<g key=${`${line.from}>${line.to}`}
 						class=${`join ${line.wired ? "wired" : "patched"} `
+							+ `${holdable ? "holdable " : ""}`
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
 						data-join=${`${line.from}>${line.to}`}>
@@ -2119,12 +2137,31 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 								     destination is a socket, open. Something
 								     plugged *into* something reads as a
 								     direction without a symbol to learn. */ ""}
-								<circle class="collar" cx=${line.a.x} cy=${line.a.y} r=${jack} />
+								${/* **A fitting you can take hold of is a target,
+								     so it is a row across** — #2107, and the
+								     reason a wired line's lugs stay small is
+								     that they are marks and cannot be moved.
+								     Size follows touchability, which is the
+								     rule saying the same thing from the other
+								     side. */ ""}
+								<circle class="collar" cx=${line.a.x} cy=${line.a.y}
+									r=${fitting}
+									onPointerDown=${holdable
+										? (event) => patchable.onTake(line, "plug", event) : null}
+									onPointerMove=${holdable ? patchable.onMove : null}
+									onPointerUp=${holdable ? patchable.onEnd : null}
+									onPointerCancel=${holdable ? patchable.onEnd : null} />
 								<circle class="plug" cx=${line.a.x} cy=${line.a.y}
-									r=${jack * 0.46} />
-								<circle class="socket" cx=${line.b.x} cy=${line.b.y} r=${jack} />
+									r=${fitting * 0.4} />
+								<circle class="socket" cx=${line.b.x} cy=${line.b.y}
+									r=${fitting}
+									onPointerDown=${holdable
+										? (event) => patchable.onTake(line, "socket", event) : null}
+									onPointerMove=${holdable ? patchable.onMove : null}
+									onPointerUp=${holdable ? patchable.onEnd : null}
+									onPointerCancel=${holdable ? patchable.onEnd : null} />
 								<circle class="hole" cx=${line.b.x} cy=${line.b.y}
-									r=${jack * 0.34} />`}
+									r=${fitting * 0.3} />`}
 						${/* The switch, and it looks like one: a disc riding on the
 						     cable. Filled while the link is sounding, hollow when it
 						     is not — the same sentence every other toggle on this
@@ -3588,14 +3625,16 @@ function Panel () {
 			layers.map((layer) => [layer.id, layer.kind === "pattern" ? "pattern" : "generator"]));
 	};
 
+	/* An id has to survive a round trip and be unique among its neighbours. The
+	   clock alone is not enough: two taps inside a millisecond are a stutter
+	   rather than an impossibility on a surface meant to be played. */
+	const freshId = () => `l${Date.now().toString(36)}`
+		+ `${Math.floor(Math.random() * 46656).toString(36)}`;
+
 	const addLayer = (stack, layer) => {
 		const held = ((state[appName] || {})[stack] || {}).layers || [];
 
-		request(`${stack}/layers`, [...held, {
-			id: `l${Date.now().toString(36)}`
-				+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-			...layer,
-		}]);
+		request(`${stack}/layers`, [...held, { id: freshId(), ...layer }]);
 	};
 
 	/* --- Patching one block into another by dragging a cable ---------------
@@ -3640,6 +3679,39 @@ function Panel () {
 		setPatching({ from, a: at, at });
 	};
 
+	/* **Taking hold of a cable that is already patched.**
+	 *
+	 * Simon: "I might move a cable between targets — re-route my generator from
+	 * one part to another ... I must be able to select an individual patch point
+	 * to disconnect or move it."
+	 *
+	 * Either end comes away. The one still plugged in stays where it is and the
+	 * other follows the finger, which is what happens when you pull a lead out
+	 * of a rack — and letting go over nothing leaves it unpatched, because that
+	 * is also what happens.
+	 *
+	 * The layer it came from is remembered and taken away on the release, so a
+	 * cable moved is one route rather than two: the old one never survives to
+	 * be silently doubled. */
+	const beginRepatch = (line, end, event) => {
+		event.preventDefault();
+		event.currentTarget.setPointerCapture(event.pointerId);
+
+		const at = wrapPoint(event);
+		const held = { pointer: event.pointerId, was: { control: line.control, layer: line.layer } };
+
+		if (end === "socket") {
+			/* The source stays plugged in; the destination is in the hand. */
+			patch.current = { ...held, from: line.from, end };
+			setPatching({ from: line.from, a: line.a, at, end });
+			return;
+		}
+
+		/* The destination stays; what feeds it is being chosen again. */
+		patch.current = { ...held, into: line.control, end };
+		setPatching({ from: null, a: line.b, at, end });
+	};
+
 	const movePatch = (event) => {
 		if (!patch.current || patch.current.pointer !== event.pointerId) return;
 
@@ -3656,21 +3728,61 @@ function Panel () {
 		patch.current = null;
 		setPatching(null);
 
-		/* Where the finger let go, whatever is under it. The pointer is
-		   captured by the outlet, so the events all arrive here and the only
-		   way to know what was landed on is to ask the document. */
 		const under = document.elementFromPoint(event.clientX, event.clientY);
-		const block = under && under.closest("[data-takes]");
-		const stack = block && block.getAttribute("data-takes");
 
-		if (!stack || stack === held.from) return;
+		/* Where the finger let go. The fitting has the pointer captured, so
+		   every event arrives here and the only way to know what was landed on
+		   is to ask the document. */
+		const landed = held.end === "plug"
+			? (() => {
+				const block = under && under.closest("[data-part]");
+				const source = block && block.getAttribute("data-part");
 
-		/* Refused rather than sent: a stack says which sources it will take,
-		   and a cable dropped somewhere that cannot hold it should come away
-		   in the hand rather than produce a `nack` a moment later. */
-		if (!(controls[stack].sources || []).includes(held.from)) return;
+				/* Choosing what feeds a pattern again: whatever is under the
+				   finger has to be something that pattern's stack takes from. */
+				return source && (controls[held.into].sources || []).includes(source)
+					? { stack: held.into, source }
+					: null;
+			})()
+			: (() => {
+				const block = under && under.closest("[data-takes]");
+				const stack = block && block.getAttribute("data-takes");
 
-		addLayer(stack, { kind: "pattern", source: held.from });
+				/* Refused rather than sent: a stack says which sources it will
+				   take, and a cable dropped somewhere that cannot hold it
+				   should come away in the hand rather than produce a `nack` a
+				   moment later. */
+				return stack && (controls[stack].sources || []).includes(held.from)
+					? { stack, source: held.from }
+					: null;
+			})();
+
+		/* **One request, not two.** Taking the old route away and making the
+		   new one were separate asks, and the second read the layers back
+		   before the first had been confirmed — so putting a cable into the
+		   socket it came out of left two routes where there should be one.
+		   Computed together and sent once, a move is a move. */
+		if (held.was && landed && landed.stack === held.was.control) {
+			const layers = ((state[appName] || {})[held.was.control] || {}).layers || [];
+
+			request(`${held.was.control}/layers`, [
+				...layers.filter((layer) => layer.id !== held.was.layer),
+				{ id: freshId(), kind: "pattern", source: landed.source },
+			]);
+
+			return;
+		}
+
+		/* Different stacks, or nowhere at all: the old route goes whatever
+		   happens, because a cable pulled out and let go is unpatched. */
+		if (held.was) {
+			const layers = ((state[appName] || {})[held.was.control] || {}).layers || [];
+
+			request(`${held.was.control}/layers`,
+				layers.filter((layer) => layer.id !== held.was.layer));
+		}
+
+		if (landed) addLayer(landed.stack, { kind: "pattern", source: landed.source });
 	};
 
 	/* Where every block on this page has ended up, sent to the app that owns
@@ -3829,6 +3941,7 @@ function Panel () {
 			     does and nothing else in the page will tell it. */ ""}
 			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
 				patching=${patching} onFlip=${flip}
+				patchable=${{ onTake: beginRepatch, onMove: movePatch, onEnd: endPatch }}
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
 

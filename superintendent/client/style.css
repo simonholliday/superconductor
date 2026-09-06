@@ -2130,12 +2130,24 @@ html, body {
 	cursor: pointer;
 }
 
-/* **Nothing else on this overlay takes a pointer.** It sits above every block,
+/* **Almost nothing on this overlay takes a pointer.** It sits above every block,
    and the grid underneath is the most tapped surface on the panel — so a cable
-   crossing a pattern must never cost a tap. The switch is the one exception and
-   it is deliberately the whole of it. */
+   crossing a pattern must never cost a tap.
+ *
+ * Three exceptions and they are all controls: the switch, and a patch cable's
+ * two fittings, which are taken hold of to unplug or re-route it. A wired
+ * line's lugs are not among them, because a hard-wired line cannot be moved —
+ * which is why they stay the size of a mark while these are a row across. */
 .joins .join * { pointer-events: none; }
-.joins .join .node { pointer-events: all; }
+.joins .join .node,
+.joins .join.holdable .collar,
+.joins .join.holdable .socket { pointer-events: all; }
+
+.join.holdable .collar,
+.join.holdable .socket { cursor: grab; touch-action: none; }
+
+.join.holdable .collar:active,
+.join.holdable .socket:active { cursor: grabbing; }
 
 /* Unplugged in effect: still connected, carrying nothing. Thin and dashed,
    which is what a dead lead looks like from across a room.

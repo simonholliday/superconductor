@@ -3237,17 +3237,32 @@ def test_a_silenced_link_is_dashed_and_hollow (
 	assert drawn["node"]["stroke"] != "none", f"a silenced switch lost its edge: {drawn}"
 
 
-def test_only_the_head_of_an_arrow_takes_a_tap (
+def test_only_a_control_on_the_overlay_takes_a_tap (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The overlay sits above the blocks, so anything live on it takes a pointer
 	from the grid underneath — and the grid is the most tapped surface there is.
 
-	So the triangle is the whole of the exception: no invisible circle around
-	it, and the line and the anchors stay inert.
+	**Three things are live and every one of them is a control**: a route's
+	switch, and a patch cable's two fittings, which are taken hold of to unplug
+	it or re-route it.  The cables themselves are inert, and so are a hard-wired
+	line's lugs — a generator cannot be moved, which is exactly why its lugs stay
+	the size of a mark while a patch cable's fittings are a row across.
 	"""
 
 	_open_the_stack(panel)
-	_route(panel, fake_app)
+
+	# One stack holding both kinds, because that is what this compares — and a
+	# `_route` after `_two_generators` would replace the list rather than add to
+	# it, leaving no wired line to check.
+	fake_app.confirm("stack/layers", [
+		{"id": "made", "generator": "euclidean", "index": 1, "bypassed": False,
+		 "params": {"pitch": "kick"}},
+		{"id": "sent", "kind": "pattern", "source": "second", "index": 2,
+		 "bypassed": False, "params": {}},
+	], by="app")
+
+	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
+	_joins_settled(panel)
 
 	inert = panel.evaluate("""() => {
 		const parts = (selector) => [...document.querySelectorAll(selector)]
@@ -3255,21 +3270,185 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 
 		return {
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
-			lines: parts(".join .cable"),
-			anchors: parts(".join .plug, .join .socket, .join .collar, .join .hole"),
+			cables: parts(".join .cable"),
+			lugs: parts(".join .lug"),
+			fittings: parts(".join.patched .collar, .join.patched .socket"),
+			inners: parts(".join .plug, .join .hole"),
 			switches: parts(".join.switchable .node"),
-			marks: parts(".join .cable"),
 		};
 	}""")
 
 	assert inert["overlay"] == "none"
-	assert set(inert["lines"]) == {"none"}, f"a cable takes taps: {inert}"
-	assert set(inert["anchors"]) == {"none"}, f"a fitting takes taps: {inert}"
+	assert set(inert["cables"]) == {"none"}, f"a cable takes taps: {inert}"
+	assert set(inert["lugs"]) == {"none"}, f"a wired line's lug takes taps: {inert}"
+	assert set(inert["inners"]) == {"none"}, f"a fitting's mark takes taps: {inert}"
+
 	assert set(inert["switches"]) == {"all"}, f"a switch takes no taps: {inert}"
 
-	# A cable with nothing to switch takes nothing: a mark must not cost the
-	# grid underneath a tap.
-	assert set(inert["marks"]) <= {"none"}, f"a mark takes taps: {inert}"
+	# **And a patch cable's fittings are targets only where there is room for
+	# them.** Three row-sized things need a cable long enough to hold them; two
+	# blocks side by side make a lead about forty pixels long, and the switch
+	# and both fittings landed on the same spot. #2107 decides it — a thing that
+	# cannot be given a row must not be touchable — so what is asserted is that
+	# the two agree, whichever way round they are on this page.
+	room = panel.evaluate("""() => {
+		const row = parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue("--row"));
+
+		return [...document.querySelectorAll(".join.patched")].map((one) => {
+			const fitting = one.querySelector(".socket");
+			const box = fitting.getBoundingClientRect();
+
+			return {
+				holdable: one.classList.contains("holdable"),
+				live: getComputedStyle(fitting).pointerEvents === "all",
+				across: box.width,
+				row,
+			};
+		});
+	}""")
+
+	assert room, "no patch cable to measure"
+
+	for one in room:
+		assert one["holdable"] == one["live"], (
+			f"a fitting says one thing and behaves as another: {one}")
+
+		if one["holdable"]:
+			assert one["across"] >= one["row"] - 0.5, (
+				f"a fitting that can be held is {one['across']}px "
+				f"against a {one['row']}px row")
+		else:
+			assert one["across"] < one["row"], (
+				f"a fitting that cannot be held is drawn as a target: {one}")
+
+
+def _apart (panel: typing.Any, part: str, dx: float, dy: float) -> None:
+	"""Move a block, so a cable between two of them is long enough to hold its
+	fittings.
+
+	Three row-sized targets need room: two blocks side by side make a lead about
+	forty pixels long, and a switch and two fittings will not fit on one.  That
+	is #2107 deciding it — a thing that cannot be given a row must not be
+	touchable — so the fittings are only targets once there is somewhere to put
+	them.
+	"""
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+	title = panel.locator(f'.part[data-part="{part}"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 20 + dx, title["y"] + 5 + dy, steps=10)
+	panel.mouse.up()
+
+	panel.locator(".bar .latch").click()
+	panel.wait_for_selector(".grid-wrap.unlocked", state="detached", timeout=5_000)
+	_joins_settled(panel)
+
+
+def _pull_onto (panel: typing.Any, selector: str, target: str) -> None:
+	"""Take hold of a cable's fitting and drop it on something."""
+
+	panel.locator(selector).scroll_into_view_if_needed()
+
+	box = panel.locator(selector).bounding_box()
+	onto = panel.locator(target).bounding_box()
+
+	panel.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(onto["x"] + onto["width"] / 2, onto["y"] + onto["height"] / 2, steps=12)
+	panel.mouse.up()
+
+
+def _pull (panel: typing.Any, selector: str, dx: float, dy: float) -> None:
+	"""Take hold of a cable's fitting and drag it somewhere."""
+
+	panel.locator(selector).scroll_into_view_if_needed()
+
+	box = panel.locator(selector).bounding_box()
+	x = box["x"] + box["width"] / 2
+	y = box["y"] + box["height"] / 2
+
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+	panel.mouse.move(x + dx, y + dy, steps=12)
+	panel.mouse.up()
+
+
+def test_a_cable_pulled_out_and_let_go_is_unpatched (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: "I must be able to select an individual patch point to disconnect
+	or move it."
+
+	Letting go over nothing leaves it unpatched, because that is what happens
+	when you pull a lead out of a rack and do not put it anywhere.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_apart(panel, "grid", dx=0, dy=420)
+
+	# Onto the header, which is not a block and never takes a cable. Dropped
+	# far below instead, the move is clamped to the viewport and can land back
+	# on something — the trap that has cost a diagnosis twice already.
+	_pull_onto(panel, '[data-join="second>grid"] .socket', ".bar")
+
+	asked = fake_app.await_set("stack/layers")
+
+	assert [layer for layer in asked["v"] if layer.get("kind") == "pattern"] == [], \
+		f"the route survived being unplugged: {asked['v']}"
+
+
+def test_a_cable_taken_by_its_source_end_can_also_be_unpatched (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Either end comes away, which is Simon's "I might want to re-patch (move)
+	the *source* end as well as the target end" — and the same gesture with
+	nowhere to land is a disconnection."""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_apart(panel, "grid", dx=0, dy=420)
+
+	_pull_onto(panel, '[data-join="second>grid"] .collar', ".bar")
+
+	asked = fake_app.await_set("stack/layers")
+
+	assert [layer for layer in asked["v"] if layer.get("kind") == "pattern"] == [], \
+		f"the route survived being unplugged: {asked['v']}"
+
+
+def test_a_cable_put_back_where_it_was_is_still_one_cable (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The property that makes a move a move rather than a copy.
+
+	Taking a lead out and plugging it into the same socket must leave one route,
+	not two — so the removal happens before anything is added, and a re-route to
+	where it already was cannot double it silently.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_apart(panel, "grid", dx=0, dy=420)
+
+	box = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+	fitting = panel.locator('[data-join="second>grid"] .socket').bounding_box()
+
+	panel.mouse.move(fitting["x"] + fitting["width"] / 2, fitting["y"] + fitting["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, steps=12)
+	panel.mouse.up()
+
+	fake_app.await_set("stack/layers")
+	panel.wait_for_timeout(400)
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	routes = [layer for layer in asked[-1]["v"] if layer.get("kind") == "pattern"]
+
+	assert len(routes) == 1, f"putting a cable back left {len(routes)} routes: {asked[-1]['v']}"
+	assert routes[0]["source"] == "second"
 
 
 def test_a_route_is_unmade_where_it_was_made (
