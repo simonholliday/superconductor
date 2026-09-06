@@ -104,6 +104,17 @@
 	   part of the surface; this reads as a state. */
 	--edge-strong: light-dark(#7c8794, #5f6877);
 
+	/* A third ink, quieter than `--ink-quiet`: what is printed beside a reading
+	   rather than read as one. */
+	--ink-faint: light-dark(#7b828d, #6b7383);
+
+	/* The recess a display sits in. **Near-black in both themes on purpose** —
+	   a lit readout is dark whatever the chassis around it, which is why an
+	   808's display area is black against cream. Said as a pair like everything
+	   else so the two are declared rather than assumed equal (#2112). */
+	--sunk: light-dark(#14161a, #0b0d10);
+	--sunk-shadow: light-dark(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.6));
+
 	/* Text drawn *on* a filled control rather than beside one. Two of them,
 	   because the two fills are a long way apart in lightness and neither can
 	   carry the other's ink. */
@@ -990,7 +1001,7 @@ html, body {
 /* The transport. Sized for a finger with no keyboard: nothing here is smaller
    than the grid's own cells, and the silence button is deliberately the
    largest thing on the page, because it is the one control wanted in a hurry. */
-.transport { display: flex; align-items: center; gap: 0.9rem; }
+.transport { display: flex; align-items: center; gap: 0.7rem; }
 
 .transport button {
 	background: var(--panel);
@@ -1000,36 +1011,85 @@ html, body {
 
 .transport button:disabled { opacity: 0.35; }
 
-.transport .hold {
-	min-width: 8.5rem;
-	font-weight: 700;
-	letter-spacing: 0.04em;
+/* Play and pause, as one framed pair with a divider — the same shape as every
+   other two-state control here, and the shape a transport has had since tape.
+ *
+ * **There is no stop.** #2054's pause deliberately *holds* the clock rather
+ * than stopping it, and a stop that returns to bar one is a different operation
+ * the app does not declare. The rule since #2046 is that the panel loses a
+ * control rather than gaining a broken one, so it is not drawn — not drawn
+ * dimmed, which is furniture. */
+.tkeys {
+	display: inline-flex;
+	align-items: stretch;
+	overflow: hidden;
+	border: 1px solid var(--edge-strong);
+	border-radius: 8px;
+	background: var(--panel);
 }
 
-/* Held is a state, not an action, so it is filled rather than outlined — and
-   amber rather than red, because a held transport is not a fault. */
-.transport .hold.engaged {
-	background: var(--on);
-	border-color: var(--on-edge);
-	color: var(--on-ink);
-}
-
-.tempo { display: flex; align-items: center; gap: 0.35rem; }
-
-.tempo .reading {
-	min-width: 5.5rem;
-	text-align: center;
-	font-size: var(--type-display);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-}
-
-.tempo .reading i {
-	font-style: normal;
-	font-size: var(--type-chrome-quiet);
+.transport .tkey {
+	width: 3.2rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 	color: var(--ink-quiet);
-	margin-left: 0.3rem;
+	opacity: 0.6;
 }
+
+.transport .tkey + .tkey { border-left: 1px solid var(--edge); }
+
+/* Engaged is a state, not an action, so it is filled — and amber rather than
+   red, because a held transport is not a fault. */
+.transport .tkey.engaged {
+	background: var(--on);
+	color: var(--on-ink);
+	opacity: 1;
+}
+
+.transport .tkey .icon { width: 1.5em; height: 1.5em; }
+
+/* **The counter is the largest thing in the transport**, because on every
+ * machine these users own it is.
+ *
+ * An LCD without pretending to be one: a recessed ground, tabular figures and
+ * the accent, with the separators dimmed so the numbers group the way a
+ * hardware counter's do. No seven-segment face — segments are a photograph of a
+ * 1982 display, and they cost legibility at the size this actually needs, which
+ * is the line between familiar and kitsch. */
+.lcd {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.15rem;
+	padding: 0.3rem 0.75rem;
+	border: 1px solid var(--edge-strong);
+	border-radius: 6px;
+	background: var(--sunk);
+	box-shadow: inset 0 2px 5px var(--sunk-shadow);
+}
+
+.lcd-value {
+	font-family: var(--face-figures);
+	font-variant-numeric: tabular-nums;
+	font-size: var(--type-display);
+	font-weight: 500;
+	line-height: 1;
+	color: var(--on);
+	letter-spacing: 0.02em;
+}
+
+.lcd.small .lcd-value { font-size: var(--type-chrome); }
+
+.lcd-label {
+	font-family: var(--face-panel);
+	text-transform: uppercase;
+	letter-spacing: 0.13em;
+	font-size: var(--type-chrome-quiet);
+	color: var(--ink-faint);
+}
+
+.tempo { display: flex; align-items: center; gap: 0.3rem; }
 
 /* Choosing the size.
  *
@@ -1122,16 +1182,10 @@ html, body {
 /* Except when the page is behind the service, when it becomes the most useful
    thing on the bar and is sized to be tapped rather than read. */
 .bar .reload {
-	min-height: 44px;
-	padding: 0 0.9rem;
-	border-radius: 8px;
-	border: 1px solid var(--warn);
+	border-color: var(--warn);
 	background: transparent;
 	color: var(--warn);
-	font: inherit;
-	font-size: var(--type-chrome);
 	white-space: nowrap;
-	touch-action: none;
 }
 
 /* Moving between pages. Drawn like the grid's own cells, because a hand that
@@ -1181,18 +1235,22 @@ html, body {
  *
  * Unlocked, a person moves blocks and plays at the same time, and may leave it
  * that way for good. */
+/* **Two surface rules in disguise, and this was one of them.** It declared a
+   height, a radius, a border, a type size, its own letter-spacing and `font:
+   inherit` — which is every single thing the chrome surface already says, plus
+   one it does not: resetting the font took the panel face off with it, so
+   "LAYOUT" was the one word on the bar still set in the body face. Simon saw it
+   immediately, which is what a face is for.
+
+   The static test missed it because it finds rules by the word "button" in the
+   selector, and a purpose class does not contain one. The measuring test missed
+   it because it compared sizes and heights, and the size and height here were
+   correct — it was only the family that was wrong. Both now look at the family
+   as well. A purpose says colour and width; the surface says the rest. */
 .bar .latch {
-	min-height: 44px;
-	padding: 0 0.9rem;
-	border-radius: 8px;
-	border: 1px solid var(--edge);
 	background: var(--panel);
 	color: var(--ink-quiet);
-	font: inherit;
-	font-size: var(--type-chrome);
-	letter-spacing: 0.04em;
 	white-space: nowrap;
-	touch-action: none;
 }
 
 .bar .latch.open {

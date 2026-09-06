@@ -221,6 +221,20 @@ class FakeApp:
 		self.send(superintendent.protocol.changed(
 			"subsequence", path, value, self.version, by=by, client=client, seq=seq))
 
+	def beat (self, beat: int, interval: float = 0.5,
+	          steps: int = 8, beats: int = 2) -> None:
+		"""Sound one beat, the way a running composition does.
+
+		An event and never a change: nothing keeps it and nothing applies it to
+		any control's state (#1965).  It is what the playhead and the transport
+		counter are both driven by, and the only way to test either without a
+		sequencer actually running.
+		"""
+
+		self.send(superintendent.protocol.event(
+			"subsequence", "beat", beat=beat, ts=0.0, interval=interval,
+			steps=steps, beats=beats))
+
 	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
 		"""Refuse a request, the way an app that cannot do it does."""
 

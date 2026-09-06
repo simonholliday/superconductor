@@ -84,15 +84,68 @@ def test_a_transport_field_moves_the_transport_not_the_grid (
 	only findable by hand, which is what this file exists to change.
 	"""
 
-	assert panel.locator(".transport .hold").inner_text().strip() == "PAUSE"
+	# Two keys rather than one word, as a transport has had since tape: which
+	# one is engaged is the state, and pressing the engaged one does nothing.
+	def engaged () -> str:
+		return panel.eval_on_selector(
+			".transport .tkeys",
+			"""one => {
+				const down = one.querySelector(".tkey.engaged");
+
+				return down ? down.getAttribute("title").split(" ")[0] : "neither";
+			}""")
+
+	assert engaged() == "play"
 
 	fake_app.confirm("transport/paused", True, by="app")
-
-	playwright_api.expect(panel.locator(".transport .hold")).to_have_text("PLAY", timeout=5_000)
+	panel.wait_for_selector('.transport .tkey.engaged[title^="pause"]', timeout=5_000)
 
 	fake_app.confirm("transport/paused", False, by="app")
+	panel.wait_for_selector('.transport .tkey.engaged[title^="play"]', timeout=5_000)
 
-	playwright_api.expect(panel.locator(".transport .hold")).to_have_text("PAUSE", timeout=5_000)
+
+def test_the_counter_says_which_bar_beat_and_step (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The largest thing in the transport, because on every machine these users
+	own it is: an 808, an MPC, a tape remote, Logic's bar.  Ours had a big word
+	reading PAUSE and no position at all, which is that arrangement inverted.
+
+	``bar · beat · step`` — Ableton's bar.beat.sixteenth, said in the units this
+	pattern actually has, and all of it arithmetic on what the beat event
+	already carries.  The fixture's grid is eight steps over two beats, so a
+	beat is four steps and a bar is two beats.
+	"""
+
+	fake_app.confirm("transport/paused", True, by="app")
+	panel.wait_for_selector('.transport .tkey.engaged[title^="pause"]', timeout=5_000)
+
+	# Held, so the reading is the beat itself rather than an extrapolation —
+	# which is what makes this measurable at all.
+	fake_app.beat(0)
+	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("001·1·1", timeout=5_000)
+
+	fake_app.beat(1)
+	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("001·2·1", timeout=5_000)
+
+	# Two beats to a bar in this fixture, so beat 2 is where the second begins.
+	fake_app.beat(2)
+	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("002·1·1", timeout=5_000)
+
+	fake_app.beat(9)
+	playwright_api.expect(panel.locator(".lcd:not(.small) .lcd-value")).to_have_text("005·2·1", timeout=5_000)
+
+
+def test_there_is_no_stop_key_because_the_app_declares_no_stop (
+	panel: typing.Any) -> None:
+	"""#2054's pause holds the clock rather than stopping it, and a stop that
+	returns to bar one is a different operation this app does not offer.
+
+	The rule since #2046 is that the panel loses a control rather than gaining a
+	broken one — so it is not drawn.  Not drawn dimmed, which is furniture: a
+	key that can never be pressed is a key that has to be explained.
+	"""
+
+	assert panel.locator(".transport .tkey").count() == 2, "the transport has a third key"
 
 
 def test_the_tempo_reading_follows_the_app (panel: typing.Any, fake_app: conftest.FakeApp) -> None:
@@ -100,7 +153,8 @@ def test_the_tempo_reading_follows_the_app (panel: typing.Any, fake_app: conftes
 
 	fake_app.confirm("transport/bpm", 137.5, by="app")
 
-	playwright_api.expect(panel.locator(".tempo .reading")).to_contain_text("137.5", timeout=5_000)
+	playwright_api.expect(
+		panel.locator(".lcd.small .lcd-value")).to_contain_text("137.5", timeout=5_000)
 
 
 def test_a_refused_request_says_why_and_gives_the_cell_back (
@@ -3447,10 +3501,19 @@ def _button_sizes (panel: typing.Any) -> dict[str, dict[str, set]]:
 			const at = surface(one);
 			const shape = getComputedStyle(one);
 
-			seen[at] = seen[at] || { sizes: [], floors: [], who: [] };
+			seen[at] = seen[at] || { sizes: [], floors: [], faces: [], who: [] };
 			seen[at].sizes.push(shape.fontSize);
 			seen[at].floors.push(shape.minHeight);
-			seen[at].who.push(one.className + "|" + shape.fontSize + "|" + shape.minHeight);
+
+			/* **The family too.** A purpose that resets the font takes the panel
+			   face off with it, and both halves of this test were blind to that:
+			   the size and the height stayed correct while the lettering did
+			   not. "LAYOUT" was the one word on the bar in the body face and
+			   Simon saw it at a glance, which is exactly what a face is for. */
+			seen[at].faces.push(shape.fontFamily);
+
+			seen[at].who.push(one.className + "|" + shape.fontSize
+				+ "|" + shape.minHeight + "|" + shape.fontFamily);
 		}
 
 		return seen;
@@ -3486,6 +3549,8 @@ def test_a_control_takes_its_size_from_the_surface_it_sits_on (
 			f"{at} draws buttons at {sorted(set(seen['sizes']))}: {sorted(set(seen['who']))}"
 		assert len(set(seen["floors"])) == 1, \
 			f"{at} floors buttons at {sorted(set(seen['floors']))}: {sorted(set(seen['who']))}"
+		assert len(set(seen["faces"])) == 1, \
+			f"{at} letters buttons in {sorted(set(seen['faces']))}: {sorted(set(seen['who']))}"
 
 
 def test_a_control_on_the_lattice_is_a_cell_and_one_in_chrome_is_a_finger (

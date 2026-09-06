@@ -2229,7 +2229,7 @@ function Playhead ({ anchor, steps, beats, paused }) {
  * hold — following an external clock, or in an Ableton Link session. The
  * refusal comes back as a nack and the button springs back with the reason,
  * because no confirming event will ever arrive. */
-function Transport ({ control, name, fields, up, onSet }) {
+function Transport ({ control, name, fields, up, anchor, onSet }) {
 	const paused = fields.paused === true;
 	const bpm = fields.bpm;
 	const [low, high] = control.tempo_range || [40, 240];
@@ -2240,19 +2240,98 @@ function Transport ({ control, name, fields, up, onSet }) {
 		onSet(`${name}/bpm`, Math.min(high, Math.max(low, Math.round((bpm + by) * 10) / 10)));
 	};
 
+	/* **The counter is the largest thing here**, because on every machine these
+	 * users own it is: an 808, an MPC, a tape remote, Logic's bar. Ours had a
+	 * big word reading PAUSE and no position at all, which is the arrangement
+	 * the other way round.
+	 *
+	 * `bar · beat · step`, which is Ableton's `bar.beat.sixteenth` said in the
+	 * units this pattern actually has. **Elapsed time is deliberately absent**:
+	 * it needs a position in seconds the transport does not declare, and a
+	 * panel counting locally instead is wrong after the first pause or tempo
+	 * change. Simon chose to leave the neighbour alone, so the counter says
+	 * only what can be known. A stop key is absent for the same reason — the app
+	 * declares no stop, and the rule since #2046 is to lose a control rather
+	 * than draw a broken one. */
+	const [reading, setReading] = useState(null);
+	const from = useRef(anchor);
+
+	useEffect(() => { from.current = anchor; }, [anchor]);
+
+	useEffect(() => {
+		let frame;
+
+		const tick = () => {
+			const held = from.current;
+
+			if (held && held.interval && held.beats) {
+				const perBar = Math.max(1, held.beats);
+				const perBeat = Math.max(1, Math.round((held.steps || perBar) / perBar));
+
+				/* Held where it stopped while the clock is held: a paused
+				   transport sends no beats, so extrapolating would run the
+				   counter on with nothing to correct it. */
+				const on = paused
+					? held.beat
+					: held.beat + Math.min((performance.now() - held.at) / 1000 / held.interval, 1);
+
+				const bar = Math.floor(on / perBar) + 1;
+				const beat = Math.floor(on % perBar) + 1;
+				const step = Math.floor((on % 1) * perBeat) + 1;
+
+				const said = `${String(bar).padStart(3, "0")}\u00b7${beat}\u00b7${step}`;
+
+				setReading((was) => (was === said ? was : said));
+			}
+
+			frame = requestAnimationFrame(tick);
+		};
+
+		tick();
+
+		return () => cancelAnimationFrame(frame);
+	}, [paused]);
+
 	return html`
 		<div class="transport">
 			${canPause && html`
-				<button
-					class=${`hold ${paused ? "engaged" : ""}`}
-					disabled=${!up}
-					onPointerDown=${(event) => { event.preventDefault(); onSet(`${name}/paused`, !paused); }}
-				>${paused ? "PLAY" : "PAUSE"}</button>`}
+				<div class="tkeys" role="group" aria-label="transport">
+					<button
+						class=${`tkey ${paused ? "" : "engaged"}`}
+						disabled=${!up}
+						aria-pressed=${paused ? "false" : "true"}
+						title="play"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							if (paused) onSet(`${name}/paused`, false);
+						}}
+					><${Icon} of="play" filled /></button>
+					<button
+						class=${`tkey ${paused ? "engaged" : ""}`}
+						disabled=${!up}
+						aria-pressed=${paused ? "true" : "false"}
+						title="pause — the clock is held, not stopped"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							if (!paused) onSet(`${name}/paused`, true);
+						}}
+					><${Icon} of="pause" filled /></button>
+				</div>`}
+
+			<div class="lcd">
+				<span class="lcd-value">${reading || "\u2014"}</span>
+				<span class="lcd-label">bar · beat · step</span>
+			</div>
+
+			<div class="lcd small">
+				<span class="lcd-value">
+					${typeof bpm === "number" ? bpm.toFixed(bpm % 1 ? 1 : 0) : "\u2014"}</span>
+				<span class="lcd-label">tempo · bpm</span>
+			</div>
 
 			<div class="tempo">
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(-5); }}>−5</button>
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(-1); }}>−1</button>
-				<span class="reading">${typeof bpm === "number" ? bpm.toFixed(bpm % 1 ? 1 : 0) : "—"}<i>BPM</i></span>
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(1); }}>+1</button>
 				<button disabled=${!up} onPointerDown=${(e) => { e.preventDefault(); nudge(5); }}>+5</button>
 			</div>
@@ -3008,7 +3087,14 @@ function Panel () {
 
 				case "event":
 					if (frame.name === "beat") {
-						setAnchor({ beat: frame.beat, at: performance.now(), interval: frame.interval });
+						setAnchor({
+							beat: frame.beat, at: performance.now(), interval: frame.interval,
+							/* Carried so the counter can say which bar and which
+							   step of it, which is arithmetic on what the app
+							   already declares rather than a fifth number that
+							   could disagree with the other four. */
+							steps: frame.steps, beats: frame.beats,
+						});
 					}
 
 					/* What the algorithms put on a pattern this cycle. Held apart
@@ -3514,7 +3600,7 @@ function Panel () {
 		<div class="bar">
 			${transportName && html`
 				<${Transport} control=${controls[transportName]} name=${transportName}
-					fields=${transportFields} up=${up} onSet=${request} />`}
+					fields=${transportFields} up=${up} anchor=${anchor} onSet=${request} />`}
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<button
 				class=${`latch ${locked ? "" : "open"}`}
