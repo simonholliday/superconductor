@@ -14,7 +14,7 @@ import json
 import typing
 
 
-CONTRACT_VERSION = "1.11.0"
+CONTRACT_VERSION = "1.12.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -71,6 +71,23 @@ they are and stop being heard.  What "off" does is the app's business — a grid
 that drives a pattern mutes that pattern, a grid that only feeds routes stops
 contributing — and neither the service nor the panel interprets it.  Absent means
 on, which is what every grid was before there was a switch.
+
+1.12.0 lets a ``note_grid`` declare ``divisions``: how many addressable
+positions make up one drawn cell.  Absent means one, which is what every grid
+was before there was a number — a position is a step, and nothing changes.
+A composition that wants to place a note between two steps says so here, and
+then a note's position and its length are both counted in those finer
+positions rather than in steps.
+
+**The unit belongs to the composition, not to this package.**  ``composition
+.data`` is the app's own dict, read by its own pattern builder, so a panel that
+re-keyed it to a resolution of its choosing would be dictating to the app it
+serves.  Instead the app names the resolution it keeps and the panel offers
+what that can hold: a grid left at one division snaps to whole steps because
+that is the only place it could store anything else.  A panel too old to read
+the field draws a step per position, which is wrong on a grid that declares
+more than one — so a service that does not know the field refuses the control
+rather than drawing it, as 1.8.0 does for the same reason.
 
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the

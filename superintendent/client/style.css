@@ -717,6 +717,44 @@ html, body {
 	to { opacity: 0; }
 }
 
+/* Zoomed out far enough that nothing can be aimed at, so the page stops
+   pretending otherwise.
+ *
+ * Simon asked for this: a top-down view of a whole composition, taken to get
+ * oriented before choosing what to work on next, and explicitly not one to
+ * make changes from. That last part is what makes it a mode rather than just a
+ * smaller size — a cell four pixels across is a coin toss, and a page that
+ * accepted taps at that size would be turning a look into an edit.
+ *
+ * So the grids stop taking them, and each pattern reads as the shape its notes
+ * make. The title bars keep the legibility floor they always had and never
+ * scaled, which is what lets a block still be identified — the whole point of
+ * looking. */
+.grid-wrap.overview .grid,
+.grid-wrap.overview .lane,
+.grid-wrap.overview .note-controls,
+.grid-wrap.overview .part-foot { pointer-events: none; }
+
+.grid-wrap.overview .note-controls,
+.grid-wrap.overview .part-foot { display: none; }
+
+/* The cell's own edge is most of its ink at this size, so a grid of empty cells
+   reads as solid and the notes in it disappear. Dropping the borders leaves the
+   pattern as the only thing with a colour, which is the thing being looked
+   for. */
+.grid-wrap.overview .cell {
+	border-color: transparent;
+	border-radius: 0;
+}
+
+.grid-wrap.overview .cell.downbeat { background: var(--panel); }
+.grid-wrap.overview .grid.notes .note { border-radius: 0; }
+.grid-wrap.overview .subs { display: none; }
+
+/* Nothing is being aimed at, so nothing announces that it could be. */
+.grid-wrap.overview .note.gripped::before,
+.grid-wrap.overview .note.gripped::after { display: none; }
+
 /* The app behind this grid has gone. The cells stay, because they are the last
    thing the sequencer actually held, but nothing here is live. */
 .grid-wrap.absent .part { opacity: 0.45; }
@@ -1025,6 +1063,80 @@ html, body {
 	background: var(--bad);
 	animation: fade-out 0.9s ease-out forwards;
 }
+
+/* The note this block's settings act on. An edge, because a selection is not a
+   value the sequencer holds — the note sounds exactly as it did — and colouring
+   its face would say the music had changed when only the panel's attention had. */
+.grid.notes .note.chosen {
+	outline: var(--mark-hair) solid var(--ring);
+	outline-offset: max(1px, calc(var(--cell) * 0.04));
+}
+
+/* Where a drag would put it. The face below goes on showing what the sequencer
+   holds, so this is a mark and not a face: same job as the ring, same colour,
+   and it is gone the moment the release is answered (#2046). */
+.grid.notes .note.asked {
+	background: none;
+	border: var(--mark-hair) dashed var(--ring);
+	z-index: 2;
+}
+
+/* A note long enough for its ends to be grabbed says so at both of them.
+   Marks, not targets: the target is the end of the bar itself, which the rule
+   above already gave a surface and an edge. They exist because an affordance
+   that appears at three cells and not at two has to be visible, or the rule is
+   something a person discovers by failing. */
+.grid.notes .note.gripped::before,
+.grid.notes .note.gripped::after {
+	content: "";
+	position: absolute;
+	top: 25%;
+	bottom: 25%;
+	width: var(--mark-hair);
+	background: var(--on-edge);
+	opacity: 0.7;
+}
+
+.grid.notes .note.gripped::before { left: var(--mark-grip); }
+.grid.notes .note.gripped::after { right: var(--mark-grip); }
+
+/* Where a gesture will land, when the snap is finer than a cell. Drawn only
+   while the marks can be resolved — the client decides that and draws nothing
+   otherwise, because a lattice too fine to read is a wash that hides the cell
+   edges that were doing the work. */
+.grid.notes .subs {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image: linear-gradient(
+		to right, var(--edge) 0 var(--mark-hair), transparent var(--mark-hair));
+	background-repeat: repeat-x;
+}
+
+/* A pitched pattern's own settings. Two rows that do not change height with
+   what is selected, because the block below one that grew and shrank would
+   move every time a note was touched. */
+.note-controls {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gap);
+	margin-top: var(--gap);
+}
+
+.note-row {
+	display: flex;
+	align-items: center;
+	gap: var(--gap);
+	min-height: var(--cell);
+}
+
+.note-row .row-label {
+	width: calc(var(--label));
+	flex: none;
+}
+
+.note-row .hint,
+.note-row.idle .row-label { color: var(--ink-quiet); }
 
 /* A note name is read as much as a drum voice is, and wants its figures to line
    up. Everything else about it is the one label rule. */

@@ -140,7 +140,23 @@ not become a different setting.
 """
 
 BASS_VELOCITY = 100
-BASS_LENGTH = 1
+
+BASS_DIVISIONS = int(subsequence.constants.MIDI_QUARTER_NOTE * STEP_DURATION)
+"""How many places a note may start within one step of the bass pattern.
+
+As many as the clock has, which is the finest this rig can play: the sequencer
+runs at 24 pulses to a beat and a step here is a sixteenth, so a step holds six
+of them.  Asking for more would offer a precision on the glass that no note
+could actually be played at.
+
+**This is the composition's number, not the package's** (#1465).  A grid that
+says nothing gets one position to a step and is the grid it always was; this
+one says six, and in exchange keeps its notes in sixths of a step and reads
+them with ``PatternBuilder.note`` rather than ``hit_steps``.
+"""
+
+BASS_LENGTH = BASS_DIVISIONS
+"""One step, counted in the positions above rather than in steps."""
 """What a note is when it is first placed: one step long, at a middling weight.
 
 Velocity reaches the Minitaur only through its two sensitivity parameters, which
@@ -238,16 +254,23 @@ def bass (p: typing.Any) -> None:
 	"""Play the pitched pattern the panel holds.
 
 	Unlike the drums, every note carries its own length and velocity, so each is
-	placed on its own rather than a row at a time.  A length is in steps and
-	``duration`` is in beats, which is what ``STEP_DURATION`` converts between.
+	placed on its own rather than a row at a time.
+
+	**Placed by beat rather than by step**, because this grid divides a step and
+	a step is the smallest thing ``hit_steps`` can address.  Both numbers a note
+	carries are counted in this pattern's own positions, and one position is
+	``STEP_DURATION / BASS_DIVISIONS`` beats — a twenty-fourth of a beat, which
+	is one pulse of the clock.
 	"""
 
+	beats_per_position = STEP_DURATION / BASS_DIVISIONS
+
 	for row, notes in composition.data["bass"].items():
-		for step, note in notes.items():
-			p.hit_steps(
-				row, [int(step)],
+		for at, note in notes.items():
+			p.note(
+				row, beat=int(at) * beats_per_position,
 				velocity=note.get("velocity", BASS_VELOCITY),
-				duration=note.get("length", BASS_LENGTH) * STEP_DURATION)
+				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
 
 def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
@@ -338,7 +361,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 			data_key="bass", name="bass", title="Minitaur — bass", mono=True,
-			pattern="bass",
+			pattern="bass", divisions=BASS_DIVISIONS,
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 			visible_rows=12),

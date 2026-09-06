@@ -378,6 +378,19 @@ class StepGrid (Control):
 		return False
 
 
+def _overlaps (at: int, span: int, other_at: int, other: dict[str, typing.Any]) -> bool:
+	"""Whether two notes sound at the same time.
+
+	Half-open on the right, so a note ending exactly where the next begins does
+	not count as overlapping it — that is a legato line, not a clash, and it is
+	the shape a person draws by filling consecutive steps.
+	"""
+
+	other_span = max(1, int(other.get("length", 1)))
+
+	return at < other_at + other_span and other_at < at + span
+
+
 class NoteGrid (Control):
 	"""A pitched pattern: one row per note, and a cell that is a note.
 
@@ -390,7 +403,18 @@ class NoteGrid (Control):
 	``mono`` is the composition's statement that the instrument sounds one note
 	at a time.  It is enforced here rather than left to the instrument, because
 	an instrument choosing between simultaneous notes by its own key-priority
-	setting would leave the glass showing notes that never sound.
+	setting would leave the glass showing notes that never sound.  Enforced by
+	**extent** and not by starting position: a note beginning part-way through
+	another is exactly the case the instrument would have to arbitrate (#2114).
+
+	``divisions`` is how many addressable positions make up one drawn cell, and
+	the composition is the one that says.  One — the default — means a position
+	is a step and this is the grid it always was.  More than one means the
+	composition keeps a finer dict and reads it with ``PatternBuilder.note``
+	rather than ``hit_steps``, because placing a note between two steps is
+	precisely what ``hit_steps`` cannot express.  **The unit is the
+	composition's**, since ``composition.data`` is its dict and its own builder
+	reads it (#1465).
 	"""
 
 	def __init__ (
@@ -405,6 +429,7 @@ class NoteGrid (Control):
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		pattern: str | None = None,
 		mono: bool = False,
+		divisions: int = 1,
 		default_length: int = 1,
 		default_velocity: int = 100,
 		visible_rows: int | None = None,
@@ -421,7 +446,14 @@ class NoteGrid (Control):
 		self.about = list(about)
 		self.pattern = pattern
 		self.mono = mono
+		self.divisions = divisions
 		self.default_length = default_length
+		"""How long a note is when it is placed, in this grid's own positions.
+
+		In positions rather than steps so that one number means one thing: a
+		composition dividing a step into six and wanting a note a step long
+		says six, and never has to know which unit a given field is counted in.
+		"""
 		self.default_velocity = default_velocity
 		self.visible_rows = visible_rows
 		"""How many rows to show at once, if fewer than there are.
@@ -440,14 +472,21 @@ class NoteGrid (Control):
 
 		self.link = link
 
+	@property
+	def positions (self) -> int:
+		"""Every place a note may start, which is a step only where there is one
+		division to a step."""
+
+		return self.steps * self.divisions
+
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Rows, width, and what a note may be."""
 
 		declared: dict[str, typing.Any] = {
 			"type": "note_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
-			"mono": self.mono,
+			"mono": self.mono, "divisions": self.divisions,
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
-			"max_length": self.steps, "velocity_range": [1, 127]}
+			"max_length": self.positions, "velocity_range": [1, 127]}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -478,14 +517,14 @@ class NoteGrid (Control):
 		if row not in self.rows:
 			raise Refused(f"this pattern has no row called {row}")
 
-		if not 0 <= int(step) < self.steps:
-			raise Refused(f"step {step} is outside a pattern {self.steps} steps long")
+		if not 0 <= int(step) < self.positions:
+			raise Refused(f"{step} is outside a pattern {self.positions} positions long")
 
 		grid = self.composition.data.setdefault(self.data_key, {})
 		notes = grid.setdefault(row, {})
 
 		if len(rest) == 3:
-			return self._shape(notes, step, rest[2], value)
+			return self._shape(grid, row, notes, step, rest[2], value)
 
 		if value:
 			if step in notes:
@@ -493,8 +532,7 @@ class NoteGrid (Control):
 
 			notes[step] = {"length": self.default_length, "velocity": self.default_velocity}
 
-			if self.mono:
-				self._clear_others(grid, row, step)
+			self._keep_mono(grid, row, int(step), self.default_length)
 
 			return True
 
@@ -512,7 +550,15 @@ class NoteGrid (Control):
 
 		return True
 
-	def _shape (self, notes: dict[str, typing.Any], step: str, field: str, value: typing.Any) -> bool:
+	def _shape (
+		self,
+		grid: dict[str, typing.Any],
+		row: str,
+		notes: dict[str, typing.Any],
+		step: str,
+		field: str,
+		value: typing.Any,
+	) -> bool:
 		"""Change a note's length or velocity, refusing what would not sound."""
 
 		if step not in notes:
@@ -524,6 +570,13 @@ class NoteGrid (Control):
 			return False
 
 		notes[step][field] = wanted
+
+		# Lengthening reaches over notes that were clear of it a moment ago, so
+		# a monophonic part has to be re-checked here and not only where a note
+		# is placed. Velocity changes nothing about when a note sounds, so this
+		# asks about the extent it now has either way and finds nothing to do.
+		if field == "length":
+			self._keep_mono(grid, row, int(step), wanted)
 
 		return True
 
@@ -537,8 +590,8 @@ class NoteGrid (Control):
 		wanted = int(value)
 
 		if field == "length":
-			if not 1 <= wanted <= self.steps:
-				raise Refused(f"a note is between 1 and {self.steps} steps long")
+			if not 1 <= wanted <= self.positions:
+				raise Refused(f"a note is between 1 and {self.positions} positions long")
 
 		elif field == "velocity":
 			if not 1 <= wanted <= 127:
@@ -567,8 +620,8 @@ class NoteGrid (Control):
 			placed: dict[str, typing.Any] = {}
 
 			for step, note in held.items():
-				if not str(step).isdigit() or not 0 <= int(step) < self.steps:
-					raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+				if not str(step).isdigit() or not 0 <= int(step) < self.positions:
+					raise Refused(f"{step} is outside a grid {self.positions} positions wide")
 
 				if not isinstance(note, dict):
 					raise Refused("a note is an object")
@@ -599,13 +652,23 @@ class NoteGrid (Control):
 
 		return self.snapshot() if rest == ["rows"] else value
 
-	def _clear_others (self, grid: dict[str, typing.Any], keep: str, step: str) -> None:
-		"""Take away any other note in this step, and say so.
+	def _keep_mono (self, grid: dict[str, typing.Any], keep: str, at: int, span: int) -> None:
+		"""Take away any note this one would sound over, and say so.
+
+		**By extent, not by starting position** (#2114). A note beginning
+		part-way through another is exactly the case a monophonic instrument
+		would have to arbitrate by its own key priority, which is what ``mono``
+		exists to keep off the glass — and once a note can be dragged around,
+		overlapping without sharing a start is the ordinary case rather than a
+		corner of one.
 
 		The panel asked for one thing and two changed, so the second is reported
 		in its own right — otherwise a cell would go dark on the glass with
 		nothing on the wire to explain it.
 		"""
+
+		if not self.mono:
+			return
 
 		for row in self.rows:
 			if row == keep:
@@ -613,8 +676,18 @@ class NoteGrid (Control):
 
 			notes = grid.get(row) or {}
 
-			if notes.pop(step, None) is not None and self.link is not None:
-				self.link.report(f"{self.name}/{row}/{step}", False)
+			for step in [held for held in notes if _overlaps(at, span, int(held), notes[held])]:
+				del notes[step]
+
+				if self.link is not None:
+					self.link.report(f"{self.name}/{row}/{step}", False)
+
+			# Dropped once its last note goes, as removing one by hand already
+			# does. Nothing on the wire differs either way — the snapshot filters
+			# empty rows — but this is the second copy of that rule, and a test
+			# found them disagreeing the moment there was a second way in.
+			if not notes:
+				grid.pop(row, None)
 
 
 class Parameter:

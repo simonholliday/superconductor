@@ -62,17 +62,99 @@ def _sets (app: str, state: dict) -> list[tuple[str, str, object]]:
 	return asks
 
 
-async def main () -> None:
-	"""Replay everything, then say what was refused."""
+def _read () -> tuple[dict, bool]:
+	"""What was written down, and whether it says which contract it was written
+	under.
+
+	A file from before 1.12.0 is the bare mapping of app to state; one from
+	after carries that under ``apps`` beside a ``contract``.  The two are told
+	apart by shape, which is safe because an app has never been called
+	``apps``.
+	"""
 
 	held = json.loads(WHERE.read_text())
 
-	asks = [ask for app, state in held.items() for ask in _sets(app, state)]
+	if isinstance(held.get("apps"), dict) and "contract" in held:
+		return held["apps"], True
+
+	return held, False
+
+
+def _converted (state: dict, declarations: dict) -> int:
+	"""Bring a pre-1.12.0 snapshot up to the grid resolutions in force now.
+
+	**A note's position and its length used to be counted in steps and are now
+	counted in the grid's own positions**, of which a step holds ``divisions``.
+	Replayed unconverted the numbers are all still legal and all still look like
+	a pattern, which is exactly what makes this worth doing rather than
+	detecting: a bar would fold into its own first sixth, silently, and the only
+	clue would be that it sounded wrong.
+
+	Grids that kept one position to a step are unchanged, which is every grid
+	that has not asked for more.
+	"""
+
+	moved = 0
+
+	for control, held in state.items():
+		declared = declarations.get(control) or {}
+		divisions = declared.get("divisions", 1)
+
+		if declared.get("type") != "note_grid" or divisions < 2 or not isinstance(held, dict):
+			continue
+
+		for row, notes in held.items():
+			if not isinstance(notes, dict):
+				continue
+
+			held[row] = {
+				str(int(step) * divisions): {
+					**note,
+					"length": int(note.get("length", 1)) * divisions,
+				}
+				for step, note in notes.items()
+			}
+
+			moved += len(held[row])
+
+	return moved
+
+
+async def main () -> None:
+	"""Replay everything, then say what was refused."""
+
+	held, stamped = _read()
 
 	async with websockets.asyncio.client.connect(URL) as socket:
 		await socket.send(json.dumps({
 			"t": "hello", "contract": "1.5.0", "client": "restore",
 			"page": None, "ver": {}, "token": None}))
+
+		# Read the manifest before sending anything, because converting an old
+		# file needs the resolutions the apps are declaring right now — there is
+		# nowhere else to learn them, and guessing would be the silent kind of
+		# wrong this exists to avoid.
+		manifest, deadline = {}, time.monotonic() + 5
+
+		while not manifest and time.monotonic() < deadline:
+			try:
+				frame = json.loads(await asyncio.wait_for(socket.recv(), timeout=1.0))
+
+			except asyncio.TimeoutError:
+				break
+
+			if frame.get("t") == "manifest":
+				manifest = frame.get("apps") or {}
+
+		if not stamped:
+			moved = sum(_converted(state, manifest.get(app) or {})
+			            for app, state in held.items())
+
+			if moved:
+				print(f"{WHERE} predates contract 1.12.0: "
+				      f"{moved} note(s) converted from steps to positions")
+
+		asks = [ask for app, state in held.items() for ask in _sets(app, state)]
 
 		for seq, (app, path, value) in enumerate(asks):
 			await socket.send(json.dumps({

@@ -523,11 +523,23 @@ def test_pressing_an_empty_cell_places_a_note (
 	assert fake_app.await_set("bass/D2/3")["v"] is True
 
 
-def test_pressing_a_note_takes_it_away (
+def test_a_note_is_taken_away_by_a_second_tap_and_not_the_first (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
-	"""The other half of the same gesture, and the reason it is unambiguous."""
+	"""Simon's call, once a drag on a note started meaning move it.
+
+	A tap that both selects and deletes cannot tell a nudge from a decision:
+	the same press begins a move, so a shaky finger on glass would delete what
+	it meant to shift. The first tap selects, which is also the state the
+	length values below the grid act on.
+	"""
 
 	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
+
+	panel.wait_for_selector(".grid.notes .note.chosen", timeout=5_000)
+	assert not [frame for frame in fake_app.sets if frame.get("path") == "bass/C2/0"], \
+		"the first tap asked the sequencer for nothing"
 
 	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
 
@@ -543,10 +555,13 @@ def test_pressing_the_middle_of_a_note_takes_that_note_away (
 	empty cell and placed a second note underneath the first — silent as a
 	second note, and on a monophonic part it retriggered the envelope and cut
 	the long note short.
+
+	Two taps, because the first of them selects.
 	"""
 
 	_open_the_bass(panel)
 
+	panel.locator(conftest.cell("bass/C2/1")).click()
 	panel.locator(conftest.cell("bass/C2/1")).click()
 
 	assert fake_app.await_set("bass/C2/0")["v"] is False, "the note it landed on, taken away"
@@ -568,6 +583,183 @@ def test_the_cell_past_a_note_is_still_its_own (
 	panel.locator(conftest.cell("bass/C2/2")).click()
 
 	assert fake_app.await_set("bass/C2/2")["v"] is True
+
+
+def _at_tested_size (panel: typing.Any) -> None:
+	"""Pin the cell to a known size, so a drag can be measured in cells.
+
+	Every geometric gesture below needs to know what a cell is worth in pixels,
+	and the automatic fit picks whatever the window allows.
+	"""
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Tested").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '44px'",
+		timeout=5_000)
+
+
+def _drag (panel: typing.Any, selector: str, dx: float, dy: float = 0) -> None:
+	"""Drag with the real mouse, from the middle of one element.
+
+	Real presses rather than dispatched ``PointerEvent``s because the handler
+	calls ``setPointerCapture``, which throws on a synthetic ``pointerId`` and
+	takes the handler down with it before it does anything at all.  Moved in
+	steps so the intermediate ``pointermove`` the gesture needs actually
+	arrives, and kept inside the window because Playwright clamps a move to the
+	viewport silently — a drag aimed past the edge lands wherever the clamp puts
+	it, which has read as a drag the other way.
+	"""
+
+	# Scrolled to first, because a bounding box is returned for an element the
+	# block has scrolled out of sight just as readily as for one on the glass —
+	# and the mouse would then be driven to where it merely would have been.
+	# `click()` does this for itself, which is why only the raw-mouse drags
+	# needed it and only they were silently landing on nothing.
+	panel.locator(selector).scroll_into_view_if_needed()
+
+	box = panel.locator(selector).bounding_box()
+	x = box["x"] + box["width"] / 2
+	y = box["y"] + box["height"] / 2
+
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+	panel.mouse.move(x + dx, y + dy, steps=8)
+	panel.mouse.up()
+
+
+def test_the_snap_selector_offers_what_the_grid_can_hold (panel: typing.Any) -> None:
+	"""And nothing it could not store.
+
+	The fixture's bass is eight steps over two beats and declares no divisions,
+	so a beat is four positions.  A snap has to tile a beat exactly, which
+	leaves a quarter, an eighth and a sixteenth — and rules out the dotted and
+	triplet values without anybody having to name them, because neither divides
+	four.
+	"""
+
+	_open_the_bass(panel)
+
+	offered = panel.eval_on_selector_all(
+		'.note-controls .note-row:first-child button', "els => els.map(el => el.dataset.snap)")
+
+	assert offered == ["1/4", "1/8", "1/16"], f"the snap row offered {offered}"
+
+
+def test_the_snap_starts_at_one_drawn_cell (panel: typing.Any) -> None:
+	"""Which is what every gesture did before there was a choice."""
+
+	_open_the_bass(panel)
+
+	assert panel.locator('.note-controls button[data-snap="1/16"].on').count() == 1
+
+
+def test_a_selected_note_takes_its_length_from_a_named_value (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The route to a length no edge grip could reach.
+
+	The finest values are two or three pixels of bar, and a dotted eighth is
+	not somewhere a drag arrives; a musician picks the value they were thinking
+	of instead.
+	"""
+
+	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
+	panel.locator('.note-controls button[data-length="1/4"]').click()
+
+	assert fake_app.await_set("bass/C2/0/length")["v"] == 4
+
+
+def test_the_note_row_says_nothing_is_selected_until_something_is (
+	panel: typing.Any) -> None:
+	"""And keeps its height either way, so the block below it holds still."""
+
+	_open_the_bass(panel)
+
+	assert panel.locator(".note-controls .note-row.idle").count() == 1
+
+	panel.locator(conftest.cell("bass/C2/0")).click(position={"x": 3, "y": 3})
+
+	assert panel.locator(".note-controls .note-row.idle").count() == 0
+
+
+def test_dragging_a_note_moves_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Taken away and put back, because a note is addressed by where it starts.
+
+	There is no set that says "the same note, elsewhere" — so the old address
+	goes first and the new one is placed with the length it had.
+	"""
+
+	_open_the_bass(panel)
+	_at_tested_size(panel)
+
+	_drag(panel, conftest.cell("bass/C2/0"), dx=48)
+
+	assert fake_app.await_set("bass/C2/1")["v"] is True, "put back one step later"
+	assert fake_app.await_set("bass/C2/0")["v"] is False, "taken away where it was"
+	assert fake_app.await_set("bass/C2/1/length")["v"] == 2, "and kept its length"
+
+
+def test_a_drag_that_goes_nowhere_is_still_a_tap (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Which is most taps on glass, and the whole reason there is a threshold."""
+
+	_open_the_bass(panel)
+	_at_tested_size(panel)
+
+	_drag(panel, conftest.cell("bass/C2/0"), dx=3)
+
+	panel.wait_for_selector(".grid.notes .note.chosen", timeout=5_000)
+	assert not [frame for frame in fake_app.sets if frame.get("path").startswith("bass/")], \
+		"a wobble asked the sequencer for nothing"
+
+
+def test_dragging_out_from_empty_ground_places_a_note_and_sizes_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Placed on the landing and sized on the release.
+
+	The placing is immediate because #2046 says a press acts on the finger
+	landing; only the length waits, because that is what the drag decided.
+	"""
+
+	_open_the_bass(panel)
+	_at_tested_size(panel)
+
+	_drag(panel, conftest.cell("bass/D2/2"), dx=96)
+
+	assert fake_app.await_set("bass/D2/2")["v"] is True
+
+	# The last of them, not the first: placing sends the snap's own length so
+	# the note exists at a legal size from the moment it is drawn, and the
+	# release then sends what the drag actually decided.
+	fake_app.await_set("bass/D2/2/length")
+	lengths = [frame["v"] for frame in fake_app.sets if frame.get("path") == "bass/D2/2/length"]
+
+	assert lengths[0] == 1, "placed at the snap's own length"
+	assert lengths[-1] == 3, f"and sized by the drag: {lengths}"
+
+
+def test_zooming_right_out_stops_the_grid_taking_taps (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Simon asked for a view to get oriented from, not one to work in.
+
+	At a cell this size a tap is a coin toss, so a page that still accepted one
+	would be turning a look into an edit.
+	"""
+
+	_open_the_bass(panel)
+	_at_tested_size(panel)
+
+	_two_fingers(panel, apart=400, then=40)
+
+	panel.wait_for_selector(".grid-wrap.overview", timeout=5_000)
+
+	panel.locator(conftest.cell("bass/D2/3")).click(force=True)
+
+	assert not [frame for frame in fake_app.sets if frame.get("path").startswith("bass/")], \
+		"nothing was asked for from a view that cannot be aimed at"
 
 
 def test_the_velocity_lane_shapes_the_note_in_its_column (
@@ -1503,7 +1695,7 @@ def test_two_fingers_brought_together_make_it_smaller (panel: typing.Any) -> Non
 	shrunk = panel.evaluate(
 		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))")
 
-	assert shrunk >= 22, f"a pinch went below the floor: {shrunk}px"
+	assert shrunk >= 6, f"a pinch went below the floor: {shrunk}px"
 
 
 def test_two_fingers_that_do_not_move_are_still_two_taps (

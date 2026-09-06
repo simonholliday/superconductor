@@ -473,6 +473,23 @@ def _readable_layers (
 
 
 NOTE_FIELDS = ("length", "velocity")
+
+
+def _positions (declaration: dict[str, typing.Any]) -> int:
+	"""Every place a note may start in this grid.
+
+	A step only where the grid declares one division to a step, which is what a
+	grid saying nothing means and what every grid was before there was a number
+	to say (contract 1.12.0).  The composition owns the unit; this only has to
+	know how many of them there are so it can refuse one that is off the end.
+	"""
+
+	divisions = declaration.get("divisions", 1)
+
+	if not isinstance(divisions, int) or isinstance(divisions, bool) or divisions < 1:
+		divisions = 1
+
+	return int(declaration.get("steps", 0)) * divisions
 """What a note carries besides being there at all."""
 
 
@@ -515,10 +532,10 @@ def _apply_note (
 	if row not in declaration.get("rows", []):
 		raise ControlError(f"this grid has no row named {row!r}")
 
-	steps = declaration.get("steps", 0)
+	positions = _positions(declaration)
 
-	if not 0 <= int(step) < steps:
-		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
+	if not 0 <= int(step) < positions:
+		raise ControlError(f"{step} is outside a grid {positions} positions wide")
 
 	notes = grid.setdefault(row, {})
 
@@ -558,7 +575,7 @@ def _readable_notes (
 		raise ControlError(f"{path!r} takes a grid of rows, and {value!r} is not one")
 
 	rows = declaration.get("rows", [])
-	steps = declaration.get("steps", 0)
+	positions = _positions(declaration)
 	kept: dict[str, dict[str, typing.Any]] = {}
 
 	for row, held in value.items():
@@ -571,8 +588,8 @@ def _readable_notes (
 		placed: dict[str, typing.Any] = {}
 
 		for step, note in held.items():
-			if not str(step).isdigit() or not 0 <= int(step) < steps:
-				raise ControlError(f"step {step!r} is outside a grid {steps} steps wide")
+			if not str(step).isdigit() or not 0 <= int(step) < positions:
+				raise ControlError(f"{step!r} is outside a grid {positions} positions wide")
 
 			if not isinstance(note, dict):
 				raise ControlError(f"a note is an object, and {note!r} is not one")

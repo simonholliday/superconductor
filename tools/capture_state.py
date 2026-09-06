@@ -20,6 +20,8 @@ import time
 
 import websockets.asyncio.client
 
+import superintendent.protocol
+
 
 URL = "ws://127.0.0.1:8090/ws/panel"
 WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superintendent-state.json")
@@ -47,7 +49,15 @@ async def main () -> None:
 			if frame["t"] == "snapshot":
 				held[frame["app"]] = frame["state"]
 
-	WHERE.write_text(json.dumps(held, indent="\t") + "\n")
+	# Stamped with the contract it was taken under, because what a note's two
+	# numbers are counted in changed at 1.12.0 and a file cannot say which it
+	# means by looking at it: a note at 12 is step 12 in one and two steps in
+	# the other, and both are patterns a person might have played. A file
+	# without this line is older than the stamp and restore_state.py converts
+	# it (contract 1.12.0).
+	WHERE.write_text(json.dumps(
+		{"contract": superintendent.protocol.CONTRACT_VERSION, "apps": held},
+		indent="\t") + "\n")
 
 	for app, state in held.items():
 		for control, value in state.items():

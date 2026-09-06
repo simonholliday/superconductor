@@ -156,6 +156,20 @@ const SIZES = [
 
 const FIT_FLOOR = 22;
 const FIT_CEILING = 96;
+
+const ZOOM_FLOOR = 6;
+/* How small a pinch may make a cell, as against how small the automatic fit
+   will choose. They are different questions. The fit is picking a size somebody
+   has to work at, so it stops where a control stops being usable; a pinch is a
+   person deciding what they want to look at, and asking to see the whole
+   composition at once is a reasonable thing to want. */
+
+const OVERVIEW_AT = 16;
+/* Below this a cell is too small to be aimed at, so the page stops pretending
+   otherwise: grids stop taking taps and draw as shapes, and the titles — which
+   have a legibility floor of their own and never scaled — go on saying which
+   block is which. That is the whole purpose of the view, since it exists to be
+   read before choosing what to zoom back into. */
 const FIT_SLACK = 2;
 
 const GAP = 4;
@@ -176,6 +190,11 @@ const PAD = GAP * 2;
 const LABEL_CELLS = 3;
 const TITLE_FLOOR = 24;
 const LANE_CELLS = 3;
+const NOTE_CONTROL_CELLS = 2;
+/* The two rows a pitched pattern's settings take under its lane: what gestures
+   snap to, and the selected note's length. Counted here because a block's
+   height is decided before anything is drawn, and a strip the fit did not know
+   about is a strip that overflows its own block. */
 const PARAM_CELLS = 6;
 /* A control's row is one cell. The same cell as everything else.
  *
@@ -231,7 +250,7 @@ class Link {
 			this.delay = RECONNECT_FLOOR;
 			this.lastInbound = performance.now();
 			this.onStatus("up");
-			this.send({ t: "hello", contract: "1.11.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.12.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 		};
 
 		this.socket.onmessage = (message) => {
@@ -276,7 +295,7 @@ class Link {
 	 * waking up cannot be left to its own stale timer to notice. */
 	resync () {
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.send({ t: "hello", contract: "1.11.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
+			this.send({ t: "hello", contract: "1.12.0", client: clientId, page: rememberedPage(), ver: {}, token: null });
 			return;
 		}
 
@@ -457,137 +476,348 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
 		<//>`;
 }
 
-/* Which note covers each step of a row, keyed by step and holding the step that
- * note starts on.
+/* The note values a grid can actually hold, and which of them make a grid.
  *
- * A note is addressed by where it starts and drawn as a bar reaching past it,
- * so the cells under the rest of the bar hold no note of their own. Without
- * this map a tap on the middle of a four-step note reads as a tap on an empty
- * cell and places a second note underneath the first — which on a monophonic
- * part retriggers the envelope and cuts the long note short.
+ * One table, read two ways. A **length** may be any of these; a **snap** may be
+ * only those that divide a beat evenly, which is what makes a lattice — and
+ * that filter is why no dotted value ever appears as a snap without anybody
+ * having to say so. A value that does not come out as a whole number of
+ * positions is not offered at all, so a grid keeping one position to a step is
+ * honestly told it can snap to sixteenths and nothing finer.
  *
- * **The bar is one thing on the glass, so it is one target** (#2107). This is
- * the map that makes it one.
- *
- * A length is counted up rather than down, so a note reaching part-way into a
- * cell still claims it: the finger is over the bar, so the bar is what it
- * means. Where two notes overlap the later one wins, which is the one drawn on
- * top — integer-like keys iterate in ascending order, so the last write is the
- * latest start. Nothing here decides whether an overlap should exist; it
- * decides which note a finger landing on the glass is pointing at.
- */
-function coverage (held, steps) {
-	const covers = new Map();
+ * Written in beats because a beat is the only unit both ends already agree on:
+ * the app declares `steps` and `beats`, and `divisions` says how finely a step
+ * is kept. Everything else here is arithmetic. */
+const NOTE_VALUES = [
+	{ label: "1/4", beats: 1 },
+	{ label: "1/8.", beats: 0.75 },
+	{ label: "1/8", beats: 0.5 },
+	{ label: "1/8T", beats: 1 / 3 },
+	{ label: "1/16.", beats: 0.375 },
+	{ label: "1/16", beats: 0.25 },
+	{ label: "1/16T", beats: 1 / 6 },
+	{ label: "1/32", beats: 0.125 },
+	{ label: "1/32T", beats: 1 / 12 },
+	{ label: "1/96", beats: 1 / 24 },
+];
 
-	for (const [start, note] of Object.entries(held || {})) {
-		const from = Number(start);
-		const span = Math.max(1, Math.ceil(note.length || 1));
+/* How many positions a note value is, or null where it is not a whole number of
+ * them. Rounded before it is tested because a third of a beat cannot be written
+ * exactly in binary: 1/3 * 24 is 7.999999999999999, and a test for wholeness
+ * that believed that would drop every triplet from the list. */
+function positionsOf (value, perBeat) {
+	const exact = value.beats * perBeat;
+	const whole = Math.round(exact);
 
-		for (let step = from; step < Math.min(steps, from + span); step += 1) covers.set(step, start);
-	}
-
-	return covers;
+	return whole >= 1 && Math.abs(exact - whole) < 1e-6 ? whole : null;
 }
 
-/* A pitched pattern: one row per note, and a cell that is a note.
+/* The values this grid can hold, each with its size in positions. */
+function valuesFor (perBeat) {
+	return NOTE_VALUES
+		.map((value) => ({ ...value, positions: positionsOf(value, perBeat) }))
+		.filter((value) => value.positions !== null);
+}
+
+/* The values that also tile a beat exactly, which is what a snap has to do. */
+function snapsFor (perBeat) {
+	return valuesFor(perBeat).filter((value) => perBeat % value.positions === 0);
+}
+
+/* Which note covers a position in a row, and where that note starts.
+ *
+ * A note is addressed by where it starts and drawn as a bar reaching past it,
+ * so the ground under the rest of the bar holds no note of its own. Without
+ * this a tap on the middle of a long note reads as a tap on empty ground and
+ * places a second note underneath the first — which on a monophonic part
+ * retriggers the envelope and cuts the long note short.
+ *
+ * **The bar is one thing on the glass, so it is one target** (#2107).
+ *
+ * Where two notes overlap the later start wins, which is the one drawn on top.
+ * Nothing here decides whether an overlap should exist; it decides which note a
+ * finger landing on the glass is pointing at. */
+function noteAt (held, position) {
+	let found = null;
+
+	for (const [start, note] of Object.entries(held || {})) {
+		const at = Number(start);
+		const span = Math.max(1, note.length || 1);
+
+		if (position >= at && position < at + span && (!found || at > found.at)) {
+			found = { at, note, span };
+		}
+	}
+
+	return found;
+}
+
+/* Round a position onto the snap lattice, never off the pattern. */
+function snapped (position, unit, positions) {
+	return Math.max(0, Math.min(positions - 1, Math.round(position / unit) * unit));
+}
+
+const DRAG_SLOP = 8;
+/* How far a finger must travel before a press becomes a drag rather than a tap.
+ * Below this it is a tap that wobbled, which on glass is most of them. */
+
+/* A pitched pattern: one row per note, and a note that may start between steps.
  *
  * A note is drawn as a bar reaching rightwards from where it starts, which is
  * how every piano roll draws one and needs no explaining. Position is pitch, so
  * the line is read as a shape before any label is read.
  *
- * Two gestures, both acting on the finger landing (#2046). Pressing an empty
- * cell places a note and begins sizing it: drag right and the note grows a step
- * at a time, each length sent as its own absolute set, so the bar on the glass
- * is never longer than the sequencer has agreed to. Pressing anywhere along a
- * note takes that note away, whichever of its cells the finger landed on.
- * Resizing a note that is already there means drawing it again, which is the
- * first thing to revisit once this has been played.
- */
-function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows,
-                    pending, failed, onSet }) {
+ * **A position is not always a step.** The app declares `divisions`, which is
+ * how many places a note may start within one drawn cell, and everything here
+ * counts in those. A grid that declares nothing gets one to a cell and is the
+ * grid it always was.
+ *
+ * **A press acts on the finger landing and a drag acts on the release** (#2046,
+ * still). Pressing empty ground places a note; pressing a note selects it, and
+ * pressing one already selected and letting go takes it away. What a drag does
+ * waits, because a move changes a note's address rather than one of its values
+ * — it cannot be streamed the way an absolute set can, and a left edge dragged
+ * is a move for exactly that reason. So a drag draws a **ghost**, which is a
+ * mark showing the request in the ring's own idiom, and the face underneath
+ * goes on showing what the sequencer actually holds until the release is
+ * answered. It also wakes the composition loop once for a gesture rather than
+ * once for every position crossed. */
+function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRows,
+                    snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 	};
 
-	const drawing = useRef(null);
-
+	const positions = steps * divisions;
 	const pitch = cell + GAP;
+	const unit = pitch / divisions;
 
-	const begin = (event, row, step, held) => {
-		event.preventDefault();
+	const drag = useRef(null);
+	const [ghost, setGhost] = useState(null);
 
-		// Addressed by where the note starts, not where the finger landed:
-		// a bar is one target and the sequencer knows it by its first step.
-		if (held !== undefined) { onSet(`${name}/${row}/${held}`, false); return; }
+	/* One drawn cell at each end, so every grip is a full row across as the
+	   target rule demands — and both grips plus the middle need three cells
+	   between them before any of them can be. Below that the whole note moves
+	   and nothing resizes, which is Simon's call: a short note is far more
+	   often in the wrong place than the wrong length. */
+	const grip = divisions;
+	const zoneOf = (span, offset) => {
+		if (span < 3 * divisions) return "move";
 
-		onSet(`${name}/${row}/${step}`, true);
+		if (offset < grip) return "start";
 
-		event.currentTarget.setPointerCapture(event.pointerId);
-		drawing.current = { pointer: event.pointerId, row, step, from: event.clientX, length: 1 };
+		return offset >= span - grip ? "end" : "move";
 	};
 
-	const stretch = (event) => {
-		const drawn = drawing.current;
+	const positionIn = (event, step) => {
+		const box = event.currentTarget.getBoundingClientRect();
+		const within = Math.floor(((event.clientX - box.left) / box.width) * divisions);
 
-		if (!drawn || drawn.pointer !== event.pointerId) return;
+		return step * divisions + Math.max(0, Math.min(divisions - 1, within));
+	};
 
-		const wanted = Math.max(1, Math.min(
-			steps - drawn.step, 1 + Math.round((event.clientX - drawn.from) / pitch)));
+	const begin = (event, row, step) => {
+		event.preventDefault();
 
-		if (wanted === drawn.length) return;
+		const at = positionIn(event, step);
+		const found = noteAt(notes[row], at);
 
-		drawn.length = wanted;
-		onSet(`${name}/${drawn.row}/${drawn.step}/length`, wanted);
+		event.currentTarget.setPointerCapture(event.pointerId);
+
+		if (!found) {
+			/* Placed on the landing, at the snap's own length, and selected so
+			   the length values below act on what was just drawn. */
+			const put = snapped(at, snap, positions);
+
+			onSet(`${name}/${row}/${put}`, true);
+			onSet(`${name}/${row}/${put}/length`, snap);
+			onSelect({ row, at: put });
+
+			drag.current = { pointer: event.pointerId, kind: "draw", row, at: put,
+				span: snap, velocity: null, x: event.clientX, y: event.clientY, moved: false };
+			return;
+		}
+
+		const already = selected && selected.row === row && selected.at === found.at;
+
+		if (!already) onSelect({ row, at: found.at });
+
+		drag.current = { pointer: event.pointerId, kind: zoneOf(found.span, at - found.at),
+			row, at: found.at, span: found.span, velocity: found.note.velocity,
+			x: event.clientX, y: event.clientY, moved: false, already };
+	};
+
+	const during = (event) => {
+		const held = drag.current;
+
+		if (!held || held.pointer !== event.pointerId) return;
+
+		const dx = event.clientX - held.x;
+		const dy = event.clientY - held.y;
+
+		if (!held.moved && Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
+
+		held.moved = true;
+
+		const across = Math.round(dx / unit);
+
+		if (held.kind === "move") {
+			const down = Math.round(dy / (controlRow(cell) + GAP));
+			const where = rows.indexOf(held.row);
+
+			setGhost({
+				row: rows[Math.max(0, Math.min(rows.length - 1, where + down))],
+				at: snapped(held.at + across, snap, positions - held.span + 1),
+				span: held.span,
+			});
+			return;
+		}
+
+		if (held.kind === "start") {
+			const edge = snapped(held.at + across, snap, positions);
+			const stop = held.at + held.span;
+
+			if (edge >= stop) return;
+
+			setGhost({ row: held.row, at: edge, span: stop - edge });
+			return;
+		}
+
+		/* "end" and "draw" are the same gesture: the right edge follows the
+		   finger and the note keeps where it starts. */
+		const edge = snapped(held.at + held.span + across, snap, positions + 1);
+
+		setGhost({ row: held.row, at: held.at, span: Math.max(snap, edge - held.at) });
 	};
 
 	const finish = (event) => {
-		if (drawing.current && drawing.current.pointer === event.pointerId) drawing.current = null;
+		const held = drag.current;
+
+		if (!held || held.pointer !== event.pointerId) return;
+
+		drag.current = null;
+		setGhost(null);
+
+		if (!held.moved) {
+			/* A tap. The first selects — which the press already did — and a
+			   second on a note already selected takes it away. Drawing a note
+			   is never a removal, however briefly the finger stayed. */
+			if (held.already && held.kind !== "draw") {
+				onSet(`${name}/${held.row}/${held.at}`, false);
+				onSelect(null);
+			}
+
+			return;
+		}
+
+		const want = ghost;
+
+		if (!want) return;
+
+		if (want.row === held.row && want.at === held.at) {
+			if (want.span !== held.span) onSet(`${name}/${held.row}/${held.at}/length`, want.span);
+
+			return;
+		}
+
+		/* The address changed, so this is a move however it was grabbed — and a
+		   note is addressed by where it starts, so there is no set that says
+		   "the same note, elsewhere". Taken away and put back, oldest first so
+		   a monophonic part cannot clear the note being moved on its way past.
+		   Four frames for a whole gesture, and each of them absolute. */
+		onSet(`${name}/${held.row}/${held.at}`, false);
+		onSet(`${name}/${want.row}/${want.at}`, true);
+		onSet(`${name}/${want.row}/${want.at}/length`, want.span);
+
+		if (held.velocity != null) {
+			onSet(`${name}/${want.row}/${want.at}/velocity`, held.velocity);
+		}
+
+		onSelect({ row: want.row, at: want.at });
 	};
+
+	const cancel = (event) => {
+		if (drag.current && drag.current.pointer === event.pointerId) {
+			drag.current = null;
+			setGhost(null);
+		}
+	};
+
+	/* A bar's geometry, in the lattice's own pixels. A position is a fraction of
+	   the cell *and its gap*, so a note landing on a cell boundary is exactly
+	   where it always was and one landing between them divides the same span
+	   evenly — which is also how the subdivision marks are spaced, so the two
+	   cannot disagree. */
+	/* Subdivision marks, drawn only while they can be told apart. Below about
+	   six pixels a lattice of them is a grey wash rather than a grid, and a mark
+	   nobody can resolve is a mark that says nothing — so the cell keeps its own
+	   edges and the snap goes on working unannounced. They are marks and never
+	   targets: read, never hit (#2107). */
+	const subs = snap < divisions && snap * unit >= 6;
+
+	const barStyle = (at, span, step) => ({
+		left: `${(at - step * divisions) * unit - 1}px`,
+		width: `${span * unit - GAP}px`,
+	});
 
 	return html`
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell}>
 		<div class="grid notes" style=${style}>
-			${rows.map((row) => {
-				const covers = coverage(notes[row], steps);
-
-				return html`
+			${rows.map((row) => html`
 				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row}</div>
 				${Array.from({ length: steps }, (_, step) => {
-					const path = `${name}/${row}/${step}`;
-					const note = (notes[row] || {})[String(step)];
-					const held = covers.get(step);
+					const path = `${name}/${row}/${step * divisions}`;
+					const note = (notes[row] || {})[String(step * divisions)];
 
-					// What a tap on this cell would change: the note covering
-					// it, or the note it would place. A ring belongs to the
-					// request, so it follows the address rather than the finger.
-					const asked = held === undefined ? path : `${name}/${row}/${held}`;
-					const waiting = pending.has(asked);
-					const refused = failed.has(asked);
+					/* Every note starting anywhere inside this cell, not only one
+					   starting exactly on it: with more than one division a cell
+					   holds several places a note may begin. */
+					const beginning = Object.entries(notes[row] || {})
+						.map(([start, held]) => ({ at: Number(start), note: held }))
+						.filter((one) => Math.floor(one.at / divisions) === step);
+
+					const shade = ghost && ghost.row === row
+						&& Math.floor(ghost.at / divisions) === step ? ghost : null;
+
+					const asked = noteAt(notes[row], step * divisions);
+					const owner = asked ? `${name}/${row}/${asked.at}` : path;
 
 					return html`
 						<div
 							key=${path}
 							data-path=${path}
-							class=${["cell", note ? "on" : "",
-								// A covered cell is under the bar, so the bar
-								// wears the ring and the cell does not: one
-								// request, one mark, not four in a row.
-								waiting && held === undefined ? "pending" : "",
-								refused && held === undefined ? "failed" : "",
+							class=${["cell",
+								pending.has(owner) && !asked ? "pending" : "",
+								failed.has(owner) && !asked ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
-							onPointerDown=${(event) => begin(event, row, step, held)}
-							onPointerMove=${stretch}
+							onPointerDown=${(event) => begin(event, row, step)}
+							onPointerMove=${during}
 							onPointerUp=${finish}
-							onPointerCancel=${finish}
-						>${note && html`
-							<div
-								class=${["note", waiting ? "pending" : "",
-									refused ? "failed" : ""].filter(Boolean).join(" ")}
-								style=${{ width: `${(note.length || 1) * pitch - GAP}px` }}
-							></div>`}</div>`;
+							onPointerCancel=${cancel}
+						>
+							${subs && html`
+								<i class="subs" style=${{
+									backgroundSize: `${snap * unit}px 100%`,
+									backgroundPositionX: `${-((step * divisions) % snap) * unit}px`,
+								}}></i>`}
+							${beginning.map((one) => html`
+								<div
+									key=${`note-${one.at}`}
+									class=${["note",
+										selected && selected.row === row && selected.at === one.at
+											? "chosen" : "",
+										pending.has(`${name}/${row}/${one.at}`) ? "pending" : "",
+										failed.has(`${name}/${row}/${one.at}`) ? "failed" : "",
+										one.note.length >= 3 * divisions ? "gripped" : ""]
+										.filter(Boolean).join(" ")}
+									style=${barStyle(one.at, Math.max(1, one.note.length || 1), step)}
+								></div>`)}
+							${shade && html`
+								<div class="note asked"
+									style=${barStyle(shade.at, shade.span, step)}></div>`}
+						</div>`;
 				})}
-			`;
-			})}
+			`)}
 		</div>
 		<//>`;
 }
@@ -600,7 +830,7 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
  *
  * It edits the note in that column and does nothing where there is none —
  * a velocity with no note is not a state the sequencer could report. */
-function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
+function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -609,14 +839,25 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
 	const [low, high] = range || [1, 127];
 	const holding = useRef(null);
 
+	/* The note beginning in this drawn cell, wherever inside it that is: with
+	   more than one division a column is several places a note may start, and
+	   looking one up by the cell's own number would find only the notes that
+	   happen to sit on a step. The earliest wins, so a column reads left to
+	   right like everything else. */
 	const at = (step) => {
-		for (const row of rows) {
-			const note = (notes[row] || {})[String(step)];
+		let found = null;
 
-			if (note) return { row, note };
+		for (const row of rows) {
+			for (const [start, note] of Object.entries(notes[row] || {})) {
+				const put = Number(start);
+
+				if (Math.floor(put / divisions) === step && (!found || put < found.at)) {
+					found = { row, note, at: put };
+				}
+			}
 		}
 
-		return null;
+		return found;
 	};
 
 	const set = (event, step) => {
@@ -630,7 +871,7 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
 
 		if (wanted === found.note.velocity) return;
 
-		onSet(`${name}/${found.row}/${step}/velocity`, wanted);
+		onSet(`${name}/${found.row}/${found.at}/velocity`, wanted);
 	};
 
 	return html`
@@ -657,6 +898,104 @@ function VelocityLane ({ name, rows, steps, notes, range, cell, onSet }) {
 					>${found && html`<i style=${{ height: `${height}%` }}></i>`}</div>`;
 			})}
 		</div>`;
+}
+
+/* A pitched pattern's own settings, under the grid they belong to.
+ *
+ * Two rows, and the height does not change with what is selected: a strip that
+ * appeared and vanished would move everything below it every time a note was
+ * touched, on a surface where the thing below it is another instrument.
+ *
+ * **Snap first, because it governs every gesture above.** The values offered
+ * are the ones this grid can hold and that tile a beat exactly — a grid keeping
+ * one position to a step is honestly offered sixteenths alone, rather than a
+ * precision it has nowhere to put.
+ *
+ * **Then the selected note's length, by name.** The finest values are two or
+ * three pixels of bar, so an edge grip can never reach them however carefully
+ * it is drawn; a dotted eighth is not something a drag arrives at either. A
+ * musician picks the value, which is the thing they were thinking of anyway. */
+function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, onRemove }) {
+	return html`
+		<div class="note-controls">
+			<div class="note-row">
+				<span class="row-label">snap</span>
+				${snaps.map((value) => html`
+					<button
+						key=${`snap-${value.label}`}
+						class=${`offer ${value.positions === snap ? "on" : ""}`}
+						data-snap=${value.label}
+						onPointerDown=${(event) => { event.preventDefault(); onSnap(value.positions); }}
+					>${value.label}</button>`)}
+			</div>
+			<div class=${`note-row ${note ? "" : "idle"}`}>
+				<span class="row-label">note</span>
+				${note
+					? html`
+						${values.map((value) => html`
+							<button
+								key=${`len-${value.label}`}
+								class=${`offer ${value.positions === note.length ? "on" : ""}`}
+								data-length=${value.label}
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									onLength(value.positions);
+								}}
+							>${value.label}</button>`)}
+						<span class="spacer"></span>
+						<button
+							class="clear"
+							onPointerDown=${(event) => { event.preventDefault(); onRemove(); }}
+						>remove</button>`
+					: html`<span class="hint">tap a note to set its length</span>`}
+			</div>
+		</div>`;
+}
+
+/* A pitched pattern and everything that acts on it.
+ *
+ * The grid, the velocity lane and the settings strip are one control on the
+ * glass and share two pieces of state — which note is selected, and what the
+ * gestures snap to — so they are one component here rather than three siblings
+ * threading state through the page.
+ *
+ * Snap starts at one drawn cell, which is what every gesture did before there
+ * was a choice. */
+function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
+	const divisions = Math.max(1, control.divisions || 1);
+	const steps = control.steps;
+	const beats = control.beats || 4;
+
+	/* Positions to a beat, which is what names a note value. Derived rather
+	   than declared: the app already says how many steps it has, how many beats
+	   they make and how finely a step is kept, and a fourth number that had to
+	   agree with the other three is a fourth number that can disagree. */
+	const perBeat = (steps * divisions) / beats;
+
+	const values = useMemo(() => valuesFor(perBeat), [perBeat]);
+	const snaps = useMemo(() => snapsFor(perBeat), [perBeat]);
+
+	const [snap, setSnap] = useState(divisions);
+	const [selected, setSelected] = useState(null);
+
+	/* Read back rather than remembered, so a note removed from another panel
+	   takes the selection with it instead of leaving buttons acting on nothing. */
+	const note = selected ? (notes[selected.row] || {})[String(selected.at)] || null : null;
+
+	return html`
+		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} divisions=${divisions}
+			notes=${notes} cell=${cell} window=${control.visible_rows}
+			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
+			onSelect=${setSelected} onSet=${onSet} />
+		<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} divisions=${divisions}
+			cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />
+		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
+			selected=${selected} note=${note}
+			onLength=${(length) => onSet(`${name}/${selected.row}/${selected.at}/length`, length)}
+			onRemove=${() => {
+				onSet(`${name}/${selected.row}/${selected.at}`, false);
+				setSelected(null);
+			}} />`;
 }
 
 /* An instrument's own settings: switches, numbers and choices.
@@ -1932,7 +2271,7 @@ function useCellSize (blocks, layout, dragging) {
 		   without knowing where it came from. */
 		const pinched = Number(choice);
 
-		if (Number.isFinite(pinched) && pinched >= FIT_FLOOR) { setCell(pinched); return; }
+		if (Number.isFinite(pinched) && pinched >= ZOOM_FLOOR) { setCell(pinched); return; }
 
 		const named = SIZES.find((size) => size.key === choice);
 
@@ -2075,7 +2414,7 @@ function usePinch (cell, choose) {
 		event.preventDefault();
 
 		const wanted = Math.round(
-			Math.min(FIT_CEILING, Math.max(FIT_FLOOR, gesture.from * ratio)));
+			Math.min(FIT_CEILING, Math.max(ZOOM_FLOOR, gesture.from * ratio)));
 
 		if (wanted !== cell) choose(String(wanted));
 	}, [cell, choose]);
@@ -2726,7 +3065,7 @@ function Panel () {
 			   playing, which is what every grid did before there was a switch. */
 			live: ((state[appName] || {})[name] || {}).enabled !== false,
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-				+ (kindOf(name) === "note_grid" ? LANE_CELLS : 0) + 1,
+				+ (kindOf(name) === "note_grid" ? LANE_CELLS + NOTE_CONTROL_CELLS : 0) + 1,
 			steps: controls[name].steps,
 		});
 	}
@@ -2914,7 +3253,8 @@ function Panel () {
 			<${Build} service=${service} stale=${stale} />
 		</div>
 		<div
-			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"}`}
+			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"} ${
+				size.cell < OVERVIEW_AT ? "overview" : ""}`}
 			ref=${size.wrap}
 			...${pinch}
 		>
@@ -2962,15 +3302,9 @@ function Panel () {
 								cell=${size.cell} onSet=${request} />`
 						: kindOf(one.control) === "note_grid"
 						? html`
-							<${NoteGrid} name=${one.control} control=${controls[one.control]}
-								rows=${controls[one.control].rows} steps=${controls[one.control].steps}
+							<${NoteBlock} name=${one.control} control=${controls[one.control]}
 								notes=${(state[appName] || {})[one.control] || {}} cell=${size.cell}
-								window=${controls[one.control].visible_rows}
-								pending=${pending} failed=${failed} onSet=${request} />
-							<${VelocityLane} name=${one.control} rows=${controls[one.control].rows}
-								steps=${controls[one.control].steps} cell=${size.cell}
-								notes=${(state[appName] || {})[one.control] || {}}
-								range=${controls[one.control].velocity_range} onSet=${request} />`
+								pending=${pending} failed=${failed} onSet=${request} />`
 						: html`
 							<${Grid} control=${one.control} rows=${controls[one.control].rows}
 								steps=${controls[one.control].steps}
