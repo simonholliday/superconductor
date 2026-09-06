@@ -1245,7 +1245,7 @@ function Setting ({ field, held, onSet }) {
 			<div class="menu">
 				<button
 					ref=${trigger}
-					class=${open ? "open" : ""}
+					class=${`picker ${open ? "open" : ""}`}
 					onPointerDown=${(event) => {
 						event.preventDefault();
 						open ? setOpen(false) : show();
@@ -1488,10 +1488,50 @@ function Toggle ({ on, title, onFlip }) {
 		<button
 			class=${`switch ${on ? "on" : ""}`}
 			title=${title}
+			role="switch"
+			aria-checked=${on ? "true" : "false"}
 			onPointerDown=${(event) => { event.preventDefault(); onFlip(!on); }}
-		>${on ? "on" : "off"}</button>`;
+		><i>off</i><i>on</i></button>`;
 }
 
+
+/* Lucide's paths, copied rather than depended on.
+ *
+ * **Why the paths and not the package.** Every serious icon set is permissive —
+ * Lucide is ISC, Phosphor and Tabler MIT, and none of them wants attribution in
+ * the interface. What separates them here is that Lucide is drawn on a 24-unit
+ * grid with a uniform 2-unit stroke, so a glyph is *stroke geometry*: it scales
+ * with the cell the way #2107 requires a mark to, where an icon font or a sprite
+ * sheet cannot. And a dozen glyphs are not a dependency. Copied in, they cost
+ * the panel no fetch on a Pi, cannot drift against a version, and cannot fail
+ * to load — which for a surface with no keyboard is the difference between a
+ * control and a blank square.
+ *
+ * The licence text lives in `licences/lucide.txt` because ISC asks for that and
+ * nothing else. Add a glyph by pasting its path here, not by adding a package.
+ */
+const ICONS = {
+	close: "M18 6 6 18M6 6l12 12",
+	add: "M5 12h14M12 5v14",
+	send: "M5 12h14M13 6l6 6-6 6",
+	clear: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+	play: "m7 4 13 8-13 8z",
+	pause: "M7 4h3.5v16H7zM13.5 4H17v16h-3.5z",
+};
+
+/* One glyph, sized by the surface it sits on rather than by itself — the size
+   rule applies to a mark as much as to a control (#2107). `currentColor` so a
+   purpose changing a control's colour changes its icon with it, and
+   `aria-hidden` because the button around it carries the name. */
+function Icon ({ of, filled }) {
+	return html`
+		<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+			fill=${filled ? "currentColor" : "none"}
+			stroke=${filled ? "none" : "currentColor"}
+			stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<path d=${ICONS[of]} />
+		</svg>`;
+}
 
 /* A sheet: the whole glass, briefly, for something that needs answering.
  *
@@ -1672,13 +1712,13 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, onMove, o
 				     under the same finger. */ ""}
 				${onClose && html`
 					<button
-						class="close" title="remove"
+						class="close" title="remove" aria-label="remove"
 						onPointerDown=${(event) => {
 							event.preventDefault();
 							event.stopPropagation();
 							onClose();
 						}}
-					>✕</button>`}
+					><${Icon} of="close" /></button>`}
 			</header>
 			<div class="part-body">${children}</div>
 			${footer}
@@ -3389,7 +3429,7 @@ function Panel () {
 						${sources.map((source) => html`
 							<button
 								key=${source}
-								class="offer"
+								class="offer option"
 								onPointerDown=${(event) => {
 									event.preventDefault();
 									added({ kind: "pattern", source });

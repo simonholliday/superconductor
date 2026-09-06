@@ -39,6 +39,12 @@
 	--playhead: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
 	--accent-beat: light-dark(#e2e6ec, #21252d);
 
+	/* A title bar's own ground. A window says it is a window by having a bar
+	   that is not the body — that is how every windowed system has done it, and
+	   without it a grip has nothing to belong to. Close to `--panel` on purpose:
+	   this is a division, not a decoration. */
+	--title-ground: light-dark(#f2f4f7, #1d2027);
+
 	/* A hairline that has to be seen rather than merely be there: the outline
 	   that says a block can be picked up. `--edge` is a separator and reads as
 	   part of the surface; this reads as a state. */
@@ -318,7 +324,16 @@ html, body {
 	   nobody can read is not. */
 	height: max(24px, var(--cell));
 	gap: 0.6rem;
+	padding: 0 0.35rem;
 	overflow: hidden;
+
+	/* Its own ground and a line under it, always — not only when the layout is
+	   unlocked. A bar that looks like the body is not a bar, and the grip that
+	   marks it as draggable had nothing to sit on. Two jobs: this one says
+	   *this is a title bar*, and the grip says *this one moves right now*. */
+	background: var(--title-ground);
+	border-bottom: 1px solid var(--edge);
+
 	color: var(--ink-quiet);
 	font-size: var(--type-title);
 	font-weight: 600;
@@ -354,16 +369,30 @@ html, body {
 	overflow: hidden;
 }
 
-/* Top right, where a windowed system has put it for forty years. A whole cell,
-   like every other control on the lattice, and never smaller than a finger can
-   find — the title bar has a legibility floor and this shares it. */
+/* Top right, where a windowed system has put it for forty years.
+ *
+ * **Round, because square was the whole problem.** It kept the surface and the
+ * edge every target must have, and the title bar's rule made that surface a
+ * panel-filled, 8px-radiused square exactly one cell across — which is the
+ * description of a grid cell. Simon read it as one, correctly. The size stays,
+ * because the target rule wants it; the *shape* becomes chrome's, and a round
+ * disc on a bar that now has its own ground can be mistaken for nothing else. */
 .part-title .close {
 	flex: none;
 	width: max(24px, var(--cell));
+	min-width: max(24px, var(--cell));
+	padding: 0;
+	border-radius: 999px;
 	color: var(--ink-quiet);
 	line-height: 1;}
 
-.part-title .close:hover { color: var(--danger); }
+.part-title .close:hover,
+.part-title .close:focus-visible {
+	color: var(--danger);
+	border-color: var(--danger);
+}
+
+.part-title .close svg { width: 42%; height: 42%; }
 
 .part-title .about > span { flex: none; }
 
@@ -437,6 +466,19 @@ html, body {
 .part-title button {
 	min-width: max(24px, var(--cell));
 	min-height: max(24px, var(--cell));
+
+	/* **Centred, and the surface says so.** The alignment is here because it is
+	   the one property this rule did not name, and a purpose class filled the
+	   silence: `.offer` set `text-align: left` for the two-line options in a
+	   sheet, was reused on a footer button, and "add a contribution" came out
+	   left-aligned beside a centred toggle. Simon found it, as he found the
+	   last two. A rule that states height and type and stops is a rule with a
+	   hole in it. */
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
+
 	padding: 0 0.4rem;
 	border: 1px solid var(--edge);
 	border-radius: 8px;
@@ -451,6 +493,10 @@ html, body {
 .part-foot button {
 	min-width: var(--row);
 	min-height: var(--row);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
 	padding: 0 0.7rem;
 	border: 1px solid var(--edge);
 	border-radius: 8px;
@@ -468,6 +514,10 @@ html, body {
 .theme .choices button {
 	min-width: 44px;
 	min-height: 44px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4rem;
 	padding: 0 0.8rem;
 	border: 1px solid var(--edge);
 	border-radius: 8px;
@@ -1113,6 +1163,15 @@ html, body {
 	background-repeat: repeat-x;
 }
 
+/* A glyph takes its size from the control around it, as a mark must (#2107) —
+   never from a rule that names the glyph. `currentColor` so a purpose changing a
+   control's colour takes the icon with it. */
+.icon {
+	flex: none;
+	width: 1.15em;
+	height: 1.15em;
+}
+
 /* A pitched pattern's own settings. Two rows that do not change height with
    what is selected, because the block below one that grew and shrank would
    move every time a note was touched. */
@@ -1191,20 +1250,73 @@ html, body {
 	min-height: var(--row);
 }
 
-.grid.params .switch {
-	min-width: 5rem;
+/* A rocker, and there is one of it.
+ *
+ * **It says what the two states are before it is touched**, which a button
+ * reading "on" only says afterwards — you have to already know whether the word
+ * is the state or the action. Every console, drum machine and amplifier Simon's
+ * users own settles that by showing both ends and pressing one down, and it
+ * costs a word of width to do the same.
+ *
+ * One button, not two. A rocker is one control with two ends, and drawing it as
+ * two targets would be two targets for one value — which is the shape #2107
+ * exists to prevent. Tapping either end flips it, as tapping it always has.
+ *
+ * The rule about fills still holds exactly: **on is the accent filling the
+ * surface**. Off fills nothing with the accent; the muted block under "off" is a
+ * mark saying which end is down, and it is the same grey as a separator. */
+.switch {
+	min-width: max(calc(var(--row) * 1.9), 4.6rem);
+	padding: 2px;
+	gap: 0;
+	overflow: hidden;
 	background: var(--panel);
 	color: var(--ink-quiet);
-	letter-spacing: 0.04em;}
+	letter-spacing: 0.04em;
+}
 
-/* On is filled rather than outlined, the way a held transport is: a state you
-   are in, not an action you can take. */
-.grid.params .switch.on {
+.switch > i {
+	flex: 1 1 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	align-self: stretch;
+	border-radius: 5px;
+	font-style: normal;
+	color: var(--ink-quiet);
+	opacity: 0.55;
+}
+
+/* **The whole surface carries the state, and the ends say which way it is
+   thrown.** Filling only one end was tried and a test caught it within the
+   minute: from across a room half a control filled reads as a small mark inside
+   a pale block, not as a lit switch, and "a silenced block says so from across
+   the room" is a property somebody wrote a test for on purpose. So on is the
+   accent filling the surface — the same sentence as every other toggle here —
+   and the rocker's two ends are read at arm's length, where they are the thing
+   that says what off would even mean. */
+.switch.on {
 	background: var(--on);
 	border-color: var(--on-edge);
 	color: var(--on-ink);
+}
+
+/* The end that is down: brought up out of the surface it sits on, in whichever
+   direction that surface goes. */
+.switch:not(.on) > i:first-child {
+	background: var(--accent-beat);
+	color: var(--ink);
+	opacity: 1;
+}
+
+.switch.on > i:last-child {
+	background: var(--on-edge);
+	color: var(--on-ink);
+	opacity: 1;
 	font-weight: 700;
 }
+
+.switch.on > i:first-child { color: var(--on-ink); opacity: 0.5; }
 
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
@@ -1347,7 +1459,10 @@ html, body {
    other controls rather than having the width to itself. */
 /* Wide enough for its own word, which is the one thing here that is not
    square: "off" has to be readable or the state is not. */
-.grid.params .layer .switch { min-width: max(var(--row), 2.6rem); }
+/* The narrowing that used to be here is gone. A rocker has to be wide enough to
+   show both of its ends, and a control that is the same control everywhere may
+   not be a different width in one place — that is how "on" and "send to" came to
+   disagree in the first place. */
 
 .grid.params .layer .spacer { flex: 1; }
 
@@ -1405,18 +1520,30 @@ html, body {
 /* Picking a generator. A tall list of names on a touchscreen, so it scrolls
    inside the block rather than making the block taller than the glass. */
 
+/* An offer is a purpose, so it may say what colour it is and nothing else. It
+   used to say how its contents were laid out as well — stacked and left-aligned,
+   which is right for the two-line options below and wrong everywhere it was
+   borrowed. That is `.option` now. */
 .offer {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.15rem;
 	background: var(--panel);
 	color: var(--ink);
-	text-align: left;}
+}
 
-.offer b { font-family: ui-monospace, monospace; font-size: var(--type-chrome); }
+/* One option in a sheet: a name and a line about it, stacked. **The only place
+   a control overrides the surface's alignment**, because it holds two lines
+   rather than a label, and two lines centred read as neither. Anything else
+   wanting this shape wants this class, not a copy of these three properties. */
+.option {
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 0.15rem;
+	text-align: left;
+}
 
-.offer i {
+.option b { font-family: ui-monospace, monospace; font-size: var(--type-chrome); }
+
+.option i {
 	color: var(--ink-quiet);
 	font-style: normal;
 	font-size: var(--type-chrome-quiet);
@@ -1444,9 +1571,11 @@ html, body {
  * only one, and it costs three rows of height to say so. */
 .menu { position: relative; display: flex; align-items: center; flex: 1; }
 
-.menu > button {
-	display: flex;
-	align-items: center;
+/* The second and last exception to centring, and like the first it names
+   itself. A picker holds a label and the mark that says it opens, and those
+   belong at opposite ends — which is what a native select does and what a hand
+   reaching for one expects to find. */
+.picker {
 	justify-content: space-between;
 	gap: 0.5rem;
 	flex: 1;

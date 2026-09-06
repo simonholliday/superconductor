@@ -3234,7 +3234,12 @@ def test_a_block_can_be_silenced_from_its_own_footer (
 	switch = panel.locator('.part[data-part="grid"] .part-foot .switch')
 
 	assert switch.count() == 1, "a pattern cannot be silenced"
-	assert switch.inner_text().strip() == "on"
+
+	# A rocker shows both of its ends, so the words are not the state — which
+	# one is thrown is. That is the whole reason it replaced a button whose
+	# label you had to already know how to read.
+	assert switch.get_attribute("aria-checked") == "true"
+	assert switch.inner_text().split() == ["off", "on"], "both ends are named"
 
 	switch.click()
 
@@ -3259,7 +3264,8 @@ def test_a_silenced_block_says_so_from_across_the_room (
 		'.part[data-part="second"] .part-body', "one => getComputedStyle(one).opacity"))
 
 	assert dimmed < lit, f"a silenced block is drawn like a live one: {dimmed} against {lit}"
-	assert panel.locator('.part[data-part="grid"] .part-foot .switch').inner_text().strip() == "off"
+	assert panel.locator(
+		'.part[data-part="grid"] .part-foot .switch').get_attribute("aria-checked") == "false"
 
 
 def test_silencing_a_block_does_not_empty_it (
@@ -3403,6 +3409,49 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 			loose.append(selector)
 
 	assert loose == [], f"these name a button and set its own size: {loose}"
+
+
+def test_every_control_centres_what_is_written_on_it (panel: typing.Any) -> None:
+	"""The hole the surface rule had, and Simon found it twice over.
+
+	`.offer` set `align-items: flex-start` and `text-align: left` — right for the
+	two-line options in a sheet, where it was written, and wrong the moment a
+	footer button borrowed the class: "add a contribution" came out left-aligned
+	beside a centred toggle.  The surface rule said height and type and stopped,
+	so alignment was the property a purpose class could still quietly own.
+
+	One exception, and it has to name itself: an option holds two lines rather
+	than a label, and two lines centred read as neither.
+	"""
+
+	_open_the_stack(panel)
+	panel.locator('.part[data-part="grid"] .part-foot button.add').click()
+	panel.wait_for_selector(".sheet .option", timeout=5_000)
+
+	adrift = panel.evaluate("""() => {
+		const out = [];
+
+		for (const one of document.querySelectorAll("button")) {
+			const how = getComputedStyle(one).justifyContent;
+
+			/* Two exceptions, and both name themselves on the element: an
+			   option stacks two lines, and a picker puts its label and its
+			   mark at opposite ends the way a select does. */
+			if (how === "center") continue;
+			if (one.classList.contains("option") || one.classList.contains("picker")) continue;
+
+			out.push((one.className || one.tagName) + " → " + how);
+		}
+
+		return out;
+	}""")
+
+	assert adrift == [], f"these do not centre what is written on them: {adrift}"
+
+	stacked = panel.evaluate(
+		"""() => getComputedStyle(document.querySelector(".sheet .option")).flexDirection""")
+
+	assert stacked == "column", "an option stacks its two lines, and says so by its class"
 
 
 def test_the_switch_on_a_line_is_big_enough_to_find (
