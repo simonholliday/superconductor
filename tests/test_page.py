@@ -2083,9 +2083,8 @@ def _joins_settled (panel: typing.Any) -> None:
 
 	panel.wait_for_function(
 		"""() => {
-			const now = [...document.querySelectorAll(".join line")]
-				.map((one) => ["x1", "y1", "x2", "y2"].map((at) => one.getAttribute(at)).join())
-				.join("|");
+			const now = [...document.querySelectorAll(".join .cable")]
+				.map((one) => one.getAttribute("d")).join("|");
 			const settled = now.length > 0 && window.__joins === now;
 
 			window.__joins = now;
@@ -2120,12 +2119,16 @@ def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 			};
 
 			const [from, to] = join.split(">");
-			const line = document.querySelector(`[data-join="${join}"] line`);
+
+			/* A cable is a cubic, so its two ends are the first and last points
+			   of the path: "M ax ay C c1x c1y c2x c2y bx by". */
+			const numbers = document.querySelector(`[data-join="${join}"] .cable`)
+				.getAttribute("d").match(/-?[\d.]+/g).map(Number);
 
 			return {
 				from: at(from), to: at(to),
-				a: { x: +line.getAttribute("x1"), y: +line.getAttribute("y1") },
-				b: { x: +line.getAttribute("x2"), y: +line.getAttribute("y2") },
+				a: { x: numbers[0], y: numbers[1] },
+				b: { x: numbers[6], y: numbers[7] },
 			};
 		}""", join)
 
@@ -2260,44 +2263,41 @@ def test_a_line_runs_between_the_two_nearest_sides (
 	assert _on_the_edge(line["b"], line["to"]), f"the head is not on the pattern: {line}"
 
 
-def test_a_line_carries_a_direction_and_points_at_the_pattern (
+def test_a_cable_carries_a_direction_by_its_two_fittings (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Only one direction exists today.  The other one is already named — an
 	element that *shows* a property of a pattern rather than controlling it —
-	and an arrowhead costs a triangle now against a format change later (#2109).
+	and saying which way a route runs costs nothing now against a format change
+	later (#2109).
 
-	The head is at the middle of the line rather than at the end it points to,
-	because several contributions feeding one pattern all arrive at the same
-	block and heads gathered on its edge merge into a smudge.  So what is
-	measured here is which way it points, not where it sits.
+	It used to be an arrowhead at the middle of the line, put there because
+	several contributions feeding one pattern all arrive at the same block and
+	heads gathered on an edge merge into a smudge.  **A plug and a socket cannot
+	merge**, because they are at opposite ends of their own cable — so the
+	direction went back to the ends, where a person patching anything expects to
+	read it: the source is plugged in, the destination is the socket.
 	"""
 
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
 	line = _edges(panel, "stack/one>grid")
-	head = panel.eval_on_selector(
-		'[data-join="stack/one>grid"] path',
-		r"""one => {
-			const [, tip, left, right] = one.getAttribute("d")
-				.split(/[MLZ]/).map((part) => part.trim().split(/\s+/).map(Number));
+	ends = panel.evaluate("""(join) => {
+		const at = (selector) => {
+			const one = document.querySelector(`[data-join="${join}"] ${selector}`);
 
-			return { tip: { x: tip[0], y: tip[1] },
-			         base: { x: (left[0] + right[0]) / 2, y: (left[1] + right[1]) / 2 } };
-		}""")
+			return { x: +one.getAttribute("cx"), y: +one.getAttribute("cy") };
+		};
+
+		return { plug: at(".plug"), socket: at(".hole") };
+	}""", "stack/one>grid")
 
 	def away (point: dict[str, float], other: dict[str, float]) -> float:
 		return ((point["x"] - other["x"]) ** 2 + (point["y"] - other["y"]) ** 2) ** 0.5
 
-	assert away(head["tip"], line["b"]) < away(head["base"], line["b"]), (
-		f"the head points away from the pattern: {head} on {line}")
-
-	# And it is on the line, near the middle of it, rather than at either end.
-	middle = {"x": (line["a"]["x"] + line["b"]["x"]) / 2,
-	          "y": (line["a"]["y"] + line["b"]["y"]) / 2}
-
-	assert away(head["tip"], middle) < away(line["a"], line["b"]) / 4, (
-		f"the head is not near the middle: {head} on {line}")
+	assert away(ends["plug"], line["a"]) < 1.5, f"the plug is not at the source: {ends} on {line}"
+	assert away(ends["socket"], line["b"]) < 1.5, (
+		f"the socket is not at the pattern: {ends} on {line}")
 
 
 def test_a_line_brightens_while_a_hand_is_on_either_end (
@@ -2533,20 +2533,17 @@ def _at_size (panel: typing.Any, label: str, cell: str) -> None:
 	_settled(panel)
 
 
-def _head (panel: typing.Any, join: str) -> float:
-	"""How long the arrowhead on one line is, tip to base."""
+def _fitting (panel: typing.Any, join: str) -> float:
+	"""How large the socket at the end of one cable is.
+
+	The arrowhead this replaced was the mark whose scaling Simon found broken by
+	zooming; the fitting is the mark now, and it is held to the same rule.
+	"""
 
 	_joins_settled(panel)
 
 	return float(panel.eval_on_selector(
-		f'[data-join="{join}"] path',
-		r"""one => {
-			const [, tip, left, right] = one.getAttribute("d")
-				.split(/[MLZ]/).map((part) => part.trim().split(/\s+/).map(Number));
-			const base = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
-
-			return Math.hypot(tip[0] - base[0], tip[1] - base[1]);
-		}"""))
+		f'[data-join="{join}"] .socket', "one => +one.getAttribute('r')"))
 
 
 def test_a_mark_on_the_lattice_grows_with_the_cell (
@@ -2565,17 +2562,17 @@ def test_a_mark_on_the_lattice_grows_with_the_cell (
 	_two_generators(panel, fake_app)
 
 	_at_size(panel, "Compact", "22px")
-	small = _head(panel, "stack/one>grid")
+	small = _fitting(panel, "stack/one>grid")
 	hair = panel.evaluate(
-		"() => parseFloat(getComputedStyle(document.querySelector('.join line')).strokeWidth)")
+		"() => parseFloat(getComputedStyle(document.querySelector('.join .cable')).strokeWidth)")
 
 	_at_size(panel, "Large", "60px")
-	large = _head(panel, "stack/one>grid")
+	large = _fitting(panel, "stack/one>grid")
 	thicker = panel.evaluate(
-		"() => parseFloat(getComputedStyle(document.querySelector('.join line')).strokeWidth)")
+		"() => parseFloat(getComputedStyle(document.querySelector('.join .cable')).strokeWidth)")
 
-	assert large > small, f"the head did not grow with the cell: {small} then {large}"
-	assert thicker > hair, f"the line did not thicken with the cell: {hair} then {thicker}"
+	assert large > small, f"the fitting did not grow with the cell: {small} then {large}"
+	assert thicker > hair, f"the cable did not thicken with the cell: {hair} then {thicker}"
 
 
 def test_a_mark_stops_growing_rather_than_running_away (
@@ -2590,12 +2587,12 @@ def test_a_mark_stops_growing_rather_than_running_away (
 	_two_generators(panel, fake_app)
 
 	_at_size(panel, "Large", "60px")
-	large = _head(panel, "stack/one>grid")
+	large = _fitting(panel, "stack/one>grid")
 
 	row = panel.evaluate(
 		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))")
 
-	assert large <= row, f"the head is taller than a control row: {large} against {row}"
+	assert large <= row, f"the fitting is larger than a control row: {large} against {row}"
 
 
 def test_a_line_shows_where_it_joins_at_both_ends (
@@ -2610,12 +2607,15 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 	_two_generators(panel, fake_app)
 
 	line = _edges(panel, "stack/one>grid")
+
+	# A plug at the source and a socket at the destination — which is also what
+	# says which way the cable runs, now that there is no arrowhead to say it.
 	dots = panel.eval_on_selector_all(
-		'[data-join="stack/one>grid"] circle.anchor',
+		'[data-join="stack/one>grid"] .plug, [data-join="stack/one>grid"] .hole',
 		"""els => els.map((one) => ({
 			x: +one.getAttribute("cx"), y: +one.getAttribute("cy"), r: +one.getAttribute("r") }))""")
 
-	assert len(dots) == 2, f"a join drew {len(dots)} anchors"
+	assert len(dots) == 2, f"a join drew {len(dots)} fittings"
 
 	for dot in dots:
 		assert dot["r"] > 0
@@ -2982,17 +2982,28 @@ def test_a_silenced_link_is_dashed_and_hollow (
 			document.querySelector('[data-join="second>grid"] ' + selector));
 
 		return {
-			dashes: at("line").strokeDasharray,
-			head: { fill: at("path").fill, stroke: at("path").stroke },
-			node: { fill: at("circle.node").fill, stroke: at("circle.node").stroke },
+			dashes: at(".cable").strokeDasharray,
+			live: at(".cable").stroke,
+			node: { fill: at(".node").fill, stroke: at(".node").stroke },
 		};
 	}""")
 
 	assert drawn["dashes"] not in ("none", ""), f"a silenced link is not dashed: {drawn}"
 
-	# The arrow goes hollow, which is what every toggle here says when it is off.
-	assert drawn["head"]["fill"] == "none", f"a silenced head is still filled: {drawn}"
-	assert drawn["head"]["stroke"] != "none", f"a silenced head has no outline: {drawn}"
+	# And it loses the accent, which is the sentence every toggle here says when
+	# it is off — a dead lead is not the colour of a live one.
+	accent = panel.evaluate(
+		"""() => {
+			const swatch = document.createElement("span");
+			swatch.style.color = getComputedStyle(document.documentElement)
+				.getPropertyValue("--ring").trim();
+			document.body.appendChild(swatch);
+			const seen = getComputedStyle(swatch).color;
+			swatch.remove();
+			return seen;
+		}""")
+
+	assert drawn["live"] != accent, f"a silenced cable is drawn like a live one: {drawn}"
 
 	# And its switch keeps its surface and its edge, because it is still a
 	# target: off is the surface alone, never the absence of one.
@@ -3018,20 +3029,20 @@ def test_only_the_head_of_an_arrow_takes_a_tap (
 
 		return {
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
-			lines: parts(".join line"),
-			anchors: parts(".join circle.anchor"),
-			switches: parts(".join.switchable circle.node"),
-			marks: parts(".join path"),
+			lines: parts(".join .cable"),
+			anchors: parts(".join .plug, .join .socket, .join .collar, .join .hole"),
+			switches: parts(".join.switchable .node"),
+			marks: parts(".join .cable"),
 		};
 	}""")
 
 	assert inert["overlay"] == "none"
-	assert set(inert["lines"]) == {"none"}, f"a line takes taps: {inert}"
-	assert set(inert["anchors"]) == {"none"}, f"an anchor takes taps: {inert}"
+	assert set(inert["lines"]) == {"none"}, f"a cable takes taps: {inert}"
+	assert set(inert["anchors"]) == {"none"}, f"a fitting takes taps: {inert}"
 	assert set(inert["switches"]) == {"all"}, f"a switch takes no taps: {inert}"
 
-	# A line with nothing to switch takes nothing: an arrowhead that is only a
-	# mark must not cost the grid underneath a tap.
+	# A cable with nothing to switch takes nothing: a mark must not cost the
+	# grid underneath a tap.
 	assert set(inert["marks"]) <= {"none"}, f"a mark takes taps: {inert}"
 
 

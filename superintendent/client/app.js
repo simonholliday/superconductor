@@ -56,31 +56,42 @@ const SEPARATION = 1;
 const marked = (cell, floor, share, ceiling) =>
 	Math.min(ceiling, Math.max(floor, cell * share));
 
-const ARROW = { floor: 15, share: 0.5, ceiling: 30 };
-/* How long the head of a connecting line is.
- *
- * Drawn at the middle of the line rather than at the end it points to. Several
- * contributions feeding one pattern all arrive at the same block, and heads
- * gathered on its edge merge into a smudge that says nothing — Simon found that
- * with three of them. At the middle they are as far apart as the lines are. */
-
-const NODE = 1.5;
-/* How large the switch on a line is, against its arrowhead — and never smaller
- * than a control on the lattice, which is the floor that actually binds.
- *
- * It was a bare triangle, then a disc the size of one. Simon twice: it is not
- * big enough and it does not look like a target. Both are the same rule said
- * from two sides — **a target is at least one row across and has a surface and
- * an edge** — and a switch on a line is a control like any other. */
-
-const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
-/* How large the dot is where a line meets a block.
+const JACK = { floor: 6, share: 0.17, ceiling: 12 };
+/* How large the fitting is where a cable meets a block.
  *
  * "Right now it might be possible to misinterpret a line as going *behind* an
- * item, since we cannot see the join" — Simon, and he is right: a line that
- * stops at an edge and a line that passes under a block are the same picture
- * without something at the end saying which. The dot is that something, and it
- * has to be at both ends because either end could be the ambiguous one. */
+ * item, since we cannot see the join" — Simon, and he was right. It began as a
+ * dot saying only "the line stops here". It is a fitting now, and it says one
+ * thing more: **the source end is a plug and the destination end is a socket**,
+ * so a cable declares which way it runs by being plugged into something.
+ *
+ * That is what replaced the arrowhead. A head drawn at a line's middle was a
+ * triangle floating in space with nothing physical about it, and at the end it
+ * pointed to it merged with every other head arriving at the same block —
+ * Simon found that with three of them. A plug and a socket cannot merge,
+ * because they are at opposite ends of their own cable.
+ */
+
+const SAG_FLOOR = 10;
+const SAG_SHARE = 0.14;
+const SAG_CEILING = 54;
+/* How far a cable hangs between its two ends.
+ *
+ * **Not decoration.** A sag is what makes two crossing cables read as two
+ * cables rather than as an X, which is the whole reason a real patchbay is
+ * legible at all — and this page will have several once a grid feeds three
+ * patterns. Proportional to the span, so a short link barely dips and a long
+ * one hangs, which is also what a real lead does.
+ */
+
+const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
+/* How far a cable's end is held off the block it meets.
+ *
+ * Once a dot marking where a line stopped; the fitting drawn there is a plug or
+ * a socket now (see `JACK`) and this is only the inset. It still earns its own
+ * number: a cable that ended exactly on an edge would have its fitting half
+ * behind the block, which is the ambiguity Simon reported in the first place —
+ * "it might be possible to misinterpret a line as going *behind* an item". */
 
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
@@ -1949,8 +1960,7 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 
 	if (!drawn.length) return null;
 
-	const arrow = marked(cell, ARROW.floor, ARROW.share, ARROW.ceiling);
-	const anchor = marked(cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling);
+	const jack = marked(cell, JACK.floor, JACK.share, JACK.ceiling);
 
 	/* Large enough to hold every line and no larger. Every endpoint sits on the
 	   edge of a block, so this can never be wider than the blocks already are —
@@ -1964,35 +1974,41 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 		{ x: 0, y: 0 });
 
 	return html`
-		${/* Room for whatever reaches past the two points measured above: the
-		     head's wings, which cross the line rather than run along it, and an
-		     anchor dot, which is centred on an endpoint and so spills by its
-		     own radius. */ ""}
+		${/* Room for whatever reaches past the two points measured above: a
+		     cable's sag hangs below the lower of its two ends, and a jack is
+		     centred on an endpoint and so spills by its own radius. */ ""}
 		<svg class="joins"
-			width=${Math.ceil(extent.x + Math.max(arrow * 0.38, anchor)) + 1}
-			height=${Math.ceil(extent.y + Math.max(arrow * 0.38, anchor)) + 1}>
+			width=${Math.ceil(extent.x + jack) + 1}
+			height=${Math.ceil(extent.y + jack + SAG_CEILING) + 1}>
 			${drawn.map((line) => {
-				const angle = Math.atan2(line.b.y - line.a.y, line.b.x - line.a.x);
-				const middle = { x: (line.a.x + line.b.x) / 2, y: (line.a.y + line.b.y) / 2 };
+				/* **A cable, because that is what this is.** A person who
+				   patches a modular, a mixer or a stage box already knows that
+				   a lead runs from a socket to a socket and hangs a little in
+				   between — and that reading is worth more than the arrowhead
+				   it replaces, which was a triangle floating in the middle of a
+				   straight line with nothing physical about it.
+				
+				   The sag is not decoration either: it is what makes two
+				   crossing cables readable as two cables, which is the whole
+				   reason a real patchbay is legible at all. */
+				const span = Math.hypot(line.b.x - line.a.x, line.b.y - line.a.y);
+				const dip = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
+				const reach = (line.b.x - line.a.x) * 0.25;
 
-				/* The head straddles the middle rather than sitting behind it,
-				   so what a person sees pointing is centred on the line's own
-				   midpoint however long the line is. */
-				const tip = {
-					x: middle.x + Math.cos(angle) * arrow / 2,
-					y: middle.y + Math.sin(angle) * arrow / 2,
+				const c1 = { x: line.a.x + reach, y: line.a.y + dip };
+				const c2 = { x: line.b.x - reach, y: line.b.y + dip };
+
+				const cable = `M ${line.a.x} ${line.a.y}`
+					+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
+
+				/* Where the switch rides. The midpoint of a cubic is
+				   (A + 3C₁ + 3C₂ + B) / 8, which for these control points is
+				   the straight midpoint pulled down by three quarters of the
+				   sag — so the switch sits on the cable rather than beside it. */
+				const middle = {
+					x: (line.a.x + line.b.x) / 2,
+					y: (line.a.y + line.b.y) / 2 + dip * 0.75,
 				};
-				const back = {
-					x: middle.x - Math.cos(angle) * arrow / 2,
-					y: middle.y - Math.sin(angle) * arrow / 2,
-				};
-				const wing = arrow * 0.38;
-				const head = [
-					`M ${tip.x} ${tip.y}`,
-					`L ${back.x - Math.sin(angle) * wing} ${back.y + Math.cos(angle) * wing}`,
-					`L ${back.x + Math.sin(angle) * wing} ${back.y - Math.cos(angle) * wing}`,
-					"Z",
-				].join(" ");
 
 				const live = touched === line.from || touched === line.to;
 				const flip = line.control && onFlip
@@ -2004,37 +2020,31 @@ function Connections ({ box, joins, touched, cell, when, onFlip }) {
 						class=${`join ${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
 						data-join=${`${line.from}>${line.to}`}>
-						<line x1=${line.a.x} y1=${line.a.y} x2=${line.b.x} y2=${line.b.y} />
-						${/* The one live target on this overlay, and only the triangle
-						     itself — not a fat circle around it. The overlay sits above
-						     the blocks, so anything that takes a pointer here takes it
-						     from the grid underneath, and the grid is the most tapped
-						     surface on the panel. A head is drawn where it is, so a
-						     person can see what they are about to hit and move the
-						     block if it is in the way. */ ""}
-						${/* The switch, and it looks like one: a disc with the arrow
-						     inside it. Filled while the link is sounding, hollow when
-						     it is not — the same sentence every other toggle on this
+						<path class="cable" d=${cable} />
+						${/* **The ends say which way it runs**, which is what the
+						     arrowhead was for and what a cable does not say by
+						     itself. The source end is a plug — solid, seated in
+						     a collar — and the destination is a socket, open.
+						     Something plugged *into* something reads as a
+						     direction without a symbol needing to be learnt. */ ""}
+						<circle class="collar" cx=${line.a.x} cy=${line.a.y} r=${jack} />
+						<circle class="plug" cx=${line.a.x} cy=${line.a.y} r=${jack * 0.46} />
+						<circle class="socket" cx=${line.b.x} cy=${line.b.y} r=${jack} />
+						<circle class="hole" cx=${line.b.x} cy=${line.b.y} r=${jack * 0.34} />
+						${/* The switch, and it looks like one: a disc riding on the
+						     cable. Filled while the link is sounding, hollow when it
+						     is not — the same sentence every other toggle on this
 						     surface says, in the shape a line can carry.
 						
 						     Drawn only where there is something to switch, so the
 						     disc means "this is a control" and its absence means
 						     "this is a mark". A generator's line is a mark: its
-						     switch lives in its own block. */ ""}
+						     switch lives in its own block (#2107). */ ""}
 						${flip && html`
 							<circle
 								class="node" cx=${middle.x} cy=${middle.y}
-								r=${Math.max(controlRow(cell), arrow * NODE) / 2}
+								r=${controlRow(cell) / 2}
 								onPointerDown=${flip} />`}
-						${/* Drawn over the switch and taking nothing: the disc is the
-						     control and the arrow is what is written on it. */ ""}
-						<path d=${head} />
-						${/* Both ends, because either could be the one read wrongly.
-						     Inert: an anchor says where a line stops and nothing else,
-						     and every live target on this overlay is one the grid
-						     underneath has lost. */ ""}
-						<circle class="anchor" cx=${line.a.x} cy=${line.a.y} r=${anchor} />
-						<circle class="anchor" cx=${line.b.x} cy=${line.b.y} r=${anchor} />
 					</g>`;
 			})}
 		</svg>`;

@@ -1910,119 +1910,92 @@ html, body {
 	z-index: 500;
 }
 
-/* Solid. It was dashed, on the argument that a quiet mark should look quiet —
-   and on the glass Simon could not see it. A dash halves the ink in a line
-   already drawn at a low opacity, and the two together came to nothing.
-   Quietness is the opacity's job alone. */
-.join line {
-	stroke: var(--ring);
-	stroke-width: var(--mark-hair);
-	stroke-opacity: 0.45;
+/* --- A cable, because that is what this is --------------------------------
+ *
+ * A route was a straight line with a triangle floating at its midpoint:
+ * accurate, and with nothing physical about it to read. It is a lead running
+ * from a socket to a socket now, which is a thing anybody who has patched a
+ * modular, a mixer or a stage box already knows how to read.
+ *
+ * Faint until a hand is on one end. That is the moment the question is being
+ * asked, and answering it then costs nothing the rest of the time. */
+.join .cable {
 	fill: none;
+	stroke: var(--ring);
+	stroke-width: max(3px, calc(var(--cell) * 0.06));
+	stroke-opacity: 0.45;
+	stroke-linecap: round;
 }
 
-/* The anchors, which are one object with the line and so are never a different
-   colour or a different weight from it. */
-.join circle.anchor {
-	fill: var(--ring);
-	fill-opacity: 0.45;
+/* **The source end is a plug and the destination end is a socket**, which is
+   how a cable says which way it runs now that there is no arrowhead: a thing
+   plugged into a thing reads as a direction with no symbol to learn. It also
+   cannot smudge the way heads did — Simon found three of them merging at one
+   block's edge — because a plug and a socket are at opposite ends of their own
+   cable and never gather. */
+.join .collar,
+.join .socket {
+	fill: var(--part);
+	stroke: var(--edge-strong);
+	stroke-width: 1.5;
+	stroke-opacity: 0.7;
 }
 
-/* The switch on a line, and it looks like one.
+.join .plug { fill: var(--ring); fill-opacity: 0.45; }
+.join .hole { fill: var(--ground); }
+
+/* Brighter under a finger: a cable says "these are related" all the time, and
+   "this one, right now" while a hand is on either end. */
+.join.live .cable { stroke-opacity: 1; }
+.join.live .plug { fill-opacity: 1; }
+.join.live .collar, .join.live .socket { stroke-opacity: 1; }
+
+/* The switch on a cable, and it looks like one.
  *
  * It was a bare triangle, and it was already a switch — Simon asked whether it
  * should become one, which is the finding rather than the request: an
- * affordance nobody can see is not an affordance.
+ * affordance nobody can see is not an affordance. It rides at the lowest point
+ * of the sag, where a cable-mounted mute sits on a real lead.
  *
- * A disc with the arrow inside it, so the direction is still said and the
- * target is unmistakable. Filled while the link is sounding; the arrow is
- * punched out of it in the page's own ground, which is what makes it read as
- * one object rather than two stacked marks. */
-/* A surface and an edge, like every other target — in the terms SVG has for
-   them. Filled with the accent while the link is sounding, which is what every
-   toggle here says when it is on. */
-.join circle.node {
-	fill: var(--ring);
-	fill-opacity: 1;
-	stroke: var(--ring);
-	stroke-width: var(--mark-hair);
-}
-
-/* The head of a line that carries a switch is punched out of its disc; the head
-   of one that does not is a plain mark, and reads as the line's own colour. */
-.join.switchable path {
-	fill: var(--ground);
-	fill-opacity: 1;
-}
-
-.join path {
-	fill: var(--ring);
-	fill-opacity: 0.45;
-}
-
-.join.live path { fill-opacity: 1; }
-
-/* Brighter under a finger: the line says "these are related" all the time, and
-   "this one, right now" while a hand is on either end. */
-.join.live line { stroke-opacity: 1; }
-.join.live circle.anchor { fill-opacity: 1; }
-
-/* **The head is the switch, and only the head.**
- *
- * The overlay takes no pointer events at all, because a line crossing a pattern
- * must not cost a tap. The triangle is the exception and it is deliberately the
- * whole of it — no invisible circle around it. It sits above the blocks, so
- * anything live here takes a pointer from the grid underneath, and the grid is
- * the most tapped surface there is. A head is drawn where it is: a person can
- * see what they are about to hit, and move the block if it is in the way. */
-/* `all`, not `auto`. A silenced head is `fill: none`, and an unpainted fill is
-   not a target — so the head could be tapped to silence a link and then only on
-   its two-pixel outline to bring it back. Caught by the test that turns one off
-   and on again, which is why that test does both. */
-/* The disc is the control and the arrow is what is written on it, so the disc
-   takes the pointer and the arrow takes nothing. One target, not two stacked. */
-.join.switchable circle.node {
+ * A surface and an edge, in the terms SVG has for them (#2107). */
+.join .node {
+	fill: var(--on);
+	stroke: var(--on-edge);
+	stroke-width: 1.5;
 	pointer-events: all;
 	touch-action: none;
 	cursor: pointer;
 }
 
-.join path { pointer-events: none; }
+/* **Nothing else on this overlay takes a pointer.** It sits above every block,
+   and the grid underneath is the most tapped surface on the panel — so a cable
+   crossing a pattern must never cost a tap. The switch is the one exception and
+   it is deliberately the whole of it. */
+.joins .join * { pointer-events: none; }
+.joins .join .node { pointer-events: all; }
 
-/* A silenced link, said twice over: the line goes dashed and the head goes
-   hollow.
+/* Unplugged in effect: still connected, carrying nothing. Thin and dashed,
+   which is what a dead lead looks like from across a room.
  *
  * Dashes were where the lines started and Simon could not see them, which is
- * why they are solid now. They come back here earning their place — a dash no
- * longer means "this is quiet", it means *this is not sounding*, and a line
- * that is hard to read is exactly right for a link that is doing nothing. */
-.join.off line {
+ * why the cable is solid. They come back here earning their place — a dash no
+ * longer means "this is quiet", it means *this is not sounding*. */
+.join.off .cable {
+	stroke: var(--ink-quiet);
 	stroke-dasharray: 6 5;
-	stroke-opacity: 0.3;
+	stroke-opacity: 0.5;
 }
 
-/* Hollow, which is what every toggle on this surface says when it is off: a
-   filled thing is sounding and an outlined one is not. The colour stays the
-   thing's own — a link is the accent because a link is a connection — because
-   what has to be identical is the *sentence*, not the hue. */
+.join.off .plug { fill: var(--ink-quiet); fill-opacity: 0.5; }
+
 /* Off is the surface and its edge alone, which is what a toggle on a block says
    too — the panel colour under an edge, with the accent kept for the mark. */
-.join.off circle.node {
+.join.off .node {
 	fill: var(--panel);
-	stroke-opacity: 0.6;
+	stroke: var(--edge-strong);
 }
 
-.join.off path {
-	fill: none;
-	stroke: var(--ring);
-	stroke-width: var(--mark-hair);
-	stroke-opacity: 0.7;
-}
-
-.join.off circle.anchor { fill-opacity: 0.2; }
-
-.join.off.live line { stroke-opacity: 0.7; }
-.join.off.live circle.node, .join.off.live path { stroke-opacity: 1; }
+.join.off.live .cable { stroke-opacity: 0.85; }
 
 /* --- A stack whose pattern is elsewhere ----------------------------------- */
 
