@@ -457,6 +457,38 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
 		<//>`;
 }
 
+/* Which note covers each step of a row, keyed by step and holding the step that
+ * note starts on.
+ *
+ * A note is addressed by where it starts and drawn as a bar reaching past it,
+ * so the cells under the rest of the bar hold no note of their own. Without
+ * this map a tap on the middle of a four-step note reads as a tap on an empty
+ * cell and places a second note underneath the first — which on a monophonic
+ * part retriggers the envelope and cuts the long note short.
+ *
+ * **The bar is one thing on the glass, so it is one target** (#2107). This is
+ * the map that makes it one.
+ *
+ * A length is counted up rather than down, so a note reaching part-way into a
+ * cell still claims it: the finger is over the bar, so the bar is what it
+ * means. Where two notes overlap the later one wins, which is the one drawn on
+ * top — integer-like keys iterate in ascending order, so the last write is the
+ * latest start. Nothing here decides whether an overlap should exist; it
+ * decides which note a finger landing on the glass is pointing at.
+ */
+function coverage (held, steps) {
+	const covers = new Map();
+
+	for (const [start, note] of Object.entries(held || {})) {
+		const from = Number(start);
+		const span = Math.max(1, Math.ceil(note.length || 1));
+
+		for (let step = from; step < Math.min(steps, from + span); step += 1) covers.set(step, start);
+	}
+
+	return covers;
+}
+
 /* A pitched pattern: one row per note, and a cell that is a note.
  *
  * A note is drawn as a bar reaching rightwards from where it starts, which is
@@ -466,9 +498,10 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
  * Two gestures, both acting on the finger landing (#2046). Pressing an empty
  * cell places a note and begins sizing it: drag right and the note grows a step
  * at a time, each length sent as its own absolute set, so the bar on the glass
- * is never longer than the sequencer has agreed to. Pressing a note takes it
- * away. Resizing a note that is already there means drawing it again, which is
- * the first thing to revisit once this has been played.
+ * is never longer than the sequencer has agreed to. Pressing anywhere along a
+ * note takes that note away, whichever of its cells the finger landed on.
+ * Resizing a note that is already there means drawing it again, which is the
+ * first thing to revisit once this has been played.
  */
 function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows,
                     pending, failed, onSet }) {
@@ -480,10 +513,12 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 
 	const pitch = cell + GAP;
 
-	const begin = (event, row, step, existing) => {
+	const begin = (event, row, step, held) => {
 		event.preventDefault();
 
-		if (existing) { onSet(`${name}/${row}/${step}`, false); return; }
+		// Addressed by where the note starts, not where the finger landed:
+		// a bar is one target and the sequencer knows it by its first step.
+		if (held !== undefined) { onSet(`${name}/${row}/${held}`, false); return; }
 
 		onSet(`${name}/${row}/${step}`, true);
 
@@ -512,29 +547,47 @@ function NoteGrid ({ control, name, rows, steps, notes, cell, window: windowRows
 	return html`
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell}>
 		<div class="grid notes" style=${style}>
-			${rows.map((row) => html`
+			${rows.map((row) => {
+				const covers = coverage(notes[row], steps);
+
+				return html`
 				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${name}/${row}/${step}`;
 					const note = (notes[row] || {})[String(step)];
+					const held = covers.get(step);
+
+					// What a tap on this cell would change: the note covering
+					// it, or the note it would place. A ring belongs to the
+					// request, so it follows the address rather than the finger.
+					const asked = held === undefined ? path : `${name}/${row}/${held}`;
+					const waiting = pending.has(asked);
+					const refused = failed.has(asked);
 
 					return html`
 						<div
 							key=${path}
 							data-path=${path}
-							class=${["cell", note ? "on" : "", pending.has(path) ? "pending" : "",
-								failed.has(path) ? "failed" : "",
+							class=${["cell", note ? "on" : "",
+								// A covered cell is under the bar, so the bar
+								// wears the ring and the cell does not: one
+								// request, one mark, not four in a row.
+								waiting && held === undefined ? "pending" : "",
+								refused && held === undefined ? "failed" : "",
 								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
-							onPointerDown=${(event) => begin(event, row, step, Boolean(note))}
+							onPointerDown=${(event) => begin(event, row, step, held)}
 							onPointerMove=${stretch}
 							onPointerUp=${finish}
 							onPointerCancel=${finish}
 						>${note && html`
-							<div class="note" style=${{
-								width: `${(note.length || 1) * pitch - GAP}px`,
-							}}></div>`}</div>`;
+							<div
+								class=${["note", waiting ? "pending" : "",
+									refused ? "failed" : ""].filter(Boolean).join(" ")}
+								style=${{ width: `${(note.length || 1) * pitch - GAP}px` }}
+							></div>`}</div>`;
 				})}
-			`)}
+			`;
+			})}
 		</div>
 		<//>`;
 }

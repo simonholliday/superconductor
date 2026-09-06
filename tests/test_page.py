@@ -534,6 +534,42 @@ def test_pressing_a_note_takes_it_away (
 	assert fake_app.await_set("bass/C2/0")["v"] is False
 
 
+def test_pressing_the_middle_of_a_note_takes_that_note_away (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A bar is one thing on the glass, so every cell of it is the same target.
+
+	The fixture holds a two-step note at ``C2/0``, so ``C2/1`` is under the bar
+	and holds no note of its own.  Before this, a tap there read as a tap on an
+	empty cell and placed a second note underneath the first — silent as a
+	second note, and on a monophonic part it retriggered the envelope and cut
+	the long note short.
+	"""
+
+	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/C2/1")).click()
+
+	assert fake_app.await_set("bass/C2/0")["v"] is False, "the note it landed on, taken away"
+	assert not [frame for frame in fake_app.sets if frame.get("path") == "bass/C2/1"], \
+		"nothing was placed in the cell the bar covers"
+
+
+def test_the_cell_past_a_note_is_still_its_own (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The bar claims the cells it covers and not one more.
+
+	The companion to the test above, and the one that catches a coverage map
+	counting a step too far: ``C2/2`` is the first cell the two-step note does
+	not reach, so a tap there places a note of its own.
+	"""
+
+	_open_the_bass(panel)
+
+	panel.locator(conftest.cell("bass/C2/2")).click()
+
+	assert fake_app.await_set("bass/C2/2")["v"] is True
+
+
 def test_the_velocity_lane_shapes_the_note_in_its_column (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""A lane rather than a dial: the whole dynamic shape is visible at once."""

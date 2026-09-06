@@ -1002,6 +1002,30 @@ html, body {
 	pointer-events: none;
 }
 
+/* A note being changed rings as one thing, because on the glass it is one
+   thing. The cell's own ring marks a note about to be placed, where there is no
+   bar yet to wear it; once there is a bar, the bar is the target and the ring
+   outlines all of it rather than repeating in each cell it covers.
+
+   Same rule and same figures as `.cell.pending::after`, over the bar's own
+   inset rather than a cell's. */
+.grid.notes .note.pending::after {
+	content: "";
+	position: absolute;
+	inset: max(2px, calc(var(--cell) * 0.11));
+	border-radius: max(2px, calc(var(--cell) * 0.09));
+	border: max(2px, calc(var(--cell) * 0.07)) solid var(--ring);
+}
+
+.grid.notes .note.failed::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
+	background: var(--bad);
+	animation: fade-out 0.9s ease-out forwards;
+}
+
 /* A note name is read as much as a drum voice is, and wants its figures to line
    up. Everything else about it is the one label rule. */
 .grid.notes .row-label { font-variant-numeric: tabular-nums; }
