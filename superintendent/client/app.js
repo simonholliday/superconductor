@@ -344,7 +344,7 @@ class Link {
  *
  * Left unpositioned deliberately — the playhead measures its offset against the
  * block's body, and a positioned scroller would put itself in between. */
-function Window ({ rows, visible, cell, children }) {
+function Window ({ rows, visible, cell, tight, children }) {
 	const seen = useRef(null);
 	const windowed = Boolean(visible && visible < rows);
 
@@ -407,7 +407,14 @@ function Window ({ rows, visible, cell, children }) {
 				class="scroller"
 				ref=${seen}
 				onScroll=${measure}
-				style=${windowed ? { maxHeight: `${visible * (cell + GAP)}px`, overflowY: "auto" } : null}
+				${/* Sized in the same units as what it is looking at. A pitched
+				     grid's rows touch, so its window must count `cell` and not
+				     `cell + GAP` — measured in one place and the content in
+				     another, a two-row window quietly held three rows and there
+				     was nothing left to scroll. */ ""}
+				style=${windowed
+					? { maxHeight: `${visible * (tight ? cell : cell + GAP)}px`, overflowY: "auto" }
+					: null}
 			>${children}</div>
 
 			${windowed && html`
@@ -426,7 +433,38 @@ function Window ({ rows, visible, cell, children }) {
 		</div>`;
 }
 
-function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, failed, onTap }) {
+/* Four colours across a bar, one to a beat, in the TR-808's own run.
+ *
+ * **This is the most recognisable thing a step sequencer does** and it is worth
+ * a mark of its own: a person can count a bar on an 808 without reading a
+ * number, because the sixteen buttons run red, orange, amber, bone in fours.
+ * The faint tint on every fourth cell was doing the same job an order of
+ * magnitude more quietly.
+ *
+ * Above the grid rather than on it, because it is a **mark and not a face**
+ * (#2107): drawn on the cells it would be a second colour competing with the
+ * one that says a step is on, and the reading of the pattern would suffer to
+ * make the counting easier. As a strip it costs a few pixels and nothing else.
+ *
+ * A beat's width is `steps / beats` cells, whatever those numbers are — a grid
+ * of twelve over three beats groups in fours as readily as sixteen over four,
+ * and neither is written down here. */
+function BeatStrip ({ steps, beats, tight }) {
+	const per = Math.max(1, Math.round(steps / Math.max(1, beats)));
+
+	return html`
+		<div
+			class=${`beats ${tight ? "tight" : ""}`}
+			style=${{ gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))` }}
+			aria-hidden="true"
+		>
+			<span class="beats-label"></span>
+			${Array.from({ length: steps }, (_, step) => html`
+				<i key=${`beat-${step}`} class=${`beat b${(Math.floor(step / per) % 4) + 1}`}></i>`)}
+		</div>`;
+}
+
+function Grid ({ control, rows, steps, beats, cells, drawn, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -436,6 +474,7 @@ function Grid ({ control, rows, steps, cells, drawn, visible, cell, pending, fai
 	};
 
 	return html`
+		<${BeatStrip} steps=${steps} beats=${beats} />
 		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
 			${rows.map((row) => html`
@@ -582,33 +621,28 @@ const DRAG_SLOP = 8;
  * goes on showing what the sequencer actually holds until the release is
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
-function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRows,
+function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: windowRows,
                     snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 	};
 
 	const positions = steps * divisions;
-	const pitch = cell + GAP;
-	const unit = pitch / divisions;
-	/* What a position is worth to a *drag*, averaged over whole cells. Right at
-	   every cell boundary, a little out between them, and the snap absorbs the
-	   difference — which is why the drawing below cannot use it. */
 
-	const inCell = cell / divisions;
-	/* What a position is worth *inside* a cell, which is a different number and
-	   the reason the subdivision marks were landing off-centre.
-
-	   A step boundary is where a cell begins, and a step occupies the cell plus
-	   the gap after it — so measuring a position as a fraction of `cell + GAP`
-	   is right for anything that crosses a boundary and wrong for everything
-	   that does not. At a 44px cell it put the half-step mark at 24px, which is
-	   two pixels right of the 22px a person reads as the middle. Simon saw it
-	   at 1/32 and named the gap as the cause.
-
-	   So the two are used for different things and neither is a rounding of the
-	   other: a boundary is `step * pitch`, and a position within a step is that
-	   plus a share of the cell's own ink. */
+	/* **A piano roll has no gaps, and that is the whole of the arithmetic.**
+	 *
+	 * A step grid is a drum machine and its cells are pads, spaced. A pitched
+	 * grid is a piano roll and its cells are a lattice, touching — which is how
+	 * Logic, Ableton and Reaper all draw one, and how Simon reads one.
+	 *
+	 * It is also why there is now a single number here where there were two. A
+	 * step used to occupy the cell *and* the gap after it, so a position that
+	 * crossed a boundary and a position inside a cell were measured differently
+	 * — and getting that wrong put the 1/32 marks at 55% across a cell, which
+	 * is where Simon found it. With no gap, a position is a position: `cell /
+	 * divisions`, everywhere, and the two measures cannot disagree because
+	 * there is only one. */
+	const unit = cell / divisions;
 
 	const drag = useRef(null);
 	const [ghost, setGhost] = useState(null);
@@ -680,7 +714,7 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 		const across = Math.round(dx / unit);
 
 		if (held.kind === "move") {
-			const down = Math.round(dy / (controlRow(cell) + GAP));
+			const down = Math.round(dy / controlRow(cell));
 			const where = rows.indexOf(held.row);
 
 			setGhost({
@@ -771,28 +805,23 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 	   nobody can resolve is a mark that says nothing — so the cell keeps its own
 	   edges and the snap goes on working unannounced. They are marks and never
 	   targets: read, never hit (#2107). */
-	const subs = snap < divisions && snap * inCell >= 6;
+	const subs = snap < divisions && snap * unit >= 6;
 
-	/* Where a position sits along the row, in the lattice's own pixels: whole
-	   cells at the pitch, and the remainder across the cell's ink. */
-	const xAt = (at) => Math.floor(at / divisions) * pitch + (at % divisions) * inCell;
-
-	/* The same for a note's right-hand end, where a position landing exactly on
-	   a boundary means the end of the cell before it rather than the start of
-	   the one after — otherwise every note finishing on a step would be drawn a
-	   gap too long, reaching into the lane that says the two cells are
-	   separate. */
-	const xEnd = (at) => (at % divisions === 0
-		? Math.floor(at / divisions) * pitch - GAP
-		: xAt(at));
-
+	/* One mapping, and no special case for a note that ends on a boundary —
+	   there is no gap for it to reach into. */
 	const barStyle = (at, span, step) => ({
-		left: `${xAt(at) - step * pitch - 1}px`,
-		width: `${xEnd(at + span) - xAt(at)}px`,
+		left: `${(at - step * divisions) * unit}px`,
+		width: `${span * unit}px`,
 	});
 
+	/* Where a beat begins, worked out from what the app declared rather than
+	   assumed to be every fourth step. It has been every fourth step in every
+	   grid so far, which is exactly why it was worth not writing down. */
+	const per = Math.max(1, Math.round(steps / Math.max(1, beats)));
+
 	return html`
-		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell}>
+		<${BeatStrip} steps=${steps} beats=${beats} tight />
+		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight>
 		<div class="grid notes" style=${style}>
 			${rows.map((row) => html`
 				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row}</div>
@@ -820,7 +849,7 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 							class=${["cell",
 								pending.has(owner) && !asked ? "pending" : "",
 								failed.has(owner) && !asked ? "failed" : "",
-								step % 4 === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+								step % per === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
 							onPointerDown=${(event) => begin(event, row, step)}
 							onPointerMove=${during}
 							onPointerUp=${finish}
@@ -828,8 +857,8 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
 						>
 							${subs && html`
 								<i class="subs" style=${{
-									backgroundSize: `${snap * inCell}px 100%`,
-									backgroundPositionX: `${-((step * divisions) % snap) * inCell}px`,
+									backgroundSize: `${snap * unit}px 100%`,
+									backgroundPositionX: `${-((step * divisions) % snap) * unit}px`,
 								}}></i>`}
 							${beginning.map((one) => html`
 								<div
@@ -861,7 +890,7 @@ function NoteGrid ({ name, rows, steps, divisions, notes, cell, window: windowRo
  *
  * It edits the note in that column and does nothing where there is none —
  * a velocity with no note is not a state the sequencer could report. */
-function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, onSet }) {
+function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, tight, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -906,7 +935,7 @@ function VelocityLane ({ name, rows, steps, divisions, notes, range, cell, onSet
 	};
 
 	return html`
-		<div class="lane" style=${style}>
+		<div class=${`lane ${tight ? "tight" : ""}`} style=${style}>
 			<div class="row-label">velocity</div>
 			${Array.from({ length: steps }, (_, step) => {
 				const found = at(step);
@@ -1014,11 +1043,13 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 	const note = selected ? (notes[selected.row] || {})[String(selected.at)] || null : null;
 
 	return html`
-		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} divisions=${divisions}
+		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
+			divisions=${divisions}
 			notes=${notes} cell=${cell} window=${control.visible_rows}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
 		<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} divisions=${divisions}
+			tight
 			cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
 			selected=${selected} note=${note}
@@ -1596,16 +1627,25 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive }) {
 				<span class="legend">live</span>
 				<${Toggle} on=${live}
 					title=${live ? "silence this" : "bring this back"} onFlip=${onLive} />`}
+			${/* **"Add a contribution" was ours, not a musician's.** Simon: not an
+			     intuitive way to connect items. A *source* is what the protocol
+			     already calls the thing being added, what a mixer calls what
+			     feeds a channel, and what a patchbay calls the end you take a
+			     cable from — so it is the word already in use at both ends, and
+			     the shortest one that is true of a generator and a routed grid
+			     alike. It becomes "add generator" outright once a cable dragged
+			     between two blocks is how a route is made, because then this
+			     button only ever adds the one thing. */ ""}
 			${onAdd && html`
 				<button
 					class="offer add"
 					onPointerDown=${(event) => { event.preventDefault(); onAdd(); }}
-				>${adds}</button>`}
+				><${Icon} of="add" />${adds}</button>`}
 			${onSend && html`
 				<button
 					class="offer send"
 					onPointerDown=${(event) => { event.preventDefault(); onSend(); }}
-				>send to…</button>`}
+				><${Icon} of="send" />send to…</button>`}
 			<span class="spacer"></span>
 			${onClear && html`
 				<button
@@ -3373,7 +3413,7 @@ function Panel () {
 						<${Footer}
 							onAdd=${one.add ? () => setAdding(one.add) : null}
 							adds=${one.add && (controls[one.add].sources || []).length
-								? "add a contribution" : "add a generator"}
+								? "add source" : "add generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing(one.control) : null}
 							live=${one.live}
@@ -3407,6 +3447,7 @@ function Panel () {
 						: html`
 							<${Grid} control=${one.control} rows=${controls[one.control].rows}
 								steps=${controls[one.control].steps}
+								beats=${controls[one.control].beats || 4}
 								cells=${(state[appName] || {})[one.control] || {}}
 								drawn=${up ? realised[one.control] : null}
 								visible=${controls[one.control].visible_rows} cell=${size.cell}
@@ -3445,7 +3486,7 @@ function Panel () {
 
 			return html`
 				<${Sheet}
-					title=${sources.length ? "add a contribution" : "add a generator"}
+					title=${sources.length ? "add source" : "add generator"}
 					onClose=${() => setAdding(null)}>
 
 					${/* Patterns first, and only when there are any. A grid this

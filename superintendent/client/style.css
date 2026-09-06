@@ -80,6 +80,17 @@
 	--playhead: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
 	--accent-beat: light-dark(#dde2ea, #2b313b);
 
+	/* The TR-808's own run of sixteen, four colours in fours, muted for a
+	   screen and for a room read at an angle. **Marks, never faces** — they are
+	   drawn above the grid and never on a cell, so they cannot be mistaken for
+	   a step being on, and the pattern goes on being read in one colour.
+	   The dark values are lifted a little, because a saturated hue on a
+	   near-black ground reads dimmer than the same hue on white. */
+	--beat-1: light-dark(#a2333b, #c8484f);
+	--beat-2: light-dark(#a8551f, #d97b39);
+	--beat-3: light-dark(#8a6714, #d4a63c);
+	--beat-4: light-dark(#5f5b52, #b9b3a5);
+
 	/* A title bar's own ground. A window says it is a window by having a bar
 	   that is not the body — that is how every windowed system has done it, and
 	   without it a grip has nothing to belong to. Close to `--panel` on purpose:
@@ -813,8 +824,39 @@ html, body {
 	border: 1px solid var(--edge);
 }
 
-/* Every fourth step is grouped, so a bar is countable without reading numbers. */
-.cell.downbeat { background: var(--accent-beat); }
+/* The tint that used to group every fourth step is gone: the beat strip above
+   the grid says it far more plainly, and in the TR-808's own colours. What is
+   left here is the boundary itself, drawn in the note grid where the cells
+   touch and there is otherwise nothing to see. */
+
+/* Four colours across a bar, one to a beat. A few pixels tall, aligned to the
+   columns by sharing the grid's own template, and read rather than touched. */
+.beats {
+	display: grid;
+	gap: var(--gap);
+	margin-bottom: var(--gap);
+	min-width: min-content;
+}
+
+.beats.tight { gap: 0; }
+
+.beats .beats-label { display: block; }
+
+/* Thicker than a hairline, because it is being *counted* rather than merely
+   noticed — a two-pixel line reads as a rule under the title and says nothing
+   about fours. Still a mark: no edge, no target, and it scales with the cell
+   like every other mark (#2107). */
+.beats .beat {
+	height: max(4px, calc(var(--cell) * 0.09));
+	border-radius: 2px;
+}
+
+.beats.tight .beat { border-radius: 0; }
+
+.beat.b1 { background: var(--beat-1); }
+.beat.b2 { background: var(--beat-2); }
+.beat.b3 { background: var(--beat-3); }
+.beat.b4 { background: var(--beat-4); }
 
 .cell.on {
 	background: var(--on);
@@ -1207,18 +1249,38 @@ html, body {
 	white-space: nowrap;
 	touch-action: none;}
 
-/* A pitched pattern.
+/* A pitched pattern, drawn as a piano roll rather than as pads.
  *
- * A note is a bar reaching rightwards from the cell it starts in, drawn over
- * the cells it covers rather than inside one — which is why it escapes its own
- * box and sits above the cells to its right. */
+ * **The cells touch.** A step grid is a drum machine and its cells are pads,
+ * spaced — that is the 808 and it is right there. A pitched grid is a piano
+ * roll, and Logic, Ableton and Reaper all draw one as a lattice with no gaps,
+ * because a note can begin between two steps and has to be drawn where it
+ * actually is.
+ *
+ * It is also the arithmetic. With a gap, a step occupied the cell *and* the
+ * space after it, so a position crossing a boundary and a position inside a
+ * cell were two different measures — and getting that wrong put the 1/32 marks
+ * at 55% across, which is where Simon found it. With no gap there is one
+ * measure and they cannot disagree. */
+.grid.notes { gap: 0; }
+
+.grid.notes .cell {
+	border-radius: 0;
+	border-width: 0 1px 1px 0;
+}
+
+/* The lattice's own hairlines, and a heavier one where a beat begins — which
+   is the only place the beat is marked inside the grid now that the strip
+   above carries the counting. */
+.grid.notes .cell.downbeat { border-left: 1px solid var(--edge-strong); }
+
 .grid.notes .cell.on { background: var(--panel); border-color: var(--edge); }
 
 .grid.notes .note {
 	position: absolute;
-	inset: 0 auto 0 -1px;
+	inset: 1px auto 1px 0;
 	z-index: 1;
-	border-radius: max(3px, calc(var(--cell) * 0.16));
+	border-radius: 2px;
 	background: var(--on);
 	border: 1px solid var(--on-edge);
 	pointer-events: none;
@@ -1373,6 +1435,11 @@ html, body {
 	margin-top: var(--gap);
 	position: relative;
 }
+
+/* Tight beside a pitched grid, so a velocity bar sits under the note it
+   belongs to rather than under the note plus half a gap. */
+.lane.tight { gap: 0; }
+.lane.tight .bar { border-radius: 0; border-width: 1px 1px 1px 0; }
 
 .lane .row-label { position: static; }
 

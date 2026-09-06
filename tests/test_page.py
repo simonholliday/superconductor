@@ -509,7 +509,10 @@ def test_a_note_is_drawn_as_a_bar_reaching_across_the_steps_it_lasts (
 	}""")
 
 	assert drawn["note"] > drawn["cell"], "a two-step note reaches past its own cell"
-	assert round(drawn["note"]) == round(drawn["cell"] * 2 + 4), "exactly two steps and the gap between"
+
+	# Exactly two cells, with no gap to account for: the lattice has none, which
+	# is the simplification that removed a whole class of geometry bug.
+	assert round(drawn["note"]) == round(drawn["cell"] * 2), "exactly two steps"
 
 
 def test_pressing_an_empty_cell_places_a_note (
@@ -1084,8 +1087,21 @@ def test_a_part_that_fits_draws_no_scroll_mark (panel: typing.Any) -> None:
 	assert panel.locator('.part[data-part="grid"] .track').count() == 0
 
 
-def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any) -> None:
-	"""A person learns a cell once. Two designs of it would be two to learn."""
+def test_each_kind_of_grid_draws_its_cells_one_way (panel: typing.Any) -> None:
+	"""The two kinds differ, on purpose, and each is consistent with itself.
+
+	This used to say a cell looks the same in every grid — a person learns a
+	cell once — and Simon overturned it deliberately, knowing it introduces a
+	difference in a pass about consistency.  The reasoning is that these are two
+	instruments, not two designs of one: a step grid is a drum machine and its
+	cells are pads, spaced, which is the 808 sitting in front of him.  A pitched
+	grid is a piano roll, and every editor he uses draws one as a lattice with
+	no gaps — because a note can begin between two steps and has to be drawn
+	where it actually is.
+
+	So what is tested is what is actually claimed: **pads are pads and lattice
+	is lattice, and no cell is a third thing.**
+	"""
 
 	# Both pages fit to their own contents, so a cell's corner radius — which
 	# scales with the cell — is only comparable once the size is pinned.
@@ -1101,13 +1117,22 @@ def test_a_cell_looks_the_same_whatever_kind_of_grid_it_is_in (panel: typing.Any
 
 	panel.locator(".pages button", has_text="Bass").click()
 	panel.wait_for_selector(".grid.notes", timeout=5_000)
+
 	pitched = cell_shape(conftest.cell("bass/C2/1"))
+	also_pitched = cell_shape(conftest.cell("bass/D2/3"))
 
 	panel.locator(".pages button", has_text="All").click()
 	panel.wait_for_selector(".grid .cell", timeout=5_000)
-	drums = cell_shape(conftest.cell("grid/snare/1"))
 
-	assert drums == pitched
+	drums = cell_shape(conftest.cell("grid/snare/1"))
+	also_drums = cell_shape(conftest.cell("grid/kick/2"))
+
+	assert pitched == also_pitched, "a pitched grid draws its cells two ways"
+	assert drums == also_drums, "a step grid draws its cells two ways"
+
+	assert drums != pitched, "the two kinds are the same, and one of them is wrong for its job"
+	assert float(pitched["radius"].rstrip("px")) == 0, "a lattice cell is square-cornered"
+	assert float(drums["radius"].rstrip("px")) > 0, "a pad is not"
 
 
 def test_the_scroll_strip_is_the_thing_you_take_hold_of (panel: typing.Any) -> None:
