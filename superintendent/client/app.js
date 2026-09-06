@@ -136,18 +136,6 @@ function rememberedPage () {
 	}
 }
 
-/* The sizes a cell can be, and where the choice is kept.
- *
- * None of these is the right one. A target that suits one pair of hands is
- * wrong for another, and a step grid at half the width fits twice the music on
- * the same glass — which is what Simon asked for after using the panel. So the
- * size is a setting with a recommended default, not a number chosen here
- * (#2055). "Fit" is not a size but a rule: measure the glass in front of you,
- * rather than the 1920-by-1080 one this was developed on (#2050).
- *
- * 44 px is the size the proof-of-concept was tested at, with taps landing where
- * intended and palm rejection working (#1998), so it is the one named "tested".
- * The others are offered without evidence and the label says so. */
 const LOCK_KEY = "superintendent.layout-locked";
 
 /* Whether the layout is held still. Remembered, because a person who works
@@ -173,6 +161,18 @@ function rememberLock (locked) {
 
 const SIZE_KEY = "superintendent.cell-size";
 
+/* The sizes a cell can be.
+ *
+ * None of these is the right one. A target that suits one pair of hands is
+ * wrong for another, and a step grid at half the width fits twice the music on
+ * the same glass — which is what Simon asked for after using the panel. So the
+ * size is a setting with a recommended default, not a number chosen here
+ * (#2055). "Fit" is not a size but a rule: measure the glass in front of you,
+ * rather than the 1920-by-1080 one this was developed on (#2050).
+ *
+ * 44 px is the size the proof-of-concept was tested at, with taps landing where
+ * intended and palm rejection working (#1998), so it is the one named "tested".
+ * The others are offered without evidence and the label says so. */
 const SIZES = [
 	{ key: "fit", label: "Fit the glass", px: null },
 	{ key: "compact", label: "Compact", px: 22 },
@@ -200,6 +200,8 @@ const OVERVIEW_AT = 16;
    read before choosing what to zoom back into. */
 const FIT_SLACK = 2;
 
+/* The gap between cells. Written in the stylesheet too, and the two must agree;
+   there is a test that says so. */
 const GAP = 4;
 
 const PAD = GAP * 2;
@@ -250,9 +252,7 @@ const GRID_KINDS = ["step_grid", "note_grid"];
 const DRAWN = ["step_grid", "note_grid", "params", "recipe"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
-/* The gap between cells, how many of them the row labels span, and the height
-   a title bar will not go below. GAP is written in the stylesheet too and the
-   two must agree; there is a test that says so. */
+
 const DEFAULT_SIZE = "fit";
 
 /* ------------------------------------------------------------------ */
@@ -897,11 +897,6 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 		}
 	};
 
-	/* A bar's geometry, in the lattice's own pixels. A position is a fraction of
-	   the cell *and its gap*, so a note landing on a cell boundary is exactly
-	   where it always was and one landing between them divides the same span
-	   evenly — which is also how the subdivision marks are spaced, so the two
-	   cannot disagree. */
 	/* Subdivision marks, drawn only while they can be told apart. Below about
 	   six pixels a lattice of them is a grey wash rather than a grid, and a mark
 	   nobody can resolve is a mark that says nothing — so the cell keeps its own
@@ -909,8 +904,16 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 	   targets: read, never hit (#2107). */
 	const subs = snap < divisions && snap * unit >= 6;
 
-	/* One mapping, and no special case for a note that ends on a boundary —
-	   there is no gap for it to reach into. */
+	/* A bar's geometry, in the lattice's own pixels.
+	
+	   **A position is a fraction of the cell, and the cell alone.** This once
+	   said "the cell *and its gap*", which was true of a step grid and never of
+	   this one: a pitched grid's cells touch, because a piano roll's ground is
+	   continuous and a note crossing a boundary must not appear to stop and
+	   start again. `unit` is the cell over the divisions and nothing else, which
+	   is what makes this one mapping with no special case for a note that ends
+	   on a boundary — there is no gap for it to reach into. The subdivision
+	   marks are spaced by the same number, so the two cannot disagree. */
 	const barStyle = (at, span, step) => ({
 		left: `${(at - step * divisions) * unit}px`,
 		width: `${span * unit}px`,
@@ -3916,9 +3919,6 @@ function Panel () {
 
 	const pinch = usePinch(size.cell, size.choose);
 
-	/* An id has to survive a round trip and be unique among its neighbours. The
-	   clock alone is not enough: two taps inside a millisecond are a stutter
-	   rather than an impossibility on a surface meant to be played. */
 	/* What kind of thing each layer of a grid's stack is, by its id. */
 	const layerKinds = (control) => {
 		const stack = stackFor(control);
@@ -4253,10 +4253,6 @@ function Panel () {
 		</div>
 
 		${adding && controls[adding] && (() => {
-			/* An id has to survive a round trip and be unique among its
-			   neighbours. The clock alone is not enough: two taps inside a
-			   millisecond are a stutter rather than an impossibility on a
-			   surface meant to be played. */
 			const added = (layer) => {
 				addLayer(adding, layer);
 				setAdding(null);
