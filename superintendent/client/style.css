@@ -2047,6 +2047,18 @@ html, body {
  *
  * Faint until a hand is on one end. That is the moment the question is being
  * asked, and answering it then costs nothing the rest of the time. */
+/* **Two kinds of connection, and they must not look alike.**
+ *
+ * Simon settled the metaphor after asking why a generator's line could not be
+ * dragged: it is not a cable. A generator is created from a pattern, belongs to
+ * it and dies with it, so there is nothing to unplug — drawing it as a patch
+ * cable was promising a gesture the model cannot offer, and the answer to "why
+ * can't I move this?" is now visible rather than something to be told.
+ *
+ * A grid is the other thing: it exists on its own, carries the same notes
+ * wherever it goes, and can be plugged into as many patterns as you like. That
+ * is a real cable and everything the metaphor promises is true of it.
+ */
 .join .cable {
 	fill: none;
 	stroke: var(--ring);
@@ -2054,6 +2066,29 @@ html, body {
 	stroke-opacity: 0.45;
 	stroke-linecap: round;
 }
+
+/* Hard-wired: taut, half the weight, and the panel's own quiet ink rather than
+   the accent — it is part of the equipment, not something you plugged in. */
+.join.wired .cable {
+	stroke: var(--ink-quiet);
+	stroke-width: max(1.5px, calc(var(--cell) * 0.03));
+	stroke-opacity: 0.55;
+}
+
+/* Terminated, not plugged: square where a patch fitting is round. Shape carries
+   the difference, as it does for a routed note against an invented one. */
+.join .lug {
+	fill: var(--part);
+	stroke: var(--ink-quiet);
+	stroke-width: 1.5;
+	stroke-opacity: 0.7;
+}
+
+.join.live.wired .cable { stroke-opacity: 1; }
+.join.live .lug { stroke-opacity: 1; }
+
+.join.off.wired .cable { stroke-dasharray: 5 4; stroke-opacity: 0.3; }
+.join.off .lug { stroke-opacity: 0.35; }
 
 /* **The source end is a plug and the destination end is a socket**, which is
    how a cable says which way it runs now that there is no arrowhead: a thing

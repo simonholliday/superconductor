@@ -1664,9 +1664,9 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet }) {
 			     feeds a channel, and what a patchbay calls the end you take a
 			     cable from — so it is the word already in use at both ends, and
 			     the shortest one that is true of a generator and a routed grid
-			     alike. It becomes "add generator" outright once a cable dragged
-			     between two blocks is how a route is made, because then this
-			     button only ever adds the one thing. */ ""}
+			     alike. It is "add generator" now: a cable dragged between two
+			     blocks is how a route is made, so this only ever adds the one
+			     thing. */ ""}
 			${onAdd && html`
 				<button
 					class="offer add"
@@ -1863,7 +1863,7 @@ function sidesOf (box) {
  * The row's height is clamped inside the block, because a pattern taller than
  * its window scrolls: a row that is out of view would otherwise be pointed at
  * somewhere off the block entirely. */
-function anchorsFor (from, to, level, anchor) {
+function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
 	if (level === null) {
 		let best = null;
 
@@ -1884,9 +1884,17 @@ function anchorsFor (from, to, level, anchor) {
 	const held = Math.min(
 		Math.max(level, to.y + anchor), Math.max(to.y + anchor, to.y + to.h - anchor));
 
+	/* **Several generators can land on one voice**, and until now they landed on
+	   one point and merged — the same fault that once made three arrowheads a
+	   smudge at a block's edge. They queue outward from the block instead, one
+	   lug each, and **left to right is the order they run in**: the stack's
+	   order stops being a number in a window and becomes something visible on
+	   the pattern it belongs to, with no new control at all. */
+	const out = (slots - 1 - slot) * anchor * 2.6;
+
 	return [
 		{ x: leftward ? from.x + from.w : from.x, y: from.y + from.h / 2 },
-		{ x: leftward ? to.x : to.x + to.w, y: held },
+		{ x: leftward ? to.x - out : to.x + to.w + out, y: held },
 	];
 }
 
@@ -1968,8 +1976,10 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 				if (!from || !to) continue;
 
 				const level = join.row ? levelOf(join.to, join.row) : null;
-				const [a, b] = anchorsFor(from, to, level, marked(
-					cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling));
+				const [a, b] = anchorsFor(
+					from, to, level,
+					marked(cell, ANCHOR.floor, ANCHOR.share, ANCHOR.ceiling),
+					join.slot || 0, join.slots || 1);
 
 				next.push({ ...join, a, b });
 			}
@@ -2058,8 +2068,14 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 				const c1 = { x: line.a.x + reach, y: line.a.y + dip };
 				const c2 = { x: line.b.x - reach, y: line.b.y + dip };
 
-				const cable = `M ${line.a.x} ${line.a.y}`
-					+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
+				/* **A loom does not hang.** A hard-wired line is taut and
+				   half the weight, so the two kinds are told apart at a glance
+				   rather than by comparison — which is the whole point of
+				   drawing them differently at all. */
+				const cable = line.wired
+					? `M ${line.a.x} ${line.a.y} L ${line.b.x} ${line.b.y}`
+					: `M ${line.a.x} ${line.a.y}`
+						+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
 
 				/* Where the switch rides. The midpoint of a cubic is
 				   (A + 3C₁ + 3C₂ + B) / 8, which for these control points is
@@ -2067,7 +2083,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 				   sag — so the switch sits on the cable rather than beside it. */
 				const middle = {
 					x: (line.a.x + line.b.x) / 2,
-					y: (line.a.y + line.b.y) / 2 + dip * 0.75,
+					y: (line.a.y + line.b.y) / 2 + (line.wired ? 0 : dip * 0.75),
 				};
 
 				const live = touched === line.from || touched === line.to;
@@ -2077,20 +2093,38 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip }) {
 
 				return html`
 					<g key=${`${line.from}>${line.to}`}
-						class=${`join ${live ? "live" : ""} ${line.off ? "off" : ""}`
+						class=${`join ${line.wired ? "wired" : "patched"} `
+							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
 						data-join=${`${line.from}>${line.to}`}>
 						<path class="cable" d=${cable} />
-						${/* **The ends say which way it runs**, which is what the
-						     arrowhead was for and what a cable does not say by
-						     itself. The source end is a plug — solid, seated in
-						     a collar — and the destination is a socket, open.
-						     Something plugged *into* something reads as a
-						     direction without a symbol needing to be learnt. */ ""}
-						<circle class="collar" cx=${line.a.x} cy=${line.a.y} r=${jack} />
-						<circle class="plug" cx=${line.a.x} cy=${line.a.y} r=${jack * 0.46} />
-						<circle class="socket" cx=${line.b.x} cy=${line.b.y} r=${jack} />
-						<circle class="hole" cx=${line.b.x} cy=${line.b.y} r=${jack * 0.34} />
+						${line.wired
+							? html`
+								${/* **Lugs, not fittings.** A wired line is
+								     terminated rather than plugged, so its ends
+								     are square where a patch cable's are round —
+								     shape carrying the difference, as it does
+								     for a routed note against an invented one. */ ""}
+								<rect class="lug" x=${line.a.x - jack * 0.42}
+									y=${line.a.y - jack * 0.42}
+									width=${jack * 0.84} height=${jack * 0.84} />
+								<rect class="lug" x=${line.b.x - jack * 0.42}
+									y=${line.b.y - jack * 0.42}
+									width=${jack * 0.84} height=${jack * 0.84} />`
+							: html`
+								${/* **The ends say which way it runs**, which is
+								     what the arrowhead was for and what a cable
+								     does not say by itself. The source end is a
+								     plug — solid, seated in a collar — and the
+								     destination is a socket, open. Something
+								     plugged *into* something reads as a
+								     direction without a symbol to learn. */ ""}
+								<circle class="collar" cx=${line.a.x} cy=${line.a.y} r=${jack} />
+								<circle class="plug" cx=${line.a.x} cy=${line.a.y}
+									r=${jack * 0.46} />
+								<circle class="socket" cx=${line.b.x} cy=${line.b.y} r=${jack} />
+								<circle class="hole" cx=${line.b.x} cy=${line.b.y}
+									r=${jack * 0.34} />`}
 						${/* The switch, and it looks like one: a disc riding on the
 						     cable. Filled while the link is sounding, hollow when it
 						     is not — the same sentence every other toggle on this
@@ -3310,6 +3344,11 @@ function Panel () {
 						routes.push({
 							from: layer.source, to: feeds, row: null,
 							control: name, layer: layer.id, off: Boolean(layer.bypassed),
+
+							/* Patched, not wired: a grid exists on its own,
+							   carries the same notes wherever it goes, and can
+							   be plugged into as many patterns as you like. */
+							wired: false,
 						});
 					}
 
@@ -3411,6 +3450,14 @@ function Panel () {
 				from: one.key, to: one.feeds, row: one.voice,
 				off: Boolean(one.layer.bypassed),
 
+				/* **Hard-wired, and drawn so.** Simon settled the metaphor: a
+				   generator is created from a pattern, belongs to it and dies
+				   with it, so there is no cable and nothing to unplug. Drawing
+				   it as a patch cable promised a gesture the model cannot
+				   offer, and "why can't I drag this?" now answers itself —
+				   because it is not patched, it is wired in. */
+				wired: true,
+
 				/* No switch on this line, and that is the correction Simon made.
 				
 				   A generator is a stack entry in exactly one pattern, so it has
@@ -3427,6 +3474,27 @@ function Panel () {
 				   Nothing has two, and nothing switchable has none. */
 			})),
 	];
+
+	/* Which lug on a voice each wired line takes, and how many there are.
+	 *
+	 * Counted after the list is built, because a lug's place depends on its
+	 * neighbours: with one generator on a voice it sits at the block's edge,
+	 * and with three they queue outward from it. Order is the order they are
+	 * built in, so the leftmost lug is the first to run. */
+	const lugs = new Map();
+
+	for (const join of joins) {
+		if (!join.wired) continue;
+
+		const lane = `${join.to}/${join.row}`;
+
+		join.slot = lugs.get(lane) || 0;
+		lugs.set(lane, join.slot + 1);
+	}
+
+	for (const join of joins) {
+		if (join.wired) join.slots = lugs.get(`${join.to}/${join.row}`) || 1;
+	}
 
 	/* The switch on a line, for the links that have one.
 	 *
@@ -3699,8 +3767,14 @@ function Panel () {
 								onEnd: endPatch,
 							} : null}
 							onAdd=${one.add ? () => setAdding(one.add) : null}
-							adds=${one.add && (controls[one.add].sources || []).length
-								? "add source" : "add generator"}
+							${/* **One thing, so one word.** It said "add source"
+							     while it did two jobs — create a generator, and
+							     route a grid — and Simon named it as the
+							     unintuitive way to connect items. Routing is a
+							     cable now, made from the grid being routed, so
+							     this adds the only thing a pattern can be added
+							     *to* with. */ ""}
+							adds="add generator"
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing(one.control) : null}
 							live=${one.live}
@@ -3759,8 +3833,6 @@ function Panel () {
 		</div>
 
 		${adding && controls[adding] && (() => {
-			const sources = controls[adding].sources || [];
-
 			/* An id has to survive a round trip and be unique among its
 			   neighbours. The clock alone is not enough: two taps inside a
 			   millisecond are a stutter rather than an impossibility on a
@@ -3771,34 +3843,21 @@ function Panel () {
 			};
 
 			return html`
-				<${Sheet}
-					title=${sources.length ? "add source" : "add generator"}
-					onClose=${() => setAdding(null)}>
+				<${Sheet} title="add generator" onClose=${() => setAdding(null)}>
 
-					${/* Patterns first, and only when there are any. A grid this
-					     one can take from is a thing a person already has on the
-					     glass and can point at; a generator is a thing they have
-					     to know the name of. The near one goes first. */ ""}
-					${sources.length > 0 && html`
-						<h4>from a pattern</h4>
-						${sources.map((source) => html`
-							<button
-								key=${source}
-								class="offer option"
-								onPointerDown=${(event) => {
-									event.preventDefault();
-									added({ kind: "pattern", source });
-								}}
-							>
-								<b>${named(source)}</b>
-								<i>every note drawn on it, played here as well</i>
-							</button>`)}
-						<h4>from a generator</h4>`}
-
+					${/* **A grid is not on this list any more.** It used to be,
+					     on the argument that a pattern to take from and a
+					     generator to add are the same kind of thing — and they
+					     are not. A generator is created here and belongs to this
+					     pattern, hard-wired to it. A grid exists on its own and
+					     is *patched* in, from its own outlet or its own "send
+					     to…". Offering it here as well was the second of two
+					     ways to make one connection, which is the shape this
+					     whole pass has been removing. */ ""}
 					${(controls[adding].generators || []).map((generator) => html`
 						<button
 							key=${generator.name}
-							class=${`offer ${generator.partial ? "partial" : ""}`}
+							class=${`offer option ${generator.partial ? "partial" : ""}`}
 							disabled=${generator.partial}
 							onPointerDown=${(event) => {
 								event.preventDefault();

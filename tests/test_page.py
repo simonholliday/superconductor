@@ -2246,15 +2246,17 @@ def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 
 			const [from, to] = join.split(">");
 
-			/* A cable is a cubic, so its two ends are the first and last points
-			   of the path: "M ax ay C c1x c1y c2x c2y bx by". */
+			/* The first and last points of the path, whichever kind of line it
+			   is: a patch cable is a cubic with eight numbers in it and a wired
+			   line is taut with four, and both start where they start and end
+			   where they end. */
 			const numbers = document.querySelector(`[data-join="${join}"] .cable`)
 				.getAttribute("d").match(/-?[\d.]+/g).map(Number);
 
 			return {
 				from: at(from), to: at(to),
 				a: { x: numbers[0], y: numbers[1] },
-				b: { x: numbers[6], y: numbers[7] },
+				b: { x: numbers[numbers.length - 2], y: numbers[numbers.length - 1] },
 			};
 		}""", join)
 
@@ -2407,7 +2409,12 @@ def test_a_cable_carries_a_direction_by_its_two_fittings (
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
-	line = _edges(panel, "stack/one>grid")
+	# A route, because this is about a *patch cable's* fittings: a generator is
+	# hard-wired and ends in lugs rather than a plug and a socket, which is the
+	# whole point of drawing the two kinds differently.
+	_route(panel, fake_app)
+
+	line = _edges(panel, "second>grid")
 	ends = panel.evaluate("""(join) => {
 		const at = (selector) => {
 			const one = document.querySelector(`[data-join="${join}"] ${selector}`);
@@ -2416,7 +2423,7 @@ def test_a_cable_carries_a_direction_by_its_two_fittings (
 		};
 
 		return { plug: at(".plug"), socket: at(".hole") };
-	}""", "stack/one>grid")
+	}""", "second>grid")
 
 	def away (point: dict[str, float], other: dict[str, float]) -> float:
 		return ((point["x"] - other["x"]) ** 2 + (point["y"] - other["y"]) ** 2) ** 0.5
@@ -2660,16 +2667,19 @@ def _at_size (panel: typing.Any, label: str, cell: str) -> None:
 
 
 def _fitting (panel: typing.Any, join: str) -> float:
-	"""How large the socket at the end of one cable is.
+	"""How large the fitting at the end of one line is.
 
-	The arrowhead this replaced was the mark whose scaling Simon found broken by
-	zooming; the fitting is the mark now, and it is held to the same rule.
+	A patch cable ends in a round socket and a hard-wired line in a square lug,
+	so this asks for whichever the line has — the mark rule applies to both, and
+	the arrowhead this replaced was the mark whose scaling Simon found broken by
+	zooming.
 	"""
 
 	_joins_settled(panel)
 
 	return float(panel.eval_on_selector(
-		f'[data-join="{join}"] .socket', "one => +one.getAttribute('r')"))
+		f'[data-join="{join}"] .socket, [data-join="{join}"] .lug',
+		"""one => +(one.getAttribute("r") || one.getAttribute("width"))"""))
 
 
 def test_a_mark_on_the_lattice_grows_with_the_cell (
@@ -2734,22 +2744,32 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 
 	line = _edges(panel, "stack/one>grid")
 
-	# A plug at the source and a socket at the destination — which is also what
-	# says which way the cable runs, now that there is no arrowhead to say it.
+	# Two lugs, because a generator is hard-wired: a line that stops at an edge
+	# and a line that passes behind a block are the same picture without
+	# something at the end saying which, whichever kind of line it is.
 	dots = panel.eval_on_selector_all(
-		'[data-join="stack/one>grid"] .plug, [data-join="stack/one>grid"] .hole',
-		"""els => els.map((one) => ({
-			x: +one.getAttribute("cx"), y: +one.getAttribute("cy"), r: +one.getAttribute("r") }))""")
+		'[data-join="stack/one>grid"] .lug',
+		"""els => els.map((one) => {
+			const box = one.getBBox();
+
+			return { x: box.x + box.width / 2, y: box.y + box.height / 2, r: box.width / 2 };
+		})""")
 
 	assert len(dots) == 2, f"a join drew {len(dots)} fittings"
 
 	for dot in dots:
 		assert dot["r"] > 0
 
-	assert {(round(dot["x"]), round(dot["y"])) for dot in dots} == {
-		(round(line["a"]["x"]), round(line["a"]["y"])),
-		(round(line["b"]["x"]), round(line["b"]["y"]))}, (
-		f"the anchors are not where the line ends: {dots} against {line}")
+	# Within a pixel rather than rounded to one. A lug's centre comes from its
+	# bounding box and the line's end from its path, and the two agreed to six
+	# decimal places while landing either side of x.5 — which rounding then
+	# turned into a failure about nothing.
+	def near (point: dict[str, float], end: dict[str, float]) -> bool:
+		return abs(point["x"] - end["x"]) <= 1 and abs(point["y"] - end["y"]) <= 1
+
+	for end in (line["a"], line["b"]):
+		assert any(near(dot, end) for dot in dots), (
+			f"nothing marks where the line ends: {dots} against {line}")
 
 	# And each sits on the edge of the block it belongs to, not adrift of it.
 	assert _on_the_edge(dots[0], line["from"]) or _on_the_edge(dots[0], line["to"])
@@ -3077,27 +3097,43 @@ def test_a_cable_dropped_on_nothing_comes_away_in_the_hand (
 	assert panel.locator(".grid-wrap.patching").count() == 0, "the page still thinks a cable is out"
 
 
-def test_a_grid_can_be_routed_into_a_pattern_from_the_glass (
+def test_a_pattern_adds_a_generator_and_nothing_else (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""The sheet offers the patterns this stack may take from alongside the
-	generators, because they are the same kind of thing to add."""
+	"""A grid used to be on this list, on the argument that a pattern to take
+	from and a generator to add are the same kind of thing.  Simon settled that
+	they are not: **a generator is hard-wired and a grid is patched.**
+
+	A generator is created here and belongs to this pattern — it cannot be
+	moved, because it was never plugged in.  A grid exists on its own, carries
+	the same notes wherever it goes, and is patched in from its own outlet or
+	its own "send to…".  Offering it here as well was the second of two ways to
+	make one connection, which is the shape this whole pass has been removing.
+	"""
 
 	_open_the_stack(panel)
 
 	panel.locator('.part[data-part="grid"] .part-foot .offer.add').click()
 	panel.wait_for_selector(".sheet", timeout=5_000)
 
-	panel.locator(".sheet .offer", has_text="second").click()
+	assert panel.locator(".sheet h4").count() == 0, "the sheet still divides into kinds"
+	assert panel.locator(".sheet .offer", has_text="second").count() == 0, \
+		"a grid is still offered where generators are added"
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	offered = panel.eval_on_selector_all(
+		".sheet .offer b", "els => els.map((one) => one.textContent.trim())")
+	declared = [one["name"] for one in conftest.CONTROLS["stack"]["generators"]]
 
-	assert asked, "routing a pattern asked for nothing"
+	assert offered == declared, f"the sheet offers {offered} against {declared}"
 
-	added = asked[-1]["v"][-1]
+	# Closed the way a panel with no keyboard closes it.
+	panel.locator(".sheet-body header button").click()
+	panel.wait_for_selector(".sheet", state="detached", timeout=5_000)
 
-	assert added["kind"] == "pattern"
-	assert added["source"] == "second"
-	assert "generator" not in added
+	# And the two ways left to route a grid are both *on the grid*, which is
+	# where a route belongs: its own outlet, and its own list for a pattern that
+	# is on another page.
+	assert panel.locator('.part[data-part="second"] .outlet').count() == 1
+	assert panel.locator('.part[data-part="second"] .part-foot .offer.send').count() == 1
 
 
 def test_a_route_is_a_line_and_nothing_else (
@@ -3844,6 +3880,18 @@ def test_every_control_centres_what_is_written_on_it (panel: typing.Any) -> None
 	}""")
 
 	assert adrift == [], f"these do not centre what is written on them: {adrift}"
+
+	# **And the other way round, which is the hole this had.** A control holding
+	# two lines and *not* saying so came out centred, which this test permitted
+	# — so the fault it exists to catch went through it three times: the footer
+	# buttons, the send-to sheet's options, and the generator list. A button with
+	# more than one element inside it is an option and must name itself one.
+	unnamed = panel.evaluate("""() => [...document.querySelectorAll("button")]
+		.filter((one) => one.children.length > 1 && !one.classList.contains("option"))
+		.map((one) => (one.className || one.tagName) + ": " + one.textContent.trim().slice(0, 30))
+	""")
+
+	assert unnamed == [], f"these hold two lines and do not say so: {unnamed}"
 
 	stacked = panel.evaluate(
 		"""() => getComputedStyle(document.querySelector(".sheet .option")).flexDirection""")
