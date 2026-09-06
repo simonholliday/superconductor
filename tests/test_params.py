@@ -121,18 +121,28 @@ def test_every_setting_is_asserted_to_the_instrument_after_declaring () -> None:
 
 	settings, _, moved = _params()
 
-	assert settings.poll() == [], "nothing is owed until the app declares itself"
+	assert settings.owed() == [], "nothing is owed until the app declares itself"
 	assert moved == []
 
 	settings.declared()
 
+	owed = settings.owed()
+
+	assert sorted(owed) == [("glide", False), ("rate", 24), ("shape", "lcr")]
+
+	# **Asking does not pay**, which is the whole point of the split: the
+	# question is asked on the clock loop and the answer is acted on elsewhere.
+	assert moved == [], "asking what is owed told the instrument on the clock loop"
 	assert settings.poll() == [], "and nothing is reported to a panel by it either"
+
+	settings.settle(owed)
+	settings.settled()
+
 	assert sorted(moved) == [("glide", False), ("rate", 24), ("shape", "lcr")]
 
 	moved.clear()
-	settings.poll()
 
-	assert moved == [], "paid once, not every beat"
+	assert settings.owed() == [], "paid once, not every beat"
 
 
 def test_a_reconnection_asserts_them_again () -> None:
@@ -140,11 +150,20 @@ def test_a_reconnection_asserts_them_again () -> None:
 
 	settings, _, moved = _params()
 
+	def pay () -> None:
+		"""What the link does on a beat: ask, hand over, mark it settled."""
+
+		owed = settings.owed()
+
+		if owed:
+			settings.settle(owed)
+			settings.settled()
+
 	settings.declared()
-	settings.poll()
+	pay()
 	moved.clear()
 
 	settings.declared()
-	settings.poll()
+	pay()
 
 	assert len(moved) == 3

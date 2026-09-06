@@ -71,9 +71,33 @@ no_implicit_optional = true
 check_untyped_defs = true
 disallow_untyped_defs = true
 
+# Everything, not only the package.  4,160 lines were checked and 10,077 were
+# not, and the unchecked ones included both halves of the restart safety net —
+# `capture_state.py` and `restore_state.py`, whose whole justification is that
+# losing a pattern happens silently.  Settled on 2026-09-06 (#2140).
+files = ["superintendent", "tests", "tools", "compositions"]
+
 [[tool.mypy.overrides]]
 module = ["uvicorn.*"]
 ignore_missing_imports = true
+
+# Subsequence ships no type information, and a composition is mostly a
+# conversation with it.  Its absence is not a finding about this code.
+[[tool.mypy.overrides]]
+module = ["subsequence.*", "playwright.*", "pytest_asyncio.*"]
+ignore_missing_imports = true
+
+# **One check off, and only for the tests that drive a browser.**
+# `warn_return_any` catches a real thing — handing back an unvalidated value as
+# though it were typed — but a page test's every reading comes out of
+# JavaScript, so the check fires on all of them and distinguishes none.  Fifteen
+# casts round fifteen blocks of embedded JavaScript would add ceremony where the
+# function's own annotation already says the expected shape.  Every other check
+# stays on here, and the errors that were worth fixing were fixed rather than
+# silenced.
+[[tool.mypy.overrides]]
+module = ["test_page", "test_client", "conftest"]
+warn_return_any = false
 
 [tool.pytest.ini_options]
 # Off the mount, for the same reason as the mypy cache above.

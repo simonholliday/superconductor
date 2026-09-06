@@ -14,6 +14,11 @@ import { html, render, useState, useEffect, useLayoutEffect, useRef, useCallback
 	from "./vendor/htm-preact-standalone.module.js";
 
 const PING_EVERY = 2000;
+
+const TRIPS_KEPT = 60;
+/* How many round trips to remember: two minutes at one ping every two seconds,
+   which is long enough for a bad moment to still be on the readout when you
+   look up from playing. */
 const STALE_AFTER = 6000;
 const CONTRACT = "1.13.0";
 /* The protocol version this client speaks, in one place.
@@ -265,13 +270,17 @@ const DEFAULT_SIZE = "fit";
  * closed its socket is invisible to the browser for half a minute, so we ping
  * and we time out rather than trusting the connection to fail loudly. */
 class Link {
-	constructor (onFrame, onStatus) {
+	constructor (onFrame, onStatus, onTrips) {
 		this.onFrame = onFrame;
 		this.onStatus = onStatus;
+		this.onTrips = onTrips;
 		this.socket = null;
 		this.delay = RECONNECT_FLOOR;
 		this.seq = 0;
 		this.lastInbound = 0;
+
+		/* How long the last few round trips took, newest last. */
+		this.trips = [];
 		this.timers = [];
 		this.dial();
 	}
@@ -290,10 +299,42 @@ class Link {
 		this.socket.onmessage = (message) => {
 			this.lastInbound = performance.now();
 
+			let frame;
+
+			/* **Two different failures, two different sentences.** One catch
+			   round both said "unreadable frame" for a frame that read
+			   perfectly well and a handler that threw — which is a lie about
+			   whose fault it is, and it cost a debugging cycle: a typo in this
+			   very handler was reported as a protocol problem while every pong
+			   was silently dropped. */
 			try {
-				this.onFrame(JSON.parse(message.data));
+				frame = JSON.parse(message.data);
+
+				/* **The round trip, which was being thrown away.** A pong
+				   echoes the timestamp its ping carried, so the panel can
+				   measure its own network without anything being built for it —
+				   and the five-second abandon timer has been carried through
+				   three reviews on the grounds that nobody has disproved it,
+				   because nobody could see this number. The worst of a window
+				   is what matters rather than the typical: the question the
+				   timer answers is how long a good request can take. */
 			} catch (error) {
-				console.warn("unreadable frame", error);
+				console.warn("frame could not be read", error);
+				return;
+			}
+
+			try {
+				if (frame.t === "pong" && typeof frame.ts === "number") {
+					this.trips.push(performance.now() - frame.ts);
+
+					if (this.trips.length > TRIPS_KEPT) this.trips.shift();
+
+					this.onTrips(this.trips.slice());
+				}
+
+				this.onFrame(frame);
+			} catch (error) {
+				console.error("this panel failed to handle a", frame.t, "frame", error);
 			}
 		};
 
@@ -1411,7 +1452,14 @@ function Setting ({ field, held, onSet }) {
 				>${chosen ? chosen.label || chosen.value : "choose"}<i>▾</i></button>
 
 				${open && where && html`
+					${/* **One framed control, and it says so.** Its rows carry no
+					     edge of their own, on the same principle as a rocker's
+					     two ends: the frame is what a person finds, and a box
+					     inside a box reads worse. The rocker declares that with
+					     a role and these did not, so the rule had to be a list
+					     of class names in a test — and a list is what drifts. */ ""}
 					<div
+						role="group"
 						class="options"
 						style=${{
 							left: `${where.left}px`,
@@ -1810,7 +1858,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet }) {
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 
@@ -1875,6 +1923,7 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, on
 	return html`
 		<section
 			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
+			data-offers=${offers || null}
 			style=${place}
 			${/* Anywhere on the block, not only its handle: a person turning a knob
 			     on a generator is asking the same question a person dragging it is
@@ -2689,6 +2738,30 @@ function Pages ({ pages, current, onChoose }) {
  * what a person quotes and the second is what is true.
  *
  * A stale page is never reloaded automatically. Someone may be playing. */
+/* How the panel's own network is doing, in the place the other diagnostics
+ * already are.
+ *
+ * **Typical and worst, because only the second answers the question.** The
+ * abandon timer exists for a request that never comes back, and choosing its
+ * length means knowing how slow a request can be while still being fine. A
+ * median alone would say four milliseconds and settle nothing; three reviews
+ * have now deferred that number for want of this one.
+ *
+ * Drawn only once there is something to say, so a panel that has just opened
+ * does not show a figure made from a single sample. */
+function Trip ({ trips }) {
+	if (!trips || trips.length < 8) return null;
+
+	const sorted = [...trips].sort((one, two) => one - two);
+	const middle = sorted[Math.floor(sorted.length / 2)];
+	const worst = sorted[sorted.length - 1];
+
+	return html`
+		<span class="build trip"
+			title="round trip to the service: typical and worst of the last two minutes"
+		>${Math.round(middle)} / ${Math.round(worst)} ms</span>`;
+}
+
 function Build ({ service, stale }) {
 	if (!service) return null;
 
@@ -3131,7 +3204,7 @@ function Theme ({ choice, onChoose }) {
 			>theme · ${named.short}</button>
 
 			${open && html`
-				<div class="choices">
+				<div role="group" class="choices">
 					${THEMES.map((theme) => html`
 						<button
 							key=${theme.key}
@@ -3164,7 +3237,7 @@ function Sizes ({ cell, choice, onChoose }) {
 			>size · ${cell}px</button>
 
 			${open && html`
-				<div class="choices">
+				<div role="group" class="choices">
 					${SIZES.map((size) => html`
 						<button
 							key=${size.key}
@@ -3192,6 +3265,10 @@ function Sizes ({ cell, choice, onChoose }) {
 
 function Panel () {
 	const [status, setStatus] = useState("down");
+
+	/* Every recent round trip to the service, so the panel can say what its own
+	   network is doing. Read from the pong the link already sends. */
+	const [trips, setTrips] = useState([]);
 	const [apps, setApps] = useState({});
 	const [present, setPresent] = useState({});
 	const [state, setState] = useState({});
@@ -3505,7 +3582,7 @@ function Panel () {
 			}
 		};
 
-		link.current = new Link(onFrame, setStatus);
+		link.current = new Link(onFrame, setStatus, setTrips);
 
 		const rejoin = () => { if (!document.hidden && link.current) link.current.resync(); };
 
@@ -3959,6 +4036,21 @@ function Panel () {
 	const patch = useRef(null);
 	const [patching, setPatching] = useState(null);
 
+	/* **What the end in your hand could land on**, which is not the same set at
+	   both ends of a cable.
+	
+	   Dragging the socket, you are choosing a destination, and a destination is
+	   a block whose stack will take what is already plugged in at the far end —
+	   that is `data-takes`, and it was the only set the page ever lit. Dragging
+	   the plug, you are choosing a *source*, so the blocks that could answer are
+	   the ones the destination's stack declares it takes from. Lighting
+	   `data-takes` for that gesture showed precisely the blocks that cannot be
+	   what you are looking for. The drop always resolved correctly; only the
+	   affordance lied. */
+	const offering = patching && patching.end === "plug" && patching.into
+		? (controls[patching.into] || {}).sources || []
+		: null;
+
 	const wrapPoint = (event) => {
 		const wrap = size.wrap.current;
 
@@ -4012,7 +4104,7 @@ function Panel () {
 
 		/* The destination stays; what feeds it is being chosen again. */
 		patch.current = { ...held, into: line.control, end };
-		setPatching({ from: null, a: line.b, at, end });
+		setPatching({ from: null, a: line.b, at, end, into: line.control });
 	};
 
 	const movePatch = (event) => {
@@ -4113,6 +4205,7 @@ function Panel () {
 				<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
 				<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
 				<${Build} service=${service} stale=${stale} />
+			<${Trip} trips=${trips} />
 			</div>
 			<div class="notice">
 				${status === "up"
@@ -4149,10 +4242,12 @@ function Panel () {
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>
 			<${Build} service=${service} stale=${stale} />
+			<${Trip} trips=${trips} />
 		</div>
 		<div
 			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"} ${
-				size.cell < OVERVIEW_AT ? "overview" : ""} ${patching ? "patching" : ""}`}
+				size.cell < OVERVIEW_AT ? "overview" : ""} ${patching ? "patching" : ""} ${
+				offering ? "sourcing" : ""}`}
 			ref=${size.wrap}
 			...${pinch}
 		>
@@ -4167,6 +4262,9 @@ function Panel () {
 					     dragging a lead is looking at where it is going. */ ""}
 					takes=${one.add && (controls[one.add].sources || []).length
 						? one.add : null}
+					${/* And the mirror of it: what this block could be taken
+					     *from*, while a plug is looking for a new source. */ ""}
+					offers=${offering && offering.includes(one.control) ? one.control : null}
 					onMove=${(who, x, y) => rearrange(who, { x, y })}
 					onRaise=${(who) => rearrange(who, null)}
 					onHold=${setDragging}

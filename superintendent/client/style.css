@@ -2209,7 +2209,12 @@ html, body {
  * changes is that some of it is now a destination. */
 .grid-wrap.patching .part { opacity: 0.45; transition: opacity 120ms ease-out; }
 
-.grid-wrap.patching .part[data-takes] {
+/* **Which set lights depends on which end is in your hand.** A socket in the
+   hand is looking for a destination; a plug is looking for a source, and those
+   are different blocks. Lighting the destinations for both showed, for half the
+   gesture, exactly the blocks that could not answer. */
+.grid-wrap.patching:not(.sourcing) .part[data-takes],
+.grid-wrap.patching.sourcing .part[data-offers] {
 	opacity: 1;
 	box-shadow: 0 0 0 max(2px, calc(var(--cell) * 0.05)) var(--ring),
 		0 6px 18px var(--shadow-near);
@@ -2330,3 +2335,8 @@ html, body {
 	color: var(--danger);
 	font-weight: 700;
 }
+
+/* The round trip, beside the build stamp because it is the same kind of fact:
+   something you look at when you are wondering rather than when you are
+   playing. It borrows `.build` for its type and adds only a little air. */
+.bar .trip { margin-left: 0.6rem; }

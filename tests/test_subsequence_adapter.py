@@ -2,6 +2,7 @@
 
 import asyncio
 import threading
+import time
 import typing
 
 import pytest
@@ -100,7 +101,7 @@ def _link () -> tuple[superintendent.subsequence_adapter.AppLink, list[superinte
 	)
 	sent: list[superintendent.protocol.Frame] = []
 
-	link._emit = sent.append  # type: ignore[method-assign]
+	link._emit = sent.append  # type: ignore[assignment, method-assign]
 
 	return link, sent
 
@@ -494,7 +495,7 @@ def test_a_beat_carries_a_pitched_grid_s_geometry_when_that_is_all_there_is () -
 	)
 
 	sent: list[superintendent.protocol.Frame] = []
-	link._emit = sent.append  # type: ignore[method-assign]
+	link._emit = sent.append  # type: ignore[assignment, method-assign]
 	link._clock_loop = asyncio.new_event_loop()
 
 	try:
@@ -508,3 +509,72 @@ def test_a_beat_carries_a_pitched_grid_s_geometry_when_that_is_all_there_is () -
 	assert beats, f"no beat event was sent: {sent}"
 	assert beats[-1]["steps"] == 12, beats[-1]
 	assert beats[-1]["beats"] == 3, beats[-1]
+
+
+def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
+	"""The clock loop asks what is owed; the link thread pays it.
+
+	Measured before it was moved: the adapter's own cost in the burst is 0.012 ms
+	and free, and the cost is one `composition.trigger()` per setting — ten for
+	the Minitaur as `compositions/drm1_grid.py` declares it, thirty-six for a
+	Matriarch.  That is linear in a number this project is deliberately
+	increasing, on a callback with about 20 ms of headroom before it delays the
+	next pulse, and it was the one path on the timing loop with no measurement
+	behind it.
+
+	Simon's rule of 2026-09-06 decides it: the clock must remain solid at all
+	costs, so an unmeasured cost on the timing path is one to remove.  It is
+	still *asked for* on a beat, because a beat is how this knows the clock is
+	running, and `composition.trigger` is documented as the thread-safe way in.
+	"""
+
+	composition = FakeComposition()
+	told: list[tuple[str, typing.Any]] = []
+
+	settings = superintendent.subsequence_adapter.Params(
+		composition,
+		parameters=[superintendent.subsequence_adapter.Parameter("glide", "switch", default=False)],
+		data_key="moog", name="moog",
+		on_change=lambda name, value: told.append((name, value)))
+
+	composition.data["moog"] = {"glide": True}
+
+	link = superintendent.subsequence_adapter.AppLink(composition, controls=[settings])
+	link._emit = lambda frame: None  # type: ignore[method-assign]
+
+	settings.declared()
+
+	# A link thread of its own, running, because that is what the work is handed
+	# to. Not an async test: an async test in this file fails once test_page.py
+	# has run, and this needs a loop either way.
+	loop = asyncio.new_event_loop()
+	thread = threading.Thread(target=loop.run_forever, daemon=True)
+	thread.start()
+
+	try:
+		link._link_loop = loop
+		link._clock_loop = loop
+
+		link._on_beat(1)
+
+		# The beat itself must not have told the instrument anything.
+		assert told == [], f"the clock loop paid the burst inline: {told}"
+
+		deadline = time.monotonic() + 5.0
+
+		while not told and time.monotonic() < deadline:
+			time.sleep(0.01)
+
+		assert told == [("glide", True)], f"the link thread never paid it: {told}"
+
+		# And once only, however many beats follow.
+		told.clear()
+		link._on_beat(2)
+		time.sleep(0.2)
+
+		assert told == [], "the burst was paid a second time"
+
+	finally:
+		loop.call_soon_threadsafe(loop.stop)
+		thread.join(timeout=5.0)
+		loop.close()

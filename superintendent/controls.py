@@ -41,6 +41,16 @@ likely, most other instruments.
 Deliberately carrying no MIDI in it at all.  A panel draws a switch; whether
 that switch is control-change 65 on channel 6 is the composition's business and
 never this package's, which is the same rule the rows of a grid follow.
+
+**One number looks like an exception and is not.**  ``subsequence_adapter.py``
+declares ``velocity_range: [1, 127]`` for a grid, which is a MIDI range — and it
+belongs there rather than here, because that file is by definition the part that
+knows it is talking to a MIDI sequencer.  This module serves any app: two of the
+three neighbours have no velocity at all, and a scanner has no notes.  So the
+line is between the adapter and the package rather than around the package, and
+what this file must never do is *assume* a range for an app that declared none.
+Settled on 2026-09-06 (#2140); the client's own hard-coded 127 was removed under
+the same rule.
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range")

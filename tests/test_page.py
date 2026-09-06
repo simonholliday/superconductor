@@ -843,7 +843,8 @@ def test_a_drag_that_goes_nowhere_is_still_a_tap (
 	_drag(panel, conftest.cell("bass/C2/0"), dx=3)
 
 	panel.wait_for_selector('.part[data-part="bass"] .grid.notes .note.chosen', timeout=5_000)
-	assert not [frame for frame in fake_app.sets if frame.get("path").startswith("bass/")], \
+	assert not [frame for frame in fake_app.sets
+	            if str(frame.get("path") or "").startswith("bass/")], \
 		"a wobble asked the sequencer for nothing"
 
 
@@ -889,7 +890,8 @@ def test_zooming_right_out_stops_the_grid_taking_taps (
 
 	panel.locator(conftest.cell("bass/D2/3")).click(force=True)
 
-	assert not [frame for frame in fake_app.sets if frame.get("path").startswith("bass/")], \
+	assert not [frame for frame in fake_app.sets
+	            if str(frame.get("path") or "").startswith("bass/")], \
 		"nothing was asked for from a view that cannot be aimed at"
 
 
@@ -4179,7 +4181,8 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 	assert loose == [], f"these name a button and set its own size: {loose}"
 
 
-def test_every_control_centres_what_is_written_on_it (panel: typing.Any) -> None:
+def test_every_control_centres_what_is_written_on_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The hole the surface rule had, and Simon found it twice over.
 
 	`.offer` set `align-items: flex-start` and `text-align: left` — right for the
@@ -4192,29 +4195,69 @@ def test_every_control_centres_what_is_written_on_it (panel: typing.Any) -> None
 	than a label, and two lines centred read as neither.
 	"""
 
-	_open_the_stack(panel)
-	panel.locator('.part[data-part="grid"] .part-foot button.add').click()
-	panel.wait_for_selector(".sheet .option", timeout=5_000)
-
-	adrift = panel.evaluate("""() => {
+	adrift = _in_every_state(panel, fake_app, lambda page: page.evaluate("""() => {
 		const out = [];
 
-		for (const one of document.querySelectorAll("button")) {
-			const how = getComputedStyle(one).justifyContent;
+		for (const one of document.querySelectorAll("*")) {
+			const shape = getComputedStyle(one);
 
-			/* Two exceptions, and both name themselves on the element: an
-			   option stacks two lines, and a picker puts its label and its
-			   mark at opposite ends the way a select does. */
+			/* **Every control, not every button.** This asked `<button>` alone,
+			   so a dial — a div that captures the pointer and slides — had
+			   never been checked, and neither had anything else that is a
+			   control without being a button. `touch-action: none` is the
+			   marker every target already carries, and the same one the target
+			   rules are found by. */
+			if (shape.touchAction !== "none") continue;
+
+			const text = (one.textContent || "").trim();
+
+			if (!text) continue;
+
+			/* Only the innermost control. A rocker is a framed group holding two
+			   ends; the group carries the text of both and centres nothing
+			   itself, so it is the ends that have to answer for it. */
+			if ([...one.querySelectorAll("*")].some(
+				(kid) => getComputedStyle(kid).touchAction === "none")) continue;
+
+			/* Centred by whichever mechanism applies: a flex control says so
+			   with justify-content, anything else with text-align. */
+			const flexed = shape.display === "flex" || shape.display === "inline-flex";
+			const how = flexed ? shape.justifyContent : shape.textAlign;
+
 			if (how === "center") continue;
-			if (one.classList.contains("option") || one.classList.contains("picker")) continue;
+
+			/* **Four exceptions, each named on the element and each with a
+			   reason.** A list is only dangerous when it is implicit; this one
+			   is the same shape as SURFACE_RULES — adding to it is a deliberate
+			   act rather than something that happens.
+			
+			   - `option` stacks two lines, and two lines centred read as
+			     neither.
+			   - `picker` puts a label and its mark at opposite ends, the way a
+			     select does.
+			   - `part-title` is a bar and not a label: a block's name goes
+			     where a name goes, with the close button at the far end. It is
+			     the same shape as a picker and only becomes a control at all
+			     when the layout is unlocked, which is why nothing had asked it
+			     before this test looked past buttons.
+			   - `dial` is a fader whose readout sits at the end of its own
+			     track. Centred, the number would float in the middle of the
+			     thing it describes and move as the fill moved under it. */
+			const named = ["option", "picker", "part-title", "dial"];
+
+			if (named.some((one_) => one.classList.contains(one_))) continue;
 
 			out.push((one.className || one.tagName) + " → " + how);
 		}
 
 		return out;
-	}""")
+	}"""))
 
 	assert adrift == [], f"these do not centre what is written on them: {adrift}"
+
+	_open_the_stack(panel)
+	panel.locator('.part[data-part="grid"] .part-foot button.add').click()
+	panel.wait_for_selector(".sheet .option", timeout=5_000)
 
 	# **And the other way round, which is the hole this had.** A control holding
 	# two lines and *not* saying so came out centred, which this test permitted
@@ -4513,10 +4556,17 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 			   it are read as a list. And of a block's title bar, which is the
 			   handle for the block and is bounded by the block.
 			
-			   The containers are named rather than matched by "has a border",
-			   because almost everything here is inside something bordered and a
-			   loose version of this rule would exempt the page. */
-			const frames = '[role="group"], .options, .choices, .part';
+			   **A container says so itself.** It used to be matched by class
+			   name here — `.options`, `.choices` — which made the rule a list,
+			   and a list is the thing that drifts: a fifth popover added later
+			   would not be in it and nothing would say so. A framed group
+			   declares a role, as the rocker always has.
+			
+			   A block is the one structural exception, because its title bar is
+			   the handle for it and takes the block's own frame. Kept narrow on
+			   purpose: this matches the parent only, so it exempts a block's
+			   own header and nothing deeper. */
+			const frames = '[role="group"], .part';
 			const parent = one.parentElement;
 			const frame = parent && getComputedStyle(parent);
 
@@ -4543,8 +4593,22 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 def test_a_target_is_at_least_one_row_in_both_directions (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The other half: if a thing cannot be given that much room, it must not be
-	touchable.  A target smaller than a finger is a target a finger misses, and
-	on this surface the finger is the only input there is."""
+	touchable.
+
+	**This is a consistency check and not a reachability one, and the difference
+	matters.**  `controlRow` returns the cell exactly, so `--row` and `--cell`
+	are the same number and the floor moves with the target — which means this
+	can never report anything as too small on the lattice.  What it does enforce
+	is that a target is never smaller than the surface it sits on says a control
+	should be, which is a real rule and the one that caught the scroll strip.
+
+	What it does *not* answer is whether a finger can hit a 22px control at
+	Compact.  Simon settled that deliberately on 2026-09-06 (#2140): a step cell
+	is the most-tapped thing on this surface and works at that size, so exempting
+	a switch from a size the person chose is the inconsistency.  The absolute
+	question belongs to the panel probes (#1997, #1998) and is hardware-gated.
+	Do not read a pass here as evidence about fingers.
+	"""
 
 	small = _in_every_state(panel, fake_app, lambda page: page.evaluate("""() => {
 		const row = parseFloat(
@@ -4874,3 +4938,61 @@ def test_a_grid_that_declares_no_weight_scale_draws_every_mark_the_same (
 
 	assert abs(loud - quiet) < 0.5, (
 		f"a panel told nothing about weight drew {loud}px and {quiet}px")
+
+
+def test_a_cable_lights_what_the_end_in_your_hand_can_land_on (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Two ends, two different sets of blocks, and it used to light one of them
+	for both.
+
+	Dragging the socket you are choosing a destination, so the blocks that can
+	answer are the ones whose stack takes what is plugged in at the far end.
+	Dragging the plug you are choosing a *source*, so the blocks that can answer
+	are the ones that destination's stack declares it takes from.  Lighting the
+	destinations for the plug showed precisely the set that cannot be what you
+	are looking for.  The drop always resolved correctly against `sources`; only
+	the affordance lied.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_apart(panel, "grid", dx=0, dy=420)
+
+	def lit_while_holding (selector: str) -> list[str]:
+		"""Which blocks are lit part-way through a drag from this fitting."""
+
+		panel.locator(selector).scroll_into_view_if_needed()
+
+		box = panel.locator(selector).bounding_box()
+		x = box["x"] + box["width"] / 2
+		y = box["y"] + box["height"] / 2
+
+		panel.mouse.move(x, y)
+		panel.mouse.down()
+		panel.mouse.move(x + 40, y + 40, steps=6)
+
+		try:
+			return panel.evaluate("""() => [...document.querySelectorAll(".part[data-part]")]
+				.filter((one) => getComputedStyle(one).opacity === "1")
+				.map((one) => one.dataset.part)
+				.sort();""")
+
+		finally:
+			# Back where it started, so the route survives for the second half.
+			panel.mouse.move(x, y, steps=6)
+			panel.mouse.up()
+			_joins_settled(panel)
+
+	# The socket is looking for a pattern to feed. `grid` is the one whose stack
+	# takes from `second`.
+	holding_socket = lit_while_holding('[data-join="second>grid"] .socket')
+
+	assert holding_socket == ["grid"], (
+		f"a socket in the hand should light the destinations: {holding_socket}")
+
+	# The plug is looking for something to feed *from*. `second` is what the
+	# stack declares as a source; `grid` is the one block that cannot be one.
+	holding_plug = lit_while_holding('[data-join="second>grid"] .collar')
+
+	assert holding_plug == ["second"], (
+		f"a plug in the hand should light the sources: {holding_plug}")

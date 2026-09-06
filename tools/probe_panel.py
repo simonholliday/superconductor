@@ -64,7 +64,7 @@ async def main () -> None:
 		# in". Everything it needs is in the manifest it has just read.
 		app, control, row = _first_step_grid(manifest)
 
-		if app is None:
+		if manifest is None or app is None or control is None:
 			print("NOTHING TO TAP: no app is offering a step grid with a row in it")
 			return
 

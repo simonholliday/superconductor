@@ -164,6 +164,28 @@ class Control:
 
 		return []
 
+	def owed (self) -> list[tuple[str, typing.Any]]:
+		"""What this control still has to say to the instrument, and has not.
+
+		**Returned rather than done, because the caller is the clock.**  Asked
+		on the clock loop and paid on the link thread, which is the discipline
+		`_emit` already follows for a socket — "never blocking there, so a slow
+		socket cannot delay a pulse".  Telling an instrument is the same kind of
+		work and was the one place doing it inline.
+
+		Asking does not clear the debt; `settled` does, once the work has been
+		handed to a thread that will do it.  So a beat that finds no link yet
+		simply asks again on the next one.
+		"""
+
+		return []
+
+	def settled (self) -> None:
+		"""The debt above has been handed over and need not be offered again."""
+
+	def settle (self, owed: list[tuple[str, typing.Any]]) -> None:
+		"""Say those things to the instrument.  Called on the link thread."""
+
 	def attach (self, link: "AppLink") -> None:
 		"""Take the link, so a control that must report between beats can.
 
@@ -971,18 +993,55 @@ class Params (Control):
 		a panel, and the panel already holds what the snapshot gave it.
 		"""
 
+		return []
+
+	def owed (self) -> list[tuple[str, typing.Any]]:
+		"""Every setting this instrument has not been told yet, once.
+
+		**Measured, and moved off the clock for it.**  The adapter's own cost
+		here is 0.012 ms and free; the cost is one `composition.trigger()` per
+		setting, and there is one per setting — ten for the Minitaur as
+		`compositions/drm1_grid.py` declares it, thirty-six for a Matriarch.
+		That is linear in a number the project is deliberately increasing, on a
+		callback with about 20 ms of headroom before it delays the next pulse,
+		and it had no measurement behind it while every other path on the timing
+		loop did (#1926, #2025, #2033, #2043).
+
+		Simon's rule of 2026-09-06 decides it: timing is paramount and the clock
+		must remain solid at all costs, so an unmeasured cost on the timing path
+		is one to remove rather than to assume away.  It is still *asked for* on
+		the first beat, because a beat is how this knows the clock is running —
+		a setting sent before playback starts is silently dropped — but it is
+		paid on the link thread, where `composition.trigger()` is documented as
+		the thread-safe way in.
+		"""
+
 		if not self._to_assert or self.on_change is None:
 			return []
 
+		return [(name, value)
+		        for name, value in (self.composition.data.get(self.data_key) or {}).items()
+		        if name in self.parameters]
+
+	def settled (self) -> None:
+		"""Owed once and no more, now that somebody has taken the work."""
+
 		self._to_assert = False
 
-		for name, value in (self.composition.data.get(self.data_key) or {}).items():
-			if name in self.parameters:
+	def settle (self, owed: list[tuple[str, typing.Any]]) -> None:
+		"""Tell the instrument, on the link thread rather than on the clock."""
+
+		if self.on_change is None:
+			return
+
+		for name, value in owed:
+			try:
 				self.on_change(name, value)
 
-		LOG.info("asserted %d setting(s) of %r to the instrument", len(self.parameters), self.name)
+			except Exception:
+				LOG.warning("asserting %r of %r failed", name, self.name, exc_info=True)
 
-		return []
+		LOG.info("asserted %d setting(s) of %r to the instrument", len(owed), self.name)
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Write one setting, and tell the composition it moved."""
@@ -2149,6 +2208,13 @@ class AppLink:
 				self._emit(superintendent.protocol.changed(
 					self.app_name, path, value, self.version, by="app"))
 
+			# Asked here because a beat is how we know the clock is running, and
+			# paid on the link thread because this is the clock.
+			owed = control.owed()
+
+			if owed:
+				self._settle(control, owed)
+
 	def _apply (self, path: str, value: typing.Any, client: str, seq: int) -> None:
 		"""Hand one request to the control that owns it, on the clock loop."""
 
@@ -2202,6 +2268,29 @@ class AppLink:
 
 		self._emit(superintendent.protocol.changed(
 			self.app_name, path, value, self.version, by="app"))
+
+	def _settle (self, control: Control, owed: list[tuple[str, typing.Any]]) -> None:
+		"""Tell an instrument what it is owed, on the link thread.
+
+		The same shape as `_emit` and for the same reason: the clock loop hands
+		the work over and returns, so a slow instrument cannot delay a pulse.
+		"""
+
+		loop = self._link_loop
+
+		# No link thread yet happens only before the socket is first dialled.
+		# The debt is left unsettled, so the next beat offers it again — paying
+		# it inline here is the one thing this exists to avoid.
+		if loop is None:
+			return
+
+		asyncio.run_coroutine_threadsafe(self._tell(control, owed), loop)
+		control.settled()
+
+	async def _tell (self, control: Control, owed: list[tuple[str, typing.Any]]) -> None:
+		"""Hand the work to the control, on the link thread."""
+
+		control.settle(owed)
 
 	def _emit (self, frame: superintendent.protocol.Frame) -> None:
 		"""Hand a frame to the link thread, in the order it was produced.

@@ -15,6 +15,7 @@ import json
 import pathlib
 import sys
 import time
+import typing
 
 import websockets.asyncio.client
 
@@ -140,7 +141,8 @@ async def main () -> None:
 		# file needs the resolutions the apps are declaring right now — there is
 		# nowhere else to learn them, and guessing would be the silent kind of
 		# wrong this exists to avoid.
-		manifest, deadline = {}, time.monotonic() + 5
+		manifest: dict[str, typing.Any] = {}
+		deadline = time.monotonic() + 5
 
 		while not manifest and time.monotonic() < deadline:
 			try:
@@ -153,8 +155,8 @@ async def main () -> None:
 				manifest = frame.get("apps") or {}
 
 		if not stamped:
-			moved = sum(_converted(state, manifest.get(app) or {})
-			            for app, state in held.items())
+			moved = sum((_converted(state, manifest.get(app) or {})
+			             for app, state in held.items()), 0)
 
 			if moved:
 				print(f"{WHERE} predates contract 1.12.0: "

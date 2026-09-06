@@ -717,7 +717,7 @@ def _watching (places: list[Note] | None = None) -> tuple[adapter.Recipe, Speake
 	recipe = adapter.Recipe(
 		Composition(), catalogue=CATALOGUE, pitches=ROWS,
 		builds="grid", pulses_per_beat=24)
-	recipe.attach(speaker)
+	recipe.attach(typing.cast(typing.Any, speaker))
 
 	return recipe, speaker, Builder(places)
 
@@ -862,7 +862,7 @@ def test_a_stack_told_no_pulse_count_says_nothing_at_all () -> None:
 	speaker = Speaker({"grid": grid})
 
 	recipe = adapter.Recipe(Composition(), catalogue=CATALOGUE, pitches=ROWS, builds="grid")
-	recipe.attach(speaker)
+	recipe.attach(typing.cast(typing.Any, speaker))
 
 	builder = Builder()
 	builder.lands = [Note(0, "kick")]
@@ -939,7 +939,7 @@ def test_a_grid_switched_off_contributes_nothing_where_it_is_routed () -> None:
 	recipe = adapter.Recipe(
 		Composition(), catalogue=CATALOGUE, pitches=ROWS,
 		sources={"shared": lambda pattern: played.append("shared")})
-	recipe.attach(speaker)
+	recipe.attach(typing.cast(typing.Any, speaker))
 
 	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
 	recipe.build(Builder())
