@@ -11,6 +11,7 @@ absent rather than stubbed, so nothing claims to work that has never run.
 """
 
 import json
+import math
 import typing
 
 
@@ -133,6 +134,49 @@ def decode (raw: str | bytes) -> Frame:
 		raise ProtocolError("frame has no 't' naming its kind")
 
 	return typing.cast(Frame, parsed)
+
+
+def whole (frame: Frame, name: str, fallback: int) -> int:
+	"""One field of a frame as a whole number, refusing anything that is not one.
+
+	`decode` guarantees a frame is an object carrying a string ``t`` and says
+	nothing about any other field, so everything else is whatever the sender
+	chose to put there.  Three fields were coerced with a bare ``int()`` or
+	``float()`` inside a ``try`` that catches only a disconnection and a
+	`ProtocolError` — so ``{"t": "set", ..., "seq": "oops"}`` took the socket
+	down with a traceback rather than through the careful path this module has
+	for exactly "a frame that could not be read".
+
+	A float that happens to be whole is accepted: JSON has one number type, and
+	refusing ``2.0`` for a sequence number would be pedantry about an encoding
+	rather than about the value.
+	"""
+
+	held = frame.get(name, fallback)
+
+	if isinstance(held, bool) or not isinstance(held, (int, float)):
+		raise ProtocolError(f"{name!r} is a whole number, and {held!r} is not one")
+
+	if isinstance(held, float) and (not math.isfinite(held) or held != int(held)):
+		raise ProtocolError(f"{name!r} is a whole number, and {held!r} is not one")
+
+	return int(held)
+
+
+def number (frame: Frame, name: str, fallback: float) -> float:
+	"""One field of a frame as a number, refusing anything that is not one.
+
+	Infinities and NaN are refused as well as strings: they survive JSON in
+	some encoders, and a timestamp of NaN would come back through a pong and
+	poison the panel's own clock arithmetic.
+	"""
+
+	held = frame.get(name, fallback)
+
+	if isinstance(held, bool) or not isinstance(held, (int, float)) or not math.isfinite(held):
+		raise ProtocolError(f"{name!r} is a number, and {held!r} is not one")
+
+	return float(held)
 
 
 def hello (client: str, page: str | None, versions: dict[str, int] | None = None) -> Frame:

@@ -8,7 +8,10 @@ description = "Touchscreen control surface for Subsequence, Subsample and Substa
 readme = "README.md"
 requires-python = ">=3.11"
 license = "LicenseRef-FSL-1.1-ALv2"
-license-files = ["LICENSE"]
+# The vendored notices travel with the artefact, because they have to: the OFL
+# requires the font's licence to accompany it, and Lucide's icon paths are
+# inside `app.js` rather than in a file anybody would notice.
+license-files = ["LICENSE", "licences/*"]
 dynamic = ["version"]
 dependencies = [
 	"starlette>=0.37",
@@ -36,10 +39,19 @@ superintendent = "superintendent.cli:main"
 [tool.setuptools]
 packages = ["superintendent"]
 
-# The page, its stylesheet and the vendored libraries are not Python, so they
-# are carried as data.  Without this a built copy has nothing to serve.
+# The page, its stylesheet, the vendored libraries and the bundled face are not
+# Python, so they are carried as data.  Without this a built copy has nothing to
+# serve.
+#
+# **Every directory has to be named.**  `client/*` does not reach into
+# `client/fonts/`, so adding the face and not this line shipped a wheel that
+# answered the font request with a 404 and silently fell back down the stack to
+# whatever condensed face the machine happened to have.  Invisible to everyone
+# developing and visible only to whoever installs — which is the same shape as
+# the first review's finding that the client was not in the distributable at
+# all, arriving a second time through a directory added later.
 [tool.setuptools.package-data]
-superintendent = ["client/*", "client/vendor/*"]
+superintendent = ["client/*", "client/vendor/*", "client/fonts/*"]
 
 [tool.setuptools_scm]
 # Used when there is no git repository to read a version from — "git init" is

@@ -426,3 +426,85 @@ def test_a_composition_that_cannot_mute_is_not_an_error () -> None:
 
 	assert grid.apply(["enabled"], False) is True
 	assert grid.enabled is False
+
+
+def test_a_transport_refuses_a_field_it_does_not_have () -> None:
+	"""`False` means "nothing changed", which is the wrong answer for "there is
+	no such thing".
+
+	Returning it emitted nothing at all, so the panel's request sat pending for
+	the full five seconds and then flashed as a failure with no reason given.
+	Every other control raises `Refused` and the panel says why; this one went
+	quiet.  It is the first review's finding about `StepGrid.apply`, fixed there
+	and still true here.
+	"""
+
+	transport, _ = _transport()
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["tempo"], 120.0)
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["bpm", "extra"], 120.0)
+
+	# And "nothing changed" is still allowed to mean exactly that.
+	assert transport.apply(["paused"], False) is False
+
+
+def test_a_composition_that_cannot_pause_says_so_rather_than_ignoring_it () -> None:
+	"""The button is not declared, so this is only reachable by a stale panel —
+	which is precisely when a silent refusal is hardest to work out."""
+
+	class WithoutPause (FakeComposition):
+		"""A composition from before the transport could be held."""
+
+		pause = None  # type: ignore[assignment]
+		resume = None  # type: ignore[assignment]
+
+	transport = superintendent.subsequence_adapter.Transport(WithoutPause())
+
+	with pytest.raises(superintendent.subsequence_adapter.Refused):
+		transport.apply(["paused"], True)
+
+
+def test_a_beat_carries_a_pitched_grid_s_geometry_when_that_is_all_there_is () -> None:
+	"""The transport counter is driven by `steps` and `beats` on the beat event.
+
+	Only a `StepGrid` was looked for, so a composition offering pitched patterns
+	and nothing else sent `steps=None, beats=None` and the counter drew nothing
+	at all, with nothing anywhere saying why.
+
+	**Synchronous, and the loop is handed over rather than borrowed.**
+	`_on_beat` captures the clock loop from the first beat it sees, so the
+	obvious way to write this is as an async test — and an async test in this
+	file fails, because `test_page.py` sorts before it and Playwright's sync API
+	holds a running loop on the main thread for the rest of the session, which
+	`Runner.run()` cannot start inside.  It passes alone and fails in the suite,
+	which is the worst way for a test to be wrong.  The loop here is never run;
+	it is only the thing the link records.
+	"""
+
+	composition = FakeComposition()
+	link = superintendent.subsequence_adapter.AppLink(
+		composition,
+		controls=[
+			superintendent.subsequence_adapter.NoteGrid(
+				composition, rows=["C2"], steps=12, beats=3, data_key="bass", name="bass"),
+		],
+	)
+
+	sent: list[superintendent.protocol.Frame] = []
+	link._emit = sent.append  # type: ignore[method-assign]
+	link._clock_loop = asyncio.new_event_loop()
+
+	try:
+		link._on_beat(1)
+
+	finally:
+		link._clock_loop.close()
+
+	beats = [one for one in sent if one.get("t") == "event" and one.get("name") == "beat"]
+
+	assert beats, f"no beat event was sent: {sent}"
+	assert beats[-1]["steps"] == 12, beats[-1]
+	assert beats[-1]["beats"] == 3, beats[-1]

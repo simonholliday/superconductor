@@ -197,7 +197,7 @@ class Hub:
 		if app is None:
 			await panel.send(superintendent.protocol.nack(
 				str(name), str(frame.get("page", "")), panel.client,
-				int(frame.get("seq", 0)), f"{name} is not connected"))
+				superintendent.protocol.whole(frame, "seq", 0), f"{name} is not connected"))
 			return
 
 		await app.send(frame)
@@ -216,11 +216,12 @@ class Hub:
 		if app is None:
 			await panel.send(superintendent.protocol.nack(
 				str(name), str(frame.get("path", "")), panel.client,
-				int(frame.get("seq", -1)), f"{name} is not connected"))
+				superintendent.protocol.whole(frame, "seq", -1), f"{name} is not connected"))
 			return
 
 		await app.send(superintendent.protocol.set_frame(
-			app.name, str(frame.get("path", "")), frame.get("v"), panel.client, int(frame.get("seq", -1))))
+			app.name, str(frame.get("path", "")), frame.get("v"), panel.client,
+			superintendent.protocol.whole(frame, "seq", -1)))
 
 	async def change_reported (self, app: AppLink, frame: superintendent.protocol.Frame) -> None:
 		"""Record what an app applied, tell every panel, and confirm to the asker.
@@ -232,7 +233,7 @@ class Hub:
 
 		path = str(frame.get("path", ""))
 		value = frame.get("v")
-		app.version = int(frame.get("ver", app.version + 1))
+		app.version = superintendent.protocol.whole(frame, "ver", app.version + 1)
 
 		try:
 			superintendent.controls.apply_change(app.state, app.controls, path, value)

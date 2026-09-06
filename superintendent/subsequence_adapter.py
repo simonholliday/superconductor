@@ -1815,18 +1815,30 @@ class Transport (Control):
 		return state
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
-		"""Hold the transport, let it go, or set the tempo."""
+		"""Hold the transport, let it go, or set the tempo.
+
+		**Refused rather than ignored.**  `False` means "nothing changed", which
+		is a true and useful answer for a pause that was already paused — and
+		the wrong one for a field this transport does not have.  Returning it
+		emitted nothing at all, so the panel's request sat pending for the full
+		five seconds and then flashed as a failure with no reason given, while
+		every other control raises.  This is the first review's finding about
+		`StepGrid.apply`, fixed there and still true here.
+		"""
 
 		if len(rest) != 1:
-			return False
+			raise Refused(f"{'/'.join(rest)!r} does not name a transport field")
 
-		if rest[0] == "paused" and self._can_pause:
+		if rest[0] == "paused":
+			if not self._can_pause:
+				raise Refused("this composition cannot hold its clock")
+
 			return self._set_paused(bool(value))
 
 		if rest[0] == "bpm":
 			return self._set_bpm(value)
 
-		return False
+		raise Refused(f"a transport has no field named {rest[0]!r}")
 
 	def poll (self) -> list[tuple[str, typing.Any]]:
 		"""Report a tempo the composition changed itself, so the panel follows it."""
@@ -2112,7 +2124,11 @@ class AppLink:
 		interval = None if self._last_beat_at is None else now - self._last_beat_at
 		self._last_beat_at = now
 
-		grid = next((c for c in self.controls.values() if isinstance(c, StepGrid)), None)
+		# **Any grid, not the first step grid.** A composition offering pitched
+		# patterns and no step grid sent `steps=None, beats=None`, and the
+		# transport counter drew nothing at all with nothing to say why.
+		grid = next(
+			(c for c in self.controls.values() if isinstance(c, (StepGrid, NoteGrid))), None)
 
 		self._emit(superintendent.protocol.event(
 			self.app_name, "beat", beat=beat, ts=now, interval=interval,

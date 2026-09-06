@@ -144,7 +144,8 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 				await hub.layout_requested(panel, frame)
 
 			elif kind == "ping":
-				await panel.send(superintendent.protocol.pong(float(frame.get("ts", 0.0))))
+				await panel.send(superintendent.protocol.pong(
+					superintendent.protocol.number(frame, "ts", 0.0)))
 
 			else:
 				LOG.debug("panel %s sent %r, which this version ignores", panel.client, kind)
@@ -176,7 +177,7 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 					send=_sender(websocket),
 					controls=dict(frame.get("controls") or {}),
 					state=dict(frame.get("state") or {}),
-					version=int(frame.get("ver", 0)),
+					version=superintendent.protocol.whole(frame, "ver", 0),
 					pages=list(frame.get("pages") or []),
 				)
 				await hub.app_declared(app)

@@ -1,9 +1,13 @@
 """The whole loop over real sockets: a tap leaves the glass and comes back."""
 
 import pathlib
+import re
+import tomllib
 import typing
 
+import pytest
 import starlette.testclient
+import starlette.websockets
 
 import superintendent
 import superintendent.config
@@ -129,6 +133,64 @@ def test_the_page_ships_inside_the_package () -> None:
 	assert (superintendent.service.CLIENT_DIR / "index.html").exists()
 	assert (superintendent.service.CLIENT_DIR / "app.js").exists()
 	assert (superintendent.service.CLIENT_DIR / "vendor").is_dir()
+	assert (superintendent.service.CLIENT_DIR / "fonts").is_dir()
+
+
+def _globbed (pattern: str) -> typing.Any:
+	"""One setuptools package-data glob as an expression, where * stops at a /."""
+
+	parts = []
+
+	for piece in re.split(r"(\*\*/|\*|\?)", pattern):
+		if piece == "**/":
+			parts.append(r"(?:[^/]+/)*")
+		elif piece == "*":
+			parts.append(r"[^/]*")
+		elif piece == "?":
+			parts.append(r"[^/]")
+		else:
+			parts.append(re.escape(piece))
+
+	return re.compile("".join(parts) + "$")
+
+
+def test_everything_the_page_needs_is_named_in_the_package_data () -> None:
+	"""Every file the service can serve must be matched by a glob that ships it.
+
+	**Listing the files a test knows about is not enough**, and this is the
+	second time the same fault has shipped: the client once sat outside the
+	package entirely, and then the bundled face was added under `client/fonts/`
+	while the globs said `client/*` and `client/vendor/*`.  A glob does not
+	reach into a directory nobody named, so a wheel carried the stylesheet that
+	asks for the face and not the face — and an installed panel answered that
+	request with a 404 and fell silently back to whatever condensed font the
+	machine happened to have.
+
+	Invisible to everyone developing, because a source tree has the file either
+	way.  So this asks the question a build asks: for each file under `client/`,
+	is there a glob that would carry it?
+	"""
+
+	settings = tomllib.loads(
+		(pathlib.Path(superintendent.__file__).resolve().parent.parent / "pyproject.toml")
+		.read_text(encoding="utf-8"))
+
+	globs = [_globbed(one) for one in
+	         settings["tool"]["setuptools"]["package-data"]["superintendent"]]
+
+	inside = pathlib.Path(superintendent.__file__).resolve().parent
+	missed = []
+
+	for file in sorted(superintendent.service.CLIENT_DIR.rglob("*")):
+		if not file.is_file() or "__pycache__" in file.parts:
+			continue
+
+		named = file.relative_to(inside).as_posix()
+
+		if not any(one.match(named) for one in globs):
+			missed.append(named)
+
+	assert missed == [], f"these would not be carried into a built copy: {missed}"
 
 
 def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
@@ -322,3 +384,31 @@ def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
 				raise AssertionError("no pong arrived to fence the count")
 
 			assert beats == 1, f"one beat was delivered {beats} times after three hellos"
+
+
+def test_a_malformed_frame_does_not_take_the_socket_down_with_a_traceback () -> None:
+	"""It goes through the refusal path this service already has for it.
+
+	The panel is our own code and this is a LAN, so it is not a security
+	finding — it is that the service has a careful, deliberate `ProtocolError`
+	path for "a frame that could not be read", and three coercions bypassed it
+	to die with a `ValueError` instead.
+	"""
+
+	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+
+	with client.websocket_connect("/ws/app") as app:
+		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			_read_until(panel, "manifest")
+
+			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/kick/0",
+			                 "v": True, "seq": "oops"})
+
+	# Nothing is read after it: the service closes the socket on a frame it
+	# cannot read, and reading a closed one blocks rather than returning. What
+	# is asserted is that leaving the block raises nothing — `TestClient`
+	# re-raises an exception that escaped the endpoint, and a bare `int()` on a
+	# string escapes it.
