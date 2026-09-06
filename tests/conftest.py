@@ -264,11 +264,43 @@ class FakeApp:
 
 		self.send(superintendent.protocol.nack("subsequence", path, client, seq, reason))
 
-	def beat (self, number: int, interval: float = 0.5) -> None:
-		"""Report a beat, which is what a playhead moves between."""
+	def stop (self) -> None:
+		"""Close the socket and let the thread that owns it finish.
 
-		self.send(superintendent.protocol.event(
-			"subsequence", "beat", beat=number, ts=0.0, interval=interval, steps=8, beats=2))
+		Without this a `FakeApp` outlives the test that made it: a daemon
+		thread, an event loop and an open socket each, all still declared to the
+		one session-scoped service as ``subsequence``.  A full run leaked about
+		a hundred and sixty of each and raised a warning for every one, which is
+		enough noise to hide a real thread fault — and it put the reconnection
+		defect this suite is meant to catch *inside* the suite, where a leaked
+		socket dropping mid-session would take the app under test away with it.
+		"""
+
+		if self._loop is None or self._loop.is_closed():
+			return
+
+		closing = None
+
+		if self._socket is not None:
+			with contextlib.suppress(Exception):
+				closing = asyncio.run_coroutine_threadsafe(self._socket.close(), self._loop)
+
+		# **Waited for by joining the thread, not by waiting on the close.**
+		# Closing the socket is what ends `_serve`, which ends
+		# `run_until_complete`, which stops the loop — and a loop that has
+		# stopped never runs the callback that would resolve the close's own
+		# future. Waiting on that future therefore always costs the full
+		# timeout, on every test, while the work itself is already done: five
+		# seconds each, measured, which is where a hundred-second suite went
+		# when this was written the obvious way.
+		self._thread.join(timeout=5.0)
+
+		if closing is not None and closing.done():
+			with contextlib.suppress(Exception):
+				closing.result()
+
+		with contextlib.suppress(Exception):
+			self._loop.close()
 
 	def await_set (self, path: str, limit: float = 5.0) -> superintendent.protocol.Frame:
 		"""Wait for the panel to ask for a path, and return what it asked."""
@@ -336,7 +368,11 @@ def fake_app (service_url: str) -> typing.Iterator[FakeApp]:
 
 	app = FakeApp(service_url.replace("http://", "ws://") + "/ws/app")
 
-	yield app
+	try:
+		yield app
+
+	finally:
+		app.stop()
 
 
 @pytest.fixture
