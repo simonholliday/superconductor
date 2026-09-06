@@ -577,6 +577,12 @@ html, body {
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.09em;
+
+		/* Tight, so centring centres the letters rather than the line box.
+		   Inherited 1.4 leaves descender room that uppercase never uses, and
+		   the text sits visibly high in the control — which Simon spotted in
+		   the settings block, where a column of them makes it obvious. */
+		line-height: 1;
 		touch-action: none;
 	}
 	
@@ -599,6 +605,12 @@ html, body {
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.09em;
+
+		/* Tight, so centring centres the letters rather than the line box.
+		   Inherited 1.4 leaves descender room that uppercase never uses, and
+		   the text sits visibly high in the control — which Simon spotted in
+		   the settings block, where a column of them makes it obvious. */
+		line-height: 1;
 		touch-action: none;
 	}
 	
@@ -624,6 +636,12 @@ html, body {
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.09em;
+
+		/* Tight, so centring centres the letters rather than the line box.
+		   Inherited 1.4 leaves descender room that uppercase never uses, and
+		   the text sits visibly high in the control — which Simon spotted in
+		   the settings block, where a column of them makes it obvious. */
+		line-height: 1;
 		touch-action: none;
 	}
 	

@@ -1207,11 +1207,12 @@ function Setting ({ field, held, onSet }) {
 		</div>`;
 
 	if (field.kind === "switch") {
-		return html`
-			<button
-				class=${`switch ${held ? "on" : ""}`}
-				onPointerDown=${(event) => { event.preventDefault(); onSet(!held); }}
-			>${held ? "on" : "off"}</button>`;
+		/* **The same toggle as everywhere else**, which #2107 has required since
+		   it was written and which this quietly was not: a settings switch was
+		   a button of its own, with its own markup and its own idea of what on
+		   looks like, and the two only diverged far enough to notice once the
+		   other one became a rocker. One component, one sentence. */
+		return html`<${Toggle} on=${held} title=${field.label || field.name} onFlip=${onSet} />`;
 	}
 
 	if (field.kind === "choice") {
