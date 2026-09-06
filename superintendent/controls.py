@@ -186,8 +186,18 @@ def _apply_cell (
 		# refused, which is the half-applied state this shape exists to avoid.
 		kept = _readable_rows(declaration, value, path)
 
+		# The mute is not one of the rows, so replacing the rows must not take
+		# it away.  `grid.clear()` is what makes the replacement a replacement
+		# rather than a merge — every row absent from the new value has to go —
+		# and it would carry `enabled` off with them.
+		mute = grid.get("enabled")
+
 		grid.clear()
 		grid.update(kept)
+
+		if mute is not None:
+			grid["enabled"] = mute
+
 		return
 
 	if len(rest) != 2 or not rest[1].isdigit():
@@ -234,8 +244,15 @@ def _readable_rows (
 			if not 0 <= step < steps:
 				raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
-		if held:
-			kept[row] = sorted(set(held))
+		# **Every row the app sent, empty ones included.** Dropping them made
+		# this the only place in the file with an opinion about which rows are
+		# worth keeping: `_set_cell` leaves a row that has just been emptied
+		# sitting there as `[]`, and a step grid's own snapshot lists every
+		# declared row whether or not anything sounds in it. So after a clear
+		# the app held `{kick: [], snare: [], enabled: False}` and the service
+		# held `{enabled: False}` — the same pattern, described two ways, which
+		# is how a panel that reloads comes to disagree with one that did not.
+		kept[row] = sorted(set(held))
 
 	return kept
 
@@ -520,8 +537,16 @@ def _apply_note (
 	if rest == ["rows"]:
 		kept = _readable_notes(declaration, value, path)
 
+		# The mute is not one of the notes; see `_apply_cell` for why clearing
+		# would otherwise carry it off.
+		mute = grid.get("enabled")
+
 		grid.clear()
 		grid.update(kept)
+
+		if mute is not None:
+			grid["enabled"] = mute
+
 		return
 
 	if len(rest) not in (2, 3) or not rest[1].isdigit():

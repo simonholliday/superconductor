@@ -2170,6 +2170,54 @@ def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
 	assert asked[0]["v"] == {}
 
 
+def test_a_confirmed_clear_empties_the_glass_and_the_service_too (
+	panel: typing.Any, fake_app: typing.Any, service_url: str) -> None:
+	"""The other half of clearing, and the half that was broken.
+
+	The test above watches the *request* go out and stops there, so it passed
+	against a client that ignored `changed` entirely — its name claimed a
+	behaviour its body never checked.  This one lets the app answer, the way the
+	real adapter answers, and then looks at the glass.
+
+	Both copies are checked, because there are two and they failed differently.
+	The panel that asked reads the `changed` frame; a panel arriving afterwards
+	reads the service's own copy.  A clear that reached one and not the other
+	would look fixed from wherever you happened to be standing.
+	"""
+
+	_settled(panel)
+
+	assert "on" in (panel.locator(conftest.cell("grid/kick/0")).get_attribute("class") or ""), \
+		"nothing was lit to begin with, so this test proves nothing"
+
+	panel.locator('.part[data-part="grid"] .part-foot .clear').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+	panel.locator(".sheet .answers button.danger").click()
+
+	asked = fake_app.await_set("grid/rows")
+
+	# Answered as `StepGrid.applied` answers it: the rows as they now stand, and
+	# not the snapshot — the mute is a path of its own and travelling inside the
+	# rows is what made the service throw the whole frame away.
+	fake_app.confirm("grid/rows", {"kick": [], "snare": []},
+	                 client=asked.get("client"), seq=asked.get("seq"))
+
+	for step in (0, 4):
+		playwright_api.expect(
+			panel.locator(conftest.cell(f"grid/kick/{step}"))).not_to_have_class(
+				re.compile(r"\bon\b"), timeout=5_000)
+
+	# And for a panel that was not here when it happened.
+	panel.goto(service_url)
+	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
+
+	for step in (0, 4):
+		assert "on" not in (
+			panel.locator(conftest.cell(f"grid/kick/{step}")).get_attribute("class") or ""), \
+			f"the service kept step {step} lit for a panel arriving after the clear"
+
+
 # --- Each contribution in its own window (#2109) -----------------------------
 #
 # A stack drawn as one tall block could not be arranged: two generators sat on

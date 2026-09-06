@@ -328,27 +328,36 @@ class StepGrid (Control):
 		told the second.
 		"""
 
-		return self.snapshot() if rest == ["rows"] else value
+		return self.rows_now() if rest == ["rows"] else value
 
-	def snapshot (self) -> dict[str, list[int]]:
+	def rows_now (self) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.
 
 		Read from the link thread rather than the clock loop, deliberately: the
 		only hazard is a row being sorted at this instant, and copying a list is
 		a single step under the interpreter's lock.  Crossing onto the loop for
 		a read would put socket work on the path that generates MIDI timing.
+
+		**Rows and nothing else**, which is why this is not `snapshot`.  A write
+		to ``control/rows`` is answered with what that path names; the mute is a
+		different path and does not belong in the answer to this one.  Sending
+		the snapshot here made the service refuse the whole frame — `enabled` is
+		not a declared row — so a cleared grid stayed lit on every panel while
+		the music went quiet.
 		"""
 
 		grid = self.composition.data.get(self.data_key) or {}
-		held: dict[str, typing.Any] = {row: sorted(grid.get(row, [])) for row in self.rows}
+
+		return {row: sorted(grid.get(row, [])) for row in self.rows}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""Everything a panel needs to draw this grid, mute included."""
 
 		# Beside the rows rather than under a key of its own, because a control's
 		# state is one object and a panel reads it as one. `rows` is already
 		# reserved here for the whole-grid write, so a row cannot be called that
 		# either; this is the second word spent and it buys a mute.
-		held["enabled"] = self.enabled
-
-		return held
+		return {**self.rows_now(), "enabled": self.enabled}
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Switch one cell, absolutely rather than by toggling.
@@ -505,23 +514,28 @@ class NoteGrid (Control):
 
 		return declared
 
-	def snapshot (self) -> dict[str, typing.Any]:
+	def rows_now (self) -> dict[str, typing.Any]:
 		"""Every note as it stands, copied so nothing shares a dict with the loop.
+
+		**Rows and nothing else**, for the reason a step grid's says: the answer
+		to a write names what the path named.
+		"""
+
+		grid = self.composition.data.get(self.data_key) or {}
+
+		return {
+			row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
+			for row in self.rows if grid.get(row)}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""Every note, and the mute that travels with them.
 
 		The mute travels with the rows, as a step grid's does: a panel arriving
 		after one was silenced has no other way to learn it, and would draw the
 		switch live over a pattern that is not.
 		"""
 
-		grid = self.composition.data.get(self.data_key) or {}
-
-		held: dict[str, typing.Any] = {
-			row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
-			for row in self.rows if grid.get(row)}
-
-		held["enabled"] = self.enabled
-
-		return held
+		return {**self.rows_now(), "enabled": self.enabled}
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one note, absolutely rather than by toggling."""
@@ -680,7 +694,7 @@ class NoteGrid (Control):
 		"""What the grid now holds, which for a whole-grid write is not the ask:
 		a note arrives without its shape and is kept with one."""
 
-		return self.snapshot() if rest == ["rows"] else value
+		return self.rows_now() if rest == ["rows"] else value
 
 	def _keep_mono (self, grid: dict[str, typing.Any], keep: str, at: int, span: int) -> None:
 		"""Take away any note this one would sound over, and say so.

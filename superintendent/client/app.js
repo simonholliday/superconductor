@@ -224,6 +224,12 @@ function controlRow (cell) {
 	return cell;
 }
 
+const GRID_KINDS = ["step_grid", "note_grid"];
+/* The kinds whose state is rows, and which therefore address all of it at once
+   as `control/rows`. Shape alone cannot tell that path from a params field or a
+   transport field called `rows`, so the kind is asked for — the same reason the
+   recipe branch beside it asks. */
+
 const DRAWN = ["step_grid", "note_grid", "params", "recipe"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
@@ -3205,6 +3211,34 @@ function Panel () {
 								grid[rest[0]] = row;
 								app[control] = grid;
 							}
+						} else if (rest.length === 1 && rest[0] === "rows"
+							&& declared && GRID_KINDS.includes(declared.type)) {
+							/* **The whole grid at once**, which is how a clear
+							   travels and how a pattern could later be pasted
+							   in. `rows` is a pseudo-key: it does not name
+							   something *in* the grid's state, it names all of
+							   it — so unlike every other length-one path this
+							   one replaces rather than writes a field.
+
+							   Without this branch it fell through below and
+							   wrote a row literally called `rows` beside the
+							   real ones, leaving every step lit on the glass
+							   while the app had actually emptied the pattern.
+							   Silent, and the wrong way round: the panel
+							   showing notes that make no sound is this
+							   project's own cardinal defect.
+
+							   The mute lives beside the rows and is a path of
+							   its own, so it survives the replacement — the
+							   same reasoning `_apply_cell` follows on the
+							   service, and it has to be the same in both or a
+							   panel that reloads disagrees with one that did
+							   not. */
+							const held = app[control] || {};
+
+							app[control] = "enabled" in held
+								? { ...frame.v, enabled: held.enabled }
+								: { ...frame.v };
 						} else if (rest.length === 1) {
 							app[control] = { ...(app[control] || {}), [rest[0]]: frame.v };
 						} else if (rest.length === 2 && declared && declared.type === "recipe") {
