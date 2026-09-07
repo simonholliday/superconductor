@@ -808,6 +808,29 @@ def _stack_for (pattern: str, name: str, title: str,
 			"grid": (1, STEPS),
 			"subdivisions": (1, 8),
 			"duration": (0.05, float(BEATS)),
+
+			# **Two bounds that are about cost rather than about music** (#2231).
+			# A stack builds on the clock loop, and Subsequence contains a
+			# rebuild that *raises* — the pattern loses its cycle and the clock
+			# is untouched — while having no defence at all against one that is
+			# merely slow. Worse, an overrunning rebuild is not a late bar: the
+			# loop accumulates absolutely and then dispatches every missed pulse
+			# in one pass without yielding, so it comes out as a burst.
+			#
+			# `reaction_diffusion` costs 3.4 ms a thousand steps, measured, and
+			# is linear — so a ceiling states it honestly. Five thousand is 17 ms
+			# against a two-second cycle here.
+			#
+			# **`de_bruijn` is deliberately not bounded here**, and it was, for
+			# an hour. Its cost is k to the power of the window, where k is how
+			# many pitches this stack has — so the bound had to be *computed*
+			# from the pool, which meant this file holding the fact that de
+			# Bruijn generates k^window notes. That is a second copy of a fact
+			# about a sequencer, which is the one thing this arrangement exists
+			# to prevent. Subsequence now clamps inside the generator against a
+			# note budget (`d03fdb6`), which is the right place because only it
+			# knows both halves.
+			"steps": (100, 5000),
 		},
 		builds=pattern,
 		sources=SHARED,
