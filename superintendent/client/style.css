@@ -1822,6 +1822,26 @@ html, body {
 	white-space: nowrap;
 }
 
+/* And when the two speak different contracts (#2164).
+ *
+ * A sentence rather than figures, so it takes the body face like every other
+ * sentence on this panel — this is the one thing in the build stamp's place
+ * that is read as words rather than quoted character by character.
+ *
+ * **Not a button, unlike the reload beside it**, and the difference is honest:
+ * that one is offering to do the thing that fixes it, and nothing this page can
+ * do fixes a service that is behind. It says which process to restart and stops
+ * there, rather than being a control that would have to refuse. */
+.bar .build.mismatch {
+	font-family: var(--face-body);
+	font-variant-numeric: normal;
+	color: var(--warn);
+}
+
+/* Across a major number a frame either end already knows may have changed
+   shape, so this is the one that corrupts rather than degrades. */
+.bar .build.mismatch.grave { color: var(--bad); }
+
 /* Moving between pages. Drawn like the grid's own cells, because a hand that
    has learned to tap a row of those has already learned this — and sized for a
    finger regardless of how small the cells themselves are set, which the chrome

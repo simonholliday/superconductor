@@ -73,3 +73,54 @@ def test_a_number_off_the_wire_is_read_rather_than_assumed () -> None:
 	for bad in ("later", None, True, float("nan"), float("inf")):
 		with pytest.raises(superintendent.protocol.ProtocolError):
 			superintendent.protocol.number({"t": "ping", "ts": bad}, "ts", 0.0)
+
+
+@pytest.mark.parametrize(("spoken", "gap"), [
+	(superintendent.protocol.CONTRACT_VERSION, None),
+	# The same major, so it is behind rather than incompatible — which is the
+	# distinction the whole thing turns on.
+	("1.0.0", "older"),
+	("9.0.0", "major"),
+	("0.0.0", "major"),
+	("", "unreadable"),
+	("banana", "unreadable"),
+	(None, "unreadable"),
+	(5, "unreadable"),
+	("1.17", "unreadable"),
+	("1.17.0.1", "unreadable"),
+	("1.-1.0", "unreadable"),
+])
+def test_a_version_on_the_wire_is_compared_rather_than_carried (
+	spoken: object, gap: str | None) -> None:
+	"""Both ends have always sent a contract version and neither ever read one
+	(#2164).  It went 1.13.0 to 1.17.0 in two days with a panel open throughout
+	and nothing anywhere said a word.
+
+	The cases that are not a version at all are reported rather than ignored,
+	because something is speaking and it is not this protocol — and a missing
+	field reads as `None`, which is what an end too old to send it looks like.
+	"""
+
+	assert superintendent.protocol.contract_gap(spoken) == gap
+
+
+def test_which_side_is_behind_is_named_and_not_left_to_the_caller () -> None:
+	"""So a log line says what was found rather than working out whose fault it
+	is.  The direction is always the *other* side's.
+
+	Built from this version rather than written down, so the test does not need
+	editing every time the contract moves — which is how a table of literals
+	comes to assert nothing.
+	"""
+
+	major, minor, patch = (int(one) for one in superintendent.protocol.CONTRACT_VERSION.split("."))
+
+	assert superintendent.protocol.contract_gap(f"{major}.{minor + 1}.0") == "newer"
+	assert superintendent.protocol.contract_gap(f"{major}.{minor}.{patch + 1}") == "newer"
+	assert superintendent.protocol.contract_gap(f"{major + 1}.0.0") == "major"
+
+	if minor:
+		assert superintendent.protocol.contract_gap(f"{major}.{minor - 1}.99") == "older"
+
+	if patch:
+		assert superintendent.protocol.contract_gap(f"{major}.{minor}.{patch - 1}") == "older"

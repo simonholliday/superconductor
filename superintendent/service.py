@@ -96,6 +96,46 @@ def build (config: superintendent.config.Config) -> starlette.applications.Starl
 	return app
 
 
+def _note_contract (side: str, who: str, frame: superintendent.protocol.Frame) -> None:
+	"""Say so when something dials in speaking a different contract (#2164).
+
+	**It is said and not acted on, deliberately.** Refusing an old panel is
+	wrong: the panel is the thing a person is standing in front of, and a blank
+	screen because the service moved on is worse than a slightly stale one. The
+	service already has the better pattern for this — a control of a kind it does
+	not know is marked ``unsupported`` and drawn saying so rather than dropped.
+
+	So this is the log half, and the panel says it on the glass for itself: the
+	service sends its own version in the greeting and the panel compares it. That
+	split is not tidiness. A panel newer than the service is the case that costs
+	a session here, and the service is by definition too old to have been taught
+	to report it — so the only half that can catch it is the half that is new.
+
+	An app has no glass of its own, which is why this is the whole of the check
+	on that side. It matters at least as much: an app declaring a control kind
+	the service does not know has every change to it dropped while the frame is
+	still forwarded, and on the glass that is a button that will not move with
+	the reason in a log nobody is reading.
+	"""
+
+	gap = superintendent.protocol.contract_gap(frame.get("contract"))
+
+	if gap is None:
+		return
+
+	spoken = frame.get("contract")
+	ours = superintendent.protocol.CONTRACT_VERSION
+
+	if gap == "major":
+		LOG.error("%s %r speaks contract %r against this service's %r; a frame either"
+		          " end already knows may have changed shape", side, who, spoken, ours)
+	elif gap == "unreadable":
+		LOG.error("%s %r named no readable contract version (%r)", side, who, spoken)
+	else:
+		LOG.warning("%s %r is %s than this service: contract %r against %r",
+		            side, who, gap, spoken, ours)
+
+
 async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
 	"""Greet one panel, then carry its frames until it goes away."""
 
@@ -120,6 +160,8 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 				# wire and the render loop degrade.
 				if panel is not None:
 					hub.panel_left(panel)
+
+				_note_contract("panel", str(frame.get("client", "panel")), frame)
 
 				panel = superintendent.hub.PanelLink(
 					client=str(frame.get("client", "panel")), send=_sender(websocket))
@@ -172,6 +214,8 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 			kind = frame["t"]
 
 			if kind == "declare":
+				_note_contract("app", str(frame.get("app", "app")), frame)
+
 				app = superintendent.hub.AppLink(
 					name=str(frame.get("app", "app")),
 					send=_sender(websocket),

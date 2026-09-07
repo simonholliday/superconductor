@@ -175,6 +175,52 @@ class ProtocolError (Exception):
 	"""A frame that could not be understood, named by what was wrong with it."""
 
 
+def contract_gap (spoken: object) -> str | None:
+	"""How a version spoken on the wire differs from this build's, if it does.
+
+	**Both ends have always sent this and neither has ever read it** (#2164).
+	The contract went 1.13.0 to 1.17.0 in two days with a panel open throughout
+	and nothing said a word, because the client's frame dispatch has no
+	``default:`` — an unknown frame kind is ignored, which is the right choice on
+	its own and, without this, means the two can disagree indefinitely and only
+	misbehave.
+
+	The dangerous case is not an unknown kind. It is a **known kind whose shape
+	changed**: 1.13.0 made a realised cell ``{v, from}`` where it had been a bare
+	velocity, so an old panel drew every dot at one size — wrong, and silent.
+
+	``None`` when the two agree.  Otherwise:
+
+	- ``"major"`` — the first numbers differ, so a frame either end already knows
+	  may have changed shape underneath it. This is the one that corrupts rather
+	  than degrades.
+	- ``"older"`` / ``"newer"`` — the other side is behind or ahead within the
+	  same major, which by this project's own numbering means additive: whichever
+	  is behind is missing something rather than misreading it.
+	- ``"unreadable"`` — not a version at all. Reported rather than ignored,
+	  because something is speaking and it is not this protocol.
+
+	The direction is the *other* side's, so a caller says what it found rather
+	than working out whose fault it is.
+	"""
+
+	if spoken == CONTRACT_VERSION:
+		return None
+
+	parts = str(spoken).split(".") if isinstance(spoken, str) else []
+
+	if len(parts) != 3 or not all(part.isdigit() for part in parts):
+		return "unreadable"
+
+	theirs = tuple(int(part) for part in parts)
+	ours = tuple(int(part) for part in CONTRACT_VERSION.split("."))
+
+	if theirs[0] != ours[0]:
+		return "major"
+
+	return "older" if theirs < ours else "newer"
+
+
 def encode (frame: Frame) -> str:
 	"""Render a frame as the compact JSON that goes on the wire."""
 

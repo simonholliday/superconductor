@@ -26,6 +26,39 @@ const CONTRACT = "1.17.0";
  * It cannot be shared with Python, so a test asserts the two agree — but it can
  * at least be written once here rather than spelled by hand at each greeting. */
 
+/* How a version the service speaks differs from this page's, if it does (#2164).
+ *
+ * **A second implementation of `protocol.contract_gap`, and it has to be**, for
+ * a reason worth reading before deciding to tidy it away. The obvious design is
+ * for the service to compare the two — it knows both — and put the verdict in a
+ * frame. That fails in exactly the case that matters. A panel *newer* than the
+ * service is what costs a session here, and the service is then by definition
+ * too old to have been taught to send the verdict, so nothing would arrive and
+ * nothing would be said. The only half that can catch it is the half that is
+ * new, which is this one.
+ *
+ * The rule is kept trivial for the same reason: compare the first number, and
+ * otherwise compare the rest. Both implementations are held to one table of
+ * pairs by a test rather than by care. */
+const contractGap = (spoken) => {
+	if (spoken === CONTRACT) return null;
+
+	const parts = String(spoken ?? "").split(".");
+
+	if (parts.length !== 3 || !parts.every((one) => /^\d+$/.test(one))) return "unreadable";
+
+	const theirs = parts.map(Number);
+	const ours = CONTRACT.split(".").map(Number);
+
+	if (theirs[0] !== ours[0]) return "major";
+
+	for (let at = 1; at < 3; at += 1) {
+		if (theirs[at] !== ours[at]) return theirs[at] < ours[at] ? "older" : "newer";
+	}
+
+	return null;
+};
+
 /* The greeting, written once.
  *
  * It was written out twice — on opening a socket and again on waking — with the
@@ -2928,6 +2961,43 @@ function Build ({ service, stale }) {
 			</button>`;
 	}
 
+	/* **The case the build stamp cannot see** (#2164).
+	 *
+	 * A stale build means this browser is holding an old page, and reloading
+	 * fixes it — that is the branch above. But the service serves the client
+	 * from disk on *every* request, so a reload always gets the newest
+	 * JavaScript, and the build hash therefore matches even when the running
+	 * Python is hours older than the files it is serving. Everything looks
+	 * picked up and nothing is: it cost a round trip on 2026-09-05, where a
+	 * feature was declared broken on the glass with both processes predating it.
+	 *
+	 * That case has exactly one symptom available, and it is this one: the page
+	 * and the service disagree about the contract while agreeing about the
+	 * build. So the message says *restart the service*, which is the fix, rather
+	 * than "reload", which is the fix for the other one and does nothing here. */
+	const gap = contractGap(service.contract);
+
+	if (gap) {
+		/* **A major difference does not say which side is behind**, on purpose.
+		   Within one major number this project's own numbering is additive, so
+		   whichever end is behind is missing something rather than misreading
+		   it, and naming the direction is the useful thing to say. Across one,
+		   a frame either end already knows may have changed shape underneath
+		   it — and then "which is behind" is the wrong question to answer
+		   confidently on a bar. */
+		const said = {
+			older: "service is behind this page — restart it",
+			newer: "this page is behind the service — reload it",
+			major: "page and service disagree — restart the service",
+			unreadable: "the service named no contract version",
+		}[gap];
+
+		return html`
+			<span class=${gap === "older" || gap === "newer" ? "build mismatch" : "build mismatch grave"}
+				title=${`this page speaks contract ${CONTRACT}; the service speaks ${service.contract}`}
+			>${said}</span>`;
+	}
+
 	const name = service.version ? `v${service.version}` : "unversioned";
 
 	return html`<span class="build">${name}${service.build && html` · ${service.build}`}</span>`;
@@ -3716,7 +3786,12 @@ function Panel () {
 				}
 
 				case "service":
-					setService({ version: frame.version, build: frame.build });
+					setService({
+						version: frame.version, build: frame.build,
+						/* Read at last (#2164). It has been arriving since 1.1.0
+						   and going straight in the bin. */
+						contract: frame.contract,
+					});
 					break;
 
 				case "ack":

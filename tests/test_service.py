@@ -412,3 +412,83 @@ def test_a_malformed_frame_does_not_take_the_socket_down_with_a_traceback () -> 
 	# is asserted is that leaving the block raises nothing — `TestClient`
 	# re-raises an exception that escaped the endpoint, and a bare `int()` on a
 	# string escapes it.
+
+
+@pytest.mark.parametrize(("spoken", "level", "said"), [
+	("1.0.0", "WARNING", "older"),
+	("99.0.0", "ERROR", "may have changed shape"),
+	("banana", "ERROR", "no readable contract version"),
+])
+def test_a_panel_speaking_a_different_contract_is_said_out_loud (
+	caplog: typing.Any, spoken: str, level: str, said: str) -> None:
+	"""It is said and not acted on (#2164).
+
+	Refusing an old panel is wrong — it is the thing a person is standing in
+	front of, and a blank screen because the service moved on is worse than a
+	slightly stale one.  So the service says so and carries the panel, which is
+	the pattern it already uses for a control kind it does not know: marked
+	`unsupported` and drawn saying so, rather than dropped.
+	"""
+
+	client = starlette.testclient.TestClient(
+		superintendent.service.build(superintendent.config.Config()))
+
+	with caplog.at_level("DEBUG", logger="superintendent.service"):
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json({**superintendent.protocol.hello("panel", None), "contract": spoken})
+
+			# Carried rather than closed: the greeting still arrives.
+			assert _read_until(panel, "service")["contract"] \
+				== superintendent.protocol.CONTRACT_VERSION
+
+	complaints = [one for one in caplog.records if one.levelname == level and said in one.getMessage()]
+
+	assert complaints, f"nothing said {said!r} at {level}: {[one.getMessage() for one in caplog.records]}"
+
+
+def test_an_app_speaking_a_different_contract_is_said_out_loud (caplog: typing.Any) -> None:
+	"""And it matters at least as much as a panel, because an app has no glass.
+
+	A panel newer than the service can say so for itself, and does.  An app
+	declaring a control kind the service does not know has every change to it
+	dropped while the frame is still forwarded — and on the glass that is a
+	button that will not move, with the reason in a log nobody is reading.  This
+	is the line that makes that log worth reading.
+	"""
+
+	client = starlette.testclient.TestClient(
+		superintendent.service.build(superintendent.config.Config()))
+
+	with caplog.at_level("DEBUG", logger="superintendent.service"):
+		with client.websocket_connect("/ws/app") as app:
+			app.send_json({
+				**superintendent.protocol.declare("subsequence", CONTROLS, {}, 1),
+				"contract": "1.0.0"})
+
+			with client.websocket_connect("/ws/panel") as panel:
+				panel.send_json(superintendent.protocol.hello("panel", None))
+				_read_until(panel, "manifest")
+
+	complaints = [one.getMessage() for one in caplog.records
+	              if "subsequence" in one.getMessage() and "older" in one.getMessage()]
+
+	assert complaints, f"the app's version went unremarked: {[one.getMessage() for one in caplog.records]}"
+
+
+def test_a_matching_contract_says_nothing_at_all (caplog: typing.Any) -> None:
+	"""The ordinary case is silent, or the warning stops being a warning.
+
+	Worth its own test because the check runs on every hello — and a panel
+	re-sends one every time it wakes, which on a tablet carried round a room is
+	often.
+	"""
+
+	client = starlette.testclient.TestClient(
+		superintendent.service.build(superintendent.config.Config()))
+
+	with caplog.at_level("DEBUG", logger="superintendent.service"):
+		with client.websocket_connect("/ws/panel") as panel:
+			panel.send_json(superintendent.protocol.hello("panel", None))
+			_read_until(panel, "service")
+
+	assert [one.getMessage() for one in caplog.records if "contract" in one.getMessage()] == []

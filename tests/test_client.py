@@ -5,6 +5,7 @@ two things that can be established cheaply are established here: that it parses,
 and that the one value it has to keep in step with Python is in step.
 """
 
+import json
 import pathlib
 import re
 import shutil
@@ -196,3 +197,69 @@ def test_the_gap_between_cells_is_the_same_number_in_both_languages () -> None:
 	in_styles = next(line for line in styles.splitlines() if line.strip().startswith("--gap:"))
 
 	assert in_script.split("=")[1].strip(" ;") == in_styles.split(":")[1].strip(" ;").removesuffix("px")
+
+
+def test_both_languages_agree_about_what_a_contract_gap_is () -> None:
+	"""There are two implementations of one rule, and this is what holds them
+	together.
+
+	**The duplication is deliberate** and `app.js` carries the argument: the
+	obvious design has the service compare the two versions — it knows both —
+	and send the verdict.  That fails in precisely the case worth catching, a
+	panel *newer* than the service, because the service is then by definition too
+	old to have been taught to send it.  So the new half has to be able to work
+	it out alone.
+
+	Which leaves the same hazard this project keeps meeting: both halves correct
+	by their own tests and wrong together.  So the client's own function is
+	pulled out of the file and run, and its answers are compared with Python's
+	over the same table — including the ones nobody would think to write twice.
+	"""
+
+	node = _node()
+
+	if node is None:
+		pytest.skip("no JavaScript engine on this machine")
+
+	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+
+	spoken = re.search(r'^const CONTRACT = "([^"]+)";$', source, re.MULTILINE)
+	assert spoken, "the client no longer names a contract version in one place"
+
+	# Sliced rather than imported: `app.js` is a module that reaches for the DOM
+	# as it loads, so it cannot be evaluated here at all. The slice is bounded by
+	# the closing `};` of the arrow function and asserted to contain it, because
+	# a slice that silently caught nothing would compare nothing and pass.
+	start = source.index("const contractGap = (spoken) => {")
+	end = source.index("\n};\n", start)
+	sliced = source[start:end + 4]
+
+	assert sliced.count("return") >= 4, f"the slice did not catch the whole function: {sliced!r}"
+
+	cases = ["1.0.0", "9.0.0", "", "banana", "1.17", "1.17.0.1", "1.-1.0",
+	         spoken.group(1), "0.0.0", "1.99.99", "10.0.0"]
+
+	major, minor, patch = (int(one) for one in spoken.group(1).split("."))
+	cases += [f"{major}.{minor + 1}.0", f"{major}.{minor}.{patch + 1}",
+	          f"{major + 1}.0.0", f"{major}.{minor}.{patch}"]
+
+	driver = (f'const CONTRACT = {json.dumps(spoken.group(1))};\n'
+	          f"{sliced}\n"
+	          f"const cases = {json.dumps(cases)};\n"
+	          "console.log(JSON.stringify(cases.map(contractGap)));\n"
+	          # `null` and a number are what a missing or malformed field looks
+	          # like, and neither can be written into a JSON list of strings.
+	          "console.log(JSON.stringify([contractGap(null), contractGap(undefined),"
+	          " contractGap(5)]));\n")
+
+	run = subprocess.run([str(node), "--input-type=module", "-"], input=driver,
+	                     capture_output=True, text=True, timeout=30)
+
+	assert run.returncode == 0, f"the client's own function would not run: {run.stderr}"
+
+	said, odd = (json.loads(line) for line in run.stdout.strip().splitlines())
+
+	assert said == [superintendent.protocol.contract_gap(one) for one in cases], (
+		f"the two languages disagree: JavaScript said {said}")
+
+	assert odd == [superintendent.protocol.contract_gap(one) for one in (None, None, 5)]

@@ -5438,3 +5438,73 @@ def test_a_cable_lights_what_the_end_in_your_hand_can_land_on (
 
 	assert holding_plug == ["second"], (
 		f"a plug in the hand should light the sources: {holding_plug}")
+
+
+def _at_contract (panel: typing.Any, service_url: str, monkeypatch: typing.Any,
+                  spoken: str) -> str:
+	"""Reload the panel against a service claiming to speak *spoken*.
+
+	The greeting is built per hello and reads the module global as it goes, so
+	moving the global moves what the next panel is told — which is the only way
+	to stand in front of a mismatched service without running two of them.
+	"""
+
+	monkeypatch.setattr(superintendent.protocol, "CONTRACT_VERSION", spoken)
+
+	panel.goto(service_url)
+	panel.wait_for_selector(".bar .build", timeout=10_000)
+
+	return str(panel.locator(".bar .build").first.inner_text()).strip()
+
+
+def test_the_panel_says_when_the_service_speaks_a_different_contract (
+	panel: typing.Any, service_url: str, monkeypatch: typing.Any) -> None:
+	"""#2164, and the case it exists for is the one the build stamp cannot see.
+
+	A stale build means this browser is holding an old page, and the reload
+	button beside this already offers the fix.  But the service serves the client
+	from disk on *every* request, so a reload always fetches the newest
+	JavaScript and the build hash matches even when the running Python is hours
+	older than the files it is serving.  Everything looks picked up and nothing
+	is — it cost a round trip on 2026-09-05, with a feature declared broken on
+	the glass while both processes predated it.
+
+	That case has exactly one symptom: page and service agreeing about the build
+	and disagreeing about the contract.  So the message names the process to
+	restart, rather than offering a reload that would do nothing.
+	"""
+
+	major, minor, _ = (int(one) for one in superintendent.protocol.CONTRACT_VERSION.split("."))
+
+	behind = _at_contract(panel, service_url, monkeypatch, f"{major}.{minor - 1}.0")
+	assert "service is behind this page" in behind, behind
+	assert "restart" in behind, "it names no process to restart, which is the only useful half"
+
+	ahead = _at_contract(panel, service_url, monkeypatch, f"{major}.{minor + 1}.0")
+	assert "page is behind the service" in ahead, ahead
+
+	# Across a major number a frame either end already knows may have changed
+	# shape, so the direction stops being the useful thing to say.
+	grave = _at_contract(panel, service_url, monkeypatch, f"{major + 1}.0.0")
+	assert "disagree" in grave, grave
+
+	drawn = panel.eval_on_selector(".bar .build", "one => one.className")
+	assert "grave" in drawn, f"a major difference is drawn like a minor one: {drawn}"
+
+
+def test_a_matching_contract_leaves_the_build_stamp_alone (
+	panel: typing.Any, service_url: str) -> None:
+	"""The ordinary case says nothing, or the warning stops meaning anything.
+
+	It also proves the test above is measuring the mismatch rather than the bar:
+	the same element carries both, and a message that were always there would
+	pass every assertion in it.
+	"""
+
+	panel.goto(service_url)
+	panel.wait_for_selector(".bar .build", timeout=10_000)
+
+	stamp = str(panel.locator(".bar .build").first.inner_text()).strip()
+
+	assert "behind" not in stamp and "disagree" not in stamp, stamp
+	assert "mismatch" not in panel.eval_on_selector(".bar .build", "one => one.className")

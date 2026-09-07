@@ -1,16 +1,6 @@
 {
 	"band": [
 		{
-			"name": "bass",
-			"x": 20,
-			"y": 0
-		},
-		{
-			"name": "chords",
-			"x": 38,
-			"y": 0
-		},
-		{
 			"name": "grid",
 			"x": 0,
 			"y": 0
@@ -19,6 +9,16 @@
 			"name": "matriarch",
 			"x": 46,
 			"y": 20
+		},
+		{
+			"name": "bass",
+			"x": 20,
+			"y": 0
+		},
+		{
+			"name": "chords",
+			"x": 39,
+			"y": 0
 		}
 	]
 }
