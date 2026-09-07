@@ -4091,11 +4091,35 @@ function Panel () {
 	   both and needs nothing to keep them together — each draws the app's own
 	   state (#2046). An app that declared no pages shows everything, which is
 	   what every panel did before pages existed. */
-	const gridNames = page
-		? declaredGrids.filter((name) => (page.parts || []).includes(name))
-		: declaredGrids;
-
 	const kindOf = (name) => controls[name].type;
+
+	/* What this page draws.
+	 *
+	 * **A stack goes wherever the pattern it builds goes**, whether or not the
+	 * page names it (#2211).  It was the page's parts alone, and the mismatch was
+	 * silent and bad: `stackFor` searches *every* control, so a pattern's
+	 * "+ add generator" appeared on every page that carried the pattern — while
+	 * the generators it created were drawn only on a page that also named the
+	 * stack.  Simon added several from the Band page, saw nothing appear, heard
+	 * them playing, and found them on Bass and Chords.
+	 *
+	 * The button is offered page-independently, so the results have to be drawn
+	 * page-independently; the alternative — hiding the button where the stack is
+	 * absent — would mean a pattern that takes generators on one page and not on
+	 * another, which is the same lie told the other way round.
+	 *
+	 * **A generator belongs to its pattern**, which is the whole reason the button
+	 * sits on the pattern's footer rather than on the stack (#2119).  So one
+	 * instrument looks the same on every page that carries it, which is what
+	 * Simon asked for: if there is one Minitaur, its generators are its
+	 * generators everywhere. */
+	const listed = page ? (page.parts || []) : declaredGrids;
+
+	/* In the order the app declared them, which is the order every other block
+	   list here is in — where a block actually sits is the arrangement's, and a
+	   stack that arrives this way is placed by the same rule as any other. */
+	const gridNames = declaredGrids.filter((name) => listed.includes(name)
+		|| (kindOf(name) === "recipe" && listed.includes(controls[name].builds)));
 
 	/* A stack says which pattern it contributes to, and that one fact places its
 	   buttons: the pattern grows an "add a generator", not the stack. */
@@ -4869,7 +4893,16 @@ function Panel () {
 							key=${generator.name}
 							class=${`offer option ${generator.partial ? "partial" : ""}`}
 							disabled=${generator.partial}
-							onPointerDown=${(event) => {
+							${/* **On release, not on press** (#2213).  A tap acts on
+							     the finger landing everywhere else here, and that is
+							     right for a grid cell: it is played, and the delay to
+							     a release is audible.  A list of thirty-three is not
+							     played, it is *read* — and a list has to scroll, and
+							     a scroll begins with a finger landing on whatever is
+							     under it.  Acting on press made every attempt to
+							     swipe this list add a generator, silently, from a
+							     page that was not drawing them. */ ""}
+							onClick=${(event) => {
 								event.preventDefault();
 								added({ kind: "generator", generator: generator.name, params: {} });
 							}}
@@ -4896,7 +4929,7 @@ function Panel () {
 							<button
 								key=${stack}
 								class=${`offer option ${already ? "here" : ""}`}
-								onPointerDown=${(event) => {
+								onClick=${(event) => {
 									event.preventDefault();
 
 									const held = ((state[appName] || {})[stack] || {}).layers || [];

@@ -2964,8 +2964,16 @@ html, body {
 	justify-content: center;
 	padding: 1rem;
 	background: var(--veil);
+
+	/* The veil itself still refuses: it is a place to press to dismiss, not a
+	   place to scroll, and the page behind it must stay where it was. */
 	touch-action: none;
 }
+
+/* And the rows of the list, which are what a finger actually lands on.
+   The header's close keeps `none` by its own rule below: it is pressed, not
+   scrolled past, and it does not move with the list. */
+.sheet-body button { touch-action: pan-y; }
 
 .sheet-body {
 	display: flex;
@@ -2974,6 +2982,19 @@ html, body {
 	width: min(34rem, 100%);
 	max-height: 100%;
 	overflow-y: auto;
+
+	/* **A list has to scroll, and a scroll starts on whatever is under the
+	   finger** (#2213).  Every target on this surface declares `touch-action:
+	   none` so it cannot pull the page out from under the hand using it (#2073)
+	   — right for a grid cell, and exactly wrong here, where the thing under the
+	   finger is a row of a list thirty-three long.  With the backdrop refusing
+	   touch and every option refusing it too, there was nowhere left to push
+	   from and the list simply would not move.
+
+	   `pan-y` rather than `auto`: this may be scrolled up and down and still may
+	   not be panned sideways or pinched, which is the page-level rule (#2046)
+	   and is not being relaxed. */
+	touch-action: pan-y;
 	padding: 0.6rem;
 	border-radius: 12px;
 	border: 1px solid var(--edge);

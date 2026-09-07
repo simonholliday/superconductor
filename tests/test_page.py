@@ -288,7 +288,14 @@ def test_by_default_the_grid_is_measured_against_this_viewport (panel: typing.An
 
 	fitted = panel.locator(conftest.cell("grid/kick/0")).bounding_box()["width"]
 
-	assert fitted > 44, "a fitted grid should use the space it has"
+	# **Above the smallest size a person can choose, not above the chrome
+	# finger.** It read `> 44` — the fixed size a control in the chrome takes —
+	# and that was never this cell's floor: a step cell is the most tapped thing
+	# on the surface and shrinks to 22px without complaint (#2107 §6). The number
+	# held only because this page carried two blocks; it carries three now that a
+	# stack travels with its pattern (#2211), and 39px is the fit working rather
+	# than failing. What a regression would look like is the minimum, or overflow.
+	assert fitted > 22, "a fitted grid should use the space it has, not the least it can"
 
 	overflow = panel.evaluate(
 		"""() => {
@@ -335,7 +342,10 @@ def test_every_declared_grid_is_drawn_not_only_the_first (panel: typing.Any) -> 
 	"""Two patterns driving one instrument belong on one page (#1944), so a page
 	showing only the first grid an app declared would be quietly wrong."""
 
-	assert panel.locator(".part").count() == 2
+	# By name: a count also sweeps up the stack that travels with `grid` (#2211),
+	# and what this test is about is that the *second* grid is drawn at all.
+	assert panel.locator('.part[data-part="grid"]').count() == 1
+	assert panel.locator('.part[data-part="second"]').count() == 1
 	assert panel.locator(conftest.cell("second/kick/2")).count() == 1
 
 
@@ -380,15 +390,45 @@ def test_a_page_larger_than_the_glass_can_be_pushed_around (panel: typing.Any) -
 	assert "pinch" not in action("body"), "pinch zoom is still the browser claiming a musician's gesture"
 
 
-def test_a_page_shows_only_the_parts_it_carries (panel: typing.Any) -> None:
-	"""A page is a view over some of what an app offers, not all of it (#2075)."""
+def _on_the_drums_page (panel: typing.Any) -> None:
+	"""The Drums page carries one grid and the All page carries two.
 
-	assert panel.locator(".part").count() == 2, "the first page carries both grids"
+	**Asked by name rather than by counting blocks**, which is what these tests
+	are actually about: which page is showing.  A count was the wrong question
+	and became the wrong answer the moment a stack started travelling with the
+	pattern it builds (#2211) — every one of these went red over a fact none of
+	them was written to check.
+	"""
+
+	playwright_api.expect(panel.locator('.part[data-part="grid"]')).to_have_count(1, timeout=5_000)
+	assert panel.locator('.part[data-part="second"]').count() == 0
+
+
+def _on_the_all_page (panel: typing.Any) -> None:
+	"""The page a panel opens on, which carries both grids."""
+
+	playwright_api.expect(panel.locator('.part[data-part="grid"]')).to_have_count(1, timeout=5_000)
+	assert panel.locator('.part[data-part="second"]').count() == 1
+
+
+def test_a_page_shows_only_the_parts_it_carries (panel: typing.Any) -> None:
+	"""A page is a view over some of what an app offers, not all of it (#2075).
+
+	**With one amendment, which is #2211**: a stack goes wherever the pattern it
+	builds goes, whether or not the page names it.  That is not this rule being
+	weakened — the button that creates a generator sits on the *pattern*, and is
+	offered on every page carrying that pattern, so a page drawing the button and
+	not the result was the incoherence rather than the tidiness.
+	"""
+
+	_on_the_all_page(panel)
 
 	panel.locator(".pages button", has_text="Drums").click()
+	_on_the_drums_page(panel)
 
-	playwright_api.expect(panel.locator(".part")).to_have_count(1, timeout=5_000)
-	assert panel.locator('.part[data-part="grid"]').count() == 1
+	# And the stack came with it, unnamed by that page.
+	assert panel.locator(".recipe").count() > 0, (
+		"a pattern's generators did not follow it onto a page that carries it")
 
 
 def test_the_page_a_panel_is_on_survives_a_reload (panel: typing.Any) -> None:
@@ -396,12 +436,12 @@ def test_the_page_a_panel_is_on_survives_a_reload (panel: typing.Any) -> None:
 	whichever one the composition happened to declare first."""
 
 	panel.locator(".pages button", has_text="Drums").click()
-	playwright_api.expect(panel.locator(".part")).to_have_count(1, timeout=5_000)
+	_on_the_drums_page(panel)
 
 	panel.reload()
 	panel.wait_for_selector(".cell", timeout=10_000)
 
-	assert panel.locator(".part").count() == 1
+	_on_the_drums_page(panel)
 
 
 def test_a_page_named_in_the_address_is_the_one_that_opens (
@@ -411,7 +451,7 @@ def test_a_page_named_in_the_address_is_the_one_that_opens (
 	panel.goto(f"{service_url}/?page=drums")
 	panel.wait_for_selector(".cell", timeout=10_000)
 
-	assert panel.locator(".part").count() == 1
+	_on_the_drums_page(panel)
 
 
 def test_a_remembered_page_that_is_no_longer_offered_is_not_forgotten (
@@ -423,7 +463,7 @@ def test_a_remembered_page_that_is_no_longer_offered_is_not_forgotten (
 	panel.reload()
 	panel.wait_for_selector(".cell", timeout=10_000)
 
-	assert panel.locator(".part").count() == 2, "falls back to the first page"
+	_on_the_all_page(panel)
 	assert panel.evaluate("() => localStorage.getItem('superintendent.page')") == "a-page-that-went-away"
 
 
@@ -547,7 +587,10 @@ def test_the_inventory_brings_a_buried_block_back (panel: typing.Any) -> None:
 	def depth (part: str) -> int:
 		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
 
-	panel.locator(".inventory button", has_text="Drums").click()
+	# **Exact, not a substring.** A generator's own entry is named after the
+	# pattern it builds — "euclidean 1 · Drums" — so `has_text` matched two
+	# buttons the moment a stack started travelling with its pattern (#2211).
+	panel.locator(".inventory").get_by_role("button", name="Drums", exact=True).click()
 
 	assert depth("grid") > depth("second")
 
@@ -2785,20 +2828,34 @@ def test_a_line_brightens_while_a_hand_is_on_either_end (
 	assert live.count() == 0, "the line stayed bright after the hand left"
 
 
-def test_a_contribution_appears_where_its_stack_does_not_where_its_pattern_does (
+def test_a_contribution_appears_wherever_the_pattern_it_builds_does (
 	panel: typing.Any) -> None:
-	"""How a person chooses to see generators at all (#2085).  A page carrying
-	the pattern alone is the uncluttered grid; a page carrying both is the one
-	given over to building it.  Inheriting the pattern's pages instead would put
-	generators on the page that was made without them.
+	"""**This asserted the opposite until 2026-09-07**, and the reversal is
+	Simon's (#2211).
+
+	#2085 had it that a page carrying the pattern alone was the uncluttered grid
+	and a page carrying both was the one given over to building it, so a stack
+	appeared only where a page named it.  What that missed is that the *button*
+	is not on the stack: `stackFor` searches every control, so "+ add generator"
+	is offered on every page carrying the pattern — and the generators it made
+	were drawn only where the stack was named.
+
+	Simon added several from a page that showed none of them, heard them playing
+	with nothing on the glass to explain it, and found them on another page.
+	**A page that draws the button and not the result is the incoherence**, and
+	the tidiness it bought is not worth it: if there is one Minitaur, its
+	generators are its generators on every page that carries it.
 	"""
 
 	_settled(panel)
 
-	# The opening page carries the pattern and not the stack.
+	# The opening page names the pattern and not the stack, and gets both.
 	assert panel.locator('.part[data-part="grid"]').count() == 1
-	assert panel.locator(".recipe").count() == 0
-	assert panel.locator(".joins").count() == 0
+	assert panel.locator(".recipe").count() > 0, (
+		"the stack did not follow the pattern it builds")
+
+	# And the button that made them is on the pattern, where it always was.
+	assert panel.locator('.part[data-part="grid"] .part-foot button.add').count() == 1
 
 
 def test_a_contribution_is_drawn_even_where_its_pattern_is_not (
@@ -4599,7 +4656,18 @@ def test_every_control_centres_what_is_written_on_it (
 			   control without being a button. `touch-action: none` is the
 			   marker every target already carries, and the same one the target
 			   rules are found by. */
-			if (shape.touchAction !== "none") continue;
+			/* **A target constrains touch, and `none` is not the only way**
+			   (#2213).  A list has to scroll, and a scroll starts on whatever is
+			   under the finger — so the rows of the generator sheet declare
+			   `pan-y`: they may be scrolled up and down and still may not be
+			   panned sideways or pinched.  Selecting on `none` alone dropped
+			   exactly the surface that had just changed out of this rule, which
+			   is how a rule comes to be trusted and not enforced.
+
+			   `body` declares `pan-x pan-y` and is not a target, which is why
+			   this is a list of the two a control may say rather than "anything
+			   but auto". */
+			if (!["none", "pan-y"].includes(shape.touchAction)) continue;
 
 			const text = (one.textContent || "").trim();
 
@@ -4609,7 +4677,7 @@ def test_every_control_centres_what_is_written_on_it (
 			   ends; the group carries the text of both and centres nothing
 			   itself, so it is the ends that have to answer for it. */
 			if ([...one.querySelectorAll("*")].some(
-				(kid) => getComputedStyle(kid).touchAction === "none")) continue;
+				(kid) => ["none", "pan-y"].includes(getComputedStyle(kid).touchAction))) continue;
 
 			/* Centred by whichever mechanism applies: a flex control says so
 			   with justify-content, anything else with text-align. */
@@ -4974,7 +5042,18 @@ def test_a_target_has_a_surface_and_an_edge_and_a_mark_has_neither (
 		for (const one of document.querySelectorAll("*")) {
 			const shape = getComputedStyle(one);
 
-			if (shape.touchAction !== "none") continue;
+			/* **A target constrains touch, and `none` is not the only way**
+			   (#2213).  A list has to scroll, and a scroll starts on whatever is
+			   under the finger — so the rows of the generator sheet declare
+			   `pan-y`: they may be scrolled up and down and still may not be
+			   panned sideways or pinched.  Selecting on `none` alone dropped
+			   exactly the surface that had just changed out of this rule, which
+			   is how a rule comes to be trusted and not enforced.
+
+			   `body` declares `pan-x pan-y` and is not a target, which is why
+			   this is a list of the two a control may say rather than "anything
+			   but auto". */
+			if (!["none", "pan-y"].includes(shape.touchAction)) continue;
 			if (scrim(one) || roll(one)) continue;
 
 			const named = (one.className.baseVal !== undefined
@@ -5052,7 +5131,7 @@ def test_a_target_is_at_least_one_row_in_both_directions (
 		const wrong = [];
 
 		for (const one of document.querySelectorAll("*")) {
-			if (getComputedStyle(one).touchAction !== "none") continue;
+			if (!["none", "pan-y"].includes(getComputedStyle(one).touchAction)) continue;
 
 			const box = one.getBoundingClientRect();
 
