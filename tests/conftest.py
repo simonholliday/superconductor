@@ -87,7 +87,19 @@ CONTROLS: dict[str, typing.Any] = {
 		      "options": [{"value": "up", "label": "up"},
 		                  {"value": "down", "label": "down"}]},
 		 ]},
-	]},
+	 ],
+	 # What this stack may *reshape* with, as against what it may add (#2246).
+	 # Two catalogues rather than one, because the two are different things and
+	 # the glass has to say which is which.
+	 "transforms": [
+		{"name": "rotate", "summary": "Roll the pattern, wrapping around.", "partial": False,
+		 "parameters": [
+		     {"name": "steps", "label": "steps", "kind": "number",
+		      "min": -8, "max": 8, "step": 1},
+		 ]},
+		{"name": "reverse", "summary": "Flip the pattern backwards.",
+		 "partial": False, "parameters": []},
+	 ]},
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.

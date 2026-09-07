@@ -344,3 +344,92 @@ def test_a_whole_grid_write_is_answered_with_rows_and_not_the_snapshot () -> Non
 		superintendent.controls.apply_change(
 			{grid.name: grid.snapshot()}, {grid.name: grid.declaration()},
 			f"{grid.name}/rows", wire)
+
+
+RESHAPING_CATALOGUE: list[dict[str, typing.Any]] = [
+	{
+		"name": "euclidean", "summary": "A euclidean rhythm.", "partial": False,
+		"parameters": [
+			{"name": "pitch", "label": "pitch", "kind": "pitch"},
+			{"name": "pulses", "label": "pulses", "kind": "number", "step": 1},
+		],
+	},
+]
+
+RESHAPERS: list[dict[str, typing.Any]] = [
+	{
+		"name": "swing", "summary": "Apply swing feel.", "partial": False,
+		"parameters": [
+			{"name": "percent", "label": "percent", "kind": "number", "default": 57.0},
+			{"name": "strength", "label": "strength", "kind": "number",
+			 "min": 0.0, "max": 1.0, "default": 1.0},
+		],
+	},
+	{
+		"name": "reverse", "summary": "Flip the pattern backwards.", "partial": False,
+		"parameters": [],
+	},
+]
+
+
+def _reshaping_stack () -> typing.Any:
+	"""A stack that may both add and reshape."""
+
+	return adapter.Recipe(
+		Composition(), catalogue=RESHAPING_CATALOGUE, transforms=RESHAPERS,
+		pitches=["kick", "snare"], builds="grid", data_key="stack", name="stack")
+
+
+@pytest.mark.parametrize(("rest", "value"), [
+	(["layers"], [{"id": "a", "kind": "transform", "transform": "swing", "params": {}}]),
+	(["layers"], [{"id": "a", "kind": "transform", "transform": "reverse", "params": {}}]),
+	(["layers"], [
+		{"id": "a", "generator": "euclidean", "params": {"pitch": "kick", "pulses": 4}},
+		{"id": "b", "kind": "transform", "transform": "swing", "params": {"percent": 62.0}},
+	]),
+])
+def test_a_transform_layer_and_the_service_agree (
+	rest: list[str], value: typing.Any) -> None:
+	"""#2246, and this is the join that has been wrong four times before.
+
+	A layer kind is declared in one place and accepted in another, and the two
+	have drifted apart every time one of them grew: the service dropped a field
+	its whitelist did not name, and a panel that reloaded saw something different
+	from one that stayed connected.
+	"""
+
+	_agree(_reshaping_stack(), rest, value)
+
+
+def test_moving_one_knob_of_a_transform_crosses_like_any_other () -> None:
+	"""The parameter path is addressed by layer and name, and it has to find the
+	transform's catalogue rather than the generators' — a lookup in the wrong
+	list refuses a parameter that exists."""
+
+	stack = _reshaping_stack()
+	stack.apply(["layers"], [
+		{"id": "a", "kind": "transform", "transform": "swing", "params": {}}])
+
+	_agree(stack, ["a", "percent"], 64.0)
+
+
+def test_a_transform_named_as_a_generator_is_refused_by_both () -> None:
+	"""The two catalogues are two namespaces, and a name in the wrong field is a
+	fault in the panel rather than something to be found helpfully.
+
+	Refused on **both** sides deliberately: the service accepting what the app
+	refuses is the seam failure this file was written for, and it has happened
+	once already when `choices` was added to one side only.
+	"""
+
+	stack = _reshaping_stack()
+
+	with pytest.raises(adapter.Refused):
+		stack.apply(["layers"], [{"id": "a", "generator": "swing", "params": {}}])
+
+	declared = {"stack": stack.declaration()}
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			{"stack": stack.snapshot()}, declared, "stack/layers",
+			[{"id": "a", "generator": "swing", "params": {}}])

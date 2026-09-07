@@ -2722,6 +2722,43 @@ html, body {
 .part.silent .part-body,
 .part.silent .part-title { opacity: 0.4; }
 
+/* --- A transform is not a generator, and must not read as one ------------
+ *
+ * #2246, which is #2119's rule a third time: a generator invents notes and a
+ * transform reshapes whatever the layers above it put down. A stack whose
+ * *order* is its meaning cannot afford two kinds of layer that look alike.
+ *
+ * Marked on the title bar rather than the body, because the body is a column of
+ * parameters and those are the same in both — it is the block's identity that
+ * differs, and the bar is where a block says what it is. No new colour: this is
+ * the accent already used for the thing that arrives from elsewhere, which is
+ * exactly what a transform's input is. */
+.part.reshaping .part-title {
+	border-bottom-color: var(--accent);
+	box-shadow: inset 0 2px 0 -1px var(--accent);
+}
+
+/* A heading in the sheet, so the two lists are read as two.  Shares every value
+   with a settings heading rather than inventing a second set — the same job in a
+   different container, and two rules holding one number is how they come to
+   disagree. */
+.sheet-body .group {
+	display: flex;
+	align-items: end;
+
+	font-family: var(--face-panel);
+	font-size: var(--type-note);
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink-faint);
+
+	border-bottom: 1px solid var(--edge);
+	padding-bottom: 0.15rem;
+	margin-top: 0.6rem;
+}
+
+.sheet-body .group:first-child { margin-top: 0; }
+
 .part-foot .clear {
 	background: var(--panel);
 	color: var(--danger);

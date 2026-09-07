@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.18.0";
+const CONTRACT = "1.19.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -4240,6 +4240,7 @@ function Panel () {
 		if (kindOf(name) === "recipe") {
 			const held = ((state[appName] || {})[name] || {}).layers || [];
 			const offered = controls[name].generators || [];
+			const reshapes = controls[name].transforms || [];
 			const builds = controls[name].builds;
 			const feeds = builds && gridNames.includes(builds) ? builds : null;
 			const voices = (feeds && controls[feeds].rows) || [];
@@ -4301,7 +4302,18 @@ function Panel () {
 					continue;
 				}
 
-				const generator = offered.find((one) => one.name === layer.generator);
+				/* **Its own catalogue, and not both merged** (#2246). A
+				   transform is reached exactly as a generator is — a name and
+				   parameters in the same shapes — and is a different thing: a
+				   generator invents notes, a transform reshapes everything
+				   above it. Told apart by the field the layer keeps its name
+				   in, so a layer of a kind this panel does not know finds no
+				   `generator` and draws as unknown rather than as something it
+				   is not. */
+				const reshaping = layer.kind === "transform";
+				const runs = reshaping ? layer.transform : layer.generator;
+				const generator = (reshaping ? reshapes : offered)
+					.find((one) => one.name === runs);
 
 				contributions.push({
 					key: `${name}/${layer.id}`,
@@ -4313,7 +4325,8 @@ function Panel () {
 					   moves it. The pattern is named beside it so that a line
 					   crossing another line is not the only thing on the glass
 					   saying what feeds what. */
-					title: `${tidied(layer.generator || "?")}`
+					reshaping,
+					title: `${tidied(runs || "?")}`
 						+ (layer.index ? ` ${layer.index}` : "")
 						+ (builds ? ` · ${named(builds)}` : ""),
 
@@ -4556,7 +4569,9 @@ function Panel () {
 		const layers = stack ? ((state[appName] || {})[stack] || {}).layers || [] : [];
 
 		return Object.fromEntries(
-			layers.map((layer) => [layer.id, layer.kind === "pattern" ? "pattern" : "generator"]));
+			layers.map((layer) => [layer.id,
+				layer.kind === "pattern" ? "pattern"
+				: layer.kind === "transform" ? "transform" : "generator"]));
 	};
 
 	/* An id has to survive a round trip and be unique among its neighbours. The
@@ -4839,7 +4854,12 @@ function Panel () {
 		>
 			${drawn.map((one) => html`
 				<${Part} key=${one.key} name=${one.key} title=${one.title} about=${one.about}
-					flavour=${one.live === false ? "silent" : ""}
+					${/* Two flavours can be true at once: a silenced transform is
+					     both. Joined rather than chosen between, because the day
+					     one wins over the other silently is the day a block lies
+					     about one of them. */ ""}
+					flavour=${[one.live === false ? "silent" : "",
+						one.reshaping ? "reshaping" : ""].filter(Boolean).join(" ")}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
 					${/* Which stack a cable dropped on this block would go into.
@@ -4980,7 +5000,7 @@ function Panel () {
 			};
 
 			return html`
-				<${Sheet} title="add generator" onClose=${() => setAdding(null)}>
+				<${Sheet} title="add to the stack" onClose=${() => setAdding(null)}>
 
 					${/* **A grid is not on this list any more.** It used to be,
 					     on the argument that a pattern to take from and a
@@ -4991,6 +5011,9 @@ function Panel () {
 					     to…". Offering it here as well was the second of two
 					     ways to make one connection, which is the shape this
 					     whole pass has been removing. */ ""}
+					${(controls[adding].transforms || []).length > 0 && html`
+						<div class="group">adds notes</div>`}
+
 					${(controls[adding].generators || []).map((generator) => html`
 						<button
 							key=${generator.name}
@@ -5014,6 +5037,32 @@ function Panel () {
 							<i>${generator.partial
 								? "takes something this panel cannot draw yet"
 								: generator.summary}</i>
+						</button>`)}
+
+					${/* **Under a heading of their own, because they are not
+					     generators** (#2246). Reached identically and different
+					     in what they do: one invents notes, the other reshapes
+					     whatever the layers above it put down. Two kinds of
+					     connection must not look alike (#2119), and a stack
+					     whose order is its meaning cannot afford a list that
+					     hides which is which. */ ""}
+					${(controls[adding].transforms || []).length > 0 && html`
+						<div class="group">reshapes what is already there</div>`}
+
+					${(controls[adding].transforms || []).map((shape) => html`
+						<button
+							key=${shape.name}
+							class=${`offer option reshaping ${shape.partial ? "partial" : ""}`}
+							disabled=${shape.partial}
+							onClick=${(event) => {
+								event.preventDefault();
+								added({ kind: "transform", transform: shape.name, params: {} });
+							}}
+						>
+							<b>${shape.name}</b>
+							<i>${shape.partial
+								? "takes something this panel cannot draw yet"
+								: shape.summary}</i>
 						</button>`)}
 				<//>`;
 		})()}

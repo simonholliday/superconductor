@@ -802,6 +802,13 @@ def _stack_for (pattern: str, name: str, title: str,
 	return superintendent.subsequence_adapter.Recipe(
 		composition,
 		catalogue=subsequence.generators(),
+
+		# **What this stack may reshape with, beside what it may add** (#2246).
+		# Subsequence describes both the same way and keeps them in two lists,
+		# because the two are different things: a generator invents notes and a
+		# transform works on everything above it in the stack. This file passes
+		# both along and names neither, exactly as it does for the generators.
+		transforms=subsequence.transforms(),
 		pitches=list(pitches),
 		bounds={
 			"pulses": (0, STEPS),

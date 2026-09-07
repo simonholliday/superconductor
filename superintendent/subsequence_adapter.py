@@ -1544,6 +1544,7 @@ class Recipe (Control):
 		catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 		pitches: collections.abc.Sequence[str] = (),
 		bounds: dict[str, tuple[float, float]] | None = None,
+		transforms: collections.abc.Sequence[dict[str, typing.Any]] = (),
 		builds: str | None = None,
 		sources: dict[str, collections.abc.Callable[[typing.Any], None]] | None = None,
 		pulses_per_beat: int | None = None,
@@ -1594,6 +1595,16 @@ class Recipe (Control):
 		self.pitches = list(pitches)
 		self.catalogue = offerable(catalogue, self.pitches, bounds)
 
+		self.transforms = offerable(transforms or [], self.pitches, bounds)
+		"""What this stack may *reshape* with, as against what it may add.
+
+		A second catalogue rather than a longer one, because the two are
+		different things and a panel has to draw them differently (#2119,
+		#2246): a generator invents notes and a transform works on everything
+		above it.  Drawn alike, the order of a stack stops meaning anything —
+		and order is the whole of what a rack is.
+		"""
+
 		self._building = False
 		"""Whether this stack is inside a build, so a route leading back here is
 		refused rather than recursed (#2230)."""
@@ -1618,6 +1629,28 @@ class Recipe (Control):
 			for generator in self.catalogue
 		}
 
+		# **Both catalogues share one map of shapes, and a collision must not be
+		# silent.**  No name appears in both today.  If one ever does the two are
+		# indistinguishable by name, and a layer would run whichever won the
+		# dictionary — the exact shape of fault this package has been bitten by
+		# three times.  So the generator keeps the name, the transform is not
+		# offered, and it is said out loud rather than found later.
+		for shape in self.transforms:
+			named = str(shape.get("name"))
+
+			if named in self._offered:
+				LOG.error(
+					"%r is offered as both a generator and a transform; keeping "
+					"the generator, because a layer names what it runs and these "
+					"two cannot be told apart by name", named)
+				continue
+
+			self._offered[named] = {
+				str(field.get("name")): _as_parameter(field)
+				for field in shape.get("parameters", [])
+			}
+			self._must_have[named] = _required(shape.get("parameters", []))
+
 		self.link: "AppLink | None" = None
 		"""How a stack says what it realised, and where it finds the grid it feeds."""
 
@@ -1638,6 +1671,9 @@ class Recipe (Control):
 		"""Every generator that can be offered, and what each of them takes."""
 
 		declared: dict[str, typing.Any] = {"type": "recipe", "generators": self.catalogue}
+
+		if self.transforms:
+			declared["transforms"] = self.transforms
 
 		if self.builds is not None:
 			declared["builds"] = self.builds
@@ -1679,6 +1715,9 @@ class Recipe (Control):
 			if one["kind"] == "pattern":
 				one["source"] = layer.get("source")
 
+			elif one["kind"] == "transform":
+				one["transform"] = layer.get("transform")
+
 			else:
 				one["generator"] = layer.get("generator")
 
@@ -1712,6 +1751,18 @@ class Recipe (Control):
 
 		return layer["params"].get(rest[1]) if layer is not None else value
 
+	@staticmethod
+	def _runs (layer: dict[str, typing.Any]) -> typing.Any:
+		"""What this layer calls, whichever field its kind keeps it in.
+
+		Said once here rather than at each of the three places that ask, which
+		is how `generator` and `source` came to be checked in two different
+		ways in the first place.
+		"""
+
+		return (layer.get("transform") if layer.get("kind") == "transform"
+		        else layer.get("generator"))
+
 	def _keep_stack (self, value: typing.Any) -> bool:
 		"""Take a whole stack, checked entire before any of it is kept."""
 
@@ -1739,7 +1790,7 @@ class Recipe (Control):
 
 			kind = str(entry.get("kind", "generator"))
 
-			if kind not in ("generator", "pattern"):
+			if kind not in ("generator", "pattern", "transform"):
 				raise Refused(f"a layer cannot be a {kind}")
 
 			if kind == "pattern":
@@ -1760,11 +1811,19 @@ class Recipe (Control):
 				})
 				continue
 
-			generator = entry.get("generator")
+			# **The two name their function in different fields**, so a stack
+			# read back says what each layer *is* without a lookup, and a panel
+			# too old to know about transforms finds no `generator` on one and
+			# draws nothing rather than drawing it as something it is not.
+			running = "transform" if kind == "transform" else "generator"
+			generator = entry.get(running)
 			offered = self._offered.get(generator)
+			known = ({shape.get("name") for shape in self.transforms}
+			         if kind == "transform"
+			         else {shape.get("name") for shape in self.catalogue})
 
-			if offered is None:
-				raise Refused(f"there is no generator called {generator}")
+			if offered is None or generator not in known:
+				raise Refused(f"there is no {running} called {generator}")
 
 			held = entry.get("params")
 			kept: dict[str, typing.Any] = {}
@@ -1778,7 +1837,7 @@ class Recipe (Control):
 			wanted.append({
 				"id": name,
 				"kind": kind,
-				"generator": generator,
+				running: generator,
 				"index": self._numbered(str(generator), name, entry, standing, counting),
 				"bypassed": bool(entry.get("bypassed", False)),
 				"params": {**self._opening(str(generator)), **kept},
@@ -1805,7 +1864,7 @@ class Recipe (Control):
 		counted = {str(one): int(mark) for one, mark in (held.get("counts") or {}).items()}
 
 		for layer in self.layers():
-			named = str(layer.get("source") if layer["kind"] == "pattern" else layer["generator"])
+			named = str(layer.get("source") if layer["kind"] == "pattern" else self._runs(layer))
 			counted[named] = max(counted.get(named, 0), layer["index"])
 
 		return counted
@@ -1859,10 +1918,11 @@ class Recipe (Control):
 		if layer is None:
 			raise Refused(f"there is no layer called {layer_id}")
 
-		offered = self._offered.get(layer.get("generator"), {})
+		running = self._runs(layer)
+		offered = self._offered.get(running, {})
 
 		if parameter not in offered:
-			raise Refused(f"{layer.get('generator')} has no parameter called {parameter}")
+			raise Refused(f"{running} has no parameter called {parameter}")
 
 		wanted = checked_value(offered[parameter], value)
 		params = layer.setdefault("params", {})
@@ -2021,11 +2081,26 @@ class Recipe (Control):
 
 				continue
 
-			generator = str(layer["generator"])
+			# **A transform is called exactly as a generator is**, and the
+			# difference is what it does rather than how it is reached: one
+			# invents notes and the other reshapes whatever is above it in the
+			# stack. Which is why the order of a stack is the whole of what it
+			# means, and why the two must not be drawn alike (#2246).
+			#
+			# **And a transform acts on the entire pattern, hand taps included.**
+			# There is no scratch builder yet, so a `rotate` here rolls the notes
+			# somebody tapped as well as the ones a generator made. That is right
+			# for the eight of thirteen that are *feel* — swing, randomize,
+			# legato — and is the thing a block has to say plainly for the five
+			# that are not. It stops being true the day a node builds into its
+			# own scratch (#2225), and this layer kind does not change then.
+			generator = str(self._runs(layer))
 			method = getattr(pattern, generator, None)
 
 			if method is None:
-				self._complain(generator, "this Subsequence has no such generator")
+				self._complain(
+					generator,
+					f"this Subsequence has no such {layer['kind']}")
 				continue
 
 			try:

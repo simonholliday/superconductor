@@ -113,7 +113,22 @@ the generators are: this package does not know that a grid exists, let alone
 which of them belongs to an instrument and which belongs to nobody.
 """
 
-CONTRIBUTIONS = (GENERATOR, PATTERN)
+TRANSFORM = "transform"
+"""A layer that reshapes what the layers above it put there, rather than adding.
+
+The same mechanism as a generator — a named function of the app's, with declared
+parameters — and a different *thing*, which is why it is a kind rather than a
+longer catalogue.  A generator invents notes; a transform works on what is
+already down.  Drawn alike they would make the order of a stack meaningless, and
+order is the whole of what a stack is.
+
+It names its function in ``transform`` where a generator names one in
+``generator``, so a stack says what each layer is without a lookup — and a panel
+too old to know the kind finds no ``generator`` on it and draws nothing, rather
+than drawing it as something it is not.
+"""
+
+CONTRIBUTIONS = (GENERATOR, PATTERN, TRANSFORM)
 """What a layer of a stack may be.
 
 The second was named here before it existed, so that adding it would be an
@@ -402,7 +417,11 @@ def _apply_parameter (
 	settings[name] = value
 
 
-def _offered (declaration: dict[str, typing.Any], generator: typing.Any) -> dict[str, typing.Any]:
+def _offered (
+	declaration: dict[str, typing.Any],
+	generator: typing.Any,
+	kind: str = GENERATOR,
+) -> dict[str, typing.Any]:
 	"""What one generator of a declared catalogue takes, as a parameter declaration.
 
 	Shaped so that a layer's parameters can go through ``_apply_parameter``
@@ -412,13 +431,20 @@ def _offered (declaration: dict[str, typing.Any], generator: typing.Any) -> dict
 	"""
 
 	if not isinstance(generator, str):
-		raise ControlError(f"a layer names no generator, and {generator!r} is not one")
+		raise ControlError(f"a layer names no {kind}, and {generator!r} is not one")
 
-	for offered in declaration.get("generators", []):
+	# **Searched in its own catalogue, not in both.**  A transform and a
+	# generator are told apart by the field a layer keeps its name in, so a name
+	# in the wrong list is a fault in the panel and is said so — which is what
+	# stops the two quietly becoming one namespace here while the app keeps them
+	# apart.
+	listed = "transforms" if kind == TRANSFORM else "generators"
+
+	for offered in declaration.get(listed, []):
 		if offered.get("name") == generator:
 			return {"fields": offered.get("parameters", [])}
 
-	raise ControlError(f"this app offers no generator called {generator!r}")
+	raise ControlError(f"this app offers no {kind} called {generator!r}")
 
 
 def _apply_recipe (
@@ -455,12 +481,15 @@ def _apply_recipe (
 	if layer is None:
 		raise ControlError(f"this stack has no layer called {rest[0]!r}")
 
+	running = TRANSFORM if layer.get("kind") == TRANSFORM else GENERATOR
+
 	_apply_parameter(
-		layer.setdefault("params", {}), _offered(declaration, layer.get("generator")),
+		layer.setdefault("params", {}),
+		_offered(declaration, layer.get(running), running),
 		rest[1:], value, path)
 
 
-LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "params", "index")
+LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "transform", "params", "index")
 """What a layer carries that **this version has an opinion about**.
 
 Named so that everything else can be carried through untouched.  A field here is
@@ -532,15 +561,16 @@ def _readable_layers (
 			layer["params"] = {}
 
 		else:
-			generator = entry.get("generator")
-			offered = _offered(declaration, generator)
+			running = TRANSFORM if kind == TRANSFORM else GENERATOR
+			generator = entry.get(running)
+			offered = _offered(declaration, generator, running)
 			held = entry.get("params")
 			kept: dict[str, typing.Any] = {}
 
 			for parameter, setting in (held if isinstance(held, dict) else {}).items():
 				_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
 
-			layer["generator"] = generator
+			layer[running] = generator
 			layer["params"] = kept
 
 		# The number the app gave this layer, which is what a person reads on

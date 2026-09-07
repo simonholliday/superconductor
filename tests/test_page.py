@@ -3655,13 +3655,23 @@ def test_a_pattern_adds_a_generator_and_nothing_else (
 	panel.locator('.part[data-part="grid"] .part-foot .offer.add').click()
 	panel.wait_for_selector(".sheet", timeout=5_000)
 
-	assert panel.locator(".sheet h4").count() == 0, "the sheet still divides into kinds"
 	assert panel.locator(".sheet .offer", has_text="second").count() == 0, \
 		"a grid is still offered where generators are added"
 
 	offered = panel.eval_on_selector_all(
 		".sheet .offer b", "els => els.map((one) => one.textContent.trim())")
-	declared = [one["name"] for one in conftest.CONTROLS["stack"]["generators"]]
+
+	# **The list divides in two now, and that is not the division this test was
+	# written against** (#2246).  A grid was taken off it because it was a second
+	# way to make one connection — a generator is created here and belongs to
+	# this pattern, a grid exists on its own and is patched.  A transform is
+	# neither: it is a layer of this same stack, created here, belonging here,
+	# and differing from a generator in what it *does* rather than in how it is
+	# reached.  So it belongs on the list, under a heading, because a stack whose
+	# order is its meaning cannot afford two kinds of layer that look alike
+	# (#2119).
+	declared = ([one["name"] for one in conftest.CONTROLS["stack"]["generators"]]
+	            + [one["name"] for one in conftest.CONTROLS["stack"]["transforms"]])
 
 	assert offered == declared, f"the sheet offers {offered} against {declared}"
 
@@ -5931,3 +5941,89 @@ def test_dragging_a_block_does_not_resize_the_page (panel: typing.Any) -> None:
 	assert size() == before, f"the drag resized the page: {before} to {size()}"
 	assert panel.locator(".sizes > button").inner_text() == readout, (
 		"the size readout followed a drag")
+
+
+def test_a_transform_is_offered_under_its_own_heading (panel: typing.Any) -> None:
+	"""#2246.  Two catalogues in one sheet, read as two.
+
+	A generator invents notes and a transform reshapes whatever the layers above
+	it put down.  They are reached identically — a name and parameters in the
+	same shapes — which is exactly why the glass has to say which is which: a
+	stack's *order* is the whole of what it means, and a list that hides the
+	difference makes ordering unreadable.  Two kinds of connection must not look
+	alike (#2119), for the third time.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator(".part-foot .offer.add").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	headings = panel.locator(".sheet-body .group").all_text_contents()
+
+	assert [one.strip() for one in headings] == [
+		"adds notes", "reshapes what is already there"]
+
+	# And a transform's own row carries the mark, so nothing has to infer it
+	# from where the row happens to sit in the list.
+	assert panel.locator(".sheet .offer.reshaping", has_text="rotate").count() == 1
+	assert panel.locator(".sheet .offer.reshaping", has_text="euclidean").count() == 0
+
+
+def test_a_transform_added_from_the_sheet_reaches_the_app_as_a_transform (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It names its function in `transform`, not in `generator`.
+
+	The field is what tells the two apart on the wire, so an app reading
+	`generator` on a transform layer would look it up in the wrong catalogue and
+	refuse a name that exists — and a panel too old to know the kind finds no
+	`generator` and draws nothing, rather than drawing it as something it is not.
+	"""
+
+	_open_the_stack(panel)
+
+	panel.locator(".part-foot .offer.add").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+	panel.locator(".sheet .offer", has_text="rotate").click()
+
+	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+
+	assert asked, "adding a transform asked for nothing"
+
+	layer = asked[-1]["v"][-1]
+
+	assert layer["kind"] == "transform"
+	assert layer["transform"] == "rotate"
+	assert "generator" not in layer, "a transform named itself as a generator"
+
+
+def test_a_transform_block_is_marked_apart_from_a_generator (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""On the title bar rather than the body, because the body is a column of
+	parameters and those are the same in both — it is the block's identity that
+	differs, and the bar is where a block says what it is."""
+
+	_open_the_stack(panel)
+
+	# Confirmed by the app rather than tapped, because a face follows the app
+	# and never the finger: a layer is not drawn until the app says it is there.
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
+		            "duration": 1, "probability": 1}},
+		{"id": "two", "kind": "transform", "transform": "rotate", "index": 1,
+		 "bypassed": False, "params": {"steps": 3}},
+	], by="app")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 2", timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator(".part.reshaping").count() == 1, "the transform drew as a generator"
+
+	marked = panel.locator(".part.reshaping .part-title").first
+	plain = panel.locator(".part:not(.reshaping) .part-title").first
+
+	assert marked.evaluate("el => getComputedStyle(el).borderBottomColor") \
+		!= plain.evaluate("el => getComputedStyle(el).borderBottomColor"), \
+		"a transform's bar is drawn exactly like a generator's"

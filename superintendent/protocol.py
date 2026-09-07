@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.18.0"
+CONTRACT_VERSION = "1.19.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,31 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.19.0 lets a layer of a stack be a ``transform``: a named function of the app's
+that **reshapes what the layers above it put there** rather than adding notes of
+its own.  A stack declares the ``transforms`` it may take beside the
+``generators`` it already declares, and a layer names one in ``transform`` where
+a generator names one in ``generator``.
+
+**Two catalogues rather than one longer one, and that is the whole of the
+decision.**  The two are reached identically — a name, and parameters in the
+same four shapes — so merging them would work and would be shorter.  It would
+also draw a transform as a generator, and then the order of a stack would stop
+meaning anything: a generator invents notes and a transform acts on everything
+above it, so *which came first* is the only thing that says what a stack does.
+Two kinds of connection must not look alike (#2119), and this is the third time
+that rule has decided something here.
+
+Naming the function in its own field is what lets an older panel behave well: it
+finds no ``generator`` on such a layer and draws nothing, rather than drawing it
+as an ordinary one.  A service too old for the kind refuses the layer, which is
+right for the same reason 1.8.0's route is refused rather than dropped — the app
+would otherwise play something the service was not holding.
+
+**A transform acts on the whole pattern, including notes tapped by hand**, and
+nothing in the contract says otherwise because nothing can: what a layer reaches
+is the app's business.  A panel that draws a transform should say so.
 
 1.18.0 lets a settings control say what it belongs to and how it is divided up.
 A ``params`` control may declare ``configures``, naming the pattern whose
