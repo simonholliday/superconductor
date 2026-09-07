@@ -914,7 +914,7 @@ class Parameter:
 			if self.maximum is not None:
 				declared["max"] = self.maximum
 
-		elif self.kind in ("choice", "choices"):
+		elif self.kind in ("choice", "choices", "action"):
 			declared["options"] = [{"value": value, "label": label} for value, label in self.options]
 
 		return declared
@@ -1006,6 +1006,15 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 
 		return [value[0], value[1]]
 
+	if parameter.kind == "action":
+		# Checked exactly as a choice is: a press names one of the things the app
+		# offered, and anything else is refused.  What differs is downstream —
+		# nothing stores the answer, because there is nothing to store.
+		if value not in [option for option, _ in parameter.options]:
+			raise Refused(f"{parameter.name} has no option called {value}")
+
+		return value
+
 	if parameter.kind == "choices":
 		if not isinstance(value, list):
 			raise Refused(f"{parameter.name} takes several options as a list")
@@ -1093,7 +1102,13 @@ class Params (Control):
 		held = composition.data.setdefault(data_key, {})
 
 		for parameter in self.parameters.values():
-			held.setdefault(parameter.name, parameter.opening())
+			# An action holds nothing, so there is nothing to open it at. Leaving
+			# it out of the dict is what keeps it out of `snapshot`, out of the
+			# settings burst, and out of the service's copy — each of which would
+			# otherwise be a place the panel could read a state back from and
+			# draw it as though somebody knew it (#2179).
+			if parameter.kind != "action":
+				held.setdefault(parameter.name, parameter.opening())
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Every setting, in the order the composition offered them."""
@@ -1192,6 +1207,19 @@ class Params (Control):
 			raise Refused(f"this instrument has no setting called {rest[0]}")
 
 		wanted = self._checked(parameter, value)
+
+		if parameter.kind == "action":
+			# **Nothing changed, and something happened.**  The composition is
+			# told so it can act; the panel is acked by the service either way,
+			# which is what clears its ring.  What it must not get is a
+			# `changed` frame, because that is the service's cue to remember a
+			# value — and remembering one here is the whole thing #2179 exists
+			# to prevent.
+			if self.on_change is not None:
+				self.on_change(parameter.name, wanted)
+
+			return False
+
 		held = self.composition.data.setdefault(self.data_key, {})
 
 		if held.get(parameter.name) == wanted:

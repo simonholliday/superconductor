@@ -53,7 +53,7 @@ Settled on 2026-09-06 (#2140); the client's own hard-coded 127 was removed under
 the same rule.
 """
 
-PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices")
+PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
 """What a parameter can be, and so what a panel knows how to draw.
 
 A range is two numbers with an order between them, held as ``[low, high]``.  It
@@ -71,6 +71,15 @@ would then have to check a second field before it knew what it was holding.
 The order is kept because it can matter: the pitches of a chord are not a set,
 and a generator handed a root first is entitled to use that.  Duplicates are
 refused, because two of one pitch in a pool says nothing a single one does not.
+
+``action`` is the odd one and the only kind that **holds nothing**.  It names
+options like a choice and a press is checked against them, but no value is kept
+here and none is sent back, because the thing it sets cannot be read.  A Moog
+Matriarch's voicing is the case it was built for: a front-panel switch changes
+it undetectably, so any state this file remembered would be wrong the moment a
+hand moved that switch, and a panel arriving late would be told a confident lie
+(#2179, #2172).  A panic button is the same shape — there is no state after
+"all notes off" either.
 """
 
 
@@ -352,6 +361,16 @@ def _apply_parameter (
 		# the same value becomes after a trip through JSON.  A tuple here and a
 		# list on the wire would compare unequal and never say why.
 		value = [value[0], value[1]]
+
+	elif kind == "action":
+		if value not in [one.get("value") for one in field.get("options", [])]:
+			raise ControlError(f"{name!r} has no option called {value!r}")
+
+		# **Deliberately not stored.**  Every other kind falls through to the
+		# write at the end of this function; this one returns before it, because
+		# the service's copy exists so a panel arriving late can be told what an
+		# app holds, and for this kind the honest answer is nothing.
+		return
 
 	elif kind == "choices":
 		if not isinstance(value, list):

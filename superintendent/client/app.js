@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.15.0";
+const CONTRACT = "1.16.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -127,6 +127,7 @@ const PINCH_THRESHOLD = 0.12;
  * happened by then and are not taken back — which is right: the person did tap
  * two cells, and then went on to do something else. */
 const CHOICE_BUTTONS = 4;
+const ACTION_FLASH = 450;
 
 
 function askedForPage () {
@@ -1299,6 +1300,7 @@ function Setting ({ field, held, onSet }) {
 	   until after the hooks have run. */
 	const [open, setOpen] = useState(false);
 	const [where, setWhere] = useState(null);
+	const [sent, setSent] = useState(null);
 	const trigger = useRef(null);
 
 	/* A menu is placed against the viewport rather than against the button it
@@ -1551,6 +1553,39 @@ function Setting ({ field, held, onSet }) {
 					<div role="group" class="options" style=${menuStyle()}>
 						${options.map((one) => option(one.value, one.label || one.value))}
 					</div>`}
+			</div>`;
+	}
+
+	if (field.kind === "action") {
+		const options = field.options || [];
+
+		/* **A control that does something and holds nothing** (#2179).
+		 *
+		 * Every other control here draws a value. This one must not, because the
+		 * thing it sets cannot be read back: a Matriarch's voicing is a
+		 * front-panel switch as well as a control change, so any selection shown
+		 * here would be wrong the moment a hand moved that switch, and a panel
+		 * arriving late would be told a confident lie (#2172).
+		 *
+		 * So no button is ever marked as chosen. What a press does get is a
+		 * flash, in the same colour a tapped cell's ring uses and for the same
+		 * reason: it says the press left the glass, not that anything now holds
+		 * it. Without that a control with no state reads as a dead control, and
+		 * under #2107 a control that looks broken is broken. */
+		const fire = (value) => {
+			onSet(value);
+			setSent(value);
+			setTimeout(() => setSent((held) => (held === value ? null : held)), ACTION_FLASH);
+		};
+
+		return html`
+			<div class="actions">
+				${options.map((option) => html`
+					<button
+						key=${option.value}
+						class=${option.value === sent ? "sent" : ""}
+						onPointerDown=${(event) => { event.preventDefault(); fire(option.value); }}
+					>${option.label || option.value}</button>`)}
 			</div>`;
 	}
 

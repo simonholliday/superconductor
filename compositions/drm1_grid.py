@@ -481,6 +481,27 @@ def bass (p: typing.Any) -> None:
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
 
+def send_voicing (name: str, value: typing.Any) -> None:
+	"""Ask the Matriarch for a voicing, which is the only way it will honour one.
+
+	Its front-panel switch and control change 94 are the same setting reached two
+	ways, and **whichever moved last wins** — measured on this rig (#2177).  So
+	nothing here can know which voicing is in force, and nothing tries: this only
+	asserts one, and the panel draws it as a control that does something rather
+	than one that shows something (#2179).
+
+	Which is what makes it worth having on the glass at all.  A hand on that
+	switch silently undoes what the composition asked for at startup, and this is
+	how a person puts it back without walking to the instrument.
+	"""
+
+	voicing = MATRIARCH.controls["paraphony_voice_mode"]
+
+	composition.trigger(
+		lambda p, cc=voicing.cc, amount=voicing.value_for(value): p.cc(cc, amount),
+		channel=CHORD_CHANNEL, beats=1 / 24, quantize=0)
+
+
 _voicing_sent = False
 """Whether this run has told the Matriarch which voicing to use yet."""
 
@@ -633,6 +654,20 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Params(
 			composition,
 			parameters=[
+				superintendent.subsequence_adapter.Parameter(
+					"voicing", "action", label="Set voicing",
+					# Lowest first, and labelled with the count rather than the
+					# band name: "1" is what is written beside the switch on the
+					# instrument, and `one_voice` is not.
+					options=[(band, str(count))
+					         for count, band in sorted(CHORD_VOICING.items())]),
+			],
+			data_key="matriarch", name="matriarch", title="Matriarch — voicing",
+			about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
+			on_change=send_voicing),
+		superintendent.subsequence_adapter.Params(
+			composition,
+			parameters=[
 				*(_panel_parameter(*setting) for setting in BASS_SETTINGS),
 
 				# The specification's own switch rather than the Minitaur's, so
@@ -656,9 +691,9 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Page(
 			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
 		superintendent.subsequence_adapter.Page(
-			"chords", parts=["chords"], title="Chords"),
+			"chords", parts=["chords", "matriarch"], title="Chords"),
 		superintendent.subsequence_adapter.Page(
-			"band", parts=["chords", "bass", "grid"], title="Band"),
+			"band", parts=["chords", "matriarch", "bass", "grid"], title="Band"),
 		superintendent.subsequence_adapter.Page(
 			"generators", parts=["grid", "drum_recipe"], title="Generators"),
 		superintendent.subsequence_adapter.Page(

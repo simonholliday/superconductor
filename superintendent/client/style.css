@@ -1679,6 +1679,28 @@ html, body {
 	font-weight: 600;
 }
 
+/* **An action does something and holds nothing** (#2179), so it never wears the
+   selected look a choice does — there is no state to select, and drawing one
+   would be claiming to know a setting that a hand on the instrument can change
+   without telling anybody.
+
+   What a press shows is that it left the glass: the same colour a tapped cell's
+   ring uses, for the same reason, and gone again in under half a second. A
+   control that answers a press with nothing at all reads as a dead one, and
+   under #2107 a control that looks broken is broken. */
+.grid.params .actions { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+.grid.params .actions button {
+	background: var(--panel);
+	color: var(--ink-quiet);
+	white-space: nowrap;
+}
+
+.grid.params .actions button.sent {
+	border-color: var(--ring);
+	color: var(--ink);
+}
+
 /* A number is a bar you push rather than a knob you turn: a rotary gesture on
    glass has no detent and no purchase, and a bar says its value by its length
    as well as by its figure. */

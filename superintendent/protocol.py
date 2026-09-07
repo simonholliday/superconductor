@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.15.0"
+CONTRACT_VERSION = "1.16.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,25 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.16.0 adds ``action``: a parameter that **does something and holds nothing**.
+It names options as a ``choice`` does and a press is checked against them, but no
+value is kept anywhere — not by the app, not by the service, and not on the glass,
+where no button is ever drawn as chosen.
+
+It exists because some settings cannot honestly be displayed.  A Moog Matriarch's
+voicing is a front-panel switch *as well as* control change 94, and moving that
+switch changes what the instrument does with no message of any kind — measured on
+the rig, where a mode set over MIDI was overridden by a hand and a mode set by
+hand was overridden over MIDI, last writer winning either way (#2177).  Any state
+a panel showed for it would be wrong within seconds, and a panel joining late
+would be handed a confident lie.
+
+So the service returns without writing its copy, and ``apply`` reports that
+nothing changed while still telling the composition something happened: the press
+is acked, and no ``changed`` frame follows it, because a ``changed`` is precisely
+the service's cue to remember a value.  A panic button is the same shape — there
+is no state after "all notes off" either.
 
 1.15.0 adds ``choices`` to a parameter's kinds: several of a pool, held as a list
 in the order the panel sent, where ``choice`` is one of it.  It is a kind of its

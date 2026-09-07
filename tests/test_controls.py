@@ -196,6 +196,40 @@ def test_choices_keeps_its_own_list_rather_than_the_caller_s () -> None:
 	assert state["recipe"]["pitches"] == ["kick", "snare"]
 
 
+ACTS: dict[str, typing.Any] = {
+	"moog": {"type": "params", "fields": [
+		{"name": "voicing", "kind": "action", "options": [
+			{"value": "one", "label": "1"}, {"value": "four", "label": "4"}]},
+	]},
+}
+
+
+def test_an_action_is_checked_and_then_deliberately_not_remembered () -> None:
+	"""This file exists to keep the service's copy of what an app holds.
+
+	For an action the honest answer is that the app holds nothing, so a panel
+	arriving late is told nothing rather than told a guess — which is the point
+	of the kind (#2179).
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, ACTS, "moog/voicing", "four")
+
+	# The control's own entry is created, as it is for any control the service
+	# is told about — what must not appear is a value under the action's name.
+	assert "voicing" not in state.get("moog", {}), (
+		"an action left a value in the service's copy")
+	assert state["moog"] == {}
+
+
+def test_an_action_still_refuses_what_the_app_did_not_offer () -> None:
+	"""Storing nothing is not a reason to check nothing."""
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change({}, ACTS, "moog/voicing", "sixteen")
+
+
 @pytest.mark.parametrize("value", [
 	"kick",                     # one of them is not several of them
 	["kick", "cowbell"],        # not in the pool

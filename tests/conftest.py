@@ -46,6 +46,11 @@ CONTROLS: dict[str, typing.Any] = {
 	              # named in the file and the panel is what letters them.
 	              "options": [{"value": "lcr", "label": "lcr"},
 	                          {"value": "exp", "label": "exp"}]},
+	             # Holds nothing and is never drawn as chosen (#2179). It carries
+	             # no entry in STATE below for the same reason.
+	             {"name": "voicing", "kind": "action", "label": "Set voicing",
+	              "options": [{"value": "one", "label": "1"},
+	                          {"value": "four", "label": "4"}]},
 	         ]},
 	"stack": {"type": "recipe", "title": "Generators", "builds": "grid",
 	          "sources": ["second"], "generators": [

@@ -1702,6 +1702,64 @@ def test_one_of_many_is_chosen_from_a_menu_rather_than_a_wall_of_buttons (
 	playwright_api.expect(panel.locator('.part[data-part="stack/one"] .menu .options')).to_have_count(0)
 
 
+def test_an_action_never_draws_a_chosen_button (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2179's whole point, on the glass.
+
+	The setting behind this cannot be read back — a Matriarch's voicing is a
+	front-panel switch as well as a control change — so a selected button would
+	be a claim nobody can stand behind. Pressing one must therefore leave no
+	button chosen, however many times it is pressed and whatever the app says.
+	"""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(".grid.params", timeout=5_000)
+
+	buttons = panel.locator('.part[data-part="moog"] .setting[data-field="voicing"] .actions button')
+
+	assert buttons.count() == 2
+	assert panel.locator('.part[data-part="moog"] .actions button.here').count() == 0
+
+	buttons.filter(has_text="4").click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "moog/voicing"]
+
+	assert sent, "pressing an action asked for nothing"
+	assert sent[-1]["v"] == "four"
+
+	# Even after the app has been told, and even if it reported one back.
+	fake_app.confirm("moog/voicing", "four", by="panel")
+	_settled(panel)
+
+	assert panel.locator('.part[data-part="moog"] .actions button.here').count() == 0, (
+		"an action drew a chosen button, which is a state nobody can verify")
+
+
+def test_an_action_says_a_press_left_the_glass (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A control that answers a press with nothing reads as a dead one.
+
+	So the press flashes, in the colour a tapped cell's ring uses and for the
+	same reason: it says the press was sent, not that anything holds it. Under
+	#2107 a control that looks broken is broken, and this is the line between
+	honest and broken.
+	"""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(".grid.params", timeout=5_000)
+
+	held = '.part[data-part="moog"] .setting[data-field="voicing"] .actions button'
+
+	panel.locator(held).filter(has_text="1").click()
+
+	assert panel.locator(f"{held}.sent").count() == 1, "a press showed nothing at all"
+
+	# And it is a flash rather than a selection: gone on its own, with nothing
+	# pressed to clear it.
+	panel.wait_for_function(
+		f"() => document.querySelectorAll('{held}.sent').length === 0", timeout=5_000)
+
+
 def test_a_short_choice_stays_a_row_of_buttons (panel: typing.Any) -> None:
 	"""Two options behind a menu would be worse than two buttons, which is why
 	there is a threshold rather than one rule for every length."""

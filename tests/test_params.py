@@ -29,6 +29,8 @@ def _params () -> tuple[adapter.Params, typing.Any, list[tuple[str, typing.Any]]
 			adapter.Parameter("rate", "number", label="Rate", default=24),
 			adapter.Parameter("shape", "choice", label="Shape", default="lcr",
 			                  options=[("lcr", "LCR"), ("exp", "EXP")]),
+			adapter.Parameter("voicing", "action", label="Set voicing",
+			                  options=[("one", "1"), ("two", "2")]),
 		],
 		data_key="moog", name="moog",
 		on_change=lambda name, value: moved.append((name, value)))
@@ -41,6 +43,8 @@ def test_a_setting_opens_where_the_composition_said () -> None:
 
 	settings, composition, _ = _params()
 
+	# The action is absent on purpose: it holds nothing, so there is nothing to
+	# open it at and nowhere for a panel to read a state back from (#2179).
 	assert composition.data["moog"] == {"glide": False, "rate": 24, "shape": "lcr"}
 	assert settings.snapshot() == composition.data["moog"]
 
@@ -54,7 +58,8 @@ def test_the_declaration_carries_no_midi_at_all () -> None:
 	declared = settings.declaration()
 
 	assert declared["type"] == "params"
-	assert [field["kind"] for field in declared["fields"]] == ["switch", "number", "choice"]
+	assert [field["kind"] for field in declared["fields"]] == [
+		"switch", "number", "choice", "action"]
 	assert "cc" not in repr(declared), "no control-change number reaches the panel"
 	assert declared["fields"][2]["options"] == [
 		{"value": "lcr", "label": "LCR"}, {"value": "exp", "label": "EXP"}]
@@ -167,3 +172,62 @@ def test_a_reconnection_asserts_them_again () -> None:
 	pay()
 
 	assert len(moved) == 3
+
+
+# --- a control that does something and holds nothing (#2179) ----------------
+
+def test_an_action_tells_the_composition_and_stores_nothing () -> None:
+	"""The whole of the kind, in one assertion pair.
+
+	Something happened — the composition heard about it and can send a control
+	change. Nothing changed — so no value is kept, here or anywhere, because the
+	setting it moves cannot be read back and a remembered value would be a claim
+	nobody can stand behind.
+	"""
+
+	settings, composition, moved = _params()
+
+	changed = settings.apply(["voicing"], "two")
+
+	assert moved == [("voicing", "two")]
+	assert changed is False, "an action must report that nothing changed"
+	assert "voicing" not in composition.data["moog"]
+	assert "voicing" not in settings.snapshot()
+
+
+def test_an_action_fires_every_time_rather_than_only_on_a_difference () -> None:
+	"""A choice set to what it already holds does nothing; an action always acts.
+
+	Pressing "all notes off" twice has to send twice, and pressing a voicing the
+	instrument is already in is exactly how somebody recovers after moving the
+	switch by hand — which is the case this kind was built for (#2177).
+	"""
+
+	settings, _, moved = _params()
+
+	settings.apply(["voicing"], "two")
+	settings.apply(["voicing"], "two")
+
+	assert moved == [("voicing", "two"), ("voicing", "two")]
+
+
+def test_an_action_refuses_an_option_the_app_never_offered () -> None:
+	"""Holding nothing is not the same as accepting anything."""
+
+	settings, _, moved = _params()
+
+	with pytest.raises(adapter.Refused, match="no option called"):
+		settings.apply(["voicing"], "sixteen")
+
+	assert moved == []
+
+
+def test_an_action_declares_its_options_so_a_panel_can_draw_them () -> None:
+	"""It names them exactly as a choice does; only the state differs."""
+
+	settings, _, _ = _params()
+
+	field = next(f for f in settings.declaration()["fields"] if f["name"] == "voicing")
+
+	assert field["kind"] == "action"
+	assert [one["value"] for one in field["options"]] == ["one", "two"]

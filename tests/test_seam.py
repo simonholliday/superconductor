@@ -202,6 +202,54 @@ def test_a_pitch_pool_the_app_would_refuse_does_not_reach_the_service_either () 
 			"recipe/a/pitches", ["C2", "F#9"])
 
 
+def _settings () -> typing.Any:
+	"""An instrument with one ordinary setting and one that holds nothing."""
+
+	return adapter.Params(
+		Composition(),
+		parameters=[
+			adapter.Parameter("glide", "switch", label="Glide"),
+			adapter.Parameter("voicing", "action", label="Set voicing",
+			                  options=[("one", "1"), ("four", "4")]),
+		],
+		data_key="moog", name="moog")
+
+
+def test_an_action_reaches_the_service_by_not_reaching_it () -> None:
+	"""The 1.16.0 kind, across the join that keeps catching this file's namesake.
+
+	**Deliberately not written with `_agree`**, because the path is a different
+	shape: `apply` reports that nothing changed, so `AppLink` emits no `changed`
+	frame, so the service is never told at all. That *is* the mechanism, and
+	asserting it is the only way to notice if it ever stops being true — an
+	action that started emitting a change would have the service quietly
+	remembering a setting nobody can read back, which is exactly what the kind
+	exists to prevent (#2179).
+	"""
+
+	settings = _settings()
+	declared = {"moog": settings.declaration()}
+	held = {"moog": settings.snapshot()}
+
+	assert settings.apply(["voicing"], "four") is False, (
+		"an action reported a change, so the service would be told about one")
+
+	# And if a frame ever did arrive by another route — an app reporting it, a
+	# tool replaying a capture — the service still must not keep it.
+	superintendent.controls.apply_change(held, declared, "moog/voicing", "four")
+
+	assert held["moog"] == settings.snapshot()
+	assert "voicing" not in held["moog"]
+
+
+def test_an_ordinary_setting_beside_it_still_crosses_normally () -> None:
+	"""So the test above is about the kind rather than about the control."""
+
+	settings = _settings()
+
+	_agree(settings, ["glide"], True)
+
+
 def test_a_whole_grid_write_is_answered_with_rows_and_not_the_snapshot () -> None:
 	"""The fault itself, named.
 
