@@ -12,6 +12,7 @@ run, and anything after it that wants a loop of its own fails.
 """
 
 import importlib.util
+import re
 import sys
 import types
 import typing
@@ -19,6 +20,9 @@ import typing
 import pytest
 
 import pymididefs.instruments
+
+import superintendent.service
+import superintendent.subsequence_adapter
 
 
 def _composition () -> typing.Any:
@@ -291,3 +295,46 @@ def test_both_pitched_grids_offer_a_transposition (rig: typing.Any) -> None:
 		assert "transpose_range" in rig.link.controls[name].declaration()
 
 	assert "transpose_range" not in rig.link.controls["grid"].declaration()
+
+
+def test_every_control_this_composition_declares_reaches_a_page (rig: typing.Any) -> None:
+	"""A control declared and put on no page is invisible, and nothing says so.
+
+	It is not an error anywhere: the app declares it, the service holds it, the
+	panel is told about it, and it is simply never drawn.  The only symptom is
+	somebody looking for a block that was there last week.
+
+	The transport is the one exception and is not a part — it is chrome, drawn
+	on the header bar whatever page is open, which is why it names no page and
+	why this asks for it by type rather than by name.
+	"""
+
+	drawn = {name for name, control in rig.link.controls.items()
+	         if not isinstance(control, superintendent.subsequence_adapter.Transport)}
+	placed = {part for page in rig.link.pages for part in page.parts}
+
+	assert drawn - placed == set(), f"declared and on no page: {sorted(drawn - placed)}"
+	assert placed - drawn == set(), f"on a page and never declared: {sorted(placed - drawn)}"
+
+
+def test_the_page_set_still_fits_the_row_of_named_buttons (rig: typing.Any) -> None:
+	"""Past `PAGE_BUTTONS` the client stops drawing page names and offers
+	previous-and-next with a counter instead.
+
+	That is correct behaviour and it is also how this rig came to be showing
+	"‹ Pattern 1 1/8 ›" — eight pages, no names, on the one control whose whole
+	job is saying which page you are on.  A page set is cheap to add to, so the
+	limit is worth failing against rather than rediscovering on the glass.
+
+	The number is read out of the client rather than written here, because two
+	places holding one number is how they come to disagree.
+	"""
+
+	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	limit = re.search(r"^const PAGE_BUTTONS = (\d+);$", source, re.MULTILINE)
+
+	assert limit, "the client no longer names a page-button limit"
+
+	assert len(rig.link.pages) <= int(limit.group(1)), (
+		f"{len(rig.link.pages)} pages is past {limit.group(1)}, so the panel will"
+		f" draw a counter instead of their names")

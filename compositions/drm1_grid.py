@@ -753,28 +753,30 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
+		# Everything that makes a sound, on one page.  The voicing button is
+		# here because without it this page cannot be played: a Matriarch sounds
+		# MIDI notes monophonically until its voice mode is asserted over MIDI,
+		# whatever the front panel says (#2177), so a chord grid beside a bass
+		# and a kit would quietly play one note at a time.
 		superintendent.subsequence_adapter.Page(
-			"pattern_1", parts=["grid"], title="Pattern 1"),
+			"band", parts=["grid", "bass", "chords", "matriarch"], title="Band"),
+
+		# The DRM1 with the things that write into it and the things that can be
+		# patched to it: generators, cables, and a grid with no instrument behind
+		# it.  All of the routing this rig can currently show is on this page.
 		superintendent.subsequence_adapter.Page(
-			"bass", parts=["bass"], title="Bass"),
+			"drums", parts=["grid", "drum_recipe", "shared"], title="Drums"),
+
 		superintendent.subsequence_adapter.Page(
-			"kit", parts=["grid", "bass"], title="Drums + bass"),
-		superintendent.subsequence_adapter.Page(
-			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
+			"bass", parts=["bass", "minitaur"], title="Bass"),
 		superintendent.subsequence_adapter.Page(
 			"chords", parts=["chords", "matriarch"], title="Chords"),
-		superintendent.subsequence_adapter.Page(
-			"band", parts=["chords", "matriarch", "bass", "grid"], title="Band"),
-		superintendent.subsequence_adapter.Page(
-			"generators", parts=["grid", "drum_recipe"], title="Generators"),
-		superintendent.subsequence_adapter.Page(
-			"shared", parts=["shared", "grid", "drum_recipe"], title="Shared"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),
 	url=SERVICE_URL,
 )
-"""Six views over this rig, and where their arrangement is kept.
+"""Four views over this rig, and where their arrangement is kept.
 
 The arrangement file sits beside this one and is written by the adapter when a
 finger lifts from a block that moved.  It is data rather than code because there
@@ -782,11 +784,18 @@ is no safe way to write a dragged block back into a Python file, and it is besid
 the composition rather than inside the service because a page set belongs to the
 piece that declared it (Subroutine #2075).
 
-Every pattern appears on more than one of them — once with the whole glass to
-itself and once beside whatever it plays against — which is the case worth
-having: see how they play together, then take one on its own to work on it
-closely.  Nothing keeps two views of a pattern in step, because nothing has to:
-both draw the grid the composition holds.
+**One page per instrument, and one with all three on it.**  Every pattern appears
+twice — once beside whatever it plays against, and once with the controls that
+belong to it — which is the case worth having: see how they play together, then
+take one on its own to work on it closely.  Nothing keeps two views of a pattern
+in step, because nothing has to: both draw the grid the composition holds.
+
+**There were eight, and eight was one problem rather than three extra pages.**
+The client draws named page buttons up to `PAGE_BUTTONS`, which is six, and gives
+way to previous-and-next above it — so the rig had been showing "‹ Pattern 1 1/8
+›" and no page names at all, which is the one thing a page selector is for.  Six
+of the eight were a pattern on its own beside the same pattern in company, and
+the second of each is the one worth keeping.
 """
 
 
