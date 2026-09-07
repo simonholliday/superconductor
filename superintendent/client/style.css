@@ -1696,9 +1696,40 @@ html, body {
 	white-space: nowrap;
 }
 
+/* **A press is an event, not a promise, and the two must not look alike.**
+ *
+ * The ring means *your press is in flight and the face will change when the
+ * truth arrives* — a promise this control can never keep, because there is no
+ * truth to arrive. Wearing it here would set up a wait that never ends, and
+ * would teach a person to distrust the ring on the grid, where it is doing real
+ * work. So an action borrows the other vocabulary this panel already has:
+ * `.cell.failed` marks an attempt and fades *rather than showing a state the
+ * cell is in*, which is exactly an action's situation — permanently, rather
+ * than only when something went wrong. Same shape, same easing; the colour is
+ * what says which kind of event it was, `--bad` for refused and the panel's own
+ * lit amber for fired.
+ *
+ * **Held before it fades, because the finger is on top of it.** A failed cell
+ * begins its fade after a round trip, by which time the hand has moved; this
+ * begins under the fingertip that caused it. So it stays full for the length of
+ * a touch and only then decays, which is what makes it visible at all on a
+ * button one row square. */
 .grid.params .actions button.sent {
-	border-color: var(--ring);
-	color: var(--ink);
+	animation: fired 1.4s ease-out forwards;
+}
+
+@keyframes fired {
+	0%, 30% {
+		background: var(--on);
+		border-color: var(--on-edge);
+		color: var(--on-ink);
+	}
+
+	100% {
+		background: var(--panel);
+		border-color: var(--edge);
+		color: var(--ink-quiet);
+	}
 }
 
 /* A number is a bar you push rather than a knob you turn: a rotary gesture on

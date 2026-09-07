@@ -1750,14 +1750,28 @@ def test_an_action_says_a_press_left_the_glass (
 
 	held = '.part[data-part="moog"] .setting[data-field="voicing"] .actions button'
 
-	panel.locator(held).filter(has_text="1").click()
+	button = panel.locator(held).filter(has_text="1")
+	resting = button.evaluate("el => getComputedStyle(el).backgroundColor")
+
+	button.click()
 
 	assert panel.locator(f"{held}.sent").count() == 1, "a press showed nothing at all"
 
-	# And it is a flash rather than a selection: gone on its own, with nothing
-	# pressed to clear it.
+	# **Measured rather than inferred from the class.** Asserting only that
+	# `.sent` appears would pass against a stylesheet with the rule deleted, and
+	# the whole point of the class is what it looks like.
+	fired = button.evaluate("el => getComputedStyle(el).backgroundColor")
+
+	assert fired != resting, (
+		"a pressed action looks exactly like an unpressed one, so nothing on the "
+		"glass says the press was received")
+
+	# And it is an event rather than a selection: it goes on its own, with
+	# nothing pressed to clear it, and comes back to where it started.
 	panel.wait_for_function(
 		f"() => document.querySelectorAll('{held}.sent').length === 0", timeout=5_000)
+
+	assert button.evaluate("el => getComputedStyle(el).backgroundColor") == resting
 
 
 def test_a_short_choice_stays_a_row_of_buttons (panel: typing.Any) -> None:

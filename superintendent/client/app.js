@@ -127,7 +127,10 @@ const PINCH_THRESHOLD = 0.12;
  * happened by then and are not taken back — which is right: the person did tap
  * two cells, and then went on to do something else. */
 const CHOICE_BUTTONS = 4;
-const ACTION_FLASH = 450;
+const ACTION_FLASH = 1400;
+/* Long enough to outlast the finger that caused it.  The stylesheet holds the
+   fill for the first third and fades it over the rest, so this only has to be
+   the whole of that — clearing the class sooner would cut the fade off. */
 
 
 function askedForPage () {
@@ -1567,11 +1570,13 @@ function Setting ({ field, held, onSet }) {
 		 * here would be wrong the moment a hand moved that switch, and a panel
 		 * arriving late would be told a confident lie (#2172).
 		 *
-		 * So no button is ever marked as chosen. What a press does get is a
-		 * flash, in the same colour a tapped cell's ring uses and for the same
-		 * reason: it says the press left the glass, not that anything now holds
-		 * it. Without that a control with no state reads as a dead control, and
-		 * under #2107 a control that looks broken is broken. */
+		 * So no button is ever marked as chosen. What a press gets instead is
+		 * the vocabulary this panel already uses for an attempt that leaves no
+		 * state behind — a fill that marks the press and decays — rather than
+		 * the ring, which promises that a face is about to change and is a
+		 * promise this control can never keep. Without any answer at all a
+		 * control with no state reads as a dead one, and under #2107 a control
+		 * that looks broken is broken. */
 		const fire = (value) => {
 			onSet(value);
 			setSent(value);
