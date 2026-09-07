@@ -492,3 +492,71 @@ def test_a_matching_contract_says_nothing_at_all (caplog: typing.Any) -> None:
 			_read_until(panel, "service")
 
 	assert [one.getMessage() for one in caplog.records if "contract" in one.getMessage()] == []
+
+
+def test_one_app_replacing_another_of_the_same_name_is_said_out_loud (
+	caplog: typing.Any) -> None:
+	"""#2133, and this is the audible half rather than the refusal it asks for.
+
+	The refusal is not safe to build yet and the reason is in `hub.app_left`: an
+	app that reconnects declares on its new socket *before the old one is noticed
+	to have died*, because the adapter gives up after about ten seconds while the
+	service can take minutes of TCP keepalive to see a corpse.  So "a link for
+	this name already exists" does not mean a second instance — and refusing on
+	it would refuse every reconnection after a crash for as long as the corpse
+	lingers, which is a worse failure than the one being fixed and a silent one
+	on the app's side.
+
+	What is buildable today is the diagnosis: the case #2133 describes is a
+	second scanner displacing the first with the panel showing one and nothing
+	anywhere saying why, and the second half of that is what this removes.
+	"""
+
+	client = starlette.testclient.TestClient(
+		superintendent.service.build(superintendent.config.Config()))
+
+	with caplog.at_level("DEBUG", logger="superintendent.hub"):
+		with client.websocket_connect("/ws/app") as first:
+			first.send_json(superintendent.protocol.declare("substation", CONTROLS, {}, 1))
+
+			with client.websocket_connect("/ws/app") as second:
+				second.send_json(superintendent.protocol.declare("substation", CONTROLS, {}, 1))
+
+				# Read something back, so the second declaration has certainly
+				# been handled before the log is inspected.
+				with client.websocket_connect("/ws/panel") as panel:
+					panel.send_json(superintendent.protocol.hello("panel", None))
+					_read_until(panel, "manifest")
+
+	said = [one.getMessage() for one in caplog.records
+	        if one.levelname == "WARNING" and "replacing" in one.getMessage()]
+
+	assert said, f"a silent replacement: {[one.getMessage() for one in caplog.records]}"
+	assert "substation" in said[0]
+	assert "2133" in said[0], "it does not say where the reasoning is"
+
+
+def test_an_app_declaring_twice_on_one_socket_is_not_a_replacement (
+	caplog: typing.Any) -> None:
+	"""An app may re-declare on the socket it already holds — that is how it says
+	its controls have changed — and doing so replaces nothing.
+
+	Worth asserting because the check is `is not`, on the link object rather than
+	the name, and a check on the name alone would call this a replacement and cry
+	wolf on the ordinary case.  A warning that fires when nothing is wrong stops
+	being read, and this one has exactly one job.
+	"""
+
+	client = starlette.testclient.TestClient(
+		superintendent.service.build(superintendent.config.Config()))
+
+	with caplog.at_level("DEBUG", logger="superintendent.hub"):
+		with client.websocket_connect("/ws/app") as app:
+			app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 1))
+			app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 2))
+
+			with client.websocket_connect("/ws/panel") as panel:
+				panel.send_json(superintendent.protocol.hello("panel", None))
+				assert _read_until(panel, "manifest")
+
+	assert [one.getMessage() for one in caplog.records if "replacing" in one.getMessage()] == []

@@ -96,6 +96,19 @@ def build (config: superintendent.config.Config) -> starlette.applications.Starl
 	return app
 
 
+def _origin (websocket: starlette.websockets.WebSocket) -> str:
+	"""Where a socket dialled in from, as a string fit for a log line.
+
+	Best effort by design: a test client has no address at all, and a proxy in
+	front would report itself. It is never identity (#2133) — only what makes a
+	replacement describable instead of merely announced.
+	"""
+
+	client = websocket.client
+
+	return f"{client.host}:{client.port}" if client else "an unnamed socket"
+
+
 def _note_contract (side: str, who: str, frame: superintendent.protocol.Frame) -> None:
 	"""Say so when something dials in speaking a different contract (#2164).
 
@@ -208,6 +221,11 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 
 	app: superintendent.hub.AppLink | None = None
 
+	# One token for the life of this socket, so a second declaration down the
+	# *same* socket — which is how an app says its controls have changed — is not
+	# mistaken for a second app of the same name (#2133).
+	connection = object()
+
 	try:
 		while True:
 			frame = superintendent.protocol.decode(await websocket.receive_text())
@@ -223,6 +241,8 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 					state=dict(frame.get("state") or {}),
 					version=superintendent.protocol.whole(frame, "ver", 0),
 					pages=list(frame.get("pages") or []),
+					origin=_origin(websocket),
+					connection=connection,
 				)
 				await hub.app_declared(app)
 

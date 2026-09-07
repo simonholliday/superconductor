@@ -11,6 +11,7 @@ and re-declare it whenever they reconnect.
 
 import dataclasses
 import logging
+import time
 import typing
 
 import superintendent.controls
@@ -38,6 +39,32 @@ class AppLink:
 	Held and passed on, never interpreted.  A page set belongs to the
 	composition that declared it; the service assembles the list and reads no
 	file of its own (#2075).
+	"""
+
+	since: float = dataclasses.field(default_factory=time.monotonic)
+	"""When this link declared itself, for describing what it replaced."""
+
+	connection: object = None
+	"""A token standing for the socket this arrived on, compared and never read.
+
+	**A link is rebuilt on every declaration, including a second one down the
+	socket already held** — which is how an app says its controls have changed.
+	So the object cannot say whether two declarations came from the same place,
+	and comparing the objects called an ordinary re-declaration a replacement and
+	cried wolf on the common case.  A warning that fires when nothing is wrong
+	stops being read, and this one has exactly one job.
+
+	Given by whatever owns the socket.  `None` means nobody said, and then two
+	links are only the same if they are the same object.
+	"""
+
+	origin: str = "?"
+	"""Where this socket came from, kept only so a replacement can be described.
+
+	Not identity and not used as any (#2133).  Two instances on one machine share
+	it, and a machine's address can change under a running app.  It is here
+	because "app *substation* replaced app *substation*" is a useless sentence
+	and "from 192.168.0.31, replacing the one from 192.168.0.30" is not.
 	"""
 
 
@@ -98,7 +125,37 @@ class Hub:
 		A re-declaration replaces what went before, because an app that has just
 		reconnected is the authority on its own state and may have been restarted
 		with a different one.
+
+		**And a second app of the same name replaces the first in exactly the
+		same way, which is #2133 and is not fixed here — it is made audible.**
+
+		The two are indistinguishable to this service and the reason is recorded
+		one method down, in `app_left`: an app that reconnects declares on its new
+		socket *before the old one is noticed to have died*, because the adapter
+		gives up after about ten seconds while the service can take minutes of TCP
+		keepalive to see a corpse. So "a link for this name already exists" does
+		not mean a second instance, and refusing on it would refuse every
+		reconnection after a crash for as long as the corpse lingers — which is a
+		worse failure than the one being fixed, and a silent one on the app's side.
+
+		Telling them apart needs an identity the app supplies, which is #1916's
+		instance name and a contract change. Until then this logs the replacement
+		with both origins and how long the incumbent had been there, so the case
+		#2133 describes — a second scanner displacing the first, the panel showing
+		one, and nothing anywhere saying why — is at least answerable.
 		"""
+
+		standing = self.apps.get(app.name)
+		elsewhere = standing is not None and (
+			standing.connection is not app.connection if app.connection is not None
+			else standing is not app)
+
+		if standing is not None and elsewhere:
+			LOG.warning(
+				"app %r declared from %s, replacing the one from %s that had been"
+				" connected for %.0fs — a reconnection and a second instance of the"
+				" same name look alike here (#2133)",
+				app.name, app.origin, standing.origin, time.monotonic() - standing.since)
 
 		self.apps[app.name] = app
 
