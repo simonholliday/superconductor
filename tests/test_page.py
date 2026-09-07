@@ -1484,6 +1484,28 @@ def test_a_short_pool_is_drawn_flat_and_a_second_tap_takes_one_back_out (
 	assert sent[-1]["v"] == ["down"], "a second tap did not take the pitch back out"
 
 
+def test_a_choice_is_lettered_by_the_panel_and_not_by_the_app (panel: typing.Any) -> None:
+	"""A control's states are named by whoever declares them; the capitals are ours.
+
+	This matters because a composition reading an instrument definition sends the
+	state names verbatim — `lcr`, `always`, `legato_only` — and a table of
+	prettier labels beside them would be a second copy of the same fact.  It is
+	only safe to leave them alone while the panel letters a control itself, so
+	that is worth a test rather than a reading of the stylesheet: the rule lives
+	in a selector list, and a selector list is exactly the kind of thing that gets
+	narrowed by somebody tidying up.
+	"""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(".grid.params", timeout=5_000)
+
+	option = panel.locator('.part[data-part="moog"] .setting[data-field="shape"] .choices button').first
+
+	assert option.inner_text().strip() == "LCR", (
+		"the panel stopped lettering a choice, so a state named in an instrument "
+		"definition now reads on the glass exactly as it is spelled in the file")
+
+
 def test_a_generator_this_panel_cannot_fully_draw_is_shown_but_not_offered (
 	panel: typing.Any) -> None:
 	"""Shown rather than hidden: knowing it exists and why it is out of reach is

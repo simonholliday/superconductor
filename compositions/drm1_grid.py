@@ -17,6 +17,9 @@ writes it.  Nothing in the Subsequence package is changed to make this work.
 import pathlib
 import typing
 
+import pymididefs.cc
+import pymididefs.instruments
+
 import subsequence
 import subsequence.constants.durations
 import subsequence.constants.instruments.vermona_drm1_drums as drm1
@@ -73,6 +76,20 @@ BEATS = int(STEPS * STEP_DURATION)
 
 # --- The Minitaur -----------------------------------------------------------
 
+MINITAUR = pymididefs.instruments.load("moog_minitaur")
+"""What a Moog Minitaur *is*, read from the shared corpus rather than typed here.
+
+**Three tiers meet in this file and only the middle one moved.**  What the
+*specification* says is `pymididefs` — control change 122 is local control, on
+every instrument ever built.  What this *model* does is the definition — control
+change 92 is glide type, and its three bands start at 0, 43 and 85.  What *this
+rig* does stays here: channel 6, two octaves from C1, and a preference for the
+words "Velocity to filter" over the manual's "Filter Velocity Sensitivity".
+
+The middle tier used to be sixty lines of this file, so every other Minitaur
+owner typed them again and a correction lived only here.
+"""
+
 BASS_CHANNEL = 6
 """The channel the Moog Minitaur is set to receive on."""
 
@@ -90,6 +107,27 @@ This list is the whole of the decision.  A different range, or only the notes of
 a scale, is an edit here and nothing else anywhere.
 """
 
+_sounds = MINITAUR.voice.note_range
+
+if _sounds is not None and not all(
+		_sounds[0] <= midi_notes.name_to_note(row) <= _sounds[1] for row in BASS_RANGE):
+	raise ValueError(
+		f"BASS_RANGE goes outside what a {MINITAUR.model.name} can sound "
+		f"(notes {_sounds[0]} to {_sounds[1]}); outside it the instrument is silent "
+		f"rather than wrong-sounding, so nothing else would tell you")
+"""A limit is the model's and a preference is the rig's, so this checks one against
+the other (#2121).
+
+Skipped when the definition states no range, because an instrument nobody has
+measured is not the same as one measured as unlimited — the same distinction
+`_voice_count` turns on.
+
+Worth an exception rather than a comment because the failure is **silent**: a
+Minitaur ignores a note above 72 rather than playing it wrong, so a range set an
+octave too high draws a grid that works perfectly and makes no sound.  Checked
+once at import, where it costs nothing and cannot be missed.
+"""
+
 BASS_ROWS = list(reversed(BASS_RANGE))
 """The same notes in the order they are drawn, which is top to bottom.
 
@@ -105,38 +143,44 @@ Subsequence resolves a string pitch through whatever map the pattern was given,
 and nothing about that map has to be about drums.
 """
 
-MINITAUR_CC = {
-	"glide": 65,
-	"glide_rate": 5,
-	"glide_type": 92,
-	"legato_glide": 83,
-	"note_sync": 81,
-	"filter_velocity": 89,
-	"volume_velocity": 90,
-	"key_priority": 91,
-	"volume": 7,
-	"local_control": 122,
-}
-"""Which control change each panel setting is wired to.
+BASS_SETTINGS: list[tuple[str, str, str, typing.Any]] = [
+	# on the glass         in the definition                on the label        opens at
+	("glide",              "glide_switch",                  "Glide",             None),
+	("glide_rate",         "glide_rate",                    "Glide rate",        24),
+	("glide_type",         "glide_type",                    "Glide type",        "lcr"),
+	("legato_glide",       "legato_glide",                  "Legato glide only", None),
+	("note_sync",          "note_sync",                     "Note sync",         None),
+	("filter_velocity",    "filter_velocity_sensitivity",   "Velocity to filter", 64),
+	("volume_velocity",    "volume_velocity_sensitivity",   "Velocity to volume", 64),
+	("key_priority",       "key_priority",                  "Note priority",     "last"),
+	("volume",             "vca_output_level",              "Output level",      127),
+]
+"""Which of the Minitaur's thirty-seven controls this rig puts on the glass.
 
-Taken from the Minitaur's own manual and written up as Subroutine #2081.  It
-lives here rather than in the Superintendent package because it is a fact about
-an instrument, and that package is not allowed to know one — a panel draws a
-switch and this file decides what the switch does.
+Four columns and every one of them is genuinely this file's to decide.  **What
+each control *is*** — its control change, whether it is a switch or a choice,
+and where its bands fall — comes from the definition and is not repeated here.
 
-Every one of these except ``glide`` and ``glide_rate`` is a parameter the
-Minitaur has no knob for at all, which is what makes them worth a panel: they
-are otherwise reachable only through the editor software.
+The names are kept short rather than adopted from the definition, for two
+reasons.  A panel row is narrow and the manual is not: "Velocity to filter" fits
+where "Filter Velocity Sensitivity" does not.  And a captured pattern names its
+settings by these, so renaming them would strand a restore (#2067).
+
+Eight of the nine have no knob on the Minitaur at all, which is what earns them
+a place: the definition marks them `panel_only`, and that is the strongest
+ranking signal a panel ever gets for free.
 """
 
-MINITAUR_BANDS = {
-	"glide_type": {"lcr": 0, "lct": 64, "exp": 110},
-	"key_priority": {"low": 0, "high": 64, "last": 110},
-}
-"""Where in each band to sit for a choice, since the Minitaur reads ranges.
+BASS_CONTROLS = {panel: MINITAUR.controls[named] for panel, named, _, _ in BASS_SETTINGS}
+"""Each panel name against what the definition says that control is."""
 
-The middle of the band rather than its edge, so a value that drifts by one does
-not become a different setting.
+LOCAL_CONTROL = "local_control"
+"""The one setting that is not the Minitaur's, and so is not in its definition.
+
+Its absence from the corpus is the specification tier working rather than a gap:
+control change 122 means local control on every instrument, so it belongs in
+`pymididefs.cc`.  It is also the one switch taking 0 and 127 exactly, with no
+band to sit in the middle of (#2081), which is why it skips the table above.
 """
 
 BASS_VELOCITY = 100
@@ -187,17 +231,101 @@ composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in
 composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
 
+def _voice_count (definition: typing.Any, *, when_switchable: int | None = None) -> int | None:
+	"""How many notes a grid should let sound at once, from what a definition says.
+
+	**Not a pass-through, and that is the whole point of it.**  A definition's
+	``polyphony`` of ``None`` means *nobody has established it*; a note grid's
+	``voices`` of ``None`` means *as many as you like*.  Handing one straight to
+	the other turns "unknown" into "unlimited" — which on a Moog Matriarch, whose
+	voicing is a front-panel switch *and* control change 94 with no documented
+	power-on default, draws a five-note chord on a four-voice instrument and says
+	nothing at all about it.
+
+	So a stated count is used; an instrument that switches between counts has to
+	be *told* which to assume; and only one that states neither is unlimited.
+	Which number a switchable instrument should open at is a real question and
+	not this function's to answer (#2143) — refusing to guess is.
+	"""
+
+	voice = definition.voice
+
+	if voice.polyphony is not None:
+		return int(voice.polyphony)
+
+	if voice.voicing_modes:
+		if when_switchable is None:
+			raise ValueError(
+				f"{definition.model.name} switches between {list(voice.voicing_modes)} "
+				f"voices and states no default, so a grid has to be told which to assume")
+
+		if when_switchable not in voice.voicing_modes:
+			raise ValueError(
+				f"{definition.model.name} has no {when_switchable}-voice mode; "
+				f"it offers {list(voice.voicing_modes)}")
+
+		return when_switchable
+
+	return None
+
+
+def _panel_parameter (
+	panel: str,
+	named: str,
+	label: str,
+	default: typing.Any,
+) -> superintendent.subsequence_adapter.Parameter:
+	"""One of the instrument's controls, as something the panel knows how to draw.
+
+	The definition says what the control *is*; this says what it is called here.
+	**A kind is derived from the bands rather than declared** — no values means a
+	continuous control, two a switch, three or more a choice — so a corrected band
+	table changes the drawing without this file being touched at all.
+	"""
+
+	control = MINITAUR.controls[named]
+
+	if control.kind == pymididefs.instruments.CHOICE:
+		return superintendent.subsequence_adapter.Parameter(
+			panel, "choice", label=label, default=default,
+			options=[(state, state.replace("_", " ")) for state in control.values])
+
+	if control.kind == pymididefs.instruments.SWITCH:
+		return superintendent.subsequence_adapter.Parameter(
+			panel, "switch", label=label, default=default)
+
+	low, high = control.range
+
+	return superintendent.subsequence_adapter.Parameter(
+		panel, "number", label=label, default=default, minimum=low, maximum=high)
+
+
 def _cc_value (name: str, value: typing.Any) -> int:
-	"""What number the Minitaur wants for a setting the panel expressed in words."""
+	"""What number the Minitaur wants for a setting the panel expressed in words.
 
-	if name in MINITAUR_BANDS:
-		return MINITAUR_BANDS[name][value]
+	The definition computes the **middle** of each band rather than its edge, so a
+	value that drifts by one does not become a different setting.  Carried by hand
+	here until #2142, and by hand they were approximate: glide type went out as 0,
+	64 and 110 where the centres are 21, 63 and 106.
+	"""
 
-	if isinstance(value, bool):
+	control = BASS_CONTROLS.get(name)
+
+	if control is None:
+		# Local control is the specification's own switch and takes 0 or 127
+		# exactly — no band, so no middle to sit in (#2081).
 		return 127 if value else 0
 
-	# Local control is the MIDI specification's own switch and takes only 0 or
-	# 127 — no band, no midpoint (#2081).
+	if control.values:
+		if isinstance(value, bool):
+			# **A switch's two states in the order the definition gives them**,
+			# which is ascending, so the second is the far end.  It is not always
+			# spelled "on": legato glide is `always` and `legato_only`, and the
+			# panel's own label is what says which way round that reads.
+			states = list(control.values)
+			value = states[1] if value else states[0]
+
+		return control.value_for(value)
 
 	return int(value)
 
@@ -217,11 +345,12 @@ def send_setting (name: str, value: typing.Any) -> None:
 	on.
 	"""
 
-	control = MINITAUR_CC[name]
+	control = BASS_CONTROLS.get(name)
+	number = control.cc if control is not None else pymididefs.cc.LOCAL_CONTROL_ON_OFF
 	amount = _cc_value(name, value)
 
 	composition.trigger(
-		lambda p, control=control, amount=amount: p.cc(control, amount),
+		lambda p, control=number, amount=amount: p.cc(control, amount),
 		channel=BASS_CHANNEL, beats=1 / 24, quantize=0)
 @composition.pattern(
 	channel=DRUM_CHANNEL,
@@ -360,7 +489,8 @@ link = superintendent.subsequence_adapter.AppLink(
 			about=[("", "no instrument")]),
 		superintendent.subsequence_adapter.NoteGrid(
 			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
-			data_key="bass", name="bass", title="Minitaur — bass", voices=1,
+			data_key="bass", name="bass", title="Minitaur — bass",
+			voices=_voice_count(MINITAUR),
 			pattern="bass", divisions=BASS_DIVISIONS,
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
@@ -368,28 +498,12 @@ link = superintendent.subsequence_adapter.AppLink(
 		superintendent.subsequence_adapter.Params(
 			composition,
 			parameters=[
+				*(_panel_parameter(*setting) for setting in BASS_SETTINGS),
+
+				# The specification's own switch rather than the Minitaur's, so
+				# it comes from `pymididefs.cc` and not from the definition.
 				superintendent.subsequence_adapter.Parameter(
-					"glide", "switch", label="Glide"),
-				superintendent.subsequence_adapter.Parameter(
-					"glide_rate", "number", label="Glide rate", default=24),
-				superintendent.subsequence_adapter.Parameter(
-					"glide_type", "choice", label="Glide type", default="lcr",
-					options=[("lcr", "LCR"), ("lct", "LCT"), ("exp", "EXP")]),
-				superintendent.subsequence_adapter.Parameter(
-					"legato_glide", "switch", label="Legato glide only"),
-				superintendent.subsequence_adapter.Parameter(
-					"note_sync", "switch", label="Note sync"),
-				superintendent.subsequence_adapter.Parameter(
-					"filter_velocity", "number", label="Velocity to filter", default=64),
-				superintendent.subsequence_adapter.Parameter(
-					"volume_velocity", "number", label="Velocity to volume", default=64),
-				superintendent.subsequence_adapter.Parameter(
-					"key_priority", "choice", label="Note priority", default="last",
-					options=[("low", "Low"), ("high", "High"), ("last", "Last")]),
-				superintendent.subsequence_adapter.Parameter(
-					"volume", "number", label="Output level", default=127),
-				superintendent.subsequence_adapter.Parameter(
-					"local_control", "switch", label="Front panel controls", default=True),
+					LOCAL_CONTROL, "switch", label="Front panel controls", default=True),
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],

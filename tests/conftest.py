@@ -41,8 +41,11 @@ CONTROLS: dict[str, typing.Any] = {
 	             {"name": "glide", "kind": "switch", "label": "Glide"},
 	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127, "step": 1},
 	             {"name": "shape", "kind": "choice", "label": "Shape",
-	              "options": [{"value": "lcr", "label": "LCR"},
-	                          {"value": "exp", "label": "EXP"}]},
+	              # Lower-cased on purpose, because that is what a composition
+	              # reading an instrument definition now sends: the states are
+	              # named in the file and the panel is what letters them.
+	              "options": [{"value": "lcr", "label": "lcr"},
+	                          {"value": "exp", "label": "exp"}]},
 	         ]},
 	"stack": {"type": "recipe", "title": "Generators", "builds": "grid",
 	          "sources": ["second"], "generators": [
