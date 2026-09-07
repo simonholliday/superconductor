@@ -2068,6 +2068,7 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 		zIndex: depth,
 	};
 
+
 	/* Taking hold. The pointer is captured so the block keeps following the
 	   finger even when the finger leaves it, which it will: a block dragged
 	   quickly is always behind the hand for a frame. */
@@ -3286,11 +3287,63 @@ function useCellSize (blocks, layout, dragging) {
 	}, [choice, JSON.stringify(blocks), dragging ? "held" : JSON.stringify(layout)]);
 
 	/* Both written from here, so the stylesheet never has to work out a row
-	   height of its own and then disagree with the fit about it. */
-	useEffect(() => {
+	   height of its own and then disagree with the fit about it.
+	 *
+	 * **And then every block is snapped to the lattice, in the same pass and
+	 * deliberately not in `Part`.**
+	 *
+	 * `.part` has claimed since it was written that "a block has to measure a
+	 * whole number of lattice cells", and it did not. A block's *left* edge
+	 * snaps to the lattice and its right edge lands wherever its contents stop,
+	 * so the lane between two blocks dragged as close as they go is `pitch`
+	 * minus however far the first overran — and the overrun differs by what is
+	 * inside. Simon saw it with three blocks side by side: 29px after the drum
+	 * grid, 11px after the bass, both dragged as far as they would go.
+	 *
+	 * The cause is that **a note grid's cells have no gaps between them and a
+	 * step grid's do**, which is correct — a piano roll is a hairline lattice and
+	 * a drum machine is spaced pads (#2107 §12). But it makes a note grid
+	 * `label + steps * cell` wide where the lattice counts `steps * pitch`, so it
+	 * lands 18px off with nothing in the arithmetic aware of it.
+	 *
+	 * **Measured, not predicted.** `blockSize` predicts a width from a formula
+	 * written for a step grid, and is wrong for a note grid by exactly the gaps
+	 * it does not have; a second formula would be a third thing to get wrong
+	 * when a third kind of block arrives. Asking a block how wide it is cannot go
+	 * stale.
+	 *
+	 * **And it has to be here rather than in `Part`, which is where it was
+	 * first written.** `--cell` is set by this effect, and a child's effects run
+	 * before its parent's — so a block measuring itself measured the *previous*
+	 * cell size, and at 37px still reported the width it had at 44. It came out
+	 * 164px too wide and stayed that way, because the answer was stable: wrong
+	 * content, right pitch. One pass, after the variable it depends on. */
+	useLayoutEffect(() => {
 		document.documentElement.style.setProperty("--cell", `${cell}px`);
 		document.documentElement.style.setProperty("--row", `${controlRow(cell)}px`);
-	}, [cell]);
+
+		if (!wrap.current) return;
+
+		const pitch = cell + GAP;
+		const frame = PAD * 2;
+
+		for (const part of wrap.current.querySelectorAll(".part")) {
+			/* Cleared first, or the next pass measures the answer from the last
+			   and a block keeps whatever width it was once given. */
+			part.style.width = "";
+
+			const content = part.getBoundingClientRect().width - frame;
+			const cells = Math.max(1, Math.ceil((content + GAP) / pitch));
+
+			/* **The content is snapped, not the block.** A block is its content
+			   plus a frame, and `frameInCells` already reserves a whole cell for
+			   that frame when placing — so snapping the whole block would close
+			   every lane to `GAP` and change the spacing of the entire page,
+			   where this leaves the drum grid exactly where it is today and
+			   brings the others into line with it. */
+			part.style.width = `${cells * pitch - GAP + frame}px`;
+		}
+	}, [cell, JSON.stringify(blocks)]);
 
 	return { wrap, cell, choice, choose };
 }

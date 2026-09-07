@@ -5564,3 +5564,65 @@ def test_no_popover_is_drawn_off_the_side_of_the_glass (panel: typing.Any) -> No
 
 	assert left >= 0, f"the block menu is drawn {-left}px off the left"
 	assert right <= glass, f"the block menu is drawn {right - glass}px off the right"
+
+
+def test_every_block_measures_a_whole_number_of_lattice_cells (panel: typing.Any) -> None:
+	"""`.part` has claimed this since it was written and it was not true.
+
+	A block's *left* edge snaps to the lattice; its right edge lands wherever its
+	contents stop.  So the lane between two blocks dragged as close as they go is
+	`pitch` minus however far the first one overran — and the overrun differs by
+	what is inside it.  Simon saw it with three blocks side by side: 29px after
+	the drum grid and 11px after the bass, both dragged as far as they would go.
+
+	**The cause is that a note grid's cells have no gaps between them and a step
+	grid's do**, which is right — a piano roll is a hairline lattice and a drum
+	machine is spaced pads (#2107 §12).  But it made a note grid
+	`label + steps * cell` wide where the lattice counts `steps * pitch`, so it
+	landed 18px off with nothing in the arithmetic aware of it.
+
+	Both kinds are checked, because one kind was always correct: a test on the
+	step grid alone passes against the defect.
+	"""
+
+	adrift = []
+
+	for page in ("All", "Bass", "Generators"):
+		panel.locator(".pages button", has_text=page).click()
+		panel.wait_for_selector(".part", timeout=5_000)
+		_settled(panel)
+
+		adrift += panel.evaluate("""(where) => {
+			const root = getComputedStyle(document.documentElement);
+			const cell = parseFloat(root.getPropertyValue("--cell"));
+			const gap = parseFloat(root.getPropertyValue("--gap"));
+			const pitch = cell + gap;
+			const out = [];
+
+			for (const part of document.querySelectorAll(".part")) {
+				/* **The frame is read off the element, not from `--pad`.** That
+				   token is `calc(var(--gap) * 2)`, and a custom property reads
+				   back as the text that was written — so `parseFloat` gave NaN,
+				   every comparison against it was false, and the first version
+				   of this test passed against the defect it was written for. */
+				const seen = getComputedStyle(part);
+				const frame = parseFloat(seen.paddingLeft) + parseFloat(seen.paddingRight);
+
+				/* The *content* is what has to span whole cells: a block is its
+				   content plus a frame, and the placer reserves a cell for the
+				   frame separately. */
+				const content = part.getBoundingClientRect().width - frame;
+				const over = (content + gap) % pitch;
+
+				/* Sub-pixel layout is real; a whole cell out is the defect. */
+				if (over > 0.5 && over < pitch - 0.5) {
+					out.push(where + " " + part.dataset.part
+						+ ": content " + Math.round(content)
+						+ " is " + Math.round(over) + "px past a cell boundary");
+				}
+			}
+
+			return out;
+		}""", page)
+
+	assert adrift == [], "\n".join(adrift)

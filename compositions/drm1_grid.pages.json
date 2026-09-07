@@ -6,14 +6,14 @@
 			"y": 0
 		},
 		{
-			"name": "matriarch",
-			"x": 46,
-			"y": 20
-		},
-		{
 			"name": "bass",
 			"x": 20,
 			"y": 0
+		},
+		{
+			"name": "matriarch",
+			"x": 46,
+			"y": 20
 		},
 		{
 			"name": "chords",
