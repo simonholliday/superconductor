@@ -460,6 +460,16 @@ def _apply_recipe (
 		rest[1:], value, path)
 
 
+LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "params", "index")
+"""What a layer carries that **this version has an opinion about**.
+
+Named so that everything else can be carried through untouched.  A field here is
+checked above and kept or refused on its merits — `index` is dropped when it is
+not a positive number, and that is a judgement rather than ignorance.  A field
+not here is the app's business and is passed on unread.
+"""
+
+
 def _readable_layers (
 	declaration: dict[str, typing.Any],
 	value: typing.Any,
@@ -548,13 +558,16 @@ def _readable_layers (
 		if isinstance(number, int) and not isinstance(number, bool) and number > 0:
 			layer["index"] = number
 
+		# **Everything else the app said, carried rather than dropped** (#2128).
+		# `LAYER_FIELDS` is what this version checks, not what a layer may hold:
+		# a field named there is validated above and one that is not rides along
+		# untouched, so an app can grow a layer without a service release.
+		layer.update({name: held for name, held in entry.items()
+		              if name not in LAYER_FIELDS})
+
 		layers.append(layer)
 
 	return layers
-
-
-NOTE_FIELDS = ("length", "velocity")
-"""What a note carries besides being there at all."""
 
 
 def _positions (declaration: dict[str, typing.Any]) -> int:
@@ -677,9 +690,11 @@ def _apply_note (
 
 	field = rest[2]
 
-	if field not in NOTE_FIELDS:
-		raise ControlError(f"a note has no field named {field!r}")
-
+	# **Any field, not only the ones this version knows.** Refusing an unknown
+	# one made "add a feature and it appears on the panel" false of an app's
+	# state: the app applied the change and said so, the panel that was watching
+	# drew it, and the service — which is what a reloading panel reads — refused
+	# to remember it. The value is the app's own report of its own state (#2128).
 	if step not in notes:
 		raise ControlError(f"{path!r} shapes a note that is not there")
 
@@ -716,8 +731,11 @@ def _readable_notes (
 			if not isinstance(note, dict):
 				raise ControlError(f"a note is an object, and {note!r} is not one")
 
-			placed[str(step)] = {
-				field: note[field] for field in NOTE_FIELDS if field in note}
+			# **Everything the note carries**, not only the two fields named
+			# above. Neither is validated here in any case — the app has already
+			# refused what it would not hold — so filtering only ever dropped
+			# what this version had not heard of (#2128).
+			placed[str(step)] = dict(note)
 
 		if placed:
 			kept[row] = placed
