@@ -467,6 +467,18 @@ class NoteGrid (Control):
 	``mono=True`` is kept as a spelling of ``voices=1``, so a composition written
 	before there was a count does not have to change.
 
+	**Do not pass an instrument definition's ``polyphony`` straight in.**  In
+	``pymididefs.instruments`` a ``polyphony`` of ``None`` means *nobody has
+	established it*; here ``voices=None`` means *as many as you like*.  They are
+	the same value with opposite meanings, and the Moog Matriarch is exactly the
+	case: its voicing is a front-panel switch and CC 94 with no documented
+	power-on default, so its definition says ``polyphony: null`` and offers
+	``voicing_modes: [1, 2, 4]`` instead.  Read straight through, that gives an
+	unlimited grid on a four-voice instrument — a chord drawn on the glass that
+	cannot sound, failing silently, on the first polyphonic synth this project
+	takes on.  Translating one into the other is #2142's job, and which number a
+	mode-switched instrument opens at is #2143's.
+
 	``divisions`` is how many addressable positions make up one drawn cell, and
 	the composition is the one that says.  One — the default — means a position
 	is a step and this is the grid it always was.  More than one means the
