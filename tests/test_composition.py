@@ -163,3 +163,68 @@ def test_a_range_outside_what_the_instrument_sounds_is_refused_at_import (
 
 	assert (low, high) == (0, 72)
 	assert all(low <= rig.midi_notes.name_to_note(row) <= high for row in rig.BASS_RANGE)
+
+
+# --- the Matriarch, and the ceiling it is given -----------------------------
+
+def test_the_chord_grid_is_given_the_ceiling_not_an_unlimited_count (
+	rig: typing.Any) -> None:
+	"""#2172: enforce the most the instrument can do, claim nothing.
+
+	The Matriarch states no polyphony at all, so this is the one instrument on
+	the rig where the guard's `when_switchable` is load-bearing rather than
+	decorative.
+	"""
+
+	assert rig.MATRIARCH.voice.polyphony is None
+	assert rig.CHORD_VOICES == 4 == max(rig.MATRIARCH.voice.voicing_modes)
+
+	assert rig.link.controls["chords"].declaration()["voices"] == 4
+
+
+def test_the_voicing_band_is_paired_with_the_count_it_selects (
+	rig: typing.Any) -> None:
+	"""An inference the composition makes, so it is worth asserting rather than trusting.
+
+	The definition states the voice counts in `voicing_modes` and names the
+	bands of control change 94 separately, and says nowhere which names which.
+	Pairing two ascending lists is sound and is still a guess about a format,
+	so the wrong pairing should fail here rather than send a Matriarch quietly
+	into one-voice mode.
+	"""
+
+	assert rig.CHORD_VOICING == {1: "one_voice", 2: "two_voice", 4: "four_voice"}
+
+	voicing = rig.MATRIARCH.controls["paraphony_voice_mode"]
+
+	assert voicing.cc == 94
+	assert voicing.value_for(rig.CHORD_VOICING[rig.CHORD_VOICES]) == 106
+
+
+def test_the_chord_range_is_inside_what_the_matriarch_sounds (rig: typing.Any) -> None:
+	"""The same check the bass gets, and it has to be made per instrument.
+
+	A Minitaur stops at note 72 and a Matriarch does not, so the limit is the
+	definition's to state and this file's to stay inside.
+	"""
+
+	low, high = rig.MATRIARCH.voice.note_range
+
+	assert (low, high) == (0, 127)
+	assert all(low <= rig.midi_notes.name_to_note(row) <= high for row in rig.CHORD_RANGE)
+
+
+def test_a_chord_note_is_placed_in_steps_rather_than_in_sub_steps (
+	rig: typing.Any) -> None:
+	"""The bass divides a step six ways; the chords do not, and the difference is
+	deliberate rather than an oversight.
+
+	A chord wants to land on the beat, and nothing has yet asked for one between
+	two of them.  Asserted because `default_length` is counted in this grid's own
+	positions, so the two numbers only mean the same thing while divisions is 1.
+	"""
+
+	declared = rig.link.controls["chords"].declaration()
+
+	assert declared["divisions"] == 1
+	assert declared["default_length"] == rig.CHORD_LENGTH == 2

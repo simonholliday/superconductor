@@ -209,6 +209,84 @@ BASS_LENGTH = BASS_DIVISIONS
 """One step, counted in the positions above rather than in steps."""
 
 
+# --- The Matriarch ----------------------------------------------------------
+
+MATRIARCH = pymididefs.instruments.load("moog_matriarch")
+"""The rig's polyphonic instrument, and the first one on this panel (#2143)."""
+
+CHORD_CHANNEL = 1
+"""The channel the Matriarch is set to receive on.
+
+Same interface and same port as the other two — a DIN output carries sixteen
+channels and this rig uses three of them.
+"""
+
+CHORD_RANGE = [midi_notes.note_to_name(note)
+               for note in range(midi_notes.name_to_note("C3"), midi_notes.name_to_note("C5") + 1)]
+"""Two chromatic octaves, C3 to C5, sitting above the bass rather than across it.
+
+Chosen for chords rather than for a line: high enough that the Minitaur's C1-C3
+has room underneath, and two octaves because a chord wants vertical space where
+a bassline wants horizontal.  As with BASS_RANGE, this list is the whole of the
+decision and a different one is an edit here and nowhere else.
+"""
+
+CHORD_ROWS = list(reversed(CHORD_RANGE))
+"""Highest note first, so the grid reads the way a stave does."""
+
+CHORD_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in CHORD_RANGE}
+"""Row names to MIDI notes, exactly as the bass does it."""
+
+CHORD_VELOCITY = 100
+"""What a note is when it is first placed.
+
+The Matriarch receives note-on velocity and does not gate it behind a
+sensitivity parameter the way the Minitaur does, so this one is heard.
+"""
+
+CHORD_LENGTH = 2
+"""How long a chord note is when placed, in steps.
+
+Two rather than one because a chord held for a sixteenth is a stab, and the
+first thing anybody will want to hear from a paraphonic synth is something that
+rings.
+"""
+
+CHORD_VOICES = max(MATRIARCH.voice.voicing_modes)
+"""How many notes the grid lets sound at once: the ceiling, not a claim (#2172).
+
+A Matriarch's voicing is a front-panel switch *and* control change 94, and a
+person can move that switch at any moment with nothing on the wire to say so.
+So the grid enforces the most the instrument can do — never refusing a note it
+could have played — and the panel never displays a count it cannot verify.
+"""
+
+CHORD_VOICING = dict(zip(MATRIARCH.voice.voicing_modes,
+                         MATRIARCH.controls["paraphony_voice_mode"].values))
+"""Which band of control change 94 selects which voice count.
+
+**Inferred by pairing two ascending lists**, because the definition states the
+counts in `voicing_modes` and names the bands in the control, and does not say
+which names which.  Both are ordered lowest-first, so pairing them is sound —
+but it is an inference this file is making rather than a fact it was given, and
+the assertion below is what stops it selecting the wrong voicing in silence if
+either list ever changes shape.  Worth carrying in the definition itself one
+day (#2151).
+"""
+
+assert len(CHORD_VOICING) == len(MATRIARCH.voice.voicing_modes), (
+	"the Matriarch's voice counts and its CC 94 bands no longer pair up")
+
+_chord_range = MATRIARCH.voice.note_range
+
+if _chord_range is not None and not all(
+		_chord_range[0] <= midi_notes.name_to_note(row) <= _chord_range[1] for row in CHORD_RANGE):
+	raise ValueError(
+		f"CHORD_RANGE goes outside what a {MATRIARCH.model.name} can sound "
+		f"(notes {_chord_range[0]} to {_chord_range[1]})")
+"""The same check the bass gets, for the same reason (#2121)."""
+
+
 # --- The pattern the composition starts with ------------------------------
 
 OPENING_PATTERN = {
@@ -230,6 +308,7 @@ composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
 composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
+composition.data["chords"] = {}
 
 def _voice_count (definition: typing.Any, *, when_switchable: int | None = None) -> int | None:
 	"""How many notes a grid should let sound at once, from what a definition says.
@@ -402,6 +481,52 @@ def bass (p: typing.Any) -> None:
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
 
+_voicing_sent = False
+"""Whether this run has told the Matriarch which voicing to use yet."""
+
+
+@composition.pattern(
+	channel=CHORD_CHANNEL,
+	steps=STEPS,
+	step_duration=STEP_DURATION,
+	drum_note_map=CHORD_NOTE_MAP,
+	reschedule_lookahead=1 / 24,
+)
+def chords (p: typing.Any) -> None:
+	"""Play the chord pattern the panel holds, on an instrument told how to voice it.
+
+	**The voicing has to be asserted over MIDI or every chord arrives as one
+	note** (#2177), measured on this rig: with the front-panel switch on
+	two-voice and untouched, notes sent together sounded singly until control
+	change 94 was written, and sounded together immediately afterwards.  The
+	switch governs the keyboard; it does not govern how incoming MIDI notes are
+	allocated.
+
+	Sent once per run rather than every cycle.  Every cycle would be three bytes
+	a bar and would also survive somebody moving the switch mid-session — but it
+	would insist, continuously, on overriding a control the person can see and
+	may have reached for on purpose.  Whether the switch overrides a mode set
+	this way is not yet known and is #2177's open question; if it does, this is
+	the line that changes.
+	"""
+
+	global _voicing_sent
+
+	if not _voicing_sent:
+		voicing = MATRIARCH.controls["paraphony_voice_mode"]
+		p.cc(voicing.cc, voicing.value_for(CHORD_VOICING[CHORD_VOICES]))
+		_voicing_sent = True
+
+	# One position is one step here, unlike the bass: a chord wants to land on
+	# the beat rather than between two of them, and nothing yet asks otherwise.
+	for row, notes in composition.data["chords"].items():
+		for at, note in notes.items():
+			p.note(
+				row, beat=int(at) * STEP_DURATION,
+				velocity=note.get("velocity", CHORD_VELOCITY),
+				duration=note.get("length", CHORD_LENGTH) * STEP_DURATION)
+
+
 def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 	"""Put whatever a grid holds onto the pattern being built."""
 
@@ -495,6 +620,16 @@ link = superintendent.subsequence_adapter.AppLink(
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 			visible_rows=12),
+		superintendent.subsequence_adapter.NoteGrid(
+			composition, rows=CHORD_ROWS, steps=STEPS, beats=BEATS,
+			data_key="chords", name="chords", title="Matriarch — chords",
+			# The ceiling, through the guard that refuses to read an
+			# unestablished polyphony as an unlimited one (#2172, #2142).
+			voices=_voice_count(MATRIARCH, when_switchable=CHORD_VOICES),
+			pattern="chords",
+			about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
+			default_length=CHORD_LENGTH, default_velocity=CHORD_VELOCITY,
+			visible_rows=12),
 		superintendent.subsequence_adapter.Params(
 			composition,
 			parameters=[
@@ -520,6 +655,10 @@ link = superintendent.subsequence_adapter.AppLink(
 			"kit", parts=["grid", "bass"], title="Drums + bass"),
 		superintendent.subsequence_adapter.Page(
 			"minitaur", parts=["bass", "minitaur"], title="Minitaur"),
+		superintendent.subsequence_adapter.Page(
+			"chords", parts=["chords"], title="Chords"),
+		superintendent.subsequence_adapter.Page(
+			"band", parts=["chords", "bass", "grid"], title="Band"),
 		superintendent.subsequence_adapter.Page(
 			"generators", parts=["grid", "drum_recipe"], title="Generators"),
 		superintendent.subsequence_adapter.Page(
