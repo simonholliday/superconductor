@@ -1584,6 +1584,13 @@ class Recipe (Control):
 		self.composition = composition
 		self.pitches = list(pitches)
 		self.catalogue = offerable(catalogue, self.pitches, bounds)
+
+		self._building = False
+		"""Whether this stack is inside a build, so a route leading back here is
+		refused rather than recursed (#2230)."""
+
+		self._playing_route: str | None = None
+		"""Which route is in flight, so the refusal can name the cable."""
 		self.data_key = data_key
 		self.name = name
 		self.title = title
@@ -1907,6 +1914,43 @@ class Recipe (Control):
 		expensive thing on this path.
 		"""
 
+		# **A stack builds at most once a cycle** (#2230). A stack is drawn
+		# wherever its pattern is drawn (#2211), so a grid and the stack feeding
+		# it share a page and a cable has two plausible ends; dragged to the
+		# wrong one, the source's play function builds this very stack.
+		#
+		# The recursion is not the damage. `RecursionError` is an `Exception`,
+		# so the route below catches it and everything unwinds for a millisecond
+		# of work — but **every level reports what it landed**, which put 482
+		# `realised` frames on the link thread in one cycle and took the rig
+		# down. Refusing the nested *build* rather than the nested route matters:
+		# refusing the route alone still lets the re-entered stack replay its
+		# generators, so the part doubles quietly.
+		#
+		# It catches an indirect loop for the same reason — whichever stack is
+		# re-entered is the one holding the flag.
+		if self._building:
+			self._complain(
+				self.name,
+				f"the {self._playing_route!r} route leads back to this stack, "
+				f"which is already building; nothing can be routed in a circle")
+
+			return
+
+		self._building = True
+
+		try:
+			self._play_once(pattern)
+
+		finally:
+			# In a `finally` so one generator raising inside a routed stack
+			# cannot leave the flag set and silence this block for ever, with
+			# nothing on the glass to say why.
+			self._building = False
+
+	def _play_once (self, pattern: typing.Any) -> None:
+		"""The body of one build, called only when this stack is not already in one."""
+
 		before = self._reads(pattern) if self.pulses_per_beat else None
 
 		# **Read between the layers, not only around them.** A dot could say
@@ -1935,6 +1979,27 @@ class Recipe (Control):
 
 				if held is not None and not held.enabled:
 					continue
+
+				# **A route may not lead back to the stack playing it** (#2230).
+				# A stack is drawn wherever its pattern is drawn (#2211), so a
+				# grid and the stack feeding it share a page and a cable has two
+				# plausible ends. Dragged to the wrong one, the source's play
+				# function builds this very stack — and the recursion is not the
+				# damage. `RecursionError` is an `Exception`, so the line below
+				# catches it and everything unwinds for a millisecond of work;
+				# what costs is that *every level reports what it landed*, which
+				# put 482 `realised` frames on the link thread in one cycle and
+				# took the rig down.
+				#
+				# Guarding the call rather than the whole of `build` is what lets
+				# the complaint name the cable: the flag is set only while a
+				# route is in flight, so an ordinary first route passes and a
+				# re-entrant one does not. It catches an indirect loop for the
+				# same reason — whichever stack is re-entered still has its own
+				# route in flight.
+				# Remembered only so the refusal above can name the cable. A
+				# nested build knows it is nested and cannot know what led there.
+				self._playing_route = source
 
 				try:
 					play(pattern)

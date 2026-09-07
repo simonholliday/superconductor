@@ -6,6 +6,7 @@ with the same shape Subsequence's own has, which is what keeps this test honest
 about the rule it is testing.
 """
 
+import logging
 import typing
 
 import pytest
@@ -1076,3 +1077,109 @@ def test_a_note_grid_reports_a_note_the_last_step_could_not_hold () -> None:
 	cells = speaker.events[0][1]["cells"]
 
 	assert _weights(cells) == {"kick": {"95": 70}}, "a note past the bar was drawn"
+
+
+def test_a_route_that_leads_back_to_its_own_stack_plays_once () -> None:
+	"""#2230, and it took the rig down.
+
+	A stack is drawn wherever its pattern is drawn (#2211), so a grid and the
+	stack that feeds it sit on one page and a cable has two plausible ends.
+	Dragged to the wrong one, the route's play function builds the very stack
+	that is playing it.
+
+	**The recursion is not the damage.**  `RecursionError` is an `Exception`, so
+	`_complain` catches it and every level unwinds — a millisecond of work.  What
+	costs is that each level *reports what it landed*, so one cycle emitted 498
+	`realised` events, and the link loop drowned in frames scheduled from the
+	clock thread (#2242).
+
+	Asserted on the event count rather than on the hang, because the count is
+	the thing that can be proved here: the offline harness never reproduced a
+	process actually becoming unresponsive.
+	"""
+
+	grid = adapter.StepGrid(Composition(), rows=["kick"], steps=16, beats=4, name="shared")
+	speaker = Speaker({"shared": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="shared", pulses_per_beat=24, name="shared_recipe")
+	recipe.attach(typing.cast(typing.Any, speaker))
+
+	# Assigned after construction because the play function has to name the
+	# recipe, which is exactly the knot the composition ties: `_play_shared`
+	# runs `shared_recipe.build(p)`, and the recipe declares `shared` a source.
+	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
+	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+
+	recipe.build(Builder())
+
+	assert len(speaker.events) == 1, (
+		f"a looping route reported {len(speaker.events)} times in one cycle")
+
+
+def test_a_stack_already_building_says_so_rather_than_failing_silently (
+	caplog: pytest.LogCaptureFixture,
+) -> None:
+	"""The guard has to be audible, because the cable looks connected.
+
+	A route refused with nothing said is a cable a person can see, drawn between
+	two blocks, carrying nothing — and #2164's whole lesson is that the one
+	symptom of a silent fault is somebody reporting the feature as broken.
+	"""
+
+	grid = adapter.StepGrid(Composition(), rows=["kick"], steps=16, beats=4, name="shared")
+	speaker = Speaker({"shared": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="shared", pulses_per_beat=24, name="shared_recipe")
+	recipe.attach(typing.cast(typing.Any, speaker))
+
+	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
+	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+
+	with caplog.at_level(logging.WARNING, logger="superintendent.subsequence_adapter"):
+		recipe.build(Builder())
+
+	said = " ".join(record.getMessage() for record in caplog.records)
+
+	assert said, "a refused route said nothing at all"
+
+	# **Named for what it is, not for how it failed.**  Before the guard this
+	# complained about a recursion limit, which is true and useless: a person
+	# reading it on the glass has to work out that the number describes their
+	# cable.  Asserting the wording is what makes this test fail against the
+	# previous commit rather than passing on the `RecursionError` by accident.
+	assert "recursion" not in said.lower(), f"complained about the mechanism: {said}"
+	assert "shared" in said, f"the complaint did not name the route: {said}"
+
+
+def test_a_guard_that_has_been_tripped_does_not_stay_tripped () -> None:
+	"""The next cycle must play normally, or one bad drag silences a part for ever.
+
+	`try`/`finally` rather than clearing at the end of the body: a generator that
+	raises inside the stack would otherwise leave the flag set, and the block
+	would go quiet with nothing to say why.
+	"""
+
+	grid = adapter.StepGrid(Composition(), rows=["kick"], steps=16, beats=4, name="shared")
+	speaker = Speaker({"shared": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="shared", pulses_per_beat=24, name="shared_recipe")
+	recipe.attach(typing.cast(typing.Any, speaker))
+	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
+
+	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.build(Builder())
+
+	# The cable is unplugged and an ordinary generator put in its place.
+	recipe.apply(["layers"], [{"id": "b", "generator": "euclidean", "params": {}}])
+
+	builder = Builder()
+	recipe.build(builder)
+
+	assert [name for name, _ in builder.calls] == ["euclidean"], (
+		"the stack stayed shut after the loop was removed")

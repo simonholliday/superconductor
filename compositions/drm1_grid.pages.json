@@ -1,29 +1,29 @@
 {
 	"band": [
 		{
+			"name": "grid",
+			"x": 14,
+			"y": 2
+		},
+		{
+			"name": "drum_recipe/lmtroifzexvg",
+			"x": 3,
+			"y": 6
+		},
+		{
+			"name": "bass_recipe/lmtroefvmivc",
+			"x": 20,
+			"y": 19
+		},
+		{
 			"name": "chords",
-			"x": 83,
+			"x": 70,
 			"y": 4
 		},
 		{
-			"name": "drum_recipe/lmtrhkx74i58",
-			"x": 14,
-			"y": 8
-		},
-		{
 			"name": "bass",
-			"x": 55,
-			"y": 5
-		},
-		{
-			"name": "bass_recipe/lmtria9uu7m3",
-			"x": 42,
-			"y": 11
-		},
-		{
-			"name": "grid",
-			"x": 48,
-			"y": 39
+			"x": 36,
+			"y": 7
 		}
 	],
 	"bass": [
@@ -36,6 +36,28 @@
 			"name": "bass_recipe/watch1",
 			"x": 26,
 			"y": 13
+		}
+	],
+	"drums": [
+		{
+			"name": "grid",
+			"x": 44,
+			"y": 1
+		},
+		{
+			"name": "drum_recipe/lmtrmfricy9d",
+			"x": 19,
+			"y": 1
+		},
+		{
+			"name": "drum_recipe/lmtrmiesjrto",
+			"x": 29,
+			"y": 6
+		},
+		{
+			"name": "shared",
+			"x": 16,
+			"y": 22
 		}
 	]
 }
