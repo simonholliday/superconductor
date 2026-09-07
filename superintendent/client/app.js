@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.17.0";
+const CONTRACT = "1.18.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1743,6 +1743,33 @@ function Setting ({ field, held, onSet }) {
 		</div>`;
 }
 
+/* **A heading appears when the section changes, and never otherwise** (#2201).
+ *
+ * An instrument with six settings does not want them and one with thirty-six is
+ * unreadable without them, so the panel draws what the app declared rather than
+ * deciding: fields carrying no `group` produce no headings at all, which is
+ * every settings control written before there was a field for it.
+ *
+ * It reads the *sequence* rather than sorting by group, deliberately. The order
+ * is the composition's — it is the order the settings appear on the instrument,
+ * which is the order somebody looking for one will expect — and sorting would
+ * take that away to enforce a tidiness nobody asked for. A composition that
+ * interleaves two sections gets the heading twice, which is a true report of
+ * what it declared. */
+function headed (fields) {
+	const out = [];
+	let standing = null;
+
+	for (const field of fields) {
+		if (field.group && field.group !== standing) out.push({ heading: field.group });
+
+		standing = field.group || null;
+		out.push({ field });
+	}
+
+	return out;
+}
+
 function Params ({ name, fields, values, cell, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
@@ -1750,18 +1777,21 @@ function Params ({ name, fields, values, cell, onSet }) {
 
 	return html`
 		<div class="grid params" style=${style}>
-			${fields.map((field) => [
-				html`
-					<div class="row-label" key=${`label-${field.name}`}>
-						${field.label || field.name}
-					</div>`,
-				html`
-					<div class="setting" key=${field.name} data-field=${field.name}
-						style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-						<${Setting} field=${field} held=${values[field.name]}
-							onSet=${(value) => onSet(`${name}/${field.name}`, value)} />
-					</div>`,
-			]).flat()}
+			${headed(fields).map((one) => one.heading
+				? html`
+					<div class="group" key=${`group-${one.heading}`}>${one.heading}</div>`
+				: [
+					html`
+						<div class="row-label" key=${`label-${one.field.name}`}>
+							${one.field.label || one.field.name}
+						</div>`,
+					html`
+						<div class="setting" key=${one.field.name} data-field=${one.field.name}
+							style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+							<${Setting} field=${one.field} held=${values[one.field.name]}
+								onSet=${(value) => onSet(`${name}/${one.field.name}`, value)} />
+						</div>`,
+				]).flat()}
 		</div>`;
 }
 
@@ -1938,6 +1968,11 @@ const ICONS = {
 	add: "M5 12h14M12 5v14",
 	send: "M5 12h14M13 6l6 6-6 6",
 	clear: "M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
+	/* A fader bank, not a cog. A cog is a computer's word for settings; this
+	   panel is drawn as equipment, and what an instrument's settings look like
+	   is three faders at three different positions. Simon asked for exactly
+	   this and asked for the cog to be avoided by name. */
+	settings: "M6 4v16M12 4v16M18 4v16M3 9h6M9 15h6M15 7h6",
 	play: "m7 4 13 8-13 8z",
 	pause: "M7 4h3.5v16H7zM13.5 4H17v16h-3.5z",
 };
@@ -1989,8 +2024,8 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet }) {
-	if (!onAdd && !onSend && !onClear && onLive === undefined) return null;
+function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSettings, settingsOpen }) {
+	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings) return null;
 
 	return html`
 		<footer class="part-foot">
@@ -2010,6 +2045,22 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet }) {
 			     alike. It is "add generator" now: a cable dragged between two
 			     blocks is how a route is made, so this only ever adds the one
 			     thing. */ ""}
+			${/* **The instrument's own settings, latched rather than opened**
+			     (#2201). It is a latch and is drawn as one — lit while the panel
+			     is showing — because a second tap puts it away and a button that
+			     only ever opens would need a different word for that.
+
+			     Icon alone, and it is the one control here without a word on it:
+			     the settings are a block with a title of their own and the icon
+			     is what says where they came from, so the label would be the
+			     third place the same name is written. */ ""}
+			${onSettings && html`
+				<button
+					class=${`offer settings ${settingsOpen ? "chosen" : ""}`}
+					aria-pressed=${settingsOpen ? "true" : "false"}
+					title=${settingsOpen ? "put the settings away" : "the instrument's settings"}
+					onPointerDown=${(event) => { event.preventDefault(); onSettings(); }}
+				><${Icon} of="settings" /></button>`}
 			${onAdd && html`
 				<button
 					class="offer add"
@@ -3644,6 +3695,16 @@ function Panel () {
 	const [chosen, setChosen] = useState(rememberedPage);
 	const [locked, setLocked] = useState(rememberedLock);
 	const [dragging, setDragging] = useState(false);
+	/* **Which instrument settings are showing** (#2201). A settings control that
+	   names the pattern it configures is put away until that pattern's own latch
+	   asks for it — Simon: it should not default open.
+
+	   Held here and deliberately not remembered. A thing that is closed until you
+	   ask for it has nothing worth persisting: restoring it across a reload would
+	   be the panel deciding you still wanted it open from yesterday, which is the
+	   behaviour being removed. */
+	const [showing, setShowing] = useState(() => new Set());
+
 	const [adding, setAdding] = useState(null);
 	const [clearing, setClearing] = useState(null);
 	const [sending, setSending] = useState(null);
@@ -4066,6 +4127,19 @@ function Panel () {
 	 * deliberate. A starting position is worked out by flowing the list left to
 	 * right, so where a block lands depends on everything before it; adding a
 	 * generator appends, and appending moves nothing that is already down. */
+	/* Which settings belong to which pattern, read from what the apps declared
+	   (#2201). Built the once rather than searched per block, and built from the
+	   *settings* side because that is the end that knows: a pattern says nothing
+	   about its instrument, which is the point — it is the composition that knows
+	   a Minitaur is on the other end of that grid, and it says so there. */
+	const settingsFor = {};
+
+	for (const name of Object.keys(controls)) {
+		const belongsTo = kindOf(name) === "params" && controls[name].configures;
+
+		if (belongsTo) settingsFor[belongsTo] = name;
+	}
+
 	const windows = [];
 	const contributions = [];
 	const routes = [];
@@ -4174,9 +4248,35 @@ function Panel () {
 		}
 
 		if (kindOf(name) === "params") {
+			/* Headings take a row each, so the fit has to count them: a block
+			   solved for its fields alone comes out short by one row per
+			   section, and on a thirty-six control panel that is six. */
+			const fields = controls[name].fields || [];
+
+			const belongsTo = controls[name].configures || null;
+
+			/* **Out of the way until asked for — but never where nothing could
+			   ask.**
+			 *
+			 * The latch is on the pattern's own footer, so settings are only
+			 * hideable on a page that also carries that pattern. A page holding
+			 * the settings alone is a page somebody made to look at settings,
+			 * and hiding them there would put a block behind a control that is
+			 * not on the glass: no latch, no way back, and nothing saying why
+			 * the page is empty.
+			 *
+			 * A control naming no pattern at all is the same case seen from the
+			 * other side, and stands as its own block — which is what every
+			 * settings control did before there was a field for this, and what a
+			 * panel too old to read the field still does. */
+			const latchable = belongsTo && gridNames.includes(belongsTo);
+
+			if (latchable && !showing.has(name)) continue;
+
 			windows.push({ key: name, control: name, title: named(name),
 			               about: controls[name].about || [],
-			               rows: Math.max(1, (controls[name].fields || []).length),
+			               configures: belongsTo,
+			               rows: Math.max(1, headed(fields).length),
 			               steps: PARAM_CELLS });
 			continue;
 		}
@@ -4638,8 +4738,23 @@ function Panel () {
 					onHold=${setDragging}
 					onSettled=${keep}
 					onTouch=${setTouched}
-					onClose=${one.layer ? () => request(`${one.control}/layers`,
-						one.layers.filter((held) => held.id !== one.layer.id)) : null}
+					${/* A generator's close takes it out of the stack, which is a
+					     change to the music. A settings block's close only puts
+					     it away — the settings themselves are untouched, and the
+					     latch on its pattern brings it back. Two closes, two
+					     meanings, and the same corner of the same title bar,
+					     which is where forty years of windows have put it. */ ""}
+					onClose=${one.layer
+						? () => request(`${one.control}/layers`,
+							one.layers.filter((held) => held.id !== one.layer.id))
+						: one.configures
+						? () => setShowing((was) => {
+							const now = new Set(was);
+							now.delete(one.key);
+
+							return now;
+						})
+						: null}
 					footer=${html`
 						<${Footer}
 							outlet=${one.sends ? {
@@ -4658,6 +4773,19 @@ function Panel () {
 							adds="add generator"
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing(one.control) : null}
+							onSettings=${settingsFor[one.control]
+								? () => setShowing((was) => {
+									const now = new Set(was);
+									const which = settingsFor[one.control];
+
+									if (now.has(which)) now.delete(which);
+									else now.add(which);
+
+									return now;
+								})
+								: null}
+							settingsOpen=${Boolean(settingsFor[one.control]
+								&& showing.has(settingsFor[one.control]))}
 							live=${one.live}
 							onLive=${one.clear
 								? (want) => request(`${one.control}/enabled`, want)

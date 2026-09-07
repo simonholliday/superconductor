@@ -5626,3 +5626,90 @@ def test_every_block_measures_a_whole_number_of_lattice_cells (panel: typing.Any
 		}""", page)
 
 	assert adrift == [], "\n".join(adrift)
+
+
+def test_an_instruments_settings_are_put_away_until_the_pattern_asks (
+	panel: typing.Any) -> None:
+	"""#2201, and Simon's requirement in his own words: a settings panel should
+	not default open.
+
+	The Matriarch's voicing stood beside its pattern for ever, on every page that
+	carried it, whether or not anybody was setting the instrument up.  A settings
+	control that names the pattern it configures is now behind a latch on that
+	pattern's own footer: a tap reveals it, a second tap puts it away, and it has
+	a close of its own.
+
+	**The latch is on the pattern and the block is the instrument's**, which is
+	what makes the relationship worth declaring rather than inferring: nothing
+	about a grid says which instrument is on the other end of it, and only the
+	composition knows (#1465).
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="bass"]', timeout=5_000)
+	_settled(panel)
+
+	settings = panel.locator('.part[data-part="moog"]')
+	latch = panel.locator('.part[data-part="bass"] .part-foot button.settings')
+
+	assert settings.count() == 0, "the settings were open before anybody asked"
+	assert latch.count() == 1, "the pattern offers no way to reach its instrument"
+
+	latch.click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+
+	assert settings.count() == 1
+	assert latch.get_attribute("aria-pressed") == "true", (
+		"the latch does not say it is holding something open")
+
+	# A second tap on the latch puts it away, which is what makes it a latch
+	# rather than a button that only ever opens.
+	latch.click()
+	playwright_api.expect(settings).to_have_count(0, timeout=5_000)
+	assert latch.get_attribute("aria-pressed") == "false"
+
+	# And its own close does the same, without touching the settings themselves.
+	latch.click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+	panel.locator('.part[data-part="moog"] .part-title button').click()
+	playwright_api.expect(settings).to_have_count(0, timeout=5_000)
+
+
+def test_a_settings_panel_is_divided_by_the_sections_its_app_named (
+	panel: typing.Any) -> None:
+	"""Simon asked for all thirty-six of the Matriarch's controls, and said why:
+	*"not because I'll necessarily need all 36, but I want to see how we handle a
+	busy interface, and use it as an example to set some conventions."*
+
+	So the heading is the deliverable rather than the controls.  It appears when
+	the section changes and never otherwise — an instrument with six settings does
+	not want them and one with thirty-six is unreadable without them, and the app
+	is what decides which it is by declaring the sections or not.
+
+	**Read in sequence rather than sorted**, because the order is the
+	composition's: it is the order the settings appear on the instrument, which is
+	the order somebody looking for one expects.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="bass"]', timeout=5_000)
+	panel.locator('.part[data-part="bass"] .part-foot button.settings').click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+
+	drawn = panel.eval_on_selector_all(
+		'.part[data-part="moog"] .grid.params > *',
+		"""els => els.map((one) => [one.className.split(" ")[0],
+			one.dataset.field || one.textContent.trim()])""")
+
+	headings = [what for kind, what in drawn if kind == "group"]
+
+	assert headings == ["Glide"], (
+		f"one heading for the one section this app names, and once: {drawn}")
+
+	# It comes before the fields it heads, and the ungrouped fields that follow
+	# it get no heading of their own — a panel does not invent a section for
+	# something the app did not put in one.
+	order = [what for kind, what in drawn if kind in ("group", "setting")]
+
+	assert order[0] == "Glide", f"the heading is not at the front of its section: {order}"
+	assert "shape" in order and "voicing" in order, order

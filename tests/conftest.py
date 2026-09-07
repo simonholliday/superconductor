@@ -39,9 +39,15 @@ CONTROLS: dict[str, typing.Any] = {
 	         "voices": None, "divisions": 4, "default_length": 4, "default_velocity": 100,
 	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine"},
 	"moog": {"type": "params", "title": "Moog",
+	         # **Belongs to the bass grid** (#2201), so it is put away wherever
+	         # that grid is drawn and stands on its own wherever it is not —
+	         # which is what the Moog page is for, and is how both halves of
+	         # the rule get drawn without a second control to keep in step.
+	         "configures": "bass",
 	         "fields": [
-	             {"name": "glide", "kind": "switch", "label": "Glide"},
-	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127, "step": 1},
+	             {"name": "glide", "kind": "switch", "label": "Glide", "group": "Glide"},
+	             {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127,
+	              "step": 1, "group": "Glide"},
 	             {"name": "shape", "kind": "choice", "label": "Shape",
 	              # Lower-cased on purpose, because that is what a composition
 	              # reading an instrument definition now sends: the states are
@@ -99,7 +105,7 @@ PAGES: list[dict[str, typing.Any]] = [
 	# than `PAGE_BUTTONS`, and the row of named buttons gives way to previous
 	# and next — which is correct behaviour and takes every test that reaches a
 	# page by its name down with it.
-	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
+	{"id": "bass", "title": "Bass", "parts": ["bass", "fine", "moog"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
 	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack"]},
 	{"id": "alone", "title": "Stack alone", "parts": ["stack"]},

@@ -277,6 +277,80 @@ day (#2151).
 assert len(CHORD_VOICING) == len(MATRIARCH.voice.voicing_modes), (
 	"the Matriarch's voice counts and its CC 94 bands no longer pair up")
 
+
+CHORD_SETTINGS: list[tuple[str, str, str, typing.Any, str]] = [
+	# on the glass        in the definition           on the label          opens at   section
+	("voices",            "paraphony_voice_mode",     "Paraphony",           None,     "Keyboard"),
+	("kb_octave",         "kb_octave",                "Octave",              "zero",   "Keyboard"),
+	("multi_trig",        "multi_trig",               "Multi trigger",       None,     "Keyboard"),
+	("sustain",           "sustain_pedal",            "Sustain",             None,     "Keyboard"),
+
+	("osc_1_octave",      "osc_1_octave",             "Osc 1 octave",        None,     "Oscillators"),
+	("osc_2_octave",      "osc_2_octave",             "Osc 2 octave",        None,     "Oscillators"),
+	("osc_2_freq",        "osc_2_frequency",          "Osc 2 frequency",     64,       "Oscillators"),
+	("osc_2_sync",        "osc_2_sync",               "Osc 2 sync",          None,     "Oscillators"),
+	("osc_3_octave",      "osc_3_octave",             "Osc 3 octave",        None,     "Oscillators"),
+	("osc_3_freq",        "osc_3_frequency",          "Osc 3 frequency",     64,       "Oscillators"),
+	("osc_3_sync",        "osc_3_sync",               "Osc 3 sync",          None,     "Oscillators"),
+	("osc_4_octave",      "osc_4_octave",             "Osc 4 octave",        None,     "Oscillators"),
+	("osc_4_freq",        "osc_4_frequency",          "Osc 4 frequency",     64,       "Oscillators"),
+	("osc_4_sync",        "osc_4_sync",               "Osc 4 sync",          None,     "Oscillators"),
+	("hard_sync",         "hard_sync_enable",         "Hard sync",           None,     "Oscillators"),
+
+	("glide",             "glide_on",                 "Glide",               None,     "Glide"),
+	("glide_time",        "glide_time",               "Glide time",          24,       "Glide"),
+	("glide_type",        "glide_type",               "Glide type",          "lcr",    "Glide"),
+	("gated_glide",       "gated_glide",              "Gated glide",         None,     "Glide"),
+	("legato_glide",      "legato_glide",             "Legato glide",        None,     "Glide"),
+
+	("arp",               "arp_play",                 "Arpeggiator",         None,     "Arpeggiator"),
+	("arp_latch",         "arp_latch",                "Latch",               None,     "Arpeggiator"),
+	("arp_mode",          "arp_mode",                 "Mode",                0,        "Arpeggiator"),
+	("arp_pattern",       "arp_pattern",              "Pattern",             0,        "Arpeggiator"),
+	("arp_rate",          "arp_rate",                 "Rate",                64,       "Arpeggiator"),
+	("arp_range",         "arp_range",                "Range",               0,        "Arpeggiator"),
+	("arp_swing",         "arp_swing",                "Swing",               64,       "Arpeggiator"),
+	("arp_gate",          "arp_gate_length",          "Gate length",         64,       "Arpeggiator"),
+
+	("delay_time",        "delay_time",               "Time",                64,       "Delay"),
+	("delay_spacing",     "delay_spacing",            "Spacing",             64,       "Delay"),
+	("delay_sync",        "delay_sync",               "Sync",                None,     "Delay"),
+	("delay_ping_pong",   "delay_ping_pong",          "Ping-pong",           None,     "Delay"),
+
+	("mod_wheel",         "mod_wheel",                "Mod wheel",           0,        "Modulation"),
+	("mod_rate",          "mod_rate",                 "Mod rate",            64,       "Modulation"),
+	("lfo_polarity",      "square_lfo_polarity",      "Square LFO",          "bipolar", "Modulation"),
+	("noise_cutoff",      "noise_filter_cutoff",      "Noise filter",        64,       "Modulation"),
+]
+"""All thirty-six of the Matriarch's controls, in six sections.
+
+**Everything, on purpose, and the point is the sections rather than the
+controls.**  Simon, 2026-09-07: *"It's not because I'll necessarily need all 36,
+but I want to see how we handle a busy interface, and use it as an example to set
+some conventions which we can use for future panels."*  So this is a stress test
+that happens to be a real instrument.
+
+Five columns where the Minitaur's table has four, and the fifth is the section on
+the instrument's own front panel.  **Those words are this file's**, like every
+other label here: a Matriarch has an *Arpeggiator* because Moog printed that on
+it, and neither the package nor the definition knows that (#1465).
+
+The order is the order they are drawn in, and it is the instrument's rather than
+the definition's — which is by control-change number and is meaningless to a
+hand.  Oscillator 2's octave, frequency and sync sit together here because that
+is where they sit on the panel, three rows apart on the Matriarch and thirty CC
+numbers apart in the file.
+
+``voices`` is the exception and is **not drawn from this table**: it is an
+`action` rather than a setting, because a Matriarch's voicing is a front-panel
+switch as well as CC 94 and whichever moved last wins (#2177, #2172).  It is
+listed here so the table is a complete account of the instrument, and skipped
+where the parameters are built.
+"""
+
+CHORD_CONTROLS = {panel: MATRIARCH.controls[named] for panel, named, _, _, _ in CHORD_SETTINGS}
+"""Each panel name against what the definition says that control is."""
+
 _chord_range = MATRIARCH.voice.note_range
 
 if _chord_range is not None and not all(
@@ -399,6 +473,8 @@ def _panel_parameter (
 	named: str,
 	label: str,
 	default: typing.Any,
+	group: str | None = None,
+	instrument: typing.Any = None,
 ) -> superintendent.subsequence_adapter.Parameter:
 	"""One of the instrument's controls, as something the panel knows how to draw.
 
@@ -406,35 +482,51 @@ def _panel_parameter (
 	**A kind is derived from the bands rather than declared** — no values means a
 	continuous control, two a switch, three or more a choice — so a corrected band
 	table changes the drawing without this file being touched at all.
+
+	``group`` is the section of the instrument's front panel this control sits in,
+	and is a **heading rather than a structure** — the settings stay one flat list
+	in the order given here.  It is optional because a panel of nine does not need
+	one and a panel of thirty-six is unreadable without one, which is exactly the
+	difference between the two instruments on this rig.
+
+	The words are this file's, like every other label: a Matriarch has an
+	*Arpeggiator* because Moog put that word on the panel, and neither the package
+	nor the definition knows that.
 	"""
 
-	control = MINITAUR.controls[named]
+	control = (instrument or MINITAUR).controls[named]
 
 	if control.kind == pymididefs.instruments.CHOICE:
 		return superintendent.subsequence_adapter.Parameter(
-			panel, "choice", label=label, default=default,
+			panel, "choice", label=label, default=default, group=group,
 			options=[(state, state.replace("_", " ")) for state in control.values])
 
 	if control.kind == pymididefs.instruments.SWITCH:
 		return superintendent.subsequence_adapter.Parameter(
-			panel, "switch", label=label, default=default)
+			panel, "switch", label=label, default=default, group=group)
 
 	low, high = control.range
 
 	return superintendent.subsequence_adapter.Parameter(
-		panel, "number", label=label, default=default, minimum=low, maximum=high)
+		panel, "number", label=label, default=default, group=group,
+		minimum=low, maximum=high)
 
 
-def _cc_value (name: str, value: typing.Any) -> int:
-	"""What number the Minitaur wants for a setting the panel expressed in words.
+def _cc_value (name: str, value: typing.Any,
+               controls: dict[str, typing.Any] | None = None) -> int:
+	"""What number the instrument wants for a setting the panel expressed in words.
 
 	The definition computes the **middle** of each band rather than its edge, so a
 	value that drifts by one does not become a different setting.  Carried by hand
 	here until #2142, and by hand they were approximate: glide type went out as 0,
 	64 and 110 where the centres are 21, 63 and 106.
+
+	``controls`` is which instrument's, defaulting to the Minitaur's because it
+	was the only one when this was written.  The band arithmetic is the
+	definition's and is the same for every instrument; only the table changes.
 	"""
 
-	control = BASS_CONTROLS.get(name)
+	control = (BASS_CONTROLS if controls is None else controls).get(name)
 
 	if control is None:
 		# Local control is the specification's own switch and takes 0 or 127
@@ -552,6 +644,31 @@ def send_voicing (name: str, value: typing.Any) -> None:
 
 	composition.trigger(
 		lambda p, cc=voicing.cc, amount=voicing.value_for(value): p.cc(cc, amount),
+		channel=CHORD_CHANNEL, beats=1 / 24, quantize=0)
+
+
+def send_chord_setting (name: str, value: typing.Any) -> None:
+	"""Send one of the Matriarch's settings, or assert its voicing.
+
+	The same shape as `send_setting` for the bass, on the Matriarch's channel and
+	against the Matriarch's table — the band arithmetic belongs to the definition
+	and is the same for both, so only the table changes.
+
+	**Voicing is the one that is not a setting** and is routed away here.  It is
+	an `action` because a Matriarch's paraphony is a front-panel switch as well as
+	CC 94, whichever moved last wins, and nothing can read which (#2177) — so it
+	is asserted and never displayed, and it holds no value to send.
+	"""
+
+	if name == "voicing":
+		send_voicing(name, value)
+
+		return
+
+	control = CHORD_CONTROLS[name]
+
+	composition.trigger(
+		lambda p, cc=control.cc, amount=_cc_value(name, value, CHORD_CONTROLS): p.cc(cc, amount),
 		channel=CHORD_CHANNEL, beats=1 / 24, quantize=0)
 
 
@@ -726,16 +843,24 @@ link = superintendent.subsequence_adapter.AppLink(
 			composition,
 			parameters=[
 				superintendent.subsequence_adapter.Parameter(
-					"voicing", "action", label="Set voicing",
+					"voicing", "action", label="Set voicing", group="Keyboard",
 					# Lowest first, and labelled with the count rather than the
 					# band name: "1" is what is written beside the switch on the
 					# instrument, and `one_voice` is not.
 					options=[(band, str(count))
 					         for count, band in sorted(CHORD_VOICING.items())]),
+
+				# Every other control the definition knows, in the instrument's
+				# own order and under the instrument's own section names.  The
+				# voicing above is skipped here because it is an action rather
+				# than a setting and is built by hand.
+				*(_panel_parameter(*setting, instrument=MATRIARCH)
+				  for setting in CHORD_SETTINGS if setting[0] != "voices"),
 			],
-			data_key="matriarch", name="matriarch", title="Matriarch — voicing",
+			data_key="matriarch", name="matriarch", title="Matriarch — settings",
 			about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
-			on_change=send_voicing),
+			configures="chords",
+			on_change=send_chord_setting),
 		superintendent.subsequence_adapter.Params(
 			composition,
 			parameters=[
@@ -748,6 +873,10 @@ link = superintendent.subsequence_adapter.AppLink(
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
 			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
+			# **No sections, and that is the demonstration.** Nine controls read
+			# as a list; thirty-six do not. A heading is offered where it earns
+			# its place and left out where it would be ceremony.
+			configures="bass",
 			on_change=send_setting),
 		drum_recipe,
 		superintendent.subsequence_adapter.Transport(composition),

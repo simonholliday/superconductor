@@ -984,8 +984,21 @@ class Parameter:
 		step: float = 1,
 		options: collections.abc.Sequence[tuple[str, str]] | None = None,
 		default: typing.Any = None,
+		group: str | None = None,
 	) -> None:
-		"""Describe one setting: what it is called, what shape it is, what it may be."""
+		"""Describe one setting: what it is called, what shape it is, what it may be.
+
+		``group`` is the section of the instrument this belongs to — *Oscillators*,
+		*Arpeggiator*, *Delay*.  It is a **heading, not a structure**: the fields
+		stay one flat list in the order the composition gave them, and a panel is
+		free to draw the headings or ignore them.  A settings panel of six controls
+		does not need them and a panel of thirty-six is unreadable without them,
+		and neither of those is this package's business to decide.
+
+		The words are the composition's, like every other label here.  A Matriarch
+		has an *Arpeggiator* because Moog put that word on the panel, and nothing
+		in this package knows that (#1465).
+		"""
 
 		self.name = name
 		self.kind = kind
@@ -995,12 +1008,16 @@ class Parameter:
 		self.step = step
 		self.options = list(options or [])
 		self.default = default
+		self.group = group
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to draw this and to know what it may ask."""
 
 		declared: dict[str, typing.Any] = {
 			"name": self.name, "kind": self.kind, "label": self.label or self.name}
+
+		if self.group is not None:
+			declared["group"] = self.group
 
 		if self.kind in ("number", "range"):
 			declared["step"] = self.step
@@ -1180,14 +1197,29 @@ class Params (Control):
 		title: str | None = None,
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		on_change: collections.abc.Callable[[str, typing.Any], None] | None = None,
+		configures: str | None = None,
 	) -> None:
-		"""Describe the settings to offer, and how the composition hears about one."""
+		"""Describe the settings to offer, and how the composition hears about one.
+
+		``configures`` names the control these settings belong to — the pattern
+		that plays the instrument they set.  It is what lets a panel keep them out
+		of the way until they are asked for, behind a control on that pattern's
+		own block, rather than standing a settings panel beside every pattern for
+		ever (#2201).
+
+		**It is a claim about this rig and not a structure.**  Nothing here checks
+		that the named control exists: an app is the authority on its own
+		declaration, and a panel that cannot find the named pattern simply draws
+		these settings as a block of their own, which is what every settings
+		control did before the field existed.
+		"""
 
 		self.composition = composition
 		self.parameters = {parameter.name: parameter for parameter in parameters}
 		self.data_key = data_key
 		self.name = name
 		self.title = title
+		self.configures = configures
 		self.about = list(about)
 		self.on_change = on_change
 
@@ -1217,6 +1249,9 @@ class Params (Control):
 		declared: dict[str, typing.Any] = {
 			"type": "params",
 			"fields": [parameter.declaration() for parameter in self.parameters.values()]}
+
+		if self.configures is not None:
+			declared["configures"] = self.configures
 
 		declared.update(self.said())
 

@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.17.0"
+CONTRACT_VERSION = "1.18.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,18 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.18.0 lets a settings control say what it belongs to and how it is divided up.
+A ``params`` control may declare ``configures``, naming the pattern whose
+instrument these settings are; a field in one may declare ``group``, naming the
+section of the instrument it sits in.  Both are additive and both are for the
+same problem: **a settings panel with thirty-six controls on it**, which is
+unreadable ungrouped and cannot be left standing beside its pattern for ever.
+
+Neither means anything to the service, which forwards a control's declaration
+whole.  An app that sends neither, and a panel that reads neither, behave exactly
+as they did — a settings control with no ``configures`` is a block of its own, as
+every one of them was, and fields with no ``group`` are one flat list.
 
 1.17.0 lets a note grid be transposed.  It declares ``transpose_range`` and its
 state carries ``transpose`` in semitones, plus two fields the app alone can fill:

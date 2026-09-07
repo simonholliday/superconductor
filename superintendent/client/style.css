@@ -1301,6 +1301,40 @@ html, body {
 	min-width: min-content;
 }
 
+/* The name of a section of an instrument, across the whole width of a settings
+ * block (#2201).
+ *
+ * **A mark, not a target**: no surface, no edge, nothing to press. It is
+ * lettering on the equipment, so it takes the panel face like the labels under
+ * it, and it is quieter than they are — a heading is read once on the way to
+ * finding a control, and the control is the thing.
+ *
+ * The rule under it is what actually separates the sections; the word alone left
+ * thirty-six rows reading as one list with occasional bold in it. It is `--edge`
+ * rather than `--edge-strong` because it divides rather than saying anything
+ * about state, which is the whole distinction between those two tokens. */
+.grid.params .group {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: end;
+
+	font-family: var(--face-panel);
+	font-size: var(--type-note);
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink-faint);
+
+	border-bottom: 1px solid var(--edge);
+	padding-bottom: 0.15rem;
+
+	/* Room above but not below: a heading belongs to what follows it, and equal
+	   space either side makes it float between two sections instead. The first
+	   one has nothing above it to be parted from. */
+	margin-top: 0.5rem;
+}
+
+.grid.params .group:first-child { margin-top: 0; }
+
 .row-label {
 	display: flex;
 	align-items: center;
