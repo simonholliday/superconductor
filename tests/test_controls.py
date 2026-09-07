@@ -522,3 +522,66 @@ def test_a_kind_of_contribution_this_version_does_not_know_is_refused () -> None
 		superintendent.controls.apply_change(
 			{}, STACK, "recipe/layers",
 			[{"id": "a", "kind": "invented", "generator": "euclidean"}])
+
+
+# --- a field this version does not understand (#2128) -----------------------
+
+def test_a_layer_keeps_a_field_this_version_has_never_heard_of () -> None:
+	"""**The promise the multi-app work rests on** (#2126, #2127).
+
+	"Add a feature and it appears on the panel with nobody editing anything" was
+	true of an app's catalogue and false of its state: the service rebuilt a
+	layer from a fixed list of keys, so a field Subsample or Substation added was
+	dropped here — and dropped is invisible until a panel reloads, because until
+	then it is reading the `changed` frame, which carries what the app said.
+	"""
+
+	state: dict[str, typing.Any] = {}
+	layer = {**_one_layer()[0], "swing": 0.6, "notes_played": ["a", "b"]}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", [layer])
+
+	kept = state["recipe"]["layers"][0]
+
+	assert kept["swing"] == 0.6
+	assert kept["notes_played"] == ["a", "b"]
+
+
+def test_a_layer_field_this_version_does_understand_is_still_judged () -> None:
+	"""Carrying the unknown is not the same as trusting everything.
+
+	`index` is named, so it is checked and dropped when it is not a positive
+	number — a judgement rather than ignorance, and the difference between the
+	two is the whole of what `LAYER_FIELDS` names.
+	"""
+
+	state: dict[str, typing.Any] = {}
+	layer = {**_one_layer()[0], "index": -4}
+
+	superintendent.controls.apply_change(state, STACK, "recipe/layers", [layer])
+
+	assert "index" not in state["recipe"]["layers"][0]
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(
+			state, STACK, "recipe/layers", [{**_one_layer()[0], "kind": "invention"}])
+
+
+def test_a_note_keeps_a_field_this_version_does_not_know_about () -> None:
+	"""A tie, an articulation, a probability — an app's to add, not ours to allow.
+
+	Both ways in: written to a note on its own, and arriving inside a whole-grid
+	write, which used to filter to the two fields it had heard of.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, MOVED, "bass/C2/0", True)
+	superintendent.controls.apply_change(state, MOVED, "bass/C2/0/tie", True)
+
+	assert state["bass"]["C2"]["0"]["tie"] is True
+
+	superintendent.controls.apply_change(state, MOVED, "bass/rows", {
+		"C2": {"0": {"length": 2, "velocity": 90, "probability": 0.4}}})
+
+	assert state["bass"]["C2"]["0"] == {"length": 2, "velocity": 90, "probability": 0.4}
