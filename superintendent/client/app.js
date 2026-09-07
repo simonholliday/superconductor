@@ -180,16 +180,26 @@ function rememberedPage () {
 
 const LOCK_KEY = "superintendent.layout-locked";
 
-/* Whether the layout is held still. Remembered, because a person who works
-   with it unlocked should not have to say so again every time they reload —
-   Simon's own words were that they may choose to leave it unlocked all the
-   time. Locked is the default: an unintended drag costs a layout, and a
-   deliberate one costs a tap. */
+/* Whether the layout is held still. Remembered, because a person who works with
+   it unlocked should not have to say so again every time they reload.
+
+   **Unlocked is the default, and it was the other way round until 2026-09-07**
+   (#2215). The argument for locking was that an unintended drag costs a layout
+   and a deliberate one costs a tap — which was the right trade when a page was
+   two blocks the composition had placed. It is not now: every pattern takes
+   generators (#2147), each arrives as a block of its own, and a page a person is
+   actually building is one they are arranging as they go. Simon: default to
+   unlocked now that we have the ability to add more windows.
+
+   So the padlock says the *exceptional* state. It is filled when the layout is
+   held, and plain when it is not — which is the same rule the rest of this panel
+   follows, one small control saying which state you are in (#2107 §8), read the
+   way round the new default requires. */
 function rememberedLock () {
 	try {
-		return localStorage.getItem(LOCK_KEY) !== "no";
+		return localStorage.getItem(LOCK_KEY) === "yes";
 	} catch (error) {
-		return true;
+		return false;
 	}
 }
 
@@ -2054,6 +2064,18 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
 			     the settings are a block with a title of their own and the icon
 			     is what says where they came from, so the label would be the
 			     third place the same name is written. */ ""}
+			${/* **What opens something acts on release** (#2215).
+			     Opening a sheet on the finger *landing* means the tap is not over
+			     when the sheet appears — and on touch the browser then dispatches
+			     a click at that same point, which now lands on whichever row of
+			     the new list happens to be under it. Simon: a quick tap on "add
+			     generator" sometimes added one instantly, and the only way to
+			     keep the list open was to hold until the context menu appeared.
+
+			     It is the rule the sheet's own rows already follow, applied one
+			     step earlier: a control you *play* acts on press, because a
+			     release is audible; a control that opens a list to read is not
+			     played. Nothing here is on the clock. */ ""}
 			${onSettings && html`
 				<button
 					class=${`offer settings ${settingsOpen ? "chosen" : ""}`}
@@ -2064,12 +2086,12 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
 			${onAdd && html`
 				<button
 					class="offer add"
-					onPointerDown=${(event) => { event.preventDefault(); onAdd(); }}
+					onClick=${(event) => { event.preventDefault(); onAdd(event); }}
 				><${Icon} of="add" />${adds}</button>`}
 			${onSend && html`
 				<button
 					class="offer send"
-					onPointerDown=${(event) => { event.preventDefault(); onSend(); }}
+					onClick=${(event) => { event.preventDefault(); onSend(event); }}
 				><${Icon} of="send" />send to…</button>`}
 			<span class="spacer"></span>
 			${/* **The outlet: take a cable from here and drop it on the block it
@@ -2092,7 +2114,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
 			${onClear && html`
 				<button
 					class="clear"
-					onPointerDown=${(event) => { event.preventDefault(); onClear(); }}
+					onClick=${(event) => { event.preventDefault(); onClear(event); }}
 				>clear</button>`}
 		</footer>`;
 }
@@ -4505,8 +4527,40 @@ function Panel () {
 
 	const addLayer = (stack, layer) => {
 		const held = ((state[appName] || {})[stack] || {}).layers || [];
+		const id = freshId();
 
-		request(`${stack}/layers`, [...held, { id: freshId(), ...layer }]);
+		request(`${stack}/layers`, [...held, { id, ...layer }]);
+
+		return id;
+	};
+
+	/* **A new block appears where the button that made it was** (#2215).
+	 *
+	 * It used to take whatever corner `autoPlace` had left, which is nowhere in
+	 * particular and looked random — Simon's word. The one thing that *is* known
+	 * about a person adding a generator is where they were looking: at the
+	 * "add generator" on the pattern's own footer, which they have just pressed.
+	 *
+	 * So the lattice cell under that button is remembered when the list opens
+	 * and used when something is chosen from it. It overlaps the pattern it
+	 * belongs to, deliberately: a block arriving *on* the thing it was made from
+	 * is unmistakably the thing that just arrived, and the layout is unlocked by
+	 * default now, so moving it is a drag rather than a mode change. */
+	const cameFrom = useRef(null);
+
+	const latticeCellUnder = (element) => {
+		const wrap = size.wrap.current;
+
+		if (!wrap || !element) return null;
+
+		const box = element.getBoundingClientRect();
+		const frame = wrap.getBoundingClientRect();
+		const pitch = size.cell + GAP;
+
+		return {
+			x: Math.max(0, Math.round((box.left - frame.left + wrap.scrollLeft) / pitch)),
+			y: Math.max(0, Math.round((box.top - frame.top + wrap.scrollTop) / pitch)),
+		};
 	};
 
 	/* --- Patching one block into another by dragging a cable ---------------
@@ -4713,7 +4767,7 @@ function Panel () {
 					fields=${transportFields} up=${up} anchor=${anchor} onSet=${request} />`}
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<button
-				class=${`latch ${locked ? "" : "open"}`}
+				class=${`latch ${locked ? "held" : ""}`}
 				title=${locked ? "the layout is held still" : "blocks can be moved"}
 				onPointerDown=${(event) => {
 					event.preventDefault();
@@ -4786,7 +4840,10 @@ function Panel () {
 								onMove: movePatch,
 								onEnd: endPatch,
 							} : null}
-							onAdd=${one.add ? () => setAdding(one.add) : null}
+							onAdd=${one.add ? (event) => {
+								cameFrom.current = latticeCellUnder(event.currentTarget);
+								setAdding(one.add);
+							} : null}
 							${/* **One thing, so one word.** It said "add source"
 							     while it did two jobs — create a generator, and
 							     route a grid — and Simon named it as the
@@ -4872,7 +4929,11 @@ function Panel () {
 
 		${adding && controls[adding] && (() => {
 			const added = (layer) => {
-				addLayer(adding, layer);
+				const id = addLayer(adding, layer);
+
+				if (cameFrom.current) rearrange(`${adding}/${id}`, cameFrom.current);
+
+				cameFrom.current = null;
 				setAdding(null);
 			};
 

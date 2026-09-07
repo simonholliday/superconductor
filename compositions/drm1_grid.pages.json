@@ -1,24 +1,41 @@
 {
 	"band": [
 		{
-			"name": "grid",
-			"x": 0,
-			"y": 0
+			"name": "chords",
+			"x": 83,
+			"y": 4
 		},
 		{
 			"name": "bass",
-			"x": 20,
-			"y": 0
+			"x": 59,
+			"y": 3
 		},
 		{
-			"name": "chords",
-			"x": 39,
-			"y": 0
+			"name": "drum_recipe/lmtrhkx74i58",
+			"x": 14,
+			"y": 8
 		},
 		{
-			"name": "matriarch",
-			"x": 57,
-			"y": 0
+			"name": "grid",
+			"x": 28,
+			"y": 23
+		},
+		{
+			"name": "bass_recipe/lmtrhlzhk5z7",
+			"x": 45,
+			"y": 2
+		}
+	],
+	"bass": [
+		{
+			"name": "bass",
+			"x": 34,
+			"y": 2
+		},
+		{
+			"name": "bass_recipe/lmtrhb90bhpo",
+			"x": 15,
+			"y": 5
 		}
 	]
 }

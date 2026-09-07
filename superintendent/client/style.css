@@ -1942,7 +1942,13 @@ html, body {
 	white-space: nowrap;
 }
 
-.bar .latch.open {
+/* **Filled when the layout is held, which is now the exceptional state**
+   (#2215). It was filled when unlocked, which was right while locked was the
+   default: the fill says "you are not in the ordinary state", and one small
+   control saying which state you are in is its whole job (#2107 §8). Unlocked
+   became the default when every pattern grew a stack, so the fill moved with
+   it rather than the rule changing. */
+.bar .latch.held {
 	background: var(--ring);
 	border-color: var(--ring);
 	color: var(--ring-ink);

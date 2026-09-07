@@ -384,10 +384,28 @@ def test_a_page_larger_than_the_glass_can_be_pushed_around (panel: typing.Any) -
 	# `touch-action` is not inherited, so a surface that says nothing computes to
 	# `auto` — which permits panning. What matters is that it is not `none`, which
 	# is the only value that refuses.
-	for surface in (".grid-wrap", ".part-title", ".row-label"):
+	for surface in (".grid-wrap", ".row-label"):
 		assert action(surface) != "none", f"{surface} is not a control and should take hold of the page"
 
 	assert "pinch" not in action("body"), "pinch zoom is still the browser claiming a musician's gesture"
+
+	# **A title bar is a grip while the layout is unlocked, and a place to push
+	# from while it is held** — and unlocked is the default since #2215, so it is
+	# a grip by default now. #2073 listed four surfaces a page could be pushed
+	# from and the title bar was one of them; that is a real cost of the flipped
+	# default and it is worth stating rather than discovering. The gutters, the
+	# space between blocks and the row labels are the three that remain, which is
+	# why the loop above still has something in it.
+	assert action(".part-title") == "none", (
+		"an unlocked title bar is a drag handle and must not scroll the page out"
+		" from under the finger dragging it")
+
+	_locked(panel)
+
+	assert action(".part-title") != "none", (
+		"a held layout gives the title bar back as somewhere to push the page from")
+
+	_unlocked(panel)
 
 
 def _on_the_drums_page (panel: typing.Any) -> None:
@@ -484,6 +502,32 @@ def test_parts_are_placed_on_the_lattice_and_their_steps_line_up (
 		"the same step of each pattern sits at the same offset within its block")
 
 
+
+def _unlocked (panel: typing.Any) -> None:
+	"""Make sure the layout can be dragged, whatever it was.
+
+	**Ensured rather than toggled**, which is the whole point: these read as
+	"unlock the layout" and were a bare click on the latch, so every one of them
+	*locked* it the day unlocked became the default (#2215) and twenty-one tests
+	went red at once.  A step that assumes the state it is changing from is a
+	step that breaks when the default moves.
+	"""
+
+	if panel.locator(".grid-wrap.unlocked").count() == 0:
+		panel.locator(".bar .latch").click()
+
+	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+
+
+def _locked (panel: typing.Any) -> None:
+	"""And the other way, for the state that is now the exceptional one."""
+
+	if panel.locator(".grid-wrap.unlocked").count() != 0:
+		panel.locator(".bar .latch").click()
+
+	panel.wait_for_selector(".grid-wrap.unlocked", state="detached", timeout=5_000)
+
+
 def test_the_latch_holds_the_layout_still_and_never_the_music (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""It used to be a mode: either you moved blocks or you played, never both,
@@ -495,23 +539,30 @@ def test_the_latch_holds_the_layout_still_and_never_the_music (
 	still, and the grid goes on playing on both sides of it.
 	"""
 
-	assert panel.locator(".grid-wrap.unlocked").count() == 0, "locked by default"
+	assert panel.locator(".grid-wrap.unlocked").count() == 1, "unlocked by default (#2215)"
 
 	panel.locator(conftest.cell("grid/snare/1")).click()
 	fake_app.await_set("grid/snare/1")
 
-	panel.locator(".bar .latch").click()
-	playwright_api.expect(panel.locator(".grid-wrap.unlocked")).to_have_count(1, timeout=5_000)
+	# And the music goes on answering on the other side of the latch, which is
+	# the whole point of it not being a mode. Locking is the exceptional state
+	# now, so that is the direction worth demonstrating.
+	_locked(panel)
 
-	# The whole change, in one assertion.
 	panel.locator(conftest.cell("grid/snare/3")).click()
 	fake_app.await_set("grid/snare/3")
 
 
 def test_a_locked_layout_does_not_move_under_a_drag (panel: typing.Any) -> None:
 	"""Which is what the padlock is for: a stray finger on a title bar costs
-	nothing until somebody says it may."""
+	nothing until somebody says it may.
 
+	Locked on purpose now rather than found that way: unlocked is the default
+	since #2215, so relying on the default would test the default rather than
+	the padlock.
+	"""
+
+	_locked(panel)
 	_settled(panel)
 
 	block = panel.locator('.part[data-part="grid"]')
@@ -530,8 +581,7 @@ def test_a_block_is_dragged_by_its_title_a_cell_at_a_time (panel: typing.Any) ->
 	"""#2078: the title bar is the only surface of a block that is not a control,
 	and a drag snaps to the lattice rather than to the pixel."""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	block = panel.locator('.part[data-part="grid"]')
 	before = block.bounding_box()
@@ -559,8 +609,7 @@ def test_a_block_may_be_dragged_over_another_and_the_last_moved_is_on_top (
 	"""Overlap is legal, which is what deletes collision resolution — and what
 	makes an inventory necessary, since a covered block cannot be grabbed."""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	def depth (part: str) -> int:
 		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
@@ -581,8 +630,7 @@ def test_the_inventory_brings_a_buried_block_back (panel: typing.Any) -> None:
 	"""The one hazard overlap introduces: a block covered completely cannot be
 	taken hold of, because a title bar is the only handle it has."""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	def depth (part: str) -> int:
 		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
@@ -599,8 +647,7 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	"""Until it can be sent to the composition that owns the page (#2077), a
 	layout that vanished on reload would not be a layout."""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	block = panel.locator('.part[data-part="grid"]')
 	before = block.bounding_box()
@@ -616,8 +663,7 @@ def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
 	# Leaving is what saves, deliberately: once rather than on every nudge, so a
 	# drag in progress is never half-kept (#2075). A reload before this would
 	# find nothing, and should.
-	panel.locator(".bar .latch").click()
-	playwright_api.expect(panel.locator(".grid-wrap.unlocked")).to_have_count(0, timeout=5_000)
+	_locked(panel)
 	_settled(panel)
 
 	# Measured after leaving rather than during. The fit is frozen while a drag
@@ -1389,8 +1435,7 @@ def test_the_page_does_not_resize_itself_under_a_dragging_finger (panel: typing.
 	before = panel.evaluate(
 		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell')")
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	title = panel.locator('.part[data-part="second"] .part-title').bounding_box()
 	panel.mouse.move(title["x"] + 20, title["y"] + 5)
@@ -2114,8 +2159,7 @@ def test_a_layout_is_kept_when_the_finger_lifts (
 	never half-saved, and an accidental nudge is one write rather than twenty.
 	"""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 	_settled(panel)
 
 	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
@@ -2146,8 +2190,7 @@ def test_a_drag_that_moves_nothing_writes_nothing (
 	"""A tap on a title bar is not a layout change, and should not cost a write
 	to the composition's file."""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 	_settled(panel)
 
 	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
@@ -2699,8 +2742,7 @@ def test_a_contribution_moves_on_its_own (
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	# In cells rather than in pixels. A drag that makes the arrangement taller
 	# re-solves the fit when the finger lifts, so every block's pixel position
@@ -2897,8 +2939,7 @@ def test_a_line_follows_the_block_it_is_joined_to (
 		timeout=5_000)
 	_settled(panel)
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	grip = panel.locator('.part[data-part="stack/one"] .part-title').bounding_box()
 
@@ -3833,8 +3874,7 @@ def _apart (panel: typing.Any, part: str, dx: float, dy: float) -> None:
 	them.
 	"""
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	title = panel.locator(f'.part[data-part="{part}"] .part-title').bounding_box()
 
@@ -4193,8 +4233,7 @@ def test_closing_a_window_does_not_drag_it (panel: typing.Any, fake_app: typing.
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
+	_unlocked(panel)
 
 	before = panel.locator('.part[data-part="stack/one"]').bounding_box()
 
@@ -4957,16 +4996,19 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	panel.locator(".theme > button").click()
 	playwright_api.expect(panel.locator(".theme .choices")).to_have_count(0, timeout=5_000)
 
-	# The inventory, which only exists while the layout is unlocked.
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", timeout=5_000)
-
-	# Waited for by name, because a state that renders nothing checks nothing
-	# and would report a clean pass for the wrong reason.
+	# The inventory, which only exists while the layout is unlocked — the default
+	# since #2215, so this is the state a panel opens in rather than one to
+	# switch to. Waited for by name regardless, because a state that renders
+	# nothing checks nothing and would report a clean pass for the wrong reason.
+	_unlocked(panel)
 	panel.wait_for_selector(".inventory button", timeout=5_000)
 	note("the layout unlocked")
-	panel.locator(".bar .latch").click()
-	panel.wait_for_selector(".grid-wrap.unlocked", state="detached", timeout=5_000)
+
+	# And held, which the flipped default made the state worth adding: the
+	# padlock filled, the grips gone, every block still.
+	_locked(panel)
+	note("the layout held")
+	_unlocked(panel)
 
 	# A menu inside a block, which is a popover sitting on the lattice rather
 	# than on the chrome. The generator's pitch has six voices behind one; the
