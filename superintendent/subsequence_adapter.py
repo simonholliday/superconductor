@@ -20,6 +20,7 @@ Subroutine #1972 and is still open.
 """
 
 import asyncio
+import collections
 import collections.abc
 import json
 import logging
@@ -35,6 +36,14 @@ import superintendent.protocol
 
 
 LOG = logging.getLogger(__name__)
+
+OUTBOUND_CAP = 256
+"""How many frames may wait for the socket before the oldest is dropped (#2242).
+
+Large enough that ordinary play never reaches it — a cycle emits a handful — and
+small enough that a burst cannot outrun the link thread.  A number rather than a
+measurement, because the thing it bounds is a fault: what matters is that some
+bound exists, not that this one is exactly right."""
 
 DEFAULT_URL = "ws://127.0.0.1:8090/ws/app"
 """The service on this machine.  A different one is a constructor argument."""
@@ -2554,6 +2563,18 @@ class AppLink:
 		self._clock_loop: asyncio.AbstractEventLoop | None = None
 		self._link_loop: asyncio.AbstractEventLoop | None = None
 		self._socket: typing.Any = None
+
+		self._outbound: collections.OrderedDict[
+			typing.Any, superintendent.protocol.Frame] = collections.OrderedDict()
+		"""Frames waiting for the socket, newest last (#2242).  Ordered because
+		the oldest is what goes when it is full, and keyed because an event about
+		a control supersedes a waiting one for the same control."""
+
+		self._dropped = 0
+		"""How many have gone that way since the link last caught up."""
+
+		self._minted = 0
+		"""Keys for frames that supersede nothing, so each queues in its turn."""
 		self._thread: threading.Thread | None = None
 		self._stopping = threading.Event()
 		self._last_beat_at: float | None = None
@@ -2708,6 +2729,13 @@ class AppLink:
 
 		Called on the clock loop and never blocking there: the send itself
 		happens on the link thread, so a slow socket cannot delay a pulse.
+
+		**Queued rather than scheduled one coroutine per frame** (#2242).  A
+		looping route once put 482 frames on this path in a single cycle and the
+		link loop drowned in work handed to it faster than it could drain — which
+		is what left the process spinning and deaf to `SIGTERM`, and was read at
+		the time as a busy builder.  A cable made that particular burst and it is
+		fixed (#2230); anything else that produces one arrives here.
 		"""
 
 		loop = self._link_loop
@@ -2715,7 +2743,76 @@ class AppLink:
 		if loop is None or self._socket is None:
 			return
 
-		asyncio.run_coroutine_threadsafe(self._send(frame), loop)
+		self._queue(frame)
+
+		asyncio.run_coroutine_threadsafe(self._drain(), loop)
+
+	def _queue (self, frame: superintendent.protocol.Frame) -> None:
+		"""Put one frame in line, superseding what it makes untrue.
+
+		Separate from `_emit` so it can be tested without a link thread, and
+		because it is the only part with a decision in it.
+
+		**An event about a control supersedes a waiting one for the same
+		control.**  An event is what the music did this cycle and nothing keeps
+		it (#1965) — two of them waiting together is not two facts, it is one
+		fact and a stale copy, and drawing the stale one is worse than drawing
+		neither.  It keeps the older one's *place* in the queue rather than
+		jumping ahead, so a superseded frame occupies the slot it would have had.
+
+		**Everything else is somebody's fact and may not be merged.**  A change
+		is intent and is kept; an `ack` and a `nack` are what a hand on the glass
+		is waiting for.  Those get a fresh key each and queue in order.
+
+		Over the cap the *oldest* goes, because these are frames a socket has not
+		taken yet and the newest is the one still true.
+		"""
+
+		waiting = self._outbound
+		key = self._supersedes(frame)
+		standing = key in waiting
+
+		waiting[key] = frame
+
+		if standing or len(waiting) <= OUTBOUND_CAP:
+			return
+
+		waiting.popitem(last=False)
+		self._dropped += 1
+
+		# Once an episode, not once a frame: the whole failure being described
+		# here is a path that says something per frame under a burst.
+		if self._dropped == 1:
+			LOG.warning(
+				"the link is behind: frames are being dropped after %d waiting. "
+				"Nothing further is logged until it catches up.", OUTBOUND_CAP)
+
+	def _supersedes (self, frame: superintendent.protocol.Frame) -> typing.Any:
+		"""What a frame replaces while it waits, or a key of its own if nothing."""
+
+		if frame.get("t") == "event":
+			return ("event", frame.get("name"), frame.get("control"))
+
+		self._minted += 1
+
+		return self._minted
+
+	async def _drain (self) -> None:
+		"""Send whatever is waiting, on the link thread.
+
+		Every `_emit` schedules one of these and most find the queue already
+		empty, which is the point: the work is bounded by the queue rather than
+		by how many times it was asked for.
+		"""
+
+		while self._outbound:
+			_, frame = self._outbound.popitem(last=False)
+
+			await self._send(frame)
+
+		if self._dropped:
+			LOG.info("the link caught up, having dropped %d frame(s)", self._dropped)
+			self._dropped = 0
 
 	# ------------------------------------------------------------------
 	# On the link thread
@@ -2869,3 +2966,12 @@ class AppLink:
 
 		except websockets.exceptions.WebSocketException:
 			LOG.debug("frame dropped: the service went away mid-send")
+
+		# **Anything else, and this was not always here** (#2242). A socket that
+		# breaks under load raises things this library does not wrap — the
+		# incident log holds 2,819 `socket.send() raised exception.` beside a
+		# `coroutine 'AppLink._send' was never awaited`, which is what an escaped
+		# exception in a future nobody reads looks like from the outside.
+		# Dropping a frame is a redrawn dot; an unread future is a leak.
+		except Exception:
+			LOG.warning("frame dropped: the socket would not take it", exc_info=True)

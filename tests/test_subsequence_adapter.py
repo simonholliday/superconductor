@@ -578,3 +578,99 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 		loop.call_soon_threadsafe(loop.stop)
 		thread.join(timeout=5.0)
 		loop.close()
+
+
+def _link_with_no_thread () -> superintendent.subsequence_adapter.AppLink:
+	"""An app link that has never dialled, for testing what it queues.
+
+	`_queue` is deliberately separate from `_emit` so this is possible: the
+	decision about what supersedes what has nothing to do with a socket, and a
+	test that needed a link thread to reach it would be testing asyncio.
+	"""
+
+	return superintendent.subsequence_adapter.AppLink(
+		FakeComposition(), controls=[], app_name="app")
+
+
+def test_an_event_about_a_control_supersedes_one_still_waiting () -> None:
+	"""#2242.  Two waiting together are not two facts, they are one and a stale copy.
+
+	An event is what the music did this cycle and nothing keeps it (#1965), so
+	the older is untrue the moment the newer arrives — and drawing the stale one
+	is worse than drawing neither.
+	"""
+
+	link = _link_with_no_thread()
+
+	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 1}))
+	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 2}))
+
+	assert len(link._outbound) == 1
+
+	(_, frame), = link._outbound.items()
+
+	assert frame["cells"] == {"a": 2}, "the stale copy won"
+
+
+def test_an_event_about_another_control_supersedes_nothing () -> None:
+	"""Two grids realising in one cycle are two facts, not one."""
+
+	link = _link_with_no_thread()
+
+	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={}))
+	link._queue(superintendent.protocol.event("app", "realised", control="bass", cells={}))
+
+	assert len(link._outbound) == 2
+
+
+def test_a_change_never_supersedes_anything () -> None:
+	"""A change is intent and is kept (#1965); an ack is what a hand is waiting for.
+
+	Merging two of those loses something nobody can get back, which is why the
+	rule is written about events rather than about frames.
+	"""
+
+	link = _link_with_no_thread()
+
+	for step in range(5):
+		link._queue(superintendent.protocol.changed(
+			"app", "grid/kick/0", step, step, by="app"))
+
+	assert len(link._outbound) == 5
+
+
+def test_a_burst_drops_the_oldest_and_keeps_the_newest () -> None:
+	"""The queue is what a socket has not taken yet, so the newest is still true.
+
+	Dropping the newest would mean the panel's last word about a control was
+	whatever it happened to receive before the burst — which is the failure that
+	took the rig down wearing different clothes.
+	"""
+
+	link = _link_with_no_thread()
+
+	for step in range(superintendent.subsequence_adapter.OUTBOUND_CAP + 50):
+		link._queue(superintendent.protocol.changed(
+			"app", "grid/kick/0", step, step, by="app"))
+
+	assert len(link._outbound) == superintendent.subsequence_adapter.OUTBOUND_CAP
+	assert link._dropped == 50
+
+	newest = list(link._outbound.values())[-1]
+
+	assert newest["v"] == superintendent.subsequence_adapter.OUTBOUND_CAP + 49, "the newest frame was the one dropped"
+
+
+def test_a_superseded_frame_keeps_its_place_rather_than_jumping_the_queue () -> None:
+	"""It occupies the slot it would have had, so it does not overtake a change
+	that was already waiting behind it."""
+
+	link = _link_with_no_thread()
+
+	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 1}))
+	link._queue(superintendent.protocol.changed("app", "grid/kick/0", True, 1, by="app"))
+	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 2}))
+
+	kinds = [frame["t"] for frame in link._outbound.values()]
+
+	assert kinds == ["event", "changed"], f"the queue reordered itself: {kinds}"
