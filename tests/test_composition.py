@@ -338,3 +338,32 @@ def test_the_page_set_still_fits_the_row_of_named_buttons (rig: typing.Any) -> N
 	assert len(rig.link.pages) <= int(limit.group(1)), (
 		f"{len(rig.link.pages)} pages is past {limit.group(1)}, so the panel will"
 		f" draw a counter instead of their names")
+
+
+def test_a_choice_the_definition_names_no_states_for_is_drawn_as_a_number (
+	rig: typing.Any) -> None:
+	"""Three of the Matriarch's arpeggiator controls are declared `choice` and
+	name no states — mode, pattern and range, all of them values a manual
+	describes in prose rather than in bands.
+
+	Drawn as declared they came out as three empty rows on the glass: a label,
+	and then nothing at all to press.  A definition is a *report* about a
+	particular model and reports are wrong in the wild, which is the whole reason
+	instrument facts live in a file rather than in code — so the kind is taken
+	from what is actually there rather than from what is claimed.
+	"""
+
+	empty = [name for name, control in rig.MATRIARCH.controls.items()
+	         if control.kind == pymididefs.instruments.CHOICE and not control.values]
+
+	assert empty, "the definition no longer has an empty choice, so this proves nothing"
+
+	drawn = {parameter.name: parameter.kind
+	         for parameter in (rig._panel_parameter(*setting, instrument=rig.MATRIARCH)
+	                           for setting in rig.CHORD_SETTINGS if setting[0] != "voices")}
+
+	for panel, named, _, _, _ in rig.CHORD_SETTINGS:
+		if named in empty:
+			assert drawn[panel] == "number", (
+				f"{panel} is a choice with nothing to choose, so it draws as nothing")
+			assert panel in drawn

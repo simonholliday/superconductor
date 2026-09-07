@@ -11,13 +11,13 @@
 			"y": 0
 		},
 		{
-			"name": "matriarch",
-			"x": 46,
-			"y": 20
-		},
-		{
 			"name": "chords",
 			"x": 39,
+			"y": 0
+		},
+		{
+			"name": "matriarch",
+			"x": 57,
 			"y": 0
 		}
 	]

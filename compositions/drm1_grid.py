@@ -496,7 +496,19 @@ def _panel_parameter (
 
 	control = (instrument or MINITAUR).controls[named]
 
-	if control.kind == pymididefs.instruments.CHOICE:
+	# **A choice with nothing to choose is not a choice.**  Three of the
+	# Matriarch's arpeggiator controls are declared `choice` in the definition and
+	# name no states — mode, pattern and range, all of them CC values a manual
+	# describes in prose rather than in bands.  Drawn as declared they came out as
+	# three empty rows: a label, and then nothing at all to press.
+	#
+	# A definition is a *report* about a particular model and reports are wrong in
+	# the wild, which is the whole reason instrument facts live in a file rather
+	# than in code.  So this reads what is actually there rather than what the
+	# kind claims, and falls back to the continuous control the range describes.
+	# Filed upstream; the fallback stays either way, because it costs one branch
+	# and the alternative is a blank row nobody can explain.
+	if control.kind == pymididefs.instruments.CHOICE and control.values:
 		return superintendent.subsequence_adapter.Parameter(
 			panel, "choice", label=label, default=default, group=group,
 			options=[(state, state.replace("_", " ")) for state in control.values])
