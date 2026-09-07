@@ -2003,9 +2003,17 @@ class Recipe (Control):
 		if grid is None or self.link is None or self.pulses_per_beat is None:
 			return
 
-		per_step = self.pulses_per_beat * grid.beats / grid.steps
+		# **In the unit the grid is addressed in**, which is not always a step.
+		# A note grid divides a step into `divisions` places a note may start,
+		# and a panel addresses it in those (#2115) — so a dot reported in steps
+		# would land at a sixth of its position on the Minitaur's bassline, which
+		# declares six. A step grid has one place per step and is unchanged.
+		places = getattr(grid, "positions", None)
+		bound = places() if callable(places) else grid.steps
 
-		if per_step <= 0:
+		per_place = self.pulses_per_beat * grid.beats / bound
+
+		if per_place <= 0:
 			return
 
 		known = set(grid.rows)
@@ -2016,7 +2024,7 @@ class Recipe (Control):
 			fresh = set(after) - seen
 			seen = set(after)
 
-			self._gather(cells, fresh, layer, known, per_step, grid.steps)
+			self._gather(cells, fresh, layer, known, per_place, bound)
 
 		self._report_cells(cells)
 
@@ -2026,8 +2034,8 @@ class Recipe (Control):
 		fresh: set[typing.Any],
 		layer: str,
 		known: set[str],
-		per_step: float,
-		steps: int,
+		per_place: float,
+		places: int,
 	) -> None:
 		"""Fold one layer's new notes into the cells being reported."""
 
@@ -2043,9 +2051,9 @@ class Recipe (Control):
 			if getattr(note, "primary_unmapped", False):
 				continue
 
-			step = int(getattr(note, "position", 0) // per_step)
+			step = int(getattr(note, "position", 0) // per_place)
 
-			if not 0 <= step < steps:
+			if not 0 <= step < places:
 				continue
 
 			# **How hard, not only whether.** A ghost fill is quiet by its whole
@@ -2085,14 +2093,26 @@ class Recipe (Control):
 		self.link.happened("realised", control=grid.name, cells=cells)
 
 	def _target (self) -> typing.Any:
-		"""The grid this stack builds, if it is one this panel can draw cells on."""
+		"""The grid this stack builds, if it is one this panel can draw cells on.
+
+		**A note grid counts too, and did not until #2218.**  This read
+		``isinstance(grid, StepGrid)`` from when a stack could only be built onto
+		the drum machine — so the moment every pattern took generators (#2147), a
+		melodic one played what its generators wrote and showed nothing at all.
+		Simon heard the notes and saw an empty grid.
+
+		Nothing else here needed to know the difference: a realised cell is
+		matched to a row by the name the generator was given, and a note grid's
+		rows are note names for exactly the same reason a drum grid's are voice
+		names — the composition said so (#1465).
+		"""
 
 		if self.link is None or self.builds is None:
 			return None
 
 		grid = self.link.controls.get(self.builds)
 
-		return grid if isinstance(grid, StepGrid) else None
+		return grid if isinstance(grid, (StepGrid, NoteGrid)) else None
 
 	def _arguments (self, generator: str, params: dict[str, typing.Any]) -> dict[str, typing.Any]:
 		"""A layer's parameters as the generator's own call expects them.

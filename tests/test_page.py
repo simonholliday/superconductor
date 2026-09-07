@@ -5834,3 +5834,100 @@ def test_a_settings_panel_is_divided_by_the_sections_its_app_named (
 
 	assert order[0] == "Glide", f"the heading is not at the front of its section: {order}"
 	assert "shape" in order and "voicing" in order, order
+
+
+def test_a_note_grid_draws_what_a_generator_put_on_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon: I can create a generator on the Minitaur pattern and hear its
+	result, but I do not see the generated note indicators on the grid.
+
+	He could not, and the panel was not at fault: `Recipe._target` ended with
+	`isinstance(grid, StepGrid)`, from when a stack could only be built onto the
+	drum machine — so **no realised event was ever sent for a pitched pattern**
+	and there was nothing to draw (#2218).  It went unnoticed for as long as it
+	did because a stack on anything but the DRM1 is two days old (#2147).
+
+	**Reported in the positions the grid is addressed in, not in steps.**  A note
+	grid divides a step into places a note may start (#2115) and the rig's bass
+	declares six, so a dot reported in steps would land at a sixth of where the
+	note is.  `fine` declares four, which is why it is the one used here.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="fine"]', timeout=5_000)
+	_settled(panel)
+
+	# Two positions inside one drawn cell, and one in the next: at four
+	# divisions, positions 4 and 6 are both in step 1 and position 8 is step 2.
+	fake_app.realised("fine", {"C2": {"4": 40, "6": 110, "8": 90}})
+
+	marked = '.part[data-part="fine"] .cell.ghost'
+	playwright_api.expect(panel.locator(marked)).to_have_count(2, timeout=5_000)
+
+	drawn = panel.eval_on_selector_all(marked, """els => els.map((one) => [
+		one.dataset.path, one.style.getPropertyValue("--struck")])""")
+
+	# A note grid's cell is addressed by the *position* it begins at rather than
+	# by a step number, so the cell holding step 1 is `.../4` at four divisions.
+	# Positions 4 and 6 share that cell; position 8 is the next one.
+	at = sorted(path.rsplit("/", 1)[1] for path, _ in drawn)
+	assert at == ["4", "8"], f"a position was drawn in the wrong cell: {drawn}"
+
+	# The loudest of the two sharing a cell is the one drawn, which is the rule
+	# the app applies to a step: what is heard is one sound at the weight of the
+	# louder. 110 against 40 in the first, 90 alone in the second.
+	weights = dict((path.rsplit("/", 1)[1], float(w or 0)) for path, w in drawn)
+	assert weights["4"] > weights["8"], (
+		f"the quieter of two in one cell won, or the weight is not read: {drawn}")
+
+
+def test_dragging_a_block_does_not_resize_the_page (panel: typing.Any) -> None:
+	"""Simon: dragging a title bar zooms the display in or out, a lot, and the
+	size readout changes with it.
+
+	#2072 settled that a page which no longer fits **scrolls** rather than
+	rearranging or resizing itself.  The fit already held still *during* a drag
+	and then caught up on release — which does not honour that at all, it only
+	moves the resize to the instant the finger lifts, when nothing is expected to
+	move any more (#2217).
+
+	So where a block sits is not an input to the fit: it re-fits for the glass,
+	the page, the set of blocks and the chosen size, and never for an
+	arrangement.
+	"""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	def size () -> float:
+		return float(panel.evaluate(
+			"() => parseFloat(getComputedStyle(document.documentElement)"
+			".getPropertyValue('--cell'))"))
+
+	before = size()
+	readout = panel.locator(".sizes > button").inner_text()
+
+	block = panel.locator('.part[data-part="grid"]')
+	stood = block.bounding_box()
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	# Rightwards and down, which is the direction that grows the arrangement and
+	# so the direction that used to shrink every cell on the page.
+	# **Far enough to change the answer.** A short drag leaves the arrangement
+	# fitting at the same cell size, so it would pass whatever the fit did — the
+	# first version of this test did exactly that. Kept inside `innerWidth`,
+	# because Playwright clamps a move past the edge and the drag then reads as
+	# going the other way.
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(min(title["x"] + 900, 1200), title["y"] + 320, steps=12)
+	panel.mouse.up()
+	_settled(panel)
+
+	# **The drag has to have moved something**, or this asserts that nothing
+	# happened rather than that the right nothing happened.
+	assert block.bounding_box() != stood, "the block did not move, so this proves nothing"
+
+	assert size() == before, f"the drag resized the page: {before} to {size()}"
+	assert panel.locator(".sizes > button").inner_text() == readout, (
+		"the size readout followed a drag")

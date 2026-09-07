@@ -793,7 +793,8 @@ const DRAG_SLOP = 8;
  * goes on showing what the sequencer actually holds until the release is
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
-function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: windowRows,
+function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, weights,
+                    cell, window: windowRows,
                     labels, unreachable, snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
@@ -1044,6 +1045,28 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 					const shade = ghost && ghost.row === row
 						&& Math.floor(ghost.at / divisions) === step ? ghost : null;
 
+					/* **What a generator put here this cycle** (#2218), reported
+					   in the same positions this grid is addressed in — so a
+					   note the Minitaur's stack placed at a sixth of a step
+					   lands in the drawn cell that holds it rather than six
+					   cells away.
+
+					   The loudest wins where several fall in one drawn cell,
+					   which is the rule the app already applies to a step: what
+					   a person hears is one sound at the weight of the louder.
+
+					   Same mark as a drum grid's, deliberately — a round dot is
+					   made up this cycle and a square is a note written down
+					   elsewhere (#1925), and that reading should not have to be
+					   learned twice. */
+					const struck = Object.entries((drawn || {})[row] || {})
+						.filter(([at]) => Math.floor(Number(at) / divisions) === step)
+						.map(([, held]) => held)
+						.reduce((loudest, held) => !loudest
+							|| Number(held.v || 0) > Number(loudest.v || 0) ? held : loudest, null);
+
+					const routed = struck && kinds && kinds[struck.from] === "pattern";
+
 					const asked = noteAt(notes[row], step * divisions);
 					const owner = asked ? `${name}/${row}/${asked.at}` : path;
 
@@ -1052,9 +1075,12 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 							key=${path}
 							data-path=${path}
 							class=${["cell",
+								struck ? "ghost" : "",
+								routed ? "routed" : "",
 								pending.has(owner) && !asked ? "pending" : "",
 								failed.has(owner) && !asked ? "failed" : "",
 								step % per === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+							style=${struck ? { "--struck": weightOf(struck.v, weights) } : null}
 							onPointerDown=${(event) => begin(event, row, step)}
 							onPointerMove=${during}
 							onPointerUp=${finish}
@@ -1252,7 +1278,7 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, 
  *
  * Snap starts at one drawn cell, which is what every gesture did before there
  * was a choice. */
-function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
+function NoteBlock ({ name, control, notes, drawn, kinds, cell, pending, failed, onSet }) {
 	const divisions = Math.max(1, control.divisions || 1);
 	const steps = control.steps;
 	const beats = control.beats || 4;
@@ -1279,6 +1305,9 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 	return html`
 		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
 			divisions=${divisions}
+			${/* What a stack put here this cycle, and what a weight is measured
+			     against — the same two facts the drum grid is given (#2218). */ ""}
+			drawn=${drawn} kinds=${kinds} weights=${control.velocity_range}
 			notes=${notes} cell=${cell} window=${control.visible_rows}
 			labels=${notes.labels} unreachable=${notes.unreachable}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
@@ -3214,9 +3243,20 @@ function useCellSize (blocks, layout, dragging) {
 	 * arrangement answers by shrinking every cell — so a drag resized the whole
 	 * page while it was still being made, by nearly half in one measurement.
 	 * Simon settled the principle in #2072: a page that no longer fits scrolls,
-	 * it does not rearrange or resize itself. So the fit uses the arrangement as
-	 * it stood when the drag began, and catches up once when it ends, which
-	 * is also when the arrangement is saved (#2075). */
+	 * it does not rearrange or resize itself.
+	 *
+	 * **It used to catch up when the drag ended, and that was the same fault a
+	 * moment later** (#2217). Simon: dragging a title bar zooms the display in
+	 * or out, a lot, and the size readout changes with it. Holding the fit still
+	 * *during* a drag and then applying it on release does not honour the
+	 * principle above — it only moves the resize to the instant the finger
+	 * lifts, which is worse, because by then the person has stopped expecting
+	 * anything to move.
+	 *
+	 * So where a block sits is not an input to the fit at all. It re-fits for
+	 * the glass, the page, the set of blocks and the size that was chosen —
+	 * never for an arrangement. A page dragged wider than the glass scrolls,
+	 * which is exactly what #2072 asked for. */
 	const solving = useRef(layout);
 
 	if (!dragging) solving.current = layout;
@@ -3357,7 +3397,7 @@ function useCellSize (blocks, layout, dragging) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, JSON.stringify(blocks), dragging ? "held" : JSON.stringify(layout)]);
+	}, [choice, JSON.stringify(blocks)]);
 
 	/* Both written from here, so the stylesheet never has to work out a row
 	   height of its own and then disagree with the fit about it.
@@ -4894,6 +4934,8 @@ function Panel () {
 						? html`
 							<${NoteBlock} name=${one.control} control=${controls[one.control]}
 								notes=${(state[appName] || {})[one.control] || {}} cell=${size.cell}
+								drawn=${up ? realised[one.control] : null}
+								kinds=${layerKinds(one.control)}
 								pending=${pending} failed=${failed} onSet=${request} />`
 						: html`
 							<${Grid} control=${one.control} rows=${controls[one.control].rows}
