@@ -2008,8 +2008,16 @@ class Recipe (Control):
 		# and a panel addresses it in those (#2115) — so a dot reported in steps
 		# would land at a sixth of its position on the Minitaur's bassline, which
 		# declares six. A step grid has one place per step and is unchanged.
-		places = getattr(grid, "positions", None)
-		bound = places() if callable(places) else grid.steps
+		#
+		# **`positions` is a property, and reading it as a method was #2219.**
+		# `callable()` on an int is False, so the fallback took `steps` and the
+		# whole bar was reported six times too coarse — the panel divides what
+		# arrives by `divisions`, so eleven notes spread across sixteen cells
+		# were drawn in the first three. It sounded right throughout, which is
+		# why it read as a generator that stopped rather than a dot in the wrong
+		# place. A default rather than a `callable` guard: a `StepGrid` has no
+		# `positions` at all and a step is its place.
+		bound = int(getattr(grid, "positions", grid.steps))
 
 		per_place = self.pulses_per_beat * grid.beats / bound
 

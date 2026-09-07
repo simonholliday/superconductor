@@ -1009,3 +1009,70 @@ def test_a_grid_switched_off_contributes_nothing_where_it_is_routed () -> None:
 	recipe.build(Builder())
 
 	assert played == ["shared", "shared"], "switching it back on did not bring it back"
+
+
+def test_a_note_grid_is_reported_in_its_own_positions_not_in_steps () -> None:
+	"""#2219, and it drew a bar's worth of generator in the first three cells.
+
+	The Minitaur's bassline divides each of sixteen steps into six, so it is
+	ninety-six positions wide and a position is one pulse — and the panel maps
+	what arrives to a cell by dividing by ``divisions``.  Reported in *steps*,
+	eleven notes spread evenly across the bar arrive as 0, 1, 3, 4, 6, 7 … and
+	are drawn in cells 0, 0, 0, 1, 1, 1: the whole rhythm compressed into the
+	first sixth of the pattern.
+
+	It sounded correct throughout, which is why it read as a generator that had
+	stopped early rather than as a dot in the wrong place.
+	"""
+
+	grid = adapter.NoteGrid(
+		Composition(), rows=["kick", "snare"], steps=16, beats=4,
+		divisions=6, name="bass")
+	speaker = Speaker({"bass": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="bass", pulses_per_beat=24)
+	recipe.attach(typing.cast(typing.Any, speaker))
+
+	# One pulse to a position here, so a note's pulse is its position — and the
+	# last of them is at pulse 90, which is a position this grid has and a step
+	# it does not.
+	builder = Builder()
+	builder.lands = [Note(0, "kick", 110), Note(12, "snare", 40), Note(90, "kick", 90)]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	cells = speaker.events[0][1]["cells"]
+
+	assert _weights(cells) == {"kick": {"0": 110, "90": 90}, "snare": {"12": 40}}
+
+
+def test_a_note_grid_reports_a_note_the_last_step_could_not_hold () -> None:
+	"""The other half of #2219: the bound is the grid's own count of places.
+
+	A note at pulse 95 is the ninety-sixth position of ninety-six and the last
+	moment of the bar.  Bounded by ``steps`` it is outside the pattern and is
+	dropped, so the fault took the far end of every generated phrase as well as
+	crowding what remained.
+	"""
+
+	grid = adapter.NoteGrid(
+		Composition(), rows=["kick"], steps=16, beats=4, divisions=6, name="bass")
+	speaker = Speaker({"bass": grid})
+
+	recipe = adapter.Recipe(
+		Composition(), catalogue=CATALOGUE, pitches=ROWS,
+		builds="bass", pulses_per_beat=24)
+	recipe.attach(typing.cast(typing.Any, speaker))
+
+	builder = Builder()
+	builder.lands = [Note(95, "kick", 70), Note(96, "kick", 70)]
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	cells = speaker.events[0][1]["cells"]
+
+	assert _weights(cells) == {"kick": {"95": 70}}, "a note past the bar was drawn"
