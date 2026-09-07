@@ -4622,11 +4622,11 @@ def test_every_control_centres_what_is_written_on_it (
 
 			if (how === "center") continue;
 
-			/* **Four exceptions, each named on the element and each with a
+			/* **Five exceptions, each named on the element and each with a
 			   reason.** A list is only dangerous when it is implicit; this one
 			   is the same shape as SURFACE_RULES — adding to it is a deliberate
 			   act rather than something that happens.
-			
+
 			   - `option` stacks two lines, and two lines centred read as
 			     neither.
 			   - `picker` puts a label and its mark at opposite ends, the way a
@@ -4638,8 +4638,18 @@ def test_every_control_centres_what_is_written_on_it (
 			     before this test looked past buttons.
 			   - `dial` is a fader whose readout sits at the end of its own
 			     track. Centred, the number would float in the middle of the
-			     thing it describes and move as the fill moved under it. */
-			const named = ["option", "picker", "part-title", "dial"];
+			     thing it describes and move as the fill moved under it.
+			   - `choice` is one row of a list: a mark and then a name, which
+			     have to line up down the column. Centred, each row places its
+			     mark according to how long its own name is. **The size chooser
+			     had been taking this exception since it was written and passing
+			     anyway** — its third element carries `margin-left: auto`, which
+			     eats the free space and leaves the first two at the start
+			     whatever this property says. So the rule was already being
+			     broken where the test could not see it, and it only became
+			     visible when the theme picker grew to eleven rows and had no
+			     such element. Simon saw it at a glance. */
+			const named = ["option", "picker", "part-title", "dial", "choice"];
 
 			if (named.some((one_) => one.classList.contains(one_))) continue;
 
@@ -4660,8 +4670,14 @@ def test_every_control_centres_what_is_written_on_it (
 	# — so the fault it exists to catch went through it three times: the footer
 	# buttons, the send-to sheet's options, and the generator list. A button with
 	# more than one element inside it is an option and must name itself one.
+	#
+	# `choice` is admitted here as well as above, and it is not a weakening: a
+	# choice holds a mark and a name on **one** line, which is a different claim
+	# from two lines and is asserted separately below. What this catches is a
+	# control holding two lines and saying nothing, and a choice says something.
 	unnamed = panel.evaluate("""() => [...document.querySelectorAll("button")]
-		.filter((one) => one.children.length > 1 && !one.classList.contains("option"))
+		.filter((one) => one.children.length > 1
+			&& !one.classList.contains("option") && !one.classList.contains("choice"))
 		.map((one) => (one.className || one.tagName) + ": " + one.textContent.trim().slice(0, 30))
 	""")
 
@@ -4671,6 +4687,22 @@ def test_every_control_centres_what_is_written_on_it (
 		"""() => getComputedStyle(document.querySelector(".sheet .option")).flexDirection""")
 
 	assert stacked == "column", "an option stacks its two lines, and says so by its class"
+
+	# And the counterpart, so the two exceptions cannot quietly become one
+	# shape: a choice is a single row with its mark at the front.
+	panel.locator(".sheet header button").click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+	panel.locator(".theme > button").click()
+	panel.wait_for_selector(".theme .choices button.choice", timeout=5_000)
+
+	laid = panel.evaluate("""() => {
+		const shape = getComputedStyle(document.querySelector(".theme .choices button.choice"));
+
+		return [shape.flexDirection, shape.justifyContent];
+	}""")
+
+	assert laid == ["row", "flex-start"], (
+		f"a choice is a row with its mark at the front, and this one is {laid}")
 
 
 def test_the_switch_on_a_line_is_big_enough_to_find (
@@ -4848,6 +4880,18 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	note("the size popover open")
 	panel.locator(".sizes > button").click()
 	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
+
+	# **And the other one, which was never a state here.** The size popover was
+	# taken as standing for both, and it does not: it is the one whose rows carry
+	# a third element with `margin-left: auto`, which is exactly what hid a
+	# centring violation in both of them for as long as they have existed. Two
+	# popovers of the same shape are two states, because the whole lesson of the
+	# six is that a state nothing renders in is a state nothing checks.
+	panel.locator(".theme > button").click()
+	panel.wait_for_selector(".theme .choices button", timeout=5_000)
+	note("the theme popover open")
+	panel.locator(".theme > button").click()
+	playwright_api.expect(panel.locator(".theme .choices")).to_have_count(0, timeout=5_000)
 
 	# The inventory, which only exists while the layout is unlocked.
 	panel.locator(".bar .latch").click()

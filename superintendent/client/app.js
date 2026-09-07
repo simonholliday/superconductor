@@ -3380,7 +3380,7 @@ function Theme ({ choice, onChoose }) {
 					${THEMES.map((theme) => html`
 						<button
 							key=${theme.key}
-							class=${theme.key === choice ? "chosen" : ""}
+							class=${`choice ${theme.key === choice ? "chosen" : ""}`}
 							onPointerDown=${(event) => {
 								event.preventDefault();
 								onChoose(theme.key);
@@ -3414,7 +3414,7 @@ function Sizes ({ cell, choice, onChoose }) {
 					${SIZES.map((size) => html`
 						<button
 							key=${size.key}
-							class=${size.key === choice ? "chosen" : ""}
+							class=${`choice ${size.key === choice ? "chosen" : ""}`}
 							onPointerDown=${(event) => {
 								event.preventDefault();
 								onChoose(size.key);

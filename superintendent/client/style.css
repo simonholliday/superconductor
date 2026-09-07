@@ -1755,6 +1755,26 @@ html, body {
    is a press and the popover cannot be dragged. When a panel short enough to
    show the fault actually exists, that is the constraint to design against. */
 
+/* The third and last exception to centring, and like the other two it names
+   itself on the element.
+ *
+ * A choice in a list is a mark and then a name, and a list of them has to line
+ * up. Centred, every row places its swatch according to how long its own name
+ * happens to be — so the marks wander down the column and none of them reads as
+ * a column at all. Simon saw it the moment there were eleven of them.
+ *
+ * **The size chooser has always had this shape and passed the rule by
+ * accident.** Its third element carries `margin-left: auto`, which eats the free
+ * space and leaves the first two at the start whatever `justify-content` says.
+ * So this is not a new exception being taken — it is the one already being taken
+ * silently by one picker, now written down and named on both. That is the whole
+ * point of the named list: an exception nobody declared is one nobody can see.
+ *
+ * It is not `.option`, which stacks two *lines* and centres them; a choice is
+ * one line with a mark at the front. And it is not `.picker`, which pushes a
+ * label and its mark to opposite ends. */
+.choice { justify-content: flex-start; }
+
 /* A theme's swatch is that theme, not a copy of it.
  *
  * **The element carries `data-theme`, so the theme's own block applies to it**
