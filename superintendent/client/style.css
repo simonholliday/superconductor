@@ -66,7 +66,15 @@
 	--panel: light-dark(#ffffff, #20242c);
 	--edge: light-dark(#d3d8df, #2a2e37);
 	--ink: light-dark(#171a1f, #e8eaee);
-	--ink-quiet: light-dark(#586069, #878d99);
+	/* **The dark value was `#878d99` and measured 4.21:1 on the title bar**, below
+	   the 4.5:1 text needs (#2192). That pairing is this token's hardest: a
+	   block's name is condensed uppercase at `--type-title`, which clamps to
+	   9–12px, and `--title-ground` is deliberately close to `--panel` so there
+	   is little ground to gain. Lifted toward white keeping the hue, which is
+	   4.73:1 there and better everywhere else it is drawn. Fixing the ink rather
+	   than the bar, because darkening the bar buys contrast by weakening the
+	   division it exists to draw. */
+	--ink-quiet: light-dark(#586069, #9196a1);
 	/* **Amber both ways, but not the same amber.** A lit step is read from across
 	   a room and at an angle, so what matters is that it is unmistakably a
 	   different block from an unlit one — and on a dark panel that means a bright
@@ -91,11 +99,34 @@
 
 	/* A hairline that has to be seen rather than merely be there: the outline
 	   that says a block can be picked up. `--edge` is a separator and reads as
-	   part of the surface; this reads as a state. */
-	--edge-strong: light-dark(#7c8794, #5f6877);
+	   part of the surface; this reads as a state.
+
+	   **The dark value was `#5f6877`**, which #2112 recorded as "3.22:1 against a
+	   block" and which measures 3.10 there and **2.76 against a control face**
+	   (#2193) — below the 3:1 a non-text boundary needs. It is drawn on both: a
+	   note grid's downbeat divider sits directly on a cell. Lifted keeping the
+	   hue to 3.30 on a control and 3.70 on a block, which brackets what the
+	   original was aiming at rather than overshooting it. */
+	--edge-strong: light-dark(#7c8794, #6c7482);
 
 	/* A third ink, quieter than `--ink-quiet`: what is printed beside a reading
-	   rather than read as one. */
+	   rather than read as one.
+
+	   **This one is a mark rather than a word, and its floor is 3:1, not 4.5**
+	   (Simon, 2026-09-07, settling #2196). That needs saying because the two
+	   places it is drawn are both small condensed uppercase — the legend beside
+	   a readout in the recess, and a grid's transposition label — and #2192
+	   calls exactly that treatment at exactly that size the hardest case for a
+	   *text* floor. The distinction is not size: it is that nothing here is read
+	   as a sentence. `BPM` beside a tempo is noticed once and then stops being
+	   read at all; what is read is the figure beside it, which is `--readout` in
+	   the recess and `--ink` elsewhere. So this is nearer `--edge` than it is to
+	   `--ink-quiet`, and a theme is entitled to keep it quiet.
+
+	   The pairing that made this a question — this ink on `--sunk` — was not
+	   among #2194's checks and is now, at 3.0. It measures 4.08 dark and 4.67
+	   light, so nothing changes here; the palettes it bites are the proposed
+	   ones, where the tightest is 3.12. */
 	--ink-faint: light-dark(#7b828d, #6b7383);
 
 	/* The recess a display sits in. **Near-black in both themes on purpose** —
@@ -104,6 +135,31 @@
 	   else so the two are declared rather than assumed equal (#2112). */
 	--sunk: light-dark(#14161a, #0b0d10);
 	--sunk-shadow: light-dark(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.6));
+
+	/* The figures in that recess, and **the reason there is a token here at all
+	   is that the recess and the grid pull `--on` in opposite directions**
+	   (#2191, settled by Simon on 2026-09-07).
+
+	   A lit step has to be *darker* than an unlit one on a light theme, because
+	   an unlit cell is near-white. A lit readout has to be *lighter* than its
+	   recess, because the recess is near-black in both lightnesses and always
+	   will be — that is #2112's rule and it is right. One colour serving both
+	   has to land between 0.206 and 0.273 relative luminance, a band 0.067 wide
+	   out of 1.0. Every light lit-colour worth having is outside it: a deep teal
+	   is 0.094, a slate blue 0.081, the ARP orange 0.108.
+
+	   So the recess gets its own ink. **A dark theme writes it equal to `--on`
+	   rather than aliasing it**, exactly as `--on-ink` is written twice for the
+	   same stated reason: a value that is only equal by accident is one the
+	   theme cannot move later.
+
+	   The pair below is what shipped, unchanged. The light half is `--on` doing
+	   this job, which measures 4.77:1 and clears the floor by 0.27 — luck rather
+	   than design, since it was picked to solve the cell. It is preserved
+	   because the two shipping palettes are preserved (#2190); a light theme
+	   written from here on gives the recess a bright value of its own hue, which
+	   is the whole point of the split. */
+	--readout: light-dark(#b87400, #f0b429);
 
 	/* Text drawn *on* a filled control rather than beside one. Two of them,
 	   because the two fills are a long way apart in lightness and neither can
@@ -267,8 +323,486 @@
  *
  * `index.html` writes the attribute before the first paint, so a pinned theme
  * does not flash the other one on the way in. */
-:root[data-theme="light"] { color-scheme: light; }
-:root[data-theme="dark"] { color-scheme: dark; }
+[data-theme="light"] { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
+/* Never set on the root — choosing "match system" *removes* the attribute, which
+   is what makes the machine's answer the answer. It exists for the swatch, which
+   has to offer that choice while a theme is pinned, and `color-scheme` inherits:
+   without this the swatch for "match system" would quietly paint whatever is
+   already pinned, which is a picture of what you have offered as the
+   alternative. */
+[data-theme="system"] { color-scheme: light dark; }
+
+/* **A theme is a block that redeclares every token, and that is the whole
+ * mechanism** (#2181).
+ *
+ * The two above are the exception rather than the pattern: they pin
+ * `color-scheme` and let `light-dark()` do the rest, which is why they cost five
+ * lines between them. That trick does not extend — `light-dark()` takes two
+ * arguments and is binary by construction, so a third palette cannot be spelled
+ * in it at all. Every other theme therefore writes its colours out flat.
+ *
+ * **Matched on `[data-theme]` rather than on `:root[data-theme]`, deliberately.**
+ * A theme applies wherever the attribute lands, so the swatch in the picker
+ * carries `data-theme` and *is* the theme rather than a second copy of it. That
+ * was already true of light and dark through `color-scheme`; this keeps it true
+ * of the other eight, and it is the reason no palette value appears twice.
+ *
+ * The specificity is equal to `:root`'s, so these depend on coming after it.
+ *
+ * **Every block declares all 29 tokens** — 21 solid and 8 overlays — and a test
+ * asserts it. A theme missing one silently inherits the default's value and
+ * produces a single wrong colour that nobody notices for weeks.
+ *
+ * **The values are measured, not chosen.** #2194 is the method: 25 contrast
+ * pairings with their floors, and a perceptual separation between `--on` and
+ * `--ring` that has to survive all three dichromacies, because those two appear
+ * on the same control in the same place meaning different things and nothing
+ * else tells them apart. #2190 is these eight and what the dichromacy check
+ * changed in each. `tests/test_themes.py` asserts the contrast half of it.
+ *
+ * **The provenance lives in those documents and in the comments here, never in
+ * a product string.** A theme's name carries the reference without claiming it,
+ * and no manufacturer's or artist's mark appears in the picker or in the
+ * `localStorage` key.
+ *
+ * Clearing every floor is not the same as being any good. The measurements say
+ * none of these is broken; only the panel in its actual position says which are
+ * worth keeping. */
+
+/* After Moog's early modular systems: black photo-etched panels,
+   white silkscreen legends, and hue spent only where a switch or a jack asks
+   for it. Its lit step is an incandescent bone lamp rather than a colour, which
+   is why it is the only theme here where a lit step stays apart from all four
+   meanings under every dichromacy. */
+[data-theme="modular"] {
+	color-scheme: dark;
+
+	/* Surfaces */
+	--ground: #0a0a0b;
+	--part: #141313;
+	--panel: #1d1c1a;
+	--title-ground: #262421;
+	--sunk: #060606;
+
+	/* Edges */
+	--edge: #302d29;
+	--edge-strong: #6e6862;
+
+	/* Inks */
+	--ink: #f2efe6;
+	--ink-quiet: #a9a399;
+	--ink-faint: #7c766d;
+
+	/* Lit */
+	--on: #efe0bc;
+	--on-edge: #fff3d2;
+	--on-ink: #17140d;
+	--readout: #efe0bc;
+
+	/* In flight */
+	--ring: #4c86d8;
+	--ring-ink: #07111f;
+
+	/* The four meanings */
+	--good: #4fbf6a;
+	--bad: #e05252;
+	--warn: #e8a247;
+	--danger: #f07070;
+
+	/* The grid's mark */
+	--accent-beat: #262422;
+
+	/* Overlays */
+	--playhead: rgba(255, 255, 255, 0.09);
+	--playhead-edge: rgba(255, 255, 255, 0.35);
+	--wash: rgba(255, 255, 255, 0.04);
+	--veil: rgba(0, 0, 0, 0.6);
+	--halo: rgba(0, 0, 0, 0.7);
+	--shadow-near: rgba(0, 0, 0, 0.45);
+	--shadow-far: rgba(0, 0, 0, 0.6);
+	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
+/* After the Fairlight CMI, and every readout before it. A lit
+   screen in an unlit room. **Its in-flight state is the same green two stops
+   down, not another hue** — green against blue is the exact axis protanopia and
+   deuteranopia destroy, so no in-flight hue worked and lightness had to carry
+   the separation. That is also what a CRT does with a trace that has not
+   settled. This theme is viable only because a lamp is also a word (#2112): its
+   good lamp and its lit step cannot be told apart at any value. */
+[data-theme="phosphor"] {
+	color-scheme: dark;
+
+	/* Surfaces */
+	--ground: #060b08;
+	--part: #0d140f;
+	--panel: #141d17;
+	--title-ground: #1a251d;
+	--sunk: #030706;
+
+	/* Edges */
+	--edge: #223129;
+	--edge-strong: #5e7a68;
+
+	/* Inks */
+	--ink: #d6eedd;
+	--ink-quiet: #8fa898;
+	--ink-faint: #6c8374;
+
+	/* Lit */
+	--on: #3be07c;
+	--on-edge: #7dffb4;
+	--on-ink: #05170d;
+	--readout: #3be07c;
+
+	/* In flight */
+	--ring: #15834a;
+	--ring-ink: #ffffff;
+
+	/* The four meanings */
+	--good: #c8f5d8;
+	--bad: #ff6b6b;
+	--warn: #ffc163;
+	--danger: #ff8a8a;
+
+	/* The grid's mark */
+	--accent-beat: #1b261f;
+
+	/* Overlays */
+	--playhead: rgba(214, 238, 221, 0.09);
+	--playhead-edge: rgba(214, 238, 221, 0.35);
+	--wash: rgba(214, 238, 221, 0.04);
+	--veil: rgba(0, 0, 0, 0.6);
+	--halo: rgba(0, 0, 0, 0.7);
+	--shadow-near: rgba(0, 0, 0, 0.45);
+	--shadow-far: rgba(0, 0, 0, 0.6);
+	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
+/* After Berlin School sleeves. Deep indigo grounds, an orchid lit
+   state, a colder blue in flight — the only palette here whose surfaces carry
+   real chroma rather than a tinted neutral. Its first draft put lit and
+   in-flight at violet and periwinkle, which measured 0.052 under protanopia:
+   effectively one colour. */
+[data-theme="phaedra"] {
+	color-scheme: dark;
+
+	/* Surfaces */
+	--ground: #0a0a16;
+	--part: #121221;
+	--panel: #1b1b2e;
+	--title-ground: #222239;
+	--sunk: #06060f;
+
+	/* Edges */
+	--edge: #262640;
+	--edge-strong: #6d6d99;
+
+	/* Inks */
+	--ink: #e4e2f2;
+	--ink-quiet: #9b99bc;
+	--ink-faint: #77759a;
+
+	/* Lit */
+	--on: #de84d6;
+	--on-edge: #f0aeea;
+	--on-ink: #1c0820;
+	--readout: #de84d6;
+
+	/* In flight */
+	--ring: #4a5fd8;
+	--ring-ink: #ffffff;
+
+	/* The four meanings */
+	--good: #5fd08a;
+	--bad: #e85f7a;
+	--warn: #ffb45c;
+	--danger: #ff87a0;
+
+	/* The grid's mark */
+	--accent-beat: #23233c;
+
+	/* Overlays */
+	--playhead: rgba(228, 226, 242, 0.09);
+	--playhead-edge: rgba(228, 226, 242, 0.35);
+	--wash: rgba(228, 226, 242, 0.04);
+	--veil: rgba(0, 0, 0, 0.6);
+	--halo: rgba(0, 0, 0, 0.7);
+	--shadow-near: rgba(0, 0, 0, 0.45);
+	--shadow-far: rgba(0, 0, 0, 0.6);
+	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
+/* After The Man-Machine, and the Lissitzky it quotes. Black,
+   white, one red, and nothing else. The hardest palette here to keep honest —
+   a red lit state sits beside a red fault lamp, and even with the fault pulled
+   two steps down in lightness the two are 0.097 apart under tritanopia. Both
+   always carry words. */
+[data-theme="constructor"] {
+	color-scheme: dark;
+
+	/* Surfaces */
+	--ground: #060606;
+	--part: #101010;
+	--panel: #1a1a1a;
+	--title-ground: #232323;
+	--sunk: #000000;
+
+	/* Edges */
+	--edge: #2e2e2e;
+	--edge-strong: #767676;
+
+	/* Inks */
+	--ink: #ffffff;
+	--ink-quiet: #a8a8a8;
+	--ink-faint: #7e7e7e;
+
+	/* Lit */
+	--on: #f44336;
+	--on-edge: #ff7a70;
+	--on-ink: #140302;
+	--readout: #f44336;
+
+	/* In flight */
+	--ring: #ededed;
+	--ring-ink: #121212;
+
+	/* The four meanings */
+	--good: #3cc85f;
+	--bad: #c4283c;
+	--warn: #ff9f0a;
+	--danger: #e0455a;
+
+	/* The grid's mark */
+	--accent-beat: #242424;
+
+	/* Overlays */
+	--playhead: rgba(255, 255, 255, 0.09);
+	--playhead-edge: rgba(255, 255, 255, 0.35);
+	--wash: rgba(255, 255, 255, 0.04);
+	--veil: rgba(0, 0, 0, 0.6);
+	--halo: rgba(0, 0, 0, 0.7);
+	--shadow-near: rgba(0, 0, 0, 0.45);
+	--shadow-far: rgba(0, 0, 0, 0.6);
+	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
+/* After Buchla's 200 series: brushed panels, the blue and red
+   Rogan knobs, and the banana-jack code underneath — orange for a pulse, blue
+   for a control voltage. The lit state is that pulse orange, darkened until it
+   reads on a near-white cell. */
+[data-theme="aluminium"] {
+	color-scheme: light;
+
+	/* Surfaces */
+	--ground: #c8ccd0;
+	--part: #e4e7ea;
+	--panel: #f4f6f7;
+	--title-ground: #dce0e3;
+	--sunk: #121417;
+
+	/* Edges */
+	--edge: #c4c9ce;
+	--edge-strong: #7a828a;
+
+	/* Inks */
+	--ink: #14181c;
+	--ink-quiet: #4e565e;
+	--ink-faint: #737b84;
+
+	/* Lit */
+	--on: #b34a10;
+	--on-edge: #7e3309;
+	--on-ink: #fff3ea;
+	--readout: #ff8a3d;
+
+	/* In flight */
+	--ring: #17479e;
+	--ring-ink: #ffffff;
+
+	/* The four meanings */
+	--good: #1a7a38;
+	--bad: #b3242c;
+	--warn: #8a5a08;
+	--danger: #b3242c;
+
+	/* The grid's mark */
+	--accent-beat: #d9dde1;
+
+	/* Overlays */
+	--playhead: rgba(0, 0, 0, 0.08);
+	--playhead-edge: rgba(0, 0, 0, 0.38);
+	--wash: rgba(0, 0, 0, 0.05);
+	--veil: rgba(20, 24, 28, 0.38);
+	--halo: rgba(255, 255, 255, 0.85);
+	--shadow-near: rgba(20, 24, 28, 0.12);
+	--shadow-far: rgba(20, 24, 28, 0.2);
+	--sunk-shadow: rgba(0, 0, 0, 0.45);
+}
+
+/* After Ambient 1 and Discreet Music. Paper white, almost no
+   chroma, and the two states carried by a deep slate and a dusty rose rather
+   than by anything resembling a lamp. **It inverts the usual temperature on
+   purpose** — settled is cool, in flight is warm — which buys the largest
+   dichromatic separation of any light theme here, 0.258. */
+[data-theme="airports"] {
+	color-scheme: light;
+
+	/* Surfaces */
+	--ground: #d8d9d5;
+	--part: #efefec;
+	--panel: #fbfbf9;
+	--title-ground: #e7e7e3;
+	--sunk: #16171a;
+
+	/* Edges */
+	--edge: #dcdcd7;
+	--edge-strong: #82857f;
+
+	/* Inks */
+	--ink: #1b1d1c;
+	--ink-quiet: #545853;
+	--ink-faint: #767a75;
+
+	/* Lit */
+	--on: #24445d;
+	--on-edge: #152c3d;
+	--on-ink: #f4f7f9;
+	--readout: #9ec2e0;
+
+	/* In flight */
+	--ring: #b87f8c;
+	--ring-ink: #1a0f12;
+
+	/* The four meanings */
+	--good: #3a6b45;
+	--bad: #9b3a3a;
+	--warn: #7e6120;
+	--danger: #9b3a3a;
+
+	/* The grid's mark */
+	--accent-beat: #e7e7e2;
+
+	/* Overlays */
+	--playhead: rgba(0, 0, 0, 0.08);
+	--playhead-edge: rgba(0, 0, 0, 0.38);
+	--wash: rgba(0, 0, 0, 0.05);
+	--veil: rgba(27, 29, 28, 0.38);
+	--halo: rgba(255, 255, 255, 0.85);
+	--shadow-near: rgba(27, 29, 28, 0.12);
+	--shadow-far: rgba(27, 29, 28, 0.2);
+	--sunk-shadow: rgba(0, 0, 0, 0.45);
+}
+
+/* Sun-bleached warm paper with a cold mark on it: a deep dusty teal
+   lit, a true blue in flight. The only light theme whose surfaces are warm and
+   whose states are cold. Teal is the one lit hue here colliding with none of
+   the four meanings, which is what let a warm palette stop reaching for ochre. */
+[data-theme="oxygene"] {
+	color-scheme: light;
+
+	/* Surfaces */
+	--ground: #dcd2c2;
+	--part: #f0e9dc;
+	--panel: #faf5ec;
+	--title-ground: #e8e0d0;
+	--sunk: #17150f;
+
+	/* Edges */
+	--edge: #ded5c4;
+	--edge-strong: #8a8071;
+
+	/* Inks */
+	--ink: #211d16;
+	--ink-quiet: #5c5346;
+	--ink-faint: #7e7466;
+
+	/* Lit */
+	--on: #0e5450;
+	--on-edge: #073b38;
+	--on-ink: #eff7f5;
+	--readout: #4fd1c5;
+
+	/* In flight */
+	--ring: #3a6fd0;
+	--ring-ink: #ffffff;
+
+	/* The four meanings */
+	--good: #1f6b36;
+	--bad: #a8302a;
+	--warn: #8a5710;
+	--danger: #a8302a;
+
+	/* The grid's mark */
+	--accent-beat: #ede5d6;
+
+	/* Overlays */
+	--playhead: rgba(0, 0, 0, 0.08);
+	--playhead-edge: rgba(0, 0, 0, 0.38);
+	--wash: rgba(0, 0, 0, 0.05);
+	--veil: rgba(33, 29, 22, 0.38);
+	--halo: rgba(255, 255, 255, 0.85);
+	--shadow-near: rgba(33, 29, 22, 0.12);
+	--shadow-far: rgba(33, 29, 22, 0.2);
+	--sunk-shadow: rgba(0, 0, 0, 0.45);
+}
+
+/* After the ARP 2600's grey, and studio chassis generally. **A
+   mid-grey light theme rather than a white one**, and the only palette in the
+   set that answers #1959 at all: glare on glossy anti-fingerprint glass, read
+   at an angle, sometimes flat like a table. Worth trying on the panel in its
+   actual position before any of the others. */
+[data-theme="workbench"] {
+	color-scheme: light;
+
+	/* Surfaces */
+	--ground: #94999e;
+	--part: #bdc2c7;
+	--panel: #d6dade;
+	--title-ground: #c8cdd2;
+	--sunk: #101215;
+
+	/* Edges */
+	--edge: #b0b5ba;
+	--edge-strong: #5e656c;
+
+	/* Inks */
+	--ink: #101317;
+	--ink-quiet: #3f464d;
+	--ink-faint: #5c646b;
+
+	/* Lit */
+	--on: #a33a05;
+	--on-edge: #742900;
+	--on-ink: #fff1e6;
+	--readout: #ff8a3d;
+
+	/* In flight */
+	--ring: #10428f;
+	--ring-ink: #ffffff;
+
+	/* The four meanings */
+	--good: #14682e;
+	--bad: #a31f26;
+	--warn: #7a4e06;
+	--danger: #a31f26;
+
+	/* The grid's mark */
+	--accent-beat: #ccd1d6;
+
+	/* Overlays */
+	--playhead: rgba(0, 0, 0, 0.08);
+	--playhead-edge: rgba(0, 0, 0, 0.38);
+	--wash: rgba(0, 0, 0, 0.05);
+	--veil: rgba(16, 19, 23, 0.38);
+	--halo: rgba(255, 255, 255, 0.85);
+	--shadow-near: rgba(16, 19, 23, 0.12);
+	--shadow-far: rgba(16, 19, 23, 0.2);
+	--sunk-shadow: rgba(0, 0, 0, 0.45);
+}
+
 
 * { box-sizing: border-box; }
 
@@ -1117,7 +1651,7 @@ html, body {
 	font-size: var(--type-display);
 	font-weight: 500;
 	line-height: 1;
-	color: var(--on);
+	color: var(--readout);
 	letter-spacing: 0.02em;
 }
 
@@ -1186,7 +1720,12 @@ html, body {
 	white-space: nowrap;
 	touch-action: none;}
 
-.sizes .choices button.chosen { border-color: var(--on-edge); color: var(--on); }
+/* Which one you are on. The theme picker had the class from the beginning and
+   no rule to go with it, so the current theme was the one row saying nothing —
+   invisible because the swatches beside it are all different anyway, and every
+   list looks deliberate. */
+.sizes .choices button.chosen,
+.theme .choices button.chosen { border-color: var(--on-edge); color: var(--on); }
 
 /* Each choice carries a swatch at the size it would draw, so the setting is
  * read on the glass rather than from a number. */
@@ -1198,29 +1737,48 @@ html, body {
 
 .sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: var(--type-chrome-quiet); }
 
+/* **Down the first column, then across**, rather than one column of eleven.
+ *
+ * Eleven rows at a chrome finger is over 500px of popover hanging off the top
+ * bar. It fits this panel and would run off the bottom of a shorter one, and the
+ * obvious fix is worse than the problem: a scrolling popover cannot be scrolled
+ * here, because every button in it carries `touch-action: none` and a finger
+ * landing on one is a press rather than a drag.
+ *
+ * `grid-auto-flow: column` with a row count fills downwards first, so the
+ * reading order is preserved — the three that were always here, then the eight,
+ * rather than the row-wise interleaving a plain two-column grid would give. */
+.theme .choices {
+	display: grid;
+	grid-auto-flow: column;
+	grid-template-rows: repeat(6, auto);
+}
+
 /* A theme's swatch is that theme, not a copy of it.
  *
- * The element carries the `color-scheme` of the theme it offers, and every
- * colour in this file is a `light-dark()` pair resolved against exactly that —
- * so the ground it paints is the ground that theme paints, and no palette value
- * is written down a second time to be got wrong later. "Match system" carries no
- * scheme of its own, which is precisely what it means. */
+ * **The element carries `data-theme`, so the theme's own block applies to it**
+ * and every `var()` below resolves to that theme's value. For light and dark
+ * that means `color-scheme` pinned and the `light-dark()` pairs resolving to the
+ * right half, which is what this did before; for the other eight it means the
+ * whole palette. Either way no palette value is written down a second time to be
+ * got wrong later, which is the only reason this is worth doing at all.
+ *
+ * **Three bands rather than one ground**, because the ground is the thing least
+ * likely to tell two themes apart — four of these are near-black and would draw
+ * as four identical squares. The bands are the chassis, the lit colour and the
+ * in-flight colour: the three a theme is actually judged on, and the three the
+ * measurements are hardest about. */
 .theme .choices i {
 	flex: none;
 	width: 24px;
 	height: 24px;
 	border-radius: 4px;
-	border: 1px solid var(--edge);
-	background: var(--ground);
+	border: 1px solid var(--edge-strong);
+	background: linear-gradient(135deg,
+		var(--part) 0 38%,
+		var(--on) 38% 72%,
+		var(--ring) 72% 100%);
 }
-
-.theme .choices i[data-scheme="light"] { color-scheme: light; }
-.theme .choices i[data-scheme="dark"] { color-scheme: dark; }
-
-/* Said rather than inherited. `color-scheme` inherits, so while a theme is
-   pinned this swatch would quietly show the pinned one — a picture of what you
-   already have, offered as the alternative. */
-.theme .choices i[data-scheme="system"] { color-scheme: light dark; }
 
 /* What is running. Quiet by design — it is provenance, not a control, and it
    earns its place in the bar only by costing no glass at all. */

@@ -2933,38 +2933,103 @@ def test_a_pinned_theme_is_applied_before_the_app_is_even_loaded (
 	assert panel.evaluate("() => document.documentElement.dataset.theme") == "dark"
 
 
+def _swatches (panel: typing.Any) -> dict[str, tuple[str, str]]:
+	"""Every swatch in the open picker, as its own painted bands and the lit
+	colour the theme it offers actually resolves to.
+
+	The second half is measured with a throwaway element carrying the same
+	`data-theme`, because a custom property reads back as the text that was
+	written — `light-dark(#b87400, #f0b429)` for the two that ride on a pair —
+	and what is wanted is the colour the browser settled on.  Asking for it
+	through `color` makes the browser do the resolving.
+	"""
+
+	found = panel.eval_on_selector_all(
+		".theme .choices i",
+		"""els => els.map((one) => {
+			const probe = document.createElement("span");
+			probe.dataset.theme = one.dataset.theme;
+			probe.style.color = "var(--on)";
+			document.body.appendChild(probe);
+			const lit = getComputedStyle(probe).color;
+			probe.remove();
+
+			return [one.dataset.theme,
+				[getComputedStyle(one).backgroundImage, lit]];
+		})""")
+
+	return {name: (bands, lit) for name, (bands, lit) in found}
+
+
 def test_a_theme_swatch_is_the_theme_it_offers (panel: typing.Any) -> None:
 	"""Rather than a copy of it.  Each swatch carries that theme's own
-	`color-scheme`, so the ground it paints is the ground the stylesheet paints
-	— which is what stops the picker becoming a second place the palette is
-	written down and a second place it goes wrong.
+	`data-theme`, so the stylesheet's block for it applies to the swatch and
+	every band in it is painted by that theme — which is what stops the picker
+	becoming a second place the palette is written down and a second place it
+	goes wrong.
+
+	It is the swatch somebody picks a theme *by*, so a picker drifting from the
+	palette is wrong in the one direction nobody would check.
 	"""
 
 	_pick_theme(panel, "Dark", "dark")
-
-	dark_page = _ground(panel)
-
 	panel.locator(".theme > button").click()
 
-	swatches = panel.eval_on_selector_all(
-		".theme .choices i",
-		"""els => els.map((one) => [one.dataset.scheme, getComputedStyle(one).backgroundColor])""")
-	shown = dict(swatches)
+	shown = _swatches(panel)
 
-	assert shown["dark"] == dark_page, (
-		f"the dark swatch is not the dark ground: {shown} against {dark_page}")
-	assert shown["light"] != shown["dark"], f"both swatches are the same colour: {shown}"
+	assert len(shown) >= 3, f"the picker offers almost nothing: {sorted(shown)}"
+
+	for name, (bands, lit) in sorted(shown.items()):
+		assert lit in bands, (
+			f"the {name} swatch does not paint that theme's own lit colour:"
+			f" {lit} is not in {bands}")
+
+	# Every theme but "match system" is a palette of its own, so no two of them
+	# may draw the same swatch: two identical squares in a picker is a choice
+	# that cannot be made.
+	distinct = {name: bands for name, (bands, _) in shown.items() if name != "system"}
+	assert len(set(distinct.values())) == len(distinct), (
+		f"two themes draw the same swatch: {sorted(distinct)}")
 
 	# And "match system" shows the machine's answer rather than the pin. It
 	# inherits `color-scheme` like everything else, so while dark is pinned it
 	# would otherwise offer a picture of what the person already has.
 	panel.emulate_media(color_scheme="light")
+	following = _swatches(panel)
 
-	following = panel.eval_on_selector(
-		'.theme .choices i[data-scheme="system"]', "one => getComputedStyle(one).backgroundColor")
+	assert following["system"] == following["light"], (
+		f"the system swatch followed the pin rather than the machine: {following['system']}")
 
-	assert following == shown["light"], (
-		f"the system swatch followed the pin rather than the machine: {following}")
+
+def test_a_named_theme_repaints_the_whole_panel (panel: typing.Any) -> None:
+	"""The eight written out flat are the ones `light-dark()` could not express,
+	and nothing else in the suite proves one of those blocks reaches the root at
+	all — the swatch test would pass just as well if they only ever applied to a
+	24px square in a popover.
+
+	Phosphor because it is the furthest from either default: a lit screen in an
+	unlit room, where even the grounds are pulled toward green.
+	"""
+
+	panel.emulate_media(color_scheme="dark")
+	before = _ground(panel)
+
+	_pick_theme(panel, "Phosphor", "phosphor")
+
+	assert _ground(panel) != before, "a named theme changed nothing on the page"
+
+	lit = panel.evaluate(
+		"""() => {
+			const probe = document.createElement("span");
+			probe.style.color = "var(--on)";
+			document.body.appendChild(probe);
+			const found = getComputedStyle(probe).color;
+			probe.remove();
+
+			return found;
+		}""")
+
+	assert lit == "rgb(59, 224, 124)", f"the panel is not lit in Phosphor's own green: {lit}"
 
 
 def test_a_theme_outlives_a_reload (panel: typing.Any, service_url: str) -> None:

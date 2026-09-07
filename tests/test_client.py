@@ -15,6 +15,10 @@ import pytest
 import superintendent.protocol
 import superintendent.service
 
+# One parser for the stylesheet's theme blocks, rather than a second regex here
+# answering a slightly different question and drifting from the first.
+import test_themes
+
 
 def _node () -> pathlib.Path | None:
 	"""A JavaScript engine, if this machine has one anywhere.
@@ -112,25 +116,32 @@ def test_the_scale_is_small_and_every_step_of_it_is_used () -> None:
 	assert defined == used, f"defined but unused: {sorted(defined - used)}"
 
 
-def test_every_colour_in_the_stylesheet_is_a_pair () -> None:
-	"""The defect a second theme block always has is a token defined in one
-	theme and missing from the other, and the way to make that impossible is to
-	have no second block: every colour is one `light-dark()` declaration.
+def test_no_rule_in_the_stylesheet_names_a_colour_of_its_own () -> None:
+	"""A colour literal may appear in exactly two places: as half of a
+	`light-dark()` pair in `:root`, or inside a `[data-theme]` block.  Anywhere
+	else it is a colour the theme cannot reach.
 
-	So a literal anywhere is either a colour that only works in one theme, or a
-	colour that will be forgotten when the other one is touched.  Both are the
-	same bug arriving at different times, and neither is caught by looking.
+	**This test used to say something narrower** — that every colour is a
+	`light-dark()` pair and there is no second block at all — which was true
+	while there were two themes and stopped being true at eleven.  The defect it
+	was guarding against has not changed: a value written into an ordinary rule
+	works in whichever theme it was picked for and is wrong in the other ten,
+	and nothing about it looks wrong while you are in the theme it was picked
+	for.  What changed is only where the legitimate copies live, and
+	`test_themes.py` is what now holds them to declaring the same set.
 	"""
 
 	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	# Comments carry item numbers, which look exactly like short hex colours;
-	# and the two halves of a pair are of course literals, which is the point.
+	# the two halves of a pair are of course literals, which is the point; and a
+	# theme block is nothing but literals, which is also the point.
 	code = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
+	code = test_themes.THEME_BLOCK.sub("", code)
 	code = re.sub(r"light-dark\((?:[^()]|\([^()]*\))*\)", "", code)
 	loose = re.findall(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)", code)
 
-	assert loose == [], f"these colours are not a pair: {loose}"
+	assert loose == [], f"these colours belong to no theme: {loose}"
 
 
 def test_every_colour_is_named_once_and_read_somewhere () -> None:

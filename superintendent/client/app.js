@@ -3309,10 +3309,26 @@ function usePinch (cell, choose) {
  * on mount, which costs nothing and means the two cannot disagree. */
 const THEME_KEY = "superintendent.theme";
 
+/* **The name carries the reference without claiming it** (#2194). Each of the
+   eight is drawn from a machine or a record, and which one is in #2190 and in
+   the stylesheet's own comment beside the values — never here, because this
+   string is a product string and the key below is written into `localStorage`.
+
+   `key` is the `data-theme` attribute, so it is also the CSS selector: adding a
+   theme is a block in `style.css` and a line here, and a test asserts the two
+   lists are the same. */
 const THEMES = [
 	{ key: "system", label: "Match system", short: "system" },
 	{ key: "light", label: "Light", short: "light" },
 	{ key: "dark", label: "Dark", short: "dark" },
+	{ key: "modular", label: "Modular", short: "modular" },
+	{ key: "phosphor", label: "Phosphor", short: "phosphor" },
+	{ key: "phaedra", label: "Phaedra", short: "phaedra" },
+	{ key: "constructor", label: "Constructor", short: "constructor" },
+	{ key: "aluminium", label: "Aluminium", short: "aluminium" },
+	{ key: "airports", label: "Airports", short: "airports" },
+	{ key: "oxygene", label: "Oxygène", short: "oxygène" },
+	{ key: "workbench", label: "Workbench", short: "workbench" },
 ];
 
 function rememberedTheme () {
@@ -3372,10 +3388,11 @@ function Theme ({ choice, onChoose }) {
 							}}
 						>
 							${/* The swatch is the theme rather than a copy of it: the
-							     element carries that theme's own `color-scheme`, so the
-							     ground it paints is whatever the stylesheet says the
-							     ground is. No palette value is written twice. */ ""}
-							<i data-scheme=${theme.key}></i>
+							     element carries that theme's own `data-theme`, so the
+							     stylesheet's block for it applies here and the swatch
+							     paints in whatever that block says. No palette value is
+							     written twice. */ ""}
+							<i data-theme=${theme.key}></i>
 							<span>${theme.label}</span>
 						</button>`)}
 				</div>`}

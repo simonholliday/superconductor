@@ -16,16 +16,24 @@
 	attribute again on mount.
 
 	Nothing stored means "match system", which leaves `prefers-color-scheme` in
-	force — so this writes an attribute only for the two states that override it,
-	and anything else is ignored rather than trusted. Storage throws outright in
-	some privacy modes, so a failure here leaves the panel following the machine
-	rather than leaving it blank.
+	force. Storage throws outright in some privacy modes, so a failure here
+	leaves the panel following the machine rather than leaving it blank.
+
+	**Checked by shape rather than against a list of names.** This named light
+	and dark when those were the only two; naming all eleven would make this a
+	third copy of that list, after `app.js` and `style.css`, and the copy nobody
+	edits is the one that silently reintroduces the flash for exactly the themes
+	added last. The shape is the safety property the list was really providing:
+	an unrecognised value can only ever be lowercase letters, so the worst it can
+	do is name a `[data-theme]` block that does not exist, and the panel then
+	paints the default — which is what a stored name from a newer build should do
+	anyway. `app.js` sets the attribute again on mount and is the authority.
 -->
 <script>
 	try {
 		var pinned = localStorage.getItem("superintendent.theme");
 
-		if (pinned === "light" || pinned === "dark") {
+		if (pinned && /^[a-z]+$/.test(pinned)) {
 			document.documentElement.dataset.theme = pinned;
 		}
 	} catch (unavailable) {
