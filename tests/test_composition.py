@@ -423,3 +423,48 @@ def test_a_stack_offers_the_pitches_of_the_pattern_it_builds (rig: typing.Any) -
 	# And they really are different vocabularies rather than three copies of one.
 	assert "kick" in stacks["drum_recipe"].pitches
 	assert "kick" not in stacks["bass_recipe"].pitches
+
+
+def test_every_settings_default_is_the_shape_its_control_derives (rig: typing.Any) -> None:
+	"""A kind is derived from the definition's bands and a default is written by
+	hand in this file, so the two can disagree — and did.
+
+	`square_lfo_polarity` names two states, which makes it a **switch**, and the
+	table opened it at `"bipolar"`: a switch holding a string.  The panel drew it,
+	the app stored it, and nothing said a word until a restore refused it with
+	*"lfo_polarity is a switch"* — after a composition restart, which is the worst
+	moment to find out and the one place it was ever going to show.
+
+	A switch takes a bool and `_cc_value` picks the far end of the definition's
+	own ascending pair, so `True` is `bipolar` and the band's name is never
+	written here at all.  That is the same rule the Minitaur's `legato_glide`
+	already turns on: neither of its states is spelled "on".
+	"""
+
+	wrong = []
+
+	for table, instrument in ((rig.BASS_SETTINGS, rig.MINITAUR),
+	                          (rig.CHORD_SETTINGS, rig.MATRIARCH)):
+		for setting in table:
+			panel, named, label, default = setting[0], setting[1], setting[2], setting[3]
+
+			# Not built from this table: an action rather than a setting (#2177).
+			if panel == "voices":
+				continue
+
+			drawn = rig._panel_parameter(panel, named, label, default,
+			                             *setting[4:5], instrument=instrument)
+
+			if default is None:
+				continue
+
+			fits = {
+				"switch": isinstance(default, bool),
+				"choice": isinstance(default, str),
+				"number": isinstance(default, (int, float)) and not isinstance(default, bool),
+			}[drawn.kind]
+
+			if not fits:
+				wrong.append(f"{panel} is a {drawn.kind} opening at {default!r}")
+
+	assert wrong == [], "\n".join(wrong)

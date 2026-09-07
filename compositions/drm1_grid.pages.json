@@ -29,13 +29,13 @@
 	"bass": [
 		{
 			"name": "bass",
-			"x": 39,
+			"x": 46,
 			"y": 4
 		},
 		{
-			"name": "bass_recipe/lmtribyl62gg",
-			"x": 18,
-			"y": 10
+			"name": "bass_recipe/watch1",
+			"x": 26,
+			"y": 13
 		}
 	]
 }

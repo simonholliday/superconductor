@@ -320,7 +320,11 @@ CHORD_SETTINGS: list[tuple[str, str, str, typing.Any, str]] = [
 
 	("mod_wheel",         "mod_wheel",                "Mod wheel",           0,        "Modulation"),
 	("mod_rate",          "mod_rate",                 "Mod rate",            64,       "Modulation"),
-	("lfo_polarity",      "square_lfo_polarity",      "Square LFO",          "bipolar", "Modulation"),
+	# **A bool, not the band's name.**  Two states make a switch, and a switch
+	# holds True or False — `_cc_value` picks the far end of the definition's own
+	# ascending pair, which is `bipolar`.  Naming the band here declared a switch
+	# opening at a string, and `restore_state.py` is what caught it.
+	("lfo_polarity",      "square_lfo_polarity",      "Square LFO",          True,     "Modulation"),
 	("noise_cutoff",      "noise_filter_cutoff",      "Noise filter",        64,       "Modulation"),
 ]
 """All thirty-six of the Matriarch's controls, in six sections.
