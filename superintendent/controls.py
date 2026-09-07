@@ -216,17 +216,17 @@ def _apply_cell (
 		# refused, which is the half-applied state this shape exists to avoid.
 		kept = _readable_rows(declaration, value, path)
 
-		# The mute is not one of the rows, so replacing the rows must not take
-		# it away.  `grid.clear()` is what makes the replacement a replacement
-		# rather than a merge — every row absent from the new value has to go —
-		# and it would carry `enabled` off with them.
-		mute = grid.get("enabled")
+		# **Everything that is not a row survives a rows write.** The mute used to
+		# be saved and restored here by name, which meant every per-grid field
+		# added afterwards had to be added beside it — the shape of whitelist
+		# this file has already been bitten by twice. A row is a row because the
+		# declaration says so; anything else is the control's own and is kept.
+		beside = {name: held for name, held in grid.items()
+		          if name not in declaration.get("rows", [])}
 
 		grid.clear()
 		grid.update(kept)
-
-		if mute is not None:
-			grid["enabled"] = mute
+		grid.update(beside)
 
 		return
 
@@ -599,18 +599,50 @@ def _apply_note (
 		grid["enabled"] = bool(value)
 		return
 
+	if rest == ["transpose"]:
+		if isinstance(value, bool) or not isinstance(value, int):
+			raise ControlError(f"a transposition is a whole number of semitones, not {value!r}")
+
+		low, high = declaration.get("transpose_range", [-24, 24])
+
+		if not low <= value <= high:
+			raise ControlError(f"a transposition is between {low} and {high} semitones")
+
+		grid["transpose"] = value
+		return
+
+	if rest in (["labels"], ["unreachable"]):
+		# **What a row is called once the pattern has moved, and which rows have
+		# stopped sounding.** Both are the app's alone — only the composition
+		# knows a row is a pitch — so this keeps them and interprets neither. It
+		# does check they name declared rows, because a copy that named a row
+		# this grid does not have could not have come from the app.
+		named = value.keys() if rest == ["labels"] else value
+
+		if not isinstance(value, (dict if rest == ["labels"] else list)):
+			raise ControlError(f"{path!r} takes {'an object' if rest == ['labels'] else 'a list'}")
+
+		for row in named:
+			if row not in declaration.get("rows", []):
+				raise ControlError(f"this grid has no row named {row!r}")
+
+		grid[rest[0]] = dict(value) if rest == ["labels"] else list(value)
+		return
+
 	if rest == ["rows"]:
 		kept = _readable_notes(declaration, value, path)
 
-		# The mute is not one of the notes; see `_apply_cell` for why clearing
-		# would otherwise carry it off.
-		mute = grid.get("enabled")
+		# **Everything that is not a row survives a rows write.** The mute used to
+		# be saved and restored here by name, which meant every per-grid field
+		# added afterwards had to be added beside it — the shape of whitelist
+		# this file has already been bitten by twice. A row is a row because the
+		# declaration says so; anything else is the control's own and is kept.
+		beside = {name: held for name, held in grid.items()
+		          if name not in declaration.get("rows", [])}
 
 		grid.clear()
 		grid.update(kept)
-
-		if mute is not None:
-			grid["enabled"] = mute
+		grid.update(beside)
 
 		return
 

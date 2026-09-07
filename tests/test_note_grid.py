@@ -40,10 +40,28 @@ class FakeLink:
 		self.reported.append((path, value))
 
 
+NOTES = {"C2": 36, "C#2": 37, "D2": 38}
+"""What each row of the fixture sounds, and a ceiling just above it.
+
+Deliberately tight: two semitones up pushes the top row past 39, which is the
+case the whole design exists for — an instrument that answers a note it cannot
+sound with silence rather than with a wrong pitch.
+"""
+
+
+def _named (row: str, semitones: int) -> str | None:
+	"""What a composition would answer, and what a Minitaur would refuse."""
+
+	note = NOTES[row] + semitones
+
+	return None if note > 39 or note < 0 else f"n{note}"
+
+
 def _grid (
 	voices: int | None = 1,
 	divisions: int = 1,
 	rows: list[str] | None = None,
+	relabel: typing.Any = None,
 ) -> tuple[adapter.NoteGrid, FakeComposition, FakeLink]:
 	"""A three-row, eight-step pattern with a link listening to it."""
 
@@ -52,7 +70,8 @@ def _grid (
 
 	grid = adapter.NoteGrid(
 		composition, rows=rows or ["C2", "C#2", "D2"], steps=8, beats=2,
-		data_key="bass", name="bass", voices=voices, divisions=divisions)
+		data_key="bass", name="bass", voices=voices, divisions=divisions,
+		relabel=relabel)
 
 	grid.attach(typing.cast(typing.Any, link))
 
@@ -531,3 +550,100 @@ def test_silencing_a_pitched_grid_mutes_the_pattern_it_drives () -> None:
 
 	grid.apply(["enabled"], True)
 	assert muted == []
+
+
+# --- transposition: the sound moves and the drawing does not (#2144) --------
+
+def test_transposing_moves_nothing_that_was_drawn () -> None:
+	"""The pattern is a stable thing to read and keep editing while it moves.
+
+	That is the whole reason the sound was chosen over the grid: a shape that
+	jumps under the finger during a performance is the worst possible moment for
+	it to move (#2152).
+	"""
+
+	grid, composition, _ = _grid(relabel=_named)
+
+	grid.apply(["C2", "4"], True)
+	before = {row: dict(notes) for row, notes in composition.data["bass"].items()}
+
+	assert grid.apply(["transpose"], 5) is True
+	assert composition.data["bass"] == before, "transposing edited the pattern"
+	assert grid.snapshot()["transpose"] == 5
+
+
+def test_the_row_labels_follow_the_offset () -> None:
+	"""Which is what stops the glass lying about pitch.
+
+	The package cannot work them out — it knows a row is called `C2` and nothing
+	more — so it asks the composition once per row and prints the answers.
+	"""
+
+	grid, _, _ = _grid(relabel=_named)
+
+	grid.apply(["transpose"], 2)
+	held = grid.snapshot()
+
+	assert held["labels"] == {"C2": "n38", "C#2": "n39"}
+	assert held["unreachable"] == ["D2"], (
+		"the row pushed past the instrument's ceiling was not marked")
+
+
+def test_a_grid_whose_rows_are_not_pitches_relabels_nothing () -> None:
+	"""Not an error: a composition that offered no way to ask has none to give,
+	and the panel goes on drawing the row names it already has."""
+
+	grid, _, _ = _grid()
+
+	grid.apply(["transpose"], 3)
+	held = grid.snapshot()
+
+	assert held["transpose"] == 3
+	assert held["labels"] == {} and held["unreachable"] == []
+
+
+def test_the_new_labels_are_reported_in_their_own_right () -> None:
+	"""The panel asked for a number and three things changed.
+
+	Said separately rather than folded into the value, because they are a
+	consequence of it rather than part of it — the same reason a note the voice
+	count cleared is reported on its own.
+	"""
+
+	grid, _, link = _grid(relabel=_named)
+
+	grid.apply(["transpose"], 2)
+
+	said = dict(link.reported)
+
+	assert said["bass/labels"] == {"C2": "n38", "C#2": "n39"}
+	assert said["bass/unreachable"] == ["D2"]
+
+
+def test_a_transposition_outside_what_the_composition_allows_is_refused () -> None:
+	"""The range is the composition's to state and the panel draws what it is told."""
+
+	grid, _, _ = _grid(relabel=_named)
+
+	with pytest.raises(adapter.Refused, match="between -24 and 24 semitones"):
+		grid.apply(["transpose"], 25)
+
+	assert grid.snapshot()["transpose"] == 0
+
+
+def test_asking_for_the_offset_it_already_has_changes_nothing () -> None:
+	"""So a re-send after a reconnect is safe, as every other absolute value is."""
+
+	grid, _, link = _grid(relabel=_named)
+
+	assert grid.apply(["transpose"], 4) is True
+	assert grid.apply(["transpose"], 4) is False
+	assert [path for path, _ in link.reported].count("bass/labels") == 1
+
+
+def test_the_declaration_says_how_far_it_may_be_moved () -> None:
+	"""A panel cannot draw a control it has to guess the bounds of."""
+
+	grid, _, _ = _grid(relabel=_named)
+
+	assert grid.declaration()["transpose_range"] == [-24, 24]

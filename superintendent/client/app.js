@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.16.0";
+const CONTRACT = "1.17.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -751,7 +751,7 @@ const DRAG_SLOP = 8;
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
 function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: windowRows,
-                    snap, selected, pending, failed, onSelect, onSet }) {
+                    labels, unreachable, snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 	};
@@ -973,7 +973,20 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, cell, window: w
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight>
 		<div class="grid notes" style=${style}>
 			${rows.map((row) => html`
-				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row}</div>
+				${/* **The pitch it sounds, not the pitch it was drawn at** (#2144).
+				     Transposition moves the sound and the labels follow it, which
+				     is the whole of what keeps the glass honest — and the panel
+				     cannot work these out, because it knows a row is called `C2`
+				     and nothing else. The app hands them over.
+
+				     A row marked unreachable is one the instrument will not sound
+				     at this offset: a Minitaur ignores anything above note 72 and
+				     goes *silent* rather than wrong, so without this the notes are
+				     still drawn, still lit, and simply absent from the music. */ ""}
+				<div
+					class=${`row-label ${(unreachable || []).includes(row) ? "unreachable" : ""}`}
+					key=${`label-${row}`} data-row=${row}
+				>${(labels || {})[row] || row}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${name}/${row}/${step * divisions}`;
 					const note = (notes[row] || {})[String(step * divisions)];
@@ -1124,9 +1137,35 @@ function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell
  * three pixels of bar, so an edge grip can never reach them however carefully
  * it is drawn; a dotted eighth is not something a drag arrives at either. A
  * musician picks the value, which is the thing they were thinking of anyway. */
-function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, onRemove }) {
+function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, onRemove,
+                        transpose, transposeRange, onTranspose }) {
+	/* **Two buttons and a readout, not a picker** — which is what every piece of
+	 * hardware that transposes offers, because a performer's hand does not choose
+	 * from a list. The octave pair is there because walking an octave one
+	 * semitone at a time is twelve taps at the worst possible moment.
+	 *
+	 * The readout is a mark rather than a target: it says where the pattern is
+	 * and cannot be pressed, so there is nothing to hit by accident while
+	 * reading it (#2107). */
+	const [low, high] = transposeRange || [-24, 24];
+	const shift = (by) => onTranspose(Math.min(high, Math.max(low, (transpose || 0) + by)));
+
 	return html`
 		<div class="note-controls">
+			${onTranspose && html`
+				<div class="note-row">
+					<span class="row-label">transpose</span>
+					${[-12, -1].map((by) => html`
+						<button key=${`t${by}`} class="offer" data-transpose=${by}
+							onPointerDown=${(event) => { event.preventDefault(); shift(by); }}
+						>${by}</button>`)}
+					<span class="reading" data-transpose="now">${
+						(transpose || 0) > 0 ? `+${transpose}` : `${transpose || 0}`}</span>
+					${[1, 12].map((by) => html`
+						<button key=${`t${by}`} class="offer" data-transpose=${`+${by}`}
+							onPointerDown=${(event) => { event.preventDefault(); shift(by); }}
+						>+${by}</button>`)}
+				</div>`}
 			<div class="note-row">
 				<span class="row-label">snap</span>
 				${snaps.map((value) => html`
@@ -1198,6 +1237,7 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
 			divisions=${divisions}
 			notes=${notes} cell=${cell} window=${control.visible_rows}
+			labels=${notes.labels} unreachable=${notes.unreachable}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
 		${/* **Drawn only where the app said what a weight means.** The lane's
@@ -1212,6 +1252,10 @@ function NoteBlock ({ name, control, notes, cell, pending, failed, onSet }) {
 				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
 			selected=${selected} note=${note}
+			transpose=${notes.transpose} transposeRange=${control.transpose_range}
+			onTranspose=${control.transpose_range
+				? (semitones) => onSet(`${name}/transpose`, semitones)
+				: null}
 			onLength=${(length) => onSet(`${name}/${selected.row}/${selected.at}/length`, length)}
 			onRemove=${() => {
 				onSet(`${name}/${selected.row}/${selected.at}`, false);

@@ -228,3 +228,66 @@ def test_a_chord_note_is_placed_in_steps_rather_than_in_sub_steps (
 
 	assert declared["divisions"] == 1
 	assert declared["default_length"] == rig.CHORD_LENGTH == 2
+
+
+# --- transposition on the rig's own instruments (#2144) ---------------------
+
+def test_the_label_and_the_player_agree_about_what_can_sound (
+	rig: typing.Any) -> None:
+	"""**One function decides, so they cannot differ.**
+
+	A row the label calls unreachable and the player sounds anyway would be the
+	glass and the ears disagreeing — which is the exact fault transposition was
+	designed to prevent, arriving by the back door.
+	"""
+
+	named = rig._relabel(rig.BASS_NOTE_MAP, rig.MINITAUR)
+
+	for semitones in (-24, -7, 0, 5, 24):
+		for row in rig.BASS_RANGE:
+			sounds = rig._sounding(row, semitones, rig.BASS_NOTE_MAP, rig.MINITAUR)
+
+			assert (named(row, semitones) is None) == (sounds is None), (
+				f"{row} at {semitones}: the label and the player disagree")
+
+
+def test_a_bassline_pushed_past_the_minitaurs_ceiling_is_marked_not_played (
+	rig: typing.Any) -> None:
+	"""The failure this whole design exists to make visible.
+
+	A Minitaur ignores a note above 72 rather than playing it wrong, so a
+	transposed bassline goes *silent* with every cell still lit.  The top of
+	BASS_RANGE is C3, note 48, so it takes a big move to reach — which is the
+	point: it is reachable, and nothing else would say so.
+	"""
+
+	named = rig._relabel(rig.BASS_NOTE_MAP, rig.MINITAUR)
+	top = rig.BASS_RANGE[-1]
+
+	assert rig.midi_notes.name_to_note(top) == 48
+	assert named(top, 24) == "C5", "two octaves up is still inside a Minitaur"
+	assert named(top, 25) is None, "a semitone above 72 should sound nothing"
+	assert rig._sounding(top, 25, rig.BASS_NOTE_MAP, rig.MINITAUR) is None
+
+
+def test_a_matriarch_has_no_ceiling_to_reach (rig: typing.Any) -> None:
+	"""Which is why the range check has to be per instrument rather than a rule.
+
+	The same transposition that silences a Minitaur is unremarkable here, and
+	only the definition knows the difference.
+	"""
+
+	named = rig._relabel(rig.CHORD_NOTE_MAP, rig.MATRIARCH)
+	top = rig.CHORD_RANGE[-1]
+
+	assert named(top, 24) is not None
+	assert rig.MATRIARCH.voice.note_range == (0, 127)
+
+
+def test_both_pitched_grids_offer_a_transposition (rig: typing.Any) -> None:
+	"""And the drum grid does not, because transposing a drum map is nonsense."""
+
+	for name in ("bass", "chords"):
+		assert "transpose_range" in rig.link.controls[name].declaration()
+
+	assert "transpose_range" not in rig.link.controls["grid"].declaration()

@@ -196,6 +196,57 @@ def test_choices_keeps_its_own_list_rather_than_the_caller_s () -> None:
 	assert state["recipe"]["pitches"] == ["kick", "snare"]
 
 
+MOVED: dict[str, typing.Any] = {
+	"bass": {"type": "note_grid", "rows": ["C2", "D2"], "steps": 4, "beats": 1,
+	         "transpose_range": [-5, 5]},
+}
+
+
+def test_a_transposition_is_kept_and_bounded_by_what_the_app_declared () -> None:
+	"""The service keeps the app's copy, so a value the app could not have
+	reported has to be refused rather than stored."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, MOVED, "bass/transpose", -5)
+
+	assert state == {"bass": {"transpose": -5}}
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, MOVED, "bass/transpose", 6)
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, MOVED, "bass/transpose", 1.5)
+
+
+def test_labels_and_unreachable_are_kept_and_checked_against_the_rows () -> None:
+	"""Held and never interpreted — only the app knows a row is a pitch — but a
+	copy naming a row this grid does not have could not have come from it."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, MOVED, "bass/labels", {"C2": "D2"})
+	superintendent.controls.apply_change(state, MOVED, "bass/unreachable", ["D2"])
+
+	assert state["bass"] == {"labels": {"C2": "D2"}, "unreachable": ["D2"]}
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(state, MOVED, "bass/labels", {"G9": "x"})
+
+
+def test_clearing_a_grid_keeps_everything_that_is_not_a_row () -> None:
+	"""The mute used to be saved and restored here by name, so every field added
+	afterwards would have had to be added beside it.  Nothing is named now."""
+
+	state: dict[str, typing.Any] = {}
+
+	superintendent.controls.apply_change(state, MOVED, "bass/enabled", False)
+	superintendent.controls.apply_change(state, MOVED, "bass/transpose", 3)
+	superintendent.controls.apply_change(state, MOVED, "bass/rows", {})
+
+	assert state["bass"] == {"enabled": False, "transpose": 3}
+
+
 ACTS: dict[str, typing.Any] = {
 	"moog": {"type": "params", "fields": [
 		{"name": "voicing", "kind": "action", "options": [

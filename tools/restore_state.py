@@ -26,6 +26,25 @@ URL = "ws://127.0.0.1:8090/ws/panel"
 WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superintendent-state.json")
 
 
+DERIVED: frozenset[str] = frozenset({"labels", "unreachable"})
+"""Fields an app works out for itself, which a restore must not try to put back.
+
+A snapshot carries them because a panel arriving late has no other way to learn
+them — what each row is called once a pattern is transposed, and which rows have
+stopped sounding.  But they are **consequences of `transpose` rather than values
+in their own right**, so replaying them is at best redundant and at worst wrong:
+the app refuses the path, and `labels` is a dict of rows that this walker would
+otherwise take apart into steps that do not exist.
+
+Restoring the offset regenerates both, which is why skipping them loses nothing.
+
+**This is a list of names and lists of names go stale**, so it is the thing to
+check when a restore starts nacking after a contract change.  The better fix is
+for a declaration to say which of its fields are derived; that does not exist yet
+and is not worth inventing for two.
+"""
+
+
 def _sets (app: str, state: dict) -> list[tuple[str, str, object]]:
 	"""Every value in a snapshot, as the sets that would put it there.
 
@@ -40,6 +59,9 @@ def _sets (app: str, state: dict) -> list[tuple[str, str, object]]:
 			continue
 
 		for key, value in held.items():
+			if key in DERIVED:
+				continue
+
 			if isinstance(value, list) and all(isinstance(one, int) for one in value):
 				for step in value:
 					asks.append((app, f"{control}/{key}/{step}", True))

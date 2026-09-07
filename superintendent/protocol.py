@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.16.0"
+CONTRACT_VERSION = "1.17.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -89,6 +89,23 @@ that is the only place it could store anything else.  A panel too old to read
 the field draws a step per position, which is wrong on a grid that declares
 more than one — so a service that does not know the field refuses the control
 rather than drawing it, as 1.8.0 does for the same reason.
+
+1.17.0 lets a note grid be transposed.  It declares ``transpose_range`` and its
+state carries ``transpose`` in semitones, plus two fields the app alone can fill:
+``labels``, what each row is called at the current offset, and ``unreachable``,
+the rows that will not sound at it.
+
+**The sound moves and the drawing does not.**  The notes stay where they were
+put, so the shape a person made stays a stable thing to read and keep editing,
+and the change is undone by putting the number back.  What follows the offset is
+the row labels — which is what stops the glass lying about pitch, and is the only
+way to mark a row pushed past an instrument's ceiling.  A Moog Minitaur ignores
+anything above note 72 and goes *silent* rather than wrong, so a transposed
+bassline can vanish with every cell still lit and nothing to say why.
+
+The panel cannot compute any of it: it knows a row is called ``C2`` and nothing
+else, and that ``C2`` is a pitch is a fact about a studio (#1465).  So the app
+sends the words and the panel prints them.
 
 1.16.0 adds ``action``: a parameter that **does something and holds nothing**.
 It names options as a ``choice`` does and a press is checked against them, but no

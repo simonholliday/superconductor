@@ -769,8 +769,12 @@ def test_the_snap_selector_offers_what_the_grid_can_hold (panel: typing.Any) -> 
 
 	_open_the_bass(panel)
 
+	# Named rather than positional. This read `.note-row:first-child` until a
+	# transposition row was added above it, at which point it silently measured
+	# a different control and reported four values of `undefined` — a selector
+	# that says where a thing sits rather than what it is.
 	offered = panel.eval_on_selector_all(
-		'.part[data-part="bass"] .note-controls .note-row:first-child button',
+		'.part[data-part="bass"] .note-controls button[data-snap]',
 		"els => els.map(el => el.dataset.snap)")
 
 	assert offered == ["1/4", "1/8", "1/16"], f"the snap row offered {offered}"
@@ -1700,6 +1704,86 @@ def test_one_of_many_is_chosen_from_a_menu_rather_than_a_wall_of_buttons (
 
 	assert asked and asked[-1]["v"] == "clap"
 	playwright_api.expect(panel.locator('.part[data-part="stack/one"] .menu .options')).to_have_count(0)
+
+
+def test_transposing_asks_for_a_number_and_moves_nothing_on_its_own (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Two buttons and a readout, which is what hardware offers a performer.
+
+	And the face is the app's, as everywhere else: the panel asks and draws what
+	comes back, rather than moving the readout itself.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	_settled(panel)
+
+	block = '.part[data-part="bass"]'
+
+	assert panel.locator(f'{block} [data-transpose="now"]').inner_text().strip() == "0"
+
+	panel.locator(f'{block} [data-transpose="+1"]').click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "bass/transpose"]
+
+	assert sent and sent[-1]["v"] == 1
+
+	fake_app.confirm("bass/transpose", 1, by="panel")
+	_settled(panel)
+
+	assert panel.locator(f'{block} [data-transpose="now"]').inner_text().strip() == "+1"
+
+
+def test_transposing_is_bounded_by_what_the_app_declared (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The panel draws what it is told rather than inventing a range, and does
+	not ask for a value the app would only refuse."""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	_settled(panel)
+
+	block = '.part[data-part="bass"]'
+
+	fake_app.confirm("bass/transpose", 3, by="panel")
+	_settled(panel)
+
+	panel.locator(f'{block} [data-transpose="+12"]').click()
+
+	sent = [one for one in fake_app.sets if one["path"] == "bass/transpose"]
+
+	assert sent[-1]["v"] == 3, "the panel asked to go past the declared ceiling"
+
+
+def test_a_row_says_the_pitch_it_sounds_and_says_when_it_sounds_nothing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The whole of why transposition moves the labels** (#2144).
+
+	The panel cannot work these out — it knows a row is called `C2` and nothing
+	else — so the app sends the words.  And a row past the instrument's ceiling
+	goes silent rather than wrong, which is invisible unless the glass says so.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	_settled(panel)
+
+	block = '.part[data-part="bass"] .grid.notes'
+
+	assert panel.locator(f'{block} .row-label[data-row="C2"]').inner_text().strip() == "C2"
+
+	fake_app.confirm("bass/labels", {"C2": "D2", "C#2": "D#2"}, by="panel")
+	fake_app.confirm("bass/unreachable", ["D2"], by="panel")
+	_settled(panel)
+
+	assert panel.locator(f'{block} .row-label[data-row="C2"]').inner_text().strip() == "D2"
+
+	assert panel.locator(f'{block} .row-label[data-row="D2"].unreachable').count() == 1, (
+		"a row that cannot sound at this offset is drawn exactly like one that can"
+	)
+
+	# Marked rather than merely dimmed: colour alone says nothing on this panel.
+	struck = panel.locator(f'{block} .row-label[data-row="D2"]').evaluate(
+		"el => getComputedStyle(el).textDecorationLine")
+
+	assert "line-through" in struck
 
 
 def test_an_action_never_draws_a_chosen_button (

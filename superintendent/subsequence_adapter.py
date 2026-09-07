@@ -502,6 +502,8 @@ class NoteGrid (Control):
 		pattern: str | None = None,
 		mono: bool = False,
 		voices: int | None = None,
+		transpose_range: tuple[int, int] = (-24, 24),
+		relabel: collections.abc.Callable[[str, int], str | None] | None = None,
 		divisions: int = 1,
 		default_length: int = 1,
 		default_velocity: int = 100,
@@ -531,6 +533,37 @@ class NoteGrid (Control):
 
 		self.voices = voices
 		"""How many notes may sound at once, or None for as many as you like."""
+
+		self.transpose = 0
+		"""How many semitones the pattern is sounding away from how it is drawn.
+
+		**The sound moves and the drawing does not** (#2152).  The notes stay
+		where they were put, so the shape a person made stays a stable thing to
+		read and to keep editing, and the change is undone by putting the number
+		back.  What follows the offset is the row *labels*, which is what stops
+		the glass lying about pitch.
+		"""
+
+		self.transpose_range = transpose_range
+		"""How far it may be moved, in semitones.
+
+		Two octaves each way by default, which is what pitch bend offers and
+		about as far as a bassline stays a bassline.  The composition may say
+		otherwise; the panel draws whatever it is told.
+		"""
+
+		self.relabel = relabel
+		"""What a row is called once the pattern is transposed, asked of the composition.
+
+		**This package cannot answer it**, and that is the point: nothing here
+		knows that a row called ``C2`` is a pitch, or that two semitones above it
+		is ``D2``.  The composition maps rows to notes and so the composition is
+		asked, one row at a time (#1465).
+
+		Returning ``None`` says the row cannot sound at this offset — which a
+		Minitaur does above note 72, silently, and is the failure this whole
+		design exists to make visible.
+		"""
 
 		self.divisions = divisions
 		self.default_length = default_length
@@ -571,6 +604,7 @@ class NoteGrid (Control):
 		declared: dict[str, typing.Any] = {
 			"type": "note_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
 			"voices": self.voices, "divisions": self.divisions,
+			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
 			"max_length": self.positions, "velocity_range": [1, 127]}
 
@@ -602,7 +636,11 @@ class NoteGrid (Control):
 		switch live over a pattern that is not.
 		"""
 
-		return {**self.rows_now(), "enabled": self.enabled}
+		labels, unreachable = self._relabelled()
+
+		return {**self.rows_now(), "enabled": self.enabled,
+		        "transpose": self.transpose,
+		        "labels": labels, "unreachable": unreachable}
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one note, absolutely rather than by toggling."""
@@ -616,6 +654,9 @@ class NoteGrid (Control):
 		# one I kept testing was the step grid, where it worked.
 		if rest == ["enabled"]:
 			return self._keep_enabled(value)
+
+		if rest == ["transpose"]:
+			return self._keep_transpose(value)
 
 		if rest == ["rows"]:
 			return self._keep_rows(value)
@@ -712,6 +753,66 @@ class NoteGrid (Control):
 			raise Refused(f"a note has no {field}")
 
 		return wanted
+
+	def _keep_transpose (self, value: typing.Any) -> bool:
+		"""Move the sound without moving the drawing, and say what the rows are now.
+
+		**Landing.**  Nothing here waits for a boundary and nothing has to: the
+		pattern is rebuilt once a cycle and reads this when it is, so a number set
+		mid-bar is heard from the next one.  What that costs is a window of up to
+		one cycle in which the labels have moved and the ears have not — small,
+		self-correcting, and worth knowing about.  A change that has to be *shown*
+		as queued is #2146's, and it is the harder half of the same idea.
+
+		The labels are said in their own right because the panel cannot work them
+		out.  It knows a row is called ``C2`` and nothing else; only the
+		composition knows that is a pitch.
+		"""
+
+		low, high = self.transpose_range
+		wanted_semitones = int(value)
+
+		if not low <= wanted_semitones <= high:
+			raise Refused(f"transposition is between {low} and {high} semitones")
+
+		if wanted_semitones == self.transpose:
+			return False
+
+		self.transpose = wanted_semitones
+
+		# Reported separately rather than folded into the value, because they are
+		# a consequence of it rather than part of it — the same reason a note the
+		# voice count cleared is reported in its own right.
+		if self.link is not None:
+			labels, unreachable = self._relabelled()
+			self.link.report(f"{self.name}/labels", labels)
+			self.link.report(f"{self.name}/unreachable", unreachable)
+
+		return True
+
+	def _relabelled (self) -> tuple[dict[str, str], list[str]]:
+		"""What each row is called at the current offset, and which cannot sound.
+
+		Empty when the composition offered no way to ask, which is not an error:
+		a grid whose rows are not pitches has nothing to relabel, and a panel goes
+		on drawing the row names it already has.
+		"""
+
+		if self.relabel is None:
+			return {}, []
+
+		labels: dict[str, str] = {}
+		unreachable: list[str] = []
+
+		for row in self.rows:
+			said = self.relabel(row, self.transpose)
+
+			if said is None:
+				unreachable.append(row)
+			else:
+				labels[row] = said
+
+		return labels, unreachable
 
 	def _keep_rows (self, value: typing.Any) -> bool:
 		"""Replace the whole grid, which is how it is cleared."""

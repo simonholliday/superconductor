@@ -202,6 +202,81 @@ def test_a_pitch_pool_the_app_would_refuse_does_not_reach_the_service_either () 
 			"recipe/a/pitches", ["C2", "F#9"])
 
 
+class Reporting:
+	"""A link that keeps what the app said without being asked."""
+
+	def __init__ (self) -> None:
+		"""Start with nothing said."""
+
+		self.reported: list[tuple[str, typing.Any]] = []
+
+	def report (self, path: str, value: typing.Any) -> None:
+		"""Keep it, the way a real link would put it on the wire."""
+
+		self.reported.append((path, value))
+
+
+def test_a_transposed_grid_and_the_service_agree () -> None:
+	"""**One press, three frames** — and `_agree` is deliberately not used.
+
+	Transposing changes the offset, the row labels and which rows can sound, and
+	the last two travel in their own right because they are a consequence of the
+	first rather than part of it.  Anything that replays only the path the panel
+	asked for leaves the service holding the offset with the *old* labels — which
+	is a panel that reloads being told a pattern sounds at pitches it does not.
+
+	The seam suite found exactly that on this change's first run, which is what
+	it is for.
+	"""
+
+	grid = _notes()
+	link = Reporting()
+	grid.attach(typing.cast(typing.Any, link))
+	grid.relabel = lambda row, semitones: None if semitones > 3 else f"{row}+{semitones}"
+
+	declared = {grid.name: grid.declaration()}
+	held = {grid.name: grid.snapshot()}
+
+	grid.apply(["transpose"], 2)
+
+	# Everything the app put on the wire, in the order it said it.
+	superintendent.controls.apply_change(
+		held, declared, f"{grid.name}/transpose", grid.applied(["transpose"], 2))
+
+	for path, value in link.reported:
+		superintendent.controls.apply_change(held, declared, path, value)
+
+	assert held[grid.name] == grid.snapshot(), (
+		f"the service holds {held[grid.name]!r} and the app holds {grid.snapshot()!r}")
+
+
+def test_a_rows_write_no_longer_carries_off_whatever_sits_beside_them () -> None:
+	"""The mute used to be saved and restored here by name.
+
+	Which meant every per-grid field added afterwards had to be added beside it,
+	and `transpose` would have been the first to go missing — silently, and only
+	for a panel that reloaded.  Nothing is named now: a row is a row because the
+	declaration says so, and everything else is kept.
+	"""
+
+	grid = _notes()
+	declared = {grid.name: grid.declaration()}
+	held = {grid.name: grid.snapshot()}
+
+	for rest, value in ((["enabled"], False), (["transpose"], 7)):
+		grid.apply(rest, value)
+		superintendent.controls.apply_change(
+			held, declared, "/".join([grid.name, *rest]), grid.applied(rest, value))
+
+	# And now the clear that used to take them with it.
+	grid.apply(["rows"], {})
+	superintendent.controls.apply_change(
+		held, declared, f"{grid.name}/rows", grid.applied(["rows"], {}))
+
+	assert held[grid.name]["enabled"] is False, "clearing the grid took the mute away"
+	assert held[grid.name]["transpose"] == 7, "clearing the grid took the transposition away"
+
+
 def _settings () -> typing.Any:
 	"""An instrument with one ordinary setting and one that holds nothing."""
 

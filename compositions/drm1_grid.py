@@ -310,6 +310,52 @@ composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
 composition.data["chords"] = {}
 
+def _relabel (notes: dict[str, int], definition: typing.Any) -> typing.Any:
+	"""What a row of *notes* is called once the pattern is transposed, for *definition*.
+
+	**Only this file can answer it.**  The package knows a row is called ``C2``
+	and nothing more; that ``C2`` is a pitch, that two semitones above it is
+	``D2``, and that the instrument stops at note 72 are all facts about a studio
+	(#1465).  So the grid asks and this answers, one row at a time.
+
+	``None`` says the row cannot sound at that offset.  It is the whole reason
+	the labels move at all: a Minitaur ignores a note above 72 rather than
+	playing it wrong, so transposing a bassline up goes **silent**, and a row
+	that says so on the glass is the difference between a design decision and a
+	bug report about a synth that stopped working.
+	"""
+
+	def named (row: str, semitones: int) -> str | None:
+		note = _sounding(row, semitones, notes, definition)
+
+		return None if note is None else str(midi_notes.note_to_name(note))
+
+	return named
+
+
+def _sounding (
+	row: str,
+	semitones: int,
+	notes: dict[str, int],
+	definition: typing.Any,
+) -> int | None:
+	"""The note *row* actually plays at *semitones*, or None where it cannot.
+
+	**Shared with `_relabel` on purpose.**  A row the label calls unreachable and
+	the player sounds anyway would be a disagreement between the glass and the
+	ears — which is the exact fault transposition was designed to avoid, arriving
+	by the back door.  One function, so they cannot differ.
+	"""
+
+	note = notes[row] + semitones
+	sounds = definition.voice.note_range
+
+	if sounds is not None and not sounds[0] <= note <= sounds[1]:
+		return None
+
+	return note
+
+
 def _voice_count (definition: typing.Any, *, when_switchable: int | None = None) -> int | None:
 	"""How many notes a grid should let sound at once, from what a definition says.
 
@@ -474,9 +520,16 @@ def bass (p: typing.Any) -> None:
 	beats_per_position = STEP_DURATION / BASS_DIVISIONS
 
 	for row, notes in composition.data["bass"].items():
+		sounding = _sounding(row, bass_grid.transpose, BASS_NOTE_MAP, MINITAUR)
+
+		# Silently, on the instrument — so the row is marked on the glass rather
+		# than played into nothing (#2144).
+		if sounding is None:
+			continue
+
 		for at, note in notes.items():
 			p.note(
-				row, beat=int(at) * beats_per_position,
+				sounding, beat=int(at) * beats_per_position,
 				velocity=note.get("velocity", BASS_VELOCITY),
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
@@ -541,9 +594,14 @@ def chords (p: typing.Any) -> None:
 	# One position is one step here, unlike the bass: a chord wants to land on
 	# the beat rather than between two of them, and nothing yet asks otherwise.
 	for row, notes in composition.data["chords"].items():
+		sounding = _sounding(row, chord_grid.transpose, CHORD_NOTE_MAP, MATRIARCH)
+
+		if sounding is None:
+			continue
+
 		for at, note in notes.items():
 			p.note(
-				row, beat=int(at) * STEP_DURATION,
+				sounding, beat=int(at) * STEP_DURATION,
 				velocity=note.get("velocity", CHORD_VELOCITY),
 				duration=note.get("length", CHORD_LENGTH) * STEP_DURATION)
 
@@ -618,6 +676,35 @@ the order a stack plays in is the person's to arrange from the glass.
 """
 
 
+bass_grid = superintendent.subsequence_adapter.NoteGrid(
+	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
+	data_key="bass", name="bass", title="Minitaur — bass",
+	relabel=_relabel(BASS_NOTE_MAP, MINITAUR),
+	voices=_voice_count(MINITAUR),
+	pattern="bass", divisions=BASS_DIVISIONS,
+	about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
+	default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
+	visible_rows=12)
+
+
+chord_grid = superintendent.subsequence_adapter.NoteGrid(
+	composition, rows=CHORD_ROWS, steps=STEPS, beats=BEATS,
+	data_key="chords", name="chords", title="Matriarch — chords",
+	relabel=_relabel(CHORD_NOTE_MAP, MATRIARCH),
+	# The ceiling, through the guard that refuses to read an
+	# unestablished polyphony as an unlimited one (#2172, #2142).
+	voices=_voice_count(MATRIARCH, when_switchable=CHORD_VOICES),
+	pattern="chords",
+	about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
+	default_length=CHORD_LENGTH, default_velocity=CHORD_VELOCITY,
+	visible_rows=12)
+"""The two pitched patterns, named rather than built in place.
+
+A pattern function has to read its grid's transposition when it builds, so the
+grid has to be a thing this file can refer to (#2144).
+"""
+
+
 link = superintendent.subsequence_adapter.AppLink(
 	composition,
 	controls=[
@@ -633,24 +720,8 @@ link = superintendent.subsequence_adapter.AppLink(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="shared", name="shared", title="Shared — drums",
 			about=[("", "no instrument")]),
-		superintendent.subsequence_adapter.NoteGrid(
-			composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
-			data_key="bass", name="bass", title="Minitaur — bass",
-			voices=_voice_count(MINITAUR),
-			pattern="bass", divisions=BASS_DIVISIONS,
-			about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
-			default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
-			visible_rows=12),
-		superintendent.subsequence_adapter.NoteGrid(
-			composition, rows=CHORD_ROWS, steps=STEPS, beats=BEATS,
-			data_key="chords", name="chords", title="Matriarch — chords",
-			# The ceiling, through the guard that refuses to read an
-			# unestablished polyphony as an unlimited one (#2172, #2142).
-			voices=_voice_count(MATRIARCH, when_switchable=CHORD_VOICES),
-			pattern="chords",
-			about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
-			default_length=CHORD_LENGTH, default_velocity=CHORD_VELOCITY,
-			visible_rows=12),
+		bass_grid,
+		chord_grid,
 		superintendent.subsequence_adapter.Params(
 			composition,
 			parameters=[

@@ -32,7 +32,9 @@ CONTROLS: dict[str, typing.Any] = {
 	"bass": {"type": "note_grid", "rows": ["D2", "C#2", "C2"], "steps": 8, "beats": 2,
 	         "visible_rows": 2,
 	         "voices": 1, "default_length": 1, "default_velocity": 100,
-	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass"},
+	         "max_length": 8, "velocity_range": [1, 127], "title": "Bass",
+	         # Narrow on purpose, so a test can reach the end of it in two taps.
+	         "transpose_range": [-3, 3]},
 	"fine": {"type": "note_grid", "rows": ["D2", "C2"], "steps": 4, "beats": 1,
 	         "voices": None, "divisions": 4, "default_length": 4, "default_velocity": 100,
 	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine"},

@@ -1733,6 +1733,27 @@ html, body {
 	}
 }
 
+/* **A row that will not sound at this offset.** Transposing moves the sound and
+   the labels follow, and past an instrument's ceiling there is no pitch to name
+   — a Minitaur ignores anything above note 72 and goes silent rather than wrong.
+   So the row keeps the name it was drawn at and says, quietly, that nothing will
+   come out of it. Struck through as well as dimmed, because dimming alone is a
+   colour saying something on its own and this panel does not do that. */
+.grid.notes .row-label.unreachable {
+	color: var(--ink-faint);
+	text-decoration: line-through;
+}
+
+/* Where the pattern is sounding, printed rather than pressed: a mark, so there
+   is nothing to hit by accident while reading it (#2107). */
+.note-row .reading {
+	font-family: var(--face-figures);
+	font-size: var(--type-body);
+	color: var(--ink);
+	min-width: calc(var(--row) * 0.9);
+	text-align: center;
+}
+
 /* A number is a bar you push rather than a knob you turn: a rotary gesture on
    glass has no detent and no purchase, and a bar says its value by its length
    as well as by its figure. */
