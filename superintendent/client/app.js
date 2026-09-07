@@ -1413,9 +1413,18 @@ function Setting ({ field, held, onSet }) {
 		setOpen(true);
 	};
 
+	const [menuBox, onGlass] = useOnGlass(open);
+
 	/* Both a choice and a choices open the same menu in the same place, so the
 	   placement is written once. Two copies of this drifted apart in an earlier
 	   life of the settings panel and only the one being looked at was fixed. */
+	/* The vertical half is decided in `show()` above, from the trigger's own box:
+	   it flips above when there is not room below. The horizontal half cannot be
+	   decided there, because this menu takes `min-width` from its trigger and is
+	   routinely wider than one — so how far it reaches is not known until it is
+	   drawn. That is `useOnGlass`, and it is the same hook the chrome popovers
+	   use, for the same fault seen from the other side (#2197): this one pins
+	   `left` and runs off the right, they pin `right` and run off the left. */
 	const menuStyle = () => ({
 		left: `${where.left}px`,
 		minWidth: `${where.minWidth}px`,
@@ -1423,6 +1432,7 @@ function Setting ({ field, held, onSet }) {
 		...(where.top !== undefined
 			? { top: `${where.top}px` }
 			: { bottom: `${where.bottom}px` }),
+		...(onGlass || {}),
 	});
 
 	const bounded = field.min !== undefined && field.max !== undefined;
@@ -1558,6 +1568,7 @@ function Setting ({ field, held, onSet }) {
 					<div
 						role="group"
 						class="options"
+						ref=${menuBox}
 						style=${menuStyle()}
 					>
 						${options.map((option) => html`
@@ -1632,7 +1643,7 @@ function Setting ({ field, held, onSet }) {
 						: `${labelOf(chosen[0])} +${chosen.length - 1}`}<i>▾</i></button>
 
 				${open && where && html`
-					<div role="group" class="options" style=${menuStyle()}>
+					<div role="group" class="options" ref=${menuBox} style=${menuStyle()}>
 						${options.map((one) => option(one.value, one.label || one.value))}
 					</div>`}
 			</div>`;
@@ -3357,6 +3368,60 @@ function usePinch (cell, choose) {
 	         onPointerUp: up, onPointerCancel: up };
 }
 
+/* **A popover is anchored to its control and must still be on the glass** (#2197).
+ *
+ * Every popover in the chrome hangs from `right: 0` of the control that opened
+ * it, which is correct while the bar is one line and that control is near the
+ * right-hand end. The bar wraps at narrow widths — it carries the transport, the
+ * tempo, the pattern navigation, the latch, the inventory, both choosers, the
+ * lamp and two readouts — and the control then lands near the *left* edge, where
+ * a popover reaching leftwards runs off the glass. Measured at 1280: the theme
+ * picker at x 14–136 and its popover spanning −25 to 136.
+ *
+ * **It does not reproduce at 1920×1080**, which is why nobody had seen it: this
+ * panel is wide enough that the bar never wraps. That is #2049 almost word for
+ * word — the development rig is where the work is done and not what the product
+ * is for.
+ *
+ * The block menu has the mirror of it. That one is placed by JavaScript already,
+ * pinned to its trigger's *left* with a vertical flip and no horizontal bound at
+ * all, so a trigger near the right edge pushes it off that side instead. Two
+ * placements, two directions, one missing rule — which is why this is a hook
+ * rather than a patch in the picker that reported it.
+ *
+ * **Measured after it is drawn, then shifted**, because nothing before that
+ * knows how wide the thing is: the chrome popovers size to their widest row and
+ * the menu can be wider than the trigger it takes `min-width` from. The shift is
+ * a transform, so it moves what is painted without disturbing the layout the
+ * measurement came from, and the effect runs only on opening — with the shift
+ * back at zero, so it never measures its own answer. */
+const GLASS_MARGIN = 8;
+
+function useOnGlass (open) {
+	const box = useRef(null);
+	const [shift, setShift] = useState(0);
+
+	useLayoutEffect(() => {
+		if (!open || !box.current) {
+			setShift(0);
+
+			return;
+		}
+
+		const seen = box.current.getBoundingClientRect();
+
+		/* Off the left wins if it is somehow off both, because the left edge is
+		   the one a reading eye starts at and the one the marks line up on. */
+		setShift(seen.left < GLASS_MARGIN
+			? Math.round(GLASS_MARGIN - seen.left)
+			: seen.right > window.innerWidth - GLASS_MARGIN
+				? Math.round(window.innerWidth - GLASS_MARGIN - seen.right)
+				: 0);
+	}, [open]);
+
+	return [box, shift ? { transform: `translateX(${shift}px)` } : null];
+}
+
 /* The size chooser.
  *
  * Every button here is a fixed comfortable size and none of them scales with
@@ -3436,6 +3501,7 @@ function useTheme () {
 
 function Theme ({ choice, onChoose }) {
 	const [open, setOpen] = useState(false);
+	const [box, shift] = useOnGlass(open);
 	const named = THEMES.find((one) => one.key === choice) || THEMES[0];
 
 	return html`
@@ -3446,7 +3512,7 @@ function Theme ({ choice, onChoose }) {
 			>theme · ${named.short}</button>
 
 			${open && html`
-				<div role="group" class="choices">
+				<div role="group" class="choices" ref=${box} style=${shift}>
 					${THEMES.map((theme) => html`
 						<button
 							key=${theme.key}
@@ -3471,6 +3537,7 @@ function Theme ({ choice, onChoose }) {
 
 function Sizes ({ cell, choice, onChoose }) {
 	const [open, setOpen] = useState(false);
+	const [box, shift] = useOnGlass(open);
 
 	return html`
 		<div class="sizes">
@@ -3480,7 +3547,7 @@ function Sizes ({ cell, choice, onChoose }) {
 			>size · ${cell}px</button>
 
 			${open && html`
-				<div role="group" class="choices">
+				<div role="group" class="choices" ref=${box} style=${shift}>
 					${SIZES.map((size) => html`
 						<button
 							key=${size.key}

@@ -3046,13 +3046,9 @@ def test_the_theme_picker_fits_what_it_offers (panel: typing.Any) -> None:
 	assert tall <= glass, (
 		f"the picker is {tall}px on {glass}px of glass, and it cannot be scrolled")
 
-	# **Horizontal placement is deliberately not asserted here, and #2197 is why.**
-	# Every popover in the chrome is pinned to `right: 0` of its own control,
-	# which is correct while the bar is one line and wrong the moment it wraps —
-	# the control lands near the left edge and the popover hangs 25px off the
-	# glass. It is pre-existing, it is not about themes, and it is the same fault
-	# for the size chooser. Asserting it here would fail on a defect this test
-	# has no business owning.
+	# Horizontal placement is #2197's and is asserted for every popover at once,
+	# below, because it was never about the theme picker: that is only where it
+	# was noticed.
 
 
 def test_a_named_theme_repaints_the_whole_panel (panel: typing.Any) -> None:
@@ -5508,3 +5504,63 @@ def test_a_matching_contract_leaves_the_build_stamp_alone (
 
 	assert "behind" not in stamp and "disagree" not in stamp, stamp
 	assert "mismatch" not in panel.eval_on_selector(".bar .build", "one => one.className")
+
+
+def _on_the_glass (panel: typing.Any, selector: str) -> tuple[int, int, int]:
+	"""Where a popover is drawn, against the width of the glass."""
+
+	return tuple(panel.eval_on_selector(selector, """one => {
+		const box = one.getBoundingClientRect();
+
+		return [Math.round(box.left), Math.round(box.right), window.innerWidth];
+	}"""))
+
+
+def test_no_popover_is_drawn_off_the_side_of_the_glass (panel: typing.Any) -> None:
+	"""#2197.  A popover hangs from the control that opened it, and a control is
+	not always where the popover assumed it would be.
+
+	**The chrome popovers pin `right: 0`**, which is correct while the bar is one
+	line and that control is near the right-hand end.  The bar wraps at narrow
+	widths — it carries the transport, the tempo, the pattern navigation, the
+	latch, the inventory, both choosers, the lamp and two readouts — and the
+	control then lands near the *left* edge, where a popover reaching leftwards
+	runs off the glass.  Measured at 1280 before the fix: the theme picker at
+	x 14–136 and its popover spanning −25 to 136.
+
+    **The block menu has the mirror of it**, and had no horizontal bound at all:
+	it is placed by JavaScript, pinned to its trigger's left, and a trigger near
+	the right edge pushes it off that side instead.  Its own test asserted top
+	and bottom and said nothing about either side, so one direction of one
+	instance was covered and the rule was not.
+
+	Neither reproduces at 1920×1080, which is why they went unseen — the panel
+	this is developed on is wide enough that the bar never wraps.  That is #2049
+	almost word for word.
+
+	Nothing here can be scrolled to, either: every button in a popover carries
+	`touch-action: none`, so a finger landing on one is a press.  A control drawn
+	off the glass is a control that cannot be worked, which this project counts
+	as a defect in its own right.
+	"""
+
+	for which in (".theme", ".sizes"):
+		panel.locator(f"{which} > button").click()
+		panel.wait_for_selector(f"{which} .choices button", timeout=5_000)
+
+		left, right, glass = _on_the_glass(panel, f"{which} .choices")
+
+		assert left >= 0, f"{which} is drawn {-left}px off the left: {left}–{right} on {glass}"
+		assert right <= glass, f"{which} is drawn {right - glass}px off the right"
+
+		panel.locator(f"{which} > button").click()
+		playwright_api.expect(panel.locator(f"{which} .choices")).to_have_count(0, timeout=5_000)
+
+	_open_the_stack(panel)
+	panel.locator('.part[data-part="stack/one"] .menu > button').first.click()
+	panel.wait_for_selector('.part[data-part="stack/one"] .menu .options', timeout=5_000)
+
+	left, right, glass = _on_the_glass(panel, ".menu .options")
+
+	assert left >= 0, f"the block menu is drawn {-left}px off the left"
+	assert right <= glass, f"the block menu is drawn {right - glass}px off the right"
