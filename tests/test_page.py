@@ -3001,6 +3001,60 @@ def test_a_theme_swatch_is_the_theme_it_offers (panel: typing.Any) -> None:
 		f"the system swatch followed the pin rather than the machine: {following['system']}")
 
 
+def test_the_theme_picker_fits_what_it_offers (panel: typing.Any) -> None:
+	"""Eleven themes do not go in one column without hanging half a metre of
+	popover off the bar, so they go down a column of six and then across — and
+	the first attempt at that drew the second column *on top of* the first.
+
+	Every other test passed against it. The palettes were right, the swatches
+	were right, the client and the stylesheet agreed about all eleven; the only
+	thing wrong was that four of the names were unreadable, which nothing in the
+	suite was looking at. Found in a screenshot, which is not a method.
+
+	**It is the name overflowing the button, not the button overlapping its
+	neighbour**, and the difference matters because the obvious test does not
+	catch it. The rows sat side by side exactly as asked; each was 44px wide,
+	which is the chrome finger's own minimum, and each label was 66 to 93px of
+	text drawn straight through the one beside it. A test comparing button
+	rectangles passes against the broken build — measured, not assumed.
+
+	So this asks whether each row is wide enough for what is written in it, and
+	whether the box is on the glass at all.
+	"""
+
+	panel.locator(".theme > button").click()
+	panel.wait_for_selector(".theme .choices button")
+
+	spilling = panel.eval_on_selector_all(".theme .choices button", """els => els
+		.filter((one) => one.scrollWidth > one.clientWidth + 1)
+		.map((one) => one.textContent.trim()
+			+ " (" + one.scrollWidth + "px of name in " + one.clientWidth + "px)")""")
+
+	assert spilling == [], f"these names are drawn outside their own row: {spilling}"
+
+	# **Height only.** A page here may be wider than the glass on purpose — the
+	# cell size is a setting and a big one overflows, which is why every surface
+	# that is not a control is a place to take hold of the page. So the bar's
+	# right-hand end being off-screen is the design rather than a fault, and
+	# horizontal position is a question about scroll. Height is not: a popover
+	# taller than the glass cannot be scrolled to, because every button in it
+	# carries `touch-action: none` and a finger landing on one is a press. That
+	# is the whole reason this list goes down a column of six and then across.
+	tall, glass = panel.eval_on_selector(".theme .choices",
+		"one => [one.getBoundingClientRect().height, window.innerHeight]")
+
+	assert tall <= glass, (
+		f"the picker is {tall}px on {glass}px of glass, and it cannot be scrolled")
+
+	# **Horizontal placement is deliberately not asserted here, and #2197 is why.**
+	# Every popover in the chrome is pinned to `right: 0` of its own control,
+	# which is correct while the bar is one line and wrong the moment it wraps —
+	# the control lands near the left edge and the popover hangs 25px off the
+	# glass. It is pre-existing, it is not about themes, and it is the same fault
+	# for the size chooser. Asserting it here would fail on a defect this test
+	# has no business owning.
+
+
 def test_a_named_theme_repaints_the_whole_panel (panel: typing.Any) -> None:
 	"""The eight written out flat are the ones `light-dark()` could not express,
 	and nothing else in the suite proves one of those blocks reaches the root at

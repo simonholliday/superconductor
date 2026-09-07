@@ -1737,22 +1737,23 @@ html, body {
 
 .sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: var(--type-chrome-quiet); }
 
-/* **Down the first column, then across**, rather than one column of eleven.
- *
- * Eleven rows at a chrome finger is over 500px of popover hanging off the top
- * bar. It fits this panel and would run off the bottom of a shorter one, and the
- * obvious fix is worse than the problem: a scrolling popover cannot be scrolled
- * here, because every button in it carries `touch-action: none` and a finger
- * landing on one is a press rather than a drag.
- *
- * `grid-auto-flow: column` with a row count fills downwards first, so the
- * reading order is preserved — the three that were always here, then the eight,
- * rather than the row-wise interleaving a plain two-column grid would give. */
-.theme .choices {
-	display: grid;
-	grid-auto-flow: column;
-	grid-template-rows: repeat(6, auto);
-}
+/* **One column of eleven, and the two-column version is a dead end worth
+   recording.**
+
+   Eleven rows is around 550px of popover, which fits this panel and would run
+   off a shorter one — so it was laid out down a column of six and then across.
+   That cost two real defects for a panel nobody has. The columns first drew on
+   top of one another, because an implicit `auto` column in a shrink-to-fit
+   absolutely-positioned box resolves against a width the box has not settled;
+   `max-content` fixed that and caused the second, which is that a 310px-wide
+   popover pinned to `right: 0` runs off the *left* of the glass wherever this
+   control is drawn near the left edge — which is exactly where the sheet draws
+   it. Neither was visible in a passing suite.
+
+   The height problem is real and unsolved, and it is not solved by scrolling:
+   every button in here carries `touch-action: none`, so a finger landing on one
+   is a press and the popover cannot be dragged. When a panel short enough to
+   show the fault actually exists, that is the constraint to design against. */
 
 /* A theme's swatch is that theme, not a copy of it.
  *
