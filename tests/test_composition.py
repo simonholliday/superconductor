@@ -367,3 +367,59 @@ def test_a_choice_the_definition_names_no_states_for_is_drawn_as_a_number (
 			assert drawn[panel] == "number", (
 				f"{panel} is a choice with nothing to choose, so it draws as nothing")
 			assert panel in drawn
+
+
+def test_every_pattern_can_be_given_a_generator (rig: typing.Any) -> None:
+	"""#2147, and Simon's ask in his own words: all patterns should have "+ Add
+	Generator", not just the DRM1 panel.
+
+	**Nothing in the package forbade it and nothing in the package changed.**  The
+	panel offers the button on a pattern exactly where some stack declares it
+	`builds`, and this composition declared one — so the DRM1 had the button and
+	the two Moogs did not, which reads as a missing feature and was a missing
+	declaration.  That is #1465's division working: an app offering no stack for a
+	pattern is saying that pattern takes no contributions, and this one was saying
+	it by accident.
+
+	Asserted against the grids rather than a list of names, so a pattern added
+	later fails here rather than quietly arriving without one.
+	"""
+
+	grids = {name for name, control in rig.link.controls.items()
+	         if isinstance(control, (superintendent.subsequence_adapter.StepGrid,
+	                                 superintendent.subsequence_adapter.NoteGrid))}
+
+	built = {control.declaration()["builds"] for control in rig.link.controls.values()
+	         if control.declaration().get("type") == "recipe"}
+
+	assert grids, "no grids at all, so this proves nothing"
+	assert grids - built == set(), f"these patterns take no contributions: {sorted(grids - built)}"
+
+
+def test_a_stack_offers_the_pitches_of_the_pattern_it_builds (rig: typing.Any) -> None:
+	"""Which is the whole difference between a stack on a kit and one on a bassline.
+
+	A euclidean rhythm on the DRM1 picks between ten voice names; the same
+	generator on the Minitaur picks between the notes that grid's rows *are*.  The
+	catalogue knows a parameter is a pitch and cannot know which pitches exist —
+	only this file knows one grid's rows are a drum machine's and another's are
+	notes an instrument can reach (#2085).
+
+	Worth asserting because the failure is quiet and wrong rather than loud: a
+	bass stack handed the drum rows would offer `kick` as a pitch for a Minitaur,
+	and every value it sent would be refused by a note map that has never heard
+	of it.
+	"""
+
+	stacks = {name: control for name, control in rig.link.controls.items()
+	          if isinstance(control, superintendent.subsequence_adapter.Recipe)}
+
+	assert set(stacks) >= {"drum_recipe", "bass_recipe", "chord_recipe"}
+
+	assert stacks["drum_recipe"].pitches == rig.ROWS
+	assert stacks["bass_recipe"].pitches == rig.BASS_ROWS
+	assert stacks["chord_recipe"].pitches == rig.CHORD_ROWS
+
+	# And they really are different vocabularies rather than three copies of one.
+	assert "kick" in stacks["drum_recipe"].pitches
+	assert "kick" not in stacks["bass_recipe"].pitches

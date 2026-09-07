@@ -14,6 +14,7 @@ each holding the steps that sound.  The pattern builder reads it and the panel
 writes it.  Nothing in the Subsequence package is changed to make this work.
 """
 
+import collections.abc
 import pathlib
 import typing
 
@@ -637,6 +638,8 @@ def bass (p: typing.Any) -> None:
 				velocity=note.get("velocity", BASS_VELOCITY),
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
+	bass_recipe.build(p)
+
 
 def send_voicing (name: str, value: typing.Any) -> None:
 	"""Ask the Matriarch for a voicing, which is the only way it will honour one.
@@ -734,6 +737,8 @@ def chords (p: typing.Any) -> None:
 				velocity=note.get("velocity", CHORD_VELOCITY),
 				duration=note.get("length", CHORD_LENGTH) * STEP_DURATION)
 
+	chord_recipe.build(p)
+
 
 def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 	"""Put whatever a grid holds onto the pattern being built."""
@@ -745,7 +750,26 @@ def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
 			p.hit_steps(row, list(steps), velocity=VELOCITY)
 
 
-SHARED = {"shared": lambda p: _play(p, composition.data["shared"])}
+def _play_shared (p: typing.Any) -> None:
+	"""Replay the instrument-less grid, and run whatever is stacked on it.
+
+	**The stack is built here because this grid has no pattern of its own**
+	(#2147).  Every other stack is built by the pattern function that owns it;
+	this grid makes no sound until something routes it, so its generators run
+	where the grid runs — inside whichever pattern borrowed it.  A grid patched
+	into two instruments carries its generators to both, which is what the grid
+	already does with its notes.
+	"""
+
+	_play(p, composition.data["shared"])
+	shared_recipe.build(p)
+
+
+SHARED: dict[str, collections.abc.Callable[[typing.Any], None]] = {"shared": _play_shared}
+"""Annotated rather than inferred: a dict is invariant in its value type, and a
+named function infers as its own signature rather than as the `Callable` the
+adapter asks for.  It was a lambda before and inferred loosely enough not to
+notice."""
 """Grids any pattern here may take its notes from, and how to play one.
 
 **Turning a grid into notes is this file's business, so the function is this
@@ -759,13 +783,22 @@ what this rig can show today.
 """
 
 
-def _stack_for (pattern: str, name: str, title: str) -> typing.Any:
-	"""A stack of contributions that build one pattern."""
+def _stack_for (pattern: str, name: str, title: str,
+                pitches: collections.abc.Sequence[str] = ROWS) -> typing.Any:
+	"""A stack of contributions that build one pattern.
+
+	``pitches`` is what this pattern's rows *are*, and it is the whole of what
+	makes a stack on a bassline different from a stack on a kit: the catalogue
+	knows a parameter is a pitch and cannot know which pitches exist, and only
+	this file knows that one grid's rows are a DRM1's voices and another's are
+	notes a Minitaur can reach (#1465, #2085).  Superintendent is handed both and
+	names neither.
+	"""
 
 	return superintendent.subsequence_adapter.Recipe(
 		composition,
 		catalogue=subsequence.generators(),
-		pitches=ROWS,
+		pitches=list(pitches),
 		bounds={
 			"pulses": (0, STEPS),
 			"grid": (1, STEPS),
@@ -802,6 +835,48 @@ because that is where a person is looking when they want another one.
 Built *after* the hand grid in the pattern function, deliberately.  A generator
 told to skip a step that already sounds has to see the taps before it runs, and
 the order a stack plays in is the person's to arrange from the glass.
+"""
+
+bass_recipe = _stack_for("bass", "bass_recipe", "Minitaur — generators", BASS_ROWS)
+"""And the same for the bassline, which is #2147 and is a change to this file.
+
+**Nothing in the package forbade it and nothing had to change there.**  The panel
+offers "add generator" on a pattern exactly where some stack declares it
+`builds`, and until now this composition declared one — so the DRM1 had the
+button and the two Moogs did not, which read as a missing feature and was a
+missing declaration.  That is the division working: an app that offers no stack
+for a pattern is saying that pattern takes no contributions, and this one was
+saying it by accident.
+
+The pitches are the difference and the only one.  A euclidean rhythm on a kit
+picks between ten voices; the same generator here picks between twenty-five
+notes a Minitaur can reach, because that is what this grid's rows *are*.
+"""
+
+chord_recipe = _stack_for("chords", "chord_recipe", "Matriarch — generators", CHORD_ROWS)
+"""And for the chords, where it is worth the most.
+
+A grid of chords is the slowest thing on this rig to type in by hand — three
+cells in a column, for every chord — and the catalogue is full of generators that
+compute exactly that.  `arpeggio` in particular came fully drivable when #2155
+landed upstream, so a chord written here can be arpeggiated by a generator rather
+than drawn note by note.
+"""
+
+shared_recipe = _stack_for("shared", "shared_recipe", "Shared — generators")
+"""And on the grid with no instrument, which is the one that needed thought.
+
+Every other stack is built by its own pattern function.  **This grid has none** —
+it makes no sound until something routes it, and it is replayed as a *source*
+inside whichever stack it is patched into (#2108).  So there is nowhere for a
+`build` of its own to happen, and its generators run where the grid itself runs:
+inside the pattern that borrowed it.
+
+That is the honest place for them.  A generator on this stack contributes to
+whatever this grid is currently feeding, which is exactly what the grid does, and
+a grid patched into two instruments carries its generators to both.  Its pitches
+are the DRM1's because that is what its rows are named after; a shared grid whose
+rows meant something else would be a different declaration in this file.
 """
 
 
@@ -891,6 +966,9 @@ link = superintendent.subsequence_adapter.AppLink(
 			configures="bass",
 			on_change=send_setting),
 		drum_recipe,
+		bass_recipe,
+		chord_recipe,
+		shared_recipe,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -906,12 +984,13 @@ link = superintendent.subsequence_adapter.AppLink(
 		# patched to it: generators, cables, and a grid with no instrument behind
 		# it.  All of the routing this rig can currently show is on this page.
 		superintendent.subsequence_adapter.Page(
-			"drums", parts=["grid", "drum_recipe", "shared"], title="Drums"),
+			"drums", parts=["grid", "drum_recipe", "shared", "shared_recipe"],
+			title="Drums"),
 
 		superintendent.subsequence_adapter.Page(
-			"bass", parts=["bass", "minitaur"], title="Bass"),
+			"bass", parts=["bass", "bass_recipe", "minitaur"], title="Bass"),
 		superintendent.subsequence_adapter.Page(
-			"chords", parts=["chords", "matriarch"], title="Chords"),
+			"chords", parts=["chords", "chord_recipe", "matriarch"], title="Chords"),
 	],
 	page_store=superintendent.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),
