@@ -4892,10 +4892,12 @@ def test_a_velocity_lane_marks_the_same_beats_as_the_grid_above_it (
 	agreed = panel.evaluate("""() => {
 		const block = document.querySelector('.part[data-part="bass"]');
 
-		/* The strip colours each beat in the 808's four-colour run, so where
-		   one beat ends and the next begins is where that colour changes. */
+		/* The strip alternates its weight beat by beat, so where one beat ends
+		   and the next begins is where that alternation flips. It used to be a
+		   run of four hues and this read the colour class; the mechanism moved
+		   and the question did not. */
 		const run = [...block.querySelectorAll(".beats .beat")].map(
-			(one) => [...one.classList].find((name) => /^b[1-9]$/.test(name)));
+			(one) => one.classList.contains("off"));
 
 		return {
 			strip: run.map((colour, step) => [step, colour])

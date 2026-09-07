@@ -576,7 +576,9 @@ function BeatStrip ({ steps, beats, tight }) {
 		>
 			<span class="beats-label"></span>
 			${Array.from({ length: steps }, (_, step) => html`
-				<i key=${`beat-${step}`} class=${`beat b${(Math.floor(step / per) % 4) + 1}`}></i>`)}
+				<i key=${`beat-${step}`} class=${["beat",
+					Math.floor(step / per) % 2 ? "off" : "",
+					step % (per * 4) === 0 ? "barline" : ""].filter(Boolean).join(" ")}></i>`)}
 		</div>`;
 }
 

@@ -80,16 +80,6 @@
 	--playhead: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
 	--accent-beat: light-dark(#dde2ea, #2b313b);
 
-	/* The TR-808's own run of sixteen, four colours in fours, muted for a
-	   screen and for a room read at an angle. **Marks, never faces** — they are
-	   drawn above the grid and never on a cell, so they cannot be mistaken for
-	   a step being on, and the pattern goes on being read in one colour.
-	   The dark values are lifted a little, because a saturated hue on a
-	   near-black ground reads dimmer than the same hue on white. */
-	--beat-1: light-dark(#a2333b, #c8484f);
-	--beat-2: light-dark(#a8551f, #d97b39);
-	--beat-3: light-dark(#8a6714, #d4a63c);
-	--beat-4: light-dark(#5f5b52, #b9b3a5);
 
 	/* A title bar's own ground. A window says it is a window by having a bar
 	   that is not the body — that is how every windowed system has done it, and
@@ -876,10 +866,21 @@ html, body {
 
 .beats.tight .beat { border-radius: 0; }
 
-.beat.b1 { background: var(--beat-1); }
-.beat.b2 { background: var(--beat-2); }
-.beat.b3 { background: var(--beat-3); }
-.beat.b4 { background: var(--beat-4); }
+/* **Beats are counted, not coloured.**
+ *
+ * This was the TR-808's own run of four hues, and it was the one place in this
+ * panel where colour said something on its own — which is the rule stated over
+ * the four meaning-colours below, and this broke it. Nobody who cannot separate
+ * red from amber could count fours here, and a run borrowed from one drum
+ * machine is a false citation on a grid driving another (Simon, 2026-09-07).
+ *
+ * So: alternate weight marks each beat, and a taller mark marks the bar. Both
+ * are readable without hue, and neither costs a theme a colour of its own. If
+ * there is a real 808 in the room, the four hues belong to *that page* as an
+ * override rather than to every panel. */
+.beat { background: var(--ink-quiet); }
+.beat.off { opacity: 0.45; }
+.beat.barline { height: max(7px, calc(var(--cell) * 0.15)); }
 
 .cell.on {
 	background: var(--on);
