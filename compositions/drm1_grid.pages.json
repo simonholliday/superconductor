@@ -16,14 +16,19 @@
 			"y": 2
 		},
 		{
+			"name": "bass_recipe/lmtrqew7ngsc",
+			"x": 15,
+			"y": 26
+		},
+		{
 			"name": "chord_recipe/lmtrqgghn8kv",
 			"x": 50,
 			"y": 14
 		},
 		{
-			"name": "bass_recipe/lmtrqew7ngsc",
-			"x": 15,
-			"y": 26
+			"name": "minitaur",
+			"x": 18,
+			"y": 14
 		}
 	],
 	"bass": [
