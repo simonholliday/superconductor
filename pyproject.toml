@@ -74,8 +74,16 @@ packages = ["superconductor"]
 superconductor = ["client/*", "client/vendor/*", "client/fonts/*"]
 
 [tool.setuptools_scm]
-# Used when there is no git repository to read a version from — "git init" is
-# Simon's call, and until it is made the version cannot be derived.
+# **The version is the git tag and is written nowhere.** `v0.1.0` builds `0.1.0`;
+# any commit past a tag builds `0.0.1.devN+g<sha>`, and PyPI refuses a version
+# carrying a local segment — so an untagged commit cannot be published even by
+# accident. Measured by building both on 2026-09-08.
+#
+# The fallback is for a tree with no git history, which is not this repository
+# any more but is still an ordinary way to arrive: a source zip from GitHub is
+# not a clone, and without this `pip install .` would fail there. Requiring git
+# to install is exactly the kind of thing #2049 refuses. `build.version()` reads
+# 0.0.0 back as *unknown* rather than as a release, so nothing prints it.
 fallback_version = "0.0.0"
 
 [tool.mypy]
