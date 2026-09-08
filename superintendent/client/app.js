@@ -3780,6 +3780,7 @@ const THEMES = [
 	{ key: "phosphor", label: "Phosphor", short: "phosphor" },
 	{ key: "phaedra", label: "Phaedra", short: "phaedra" },
 	{ key: "constructor", label: "Constructor", short: "constructor" },
+	{ key: "prism", label: "Prism", short: "prism" },
 	{ key: "aluminium", label: "Aluminium", short: "aluminium" },
 	{ key: "airports", label: "Airports", short: "airports" },
 	{ key: "oxygene", label: "Oxygène", short: "oxygène" },

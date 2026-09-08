@@ -40,9 +40,9 @@
 			"y": 1
 		},
 		{
-			"name": "shared",
-			"x": 1,
-			"y": 5
+			"name": "snare_lane",
+			"x": 3,
+			"y": 22
 		},
 		{
 			"name": "nine",
@@ -50,9 +50,19 @@
 			"y": 17
 		},
 		{
-			"name": "snare_lane",
+			"name": "shared",
 			"x": 3,
-			"y": 22
+			"y": 0
+		},
+		{
+			"name": "made_grids",
+			"x": 4,
+			"y": 15
+		},
+		{
+			"name": "made_grids-lmtsomcp0qlz",
+			"x": 5,
+			"y": 17
 		}
 	],
 	"chords": [

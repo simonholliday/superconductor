@@ -540,6 +540,84 @@
    a red lit state sits beside a red fault lamp, and even with the fault pulled
    two steps down in lightness the two are 0.097 apart under tritanopia. Both
    always carry words. */
+/* **Prism** — after the cover Hipgnosis drew for a record about going mad, which
+ * is a beam of white light entering a glass prism on a field of pure black and
+ * leaving as six bands.  Famously six: red, orange, yellow, green, blue, violet,
+ * and no indigo.
+ *
+ * **The panel has exactly six jobs that are said in colour** — the lit state, the
+ * state in flight, and the four meanings — so the artwork's own bands go to them
+ * one for one, and nothing here is a hue somebody invented.  Where the palette
+ * needed more tones than the cover has, they are the same band at a different
+ * lightness or saturation rather than a new hue, which is the rule Simon set.
+ *
+ * The one place two jobs share a band is red: `--bad` and `--danger` are both in
+ * the red family by #2194's rule 4, so they are the red band twice, parted by
+ * lightness.  Blue is the beat mark rather than a state, at a lightness that
+ * makes it a tint on the grid instead of a colour.
+ *
+ * **The white is the beam and the line of the prism**, so it is the ink and the
+ * pick-up hairline, never a fill.  The greys under it are the airbrush.
+ *
+ * **`--ground` is pure black and that is the one value the artwork insists on.**
+ * It is what separates this chassis from Constructor's, which starts at #060606
+ * — the two are otherwise close, because a black theme has nowhere else to go,
+ * and everything that carries meaning is different.
+ *
+ * Measured 2026-09-08: 25/25, tightest `--ring` on `--panel` at 3.34. `--on`
+ * against `--ring` is 0.395 under the worst dichromacy, which is the widest
+ * separation of any theme here — yellow against violet parts by lightness, which
+ * is the one channel every form of colour vision keeps. */
+[data-theme="prism"] {
+	color-scheme: dark;
+
+	/* Surfaces — the field, and the airbrushed prism on it */
+	--ground: #000000;
+	--part: #0c0c0e;
+	--panel: #18181c;
+	--title-ground: #212126;
+	--sunk: #000000;
+
+	/* Edges — the drawn line of the prism */
+	--edge: #2b2b31;
+	--edge-strong: #9a9aa4;
+
+	/* Inks — the beam */
+	--ink: #ffffff;
+	--ink-quiet: #adadb6;
+	--ink-faint: #7c7c85;
+
+	/* Lit — the yellow band, and its edge leaning toward the green beside it */
+	--on: #ffe800;
+	--on-edge: #f4ff5c;
+	--on-ink: #141000;
+	--readout: #ffe800;
+
+	/* In flight — the violet band, and the only band dark enough to part from
+	   the lit one by lightness rather than by hue */
+	--ring: #8f2bff;
+	--ring-ink: #ffffff;
+
+	/* The four meanings — red, orange, green, and the red band again, deeper */
+	--good: #00d639;
+	--bad: #ff2a1f;
+	--warn: #ff8a00;
+	--danger: #e01507;
+
+	/* The grid's mark — the blue band, taken down to a tint */
+	--accent-beat: #0e1226;
+
+	/* Overlays */
+	--playhead: rgba(255, 255, 255, 0.09);
+	--playhead-edge: rgba(255, 255, 255, 0.35);
+	--wash: rgba(255, 255, 255, 0.04);
+	--veil: rgba(0, 0, 0, 0.6);
+	--halo: rgba(0, 0, 0, 0.7);
+	--shadow-near: rgba(0, 0, 0, 0.45);
+	--shadow-far: rgba(0, 0, 0, 0.6);
+	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
 [data-theme="constructor"] {
 	color-scheme: dark;
 
