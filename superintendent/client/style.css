@@ -587,17 +587,19 @@
 	--ink-quiet: #adadb6;
 	--ink-faint: #7c7c85;
 
-	/* Lit — the violet end of the spectrum, and where the fan below starts.
-	   Every band is this saturation and this lightness; only the hue moves. */
-	--on: #b54dff;
-	--on-edge: #d499ff;
-	--on-ink: #150022;
-	--readout: #b54dff;
+	/* Lit — the beam going in.  Not pure white but the airbrushed grey the
+	   prism's lit face is drawn in, which is what stops a lit control reading
+	   as a hole cut out of the black. */
+	--on: #e2e2ea;
+	--on-edge: #fbfbfe;
+	--on-ink: #12121a;
+	--readout: #e2e2ea;
 
-	/* In flight — the beam before it reaches the glass.  White in, spectrum
-	   out, which is the whole of the picture. */
-	--ring: #f2f2f7;
-	--ring-ink: #12121a;
+	/* In flight — the far end of the spectrum, so a press that has not resolved
+	   is unmistakably not a press that has.  White against violet parts by
+	   lightness, which is the one channel every form of colour vision keeps. */
+	--ring: #8f2bff;
+	--ring-ink: #ffffff;
 
 	/* The four meanings — red, orange, green, and the red band again, deeper */
 	--good: #00d639;
@@ -628,12 +630,19 @@
  * the other eleven — so this one is scoped to its own attribute and changes
  * nothing anywhere else.
  *
- * **It derives from `--on` rather than naming colours.**  `hsl(from …)` takes the
- * saturation and lightness of the theme's own lit colour and moves only the hue,
- * so the fan follows the token: change `--on` and the whole spectrum moves with
- * it.  A rule that spelled out six colours would be six colours the theme cannot
- * reach, which is the fault `test_no_rule_in_the_stylesheet_names_a_colour_of_its_own`
- * exists to catch.
+ * **Red at the top and violet at the bottom**, which is the order on the cover.
+ *
+ * **The fan names no colour and cannot**, because the token it would have derived
+ * from is now the beam — a grey, with no hue to sweep.  So the spread, the
+ * saturation and the lightness are written here, in a rule that belongs to one
+ * theme and is scoped to it.  That is not the fault
+ * `test_no_rule_in_the_stylesheet_names_a_colour_of_its_own` guards against: what
+ * that forbids is a value in an *ordinary* rule, which works in the theme it was
+ * picked for and is wrong in the other eleven.  This rule is the theme.
+ *
+ * **Every number in it is read back by the suite** rather than trusted, for the
+ * same reason: nothing else here varies a colour per element, so nothing else
+ * would notice if one of them drifted.
  *
  * `--band` is where a row sits in its grid, 0 to 1, set by the client on every
  * cell in every theme.  It is a *position*, not a colour — the eleven themes that
@@ -648,11 +657,11 @@
  * pairing nobody measures is how all three defects in this area happened. */
 [data-theme="prism"] .cell.on,
 [data-theme="prism"] .grid.notes .note {
-	background: hsl(from var(--on) calc(h - var(--band) * 275) s l);
+	background: hsl(calc(var(--band) * 275) 100% 65%);
 }
 
 [data-theme="prism"] .cell.on {
-	border-color: hsl(from var(--on-edge) calc(h - var(--band) * 275) s l);
+	border-color: hsl(calc(var(--band) * 275) 100% 80%);
 }
 
 /* **And the unlit cell carries its band too, faintly**, so the spectrum is there
@@ -667,7 +676,7 @@
  * walks it. */
 [data-theme="prism"] .cell {
 	background: color-mix(in srgb,
-		hsl(from var(--on) calc(h - var(--band) * 275) s l) 10%, var(--panel));
+		hsl(calc(var(--band) * 275) 100% 65%) 10%, var(--panel));
 }
 
 [data-theme="constructor"] {

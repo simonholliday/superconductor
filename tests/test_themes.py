@@ -334,8 +334,8 @@ def test_the_recess_reads_its_own_ink () -> None:
 
 # --- the one theme that is a rule rather than a set of values (#2190) --------
 
-def _fan () -> tuple[float, int]:
-	"""How far the fan spreads, and how much of a band tints an unlit cell.
+def _fan () -> tuple[float, float, float, int]:
+	"""The four numbers the prism fan is made of, read out of the stylesheet.
 
 	**Read out of the stylesheet rather than written down here.**  Two rules hold
 	one number is how they come to disagree, and this file already exists because
@@ -346,14 +346,15 @@ def _fan () -> tuple[float, int]:
 
 	style = stylesheet()
 
-	spread = re.search(r"calc\(h - var\(--band\) \* (\d+)\)", style)
-	tint = re.search(r"color-mix\(in srgb,[^)]*\)[^,]*\s(\d+)%,\s*var\(--panel\)\)", style,
-	                 re.DOTALL)
+	fan = re.search(r"hsl\(calc\(var\(--band\) \* (\d+)\) (\d+)% (\d+)%\);", style)
+	tint = re.search(r"hsl\(calc\(var\(--band\) \* \d+\) \d+% \d+%\) (\d+)%,"
+	                 r"\s*var\(--panel\)\)", style, re.DOTALL)
 
-	assert spread, "the prism fan's spread is not in the stylesheet where this expects it"
-	assert tint, "the prism tint is not in the stylesheet where this expects it"
+	assert fan, "the prism fan is not in the stylesheet in the shape this expects"
+	assert tint, "the prism tint is not in the stylesheet in the shape this expects"
 
-	return float(spread.group(1)), int(tint.group(1))
+	return (float(fan.group(1)), int(fan.group(2)) / 100,
+	        int(fan.group(3)) / 100, int(tint.group(1)))
 
 
 def _hsl (hue: float, saturation: float, lightness: float) -> str:
@@ -366,28 +367,6 @@ def _hsl (hue: float, saturation: float, lightness: float) -> str:
 		return round(255 * (lightness - a * max(-1, min(k - 3, 9 - k, 1))))
 
 	return "#" + "".join(f"{channel(n):02x}" for n in (0, 8, 4))
-
-
-def _parts (colour: str) -> tuple[float, float, float]:
-	"""A `#rrggbb` as hue, saturation and lightness."""
-
-	red, green, blue = (int(colour.lstrip("#")[at:at + 2], 16) / 255 for at in (0, 2, 4))
-	high, low = max(red, green, blue), min(red, green, blue)
-	lightness, span = (high + low) / 2, high - low
-
-	if not span:
-		return 0.0, 0.0, lightness
-
-	saturation = span / (1 - abs(2 * lightness - 1))
-
-	if high == red:
-		hue = 60 * (((green - blue) / span) % 6)
-	elif high == green:
-		hue = 60 * ((blue - red) / span + 2)
-	else:
-		hue = 60 * ((red - green) / span + 4)
-
-	return hue, saturation, lightness
 
 
 def _mixed (one: str, other: str, per_cent: int) -> str:
@@ -421,13 +400,12 @@ def test_every_band_of_the_prism_fan_is_legible () -> None:
 	"""
 
 	prism = palettes()["prism"]
-	spread, tint = _fan()
-	hue, saturation, lightness = _parts(prism["--on"])
+	spread, saturation, lightness, tint = _fan()
 
 	tightest = ("", 99.0)
 
 	for step in range(21):
-		band = _hsl((hue - step / 20 * spread) % 360, saturation, lightness)
+		band = _hsl((step / 20 * spread) % 360, saturation, lightness)
 		unlit = _mixed(band, prism["--panel"], tint)
 
 		for ink, ground, floor, what in (
