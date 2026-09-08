@@ -642,7 +642,7 @@ function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visi
 		<${BeatStrip} steps=${steps} beats=${beats} />
 		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
-			${rows.map((row) => html`
+			${rows.map((row, band) => html`
 				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${control}/${row}/${step}`;
@@ -682,7 +682,13 @@ function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visi
 								failed.has(path) ? "failed" : "",
 								step % beatEvery(steps, beats) === 0 ? "downbeat" : ""]
 								.filter(Boolean).join(" ")}
-							style=${ghost ? { "--struck": weightOf(struck.v, weights) } : null}
+							${/* **Where this row sits in its grid, 0 to 1** — a
+							     position rather than a colour, so it means the
+							     same in every theme and costs the eleven that
+							     ignore it nothing.  One of them fans the lit
+							     colour across it (#2190). */ ""}
+							style=${{ "--band": rows.length > 1 ? band / (rows.length - 1) : 0,
+								...(ghost ? { "--struck": weightOf(struck.v, weights) } : {}) }}
 							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
 						></div>`;
 				})}
@@ -1020,7 +1026,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 		<${BeatStrip} steps=${steps} beats=${beats} tight />
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight>
 		<div class="grid notes" style=${style}>
-			${rows.map((row) => html`
+			${rows.map((row, band) => html`
 				${/* **The pitch it sounds, not the pitch it was drawn at** (#2144).
 				     Transposition moves the sound and the labels follow it, which
 				     is the whole of what keeps the glass honest — and the panel
@@ -1084,7 +1090,8 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 								pending.has(owner) && !asked ? "pending" : "",
 								failed.has(owner) && !asked ? "failed" : "",
 								step % per === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
-							style=${struck ? { "--struck": weightOf(struck.v, weights) } : null}
+							style=${{ "--band": rows.length > 1 ? band / (rows.length - 1) : 0,
+								...(struck ? { "--struck": weightOf(struck.v, weights) } : {}) }}
 							onPointerDown=${(event) => begin(event, row, step)}
 							onPointerMove=${during}
 							onPointerUp=${finish}
@@ -3780,11 +3787,16 @@ const THEMES = [
 	{ key: "phosphor", label: "Phosphor", short: "phosphor" },
 	{ key: "phaedra", label: "Phaedra", short: "phaedra" },
 	{ key: "constructor", label: "Constructor", short: "constructor" },
-	{ key: "prism", label: "Prism", short: "prism" },
 	{ key: "aluminium", label: "Aluminium", short: "aluminium" },
 	{ key: "airports", label: "Airports", short: "airports" },
 	{ key: "oxygene", label: "Oxygène", short: "oxygène" },
 	{ key: "workbench", label: "Workbench", short: "workbench" },
+
+	/* **Last, and on purpose.** The only theme here that is a rule as well as a
+	   set of values, and the only one that is a joke — a spectrum fanned across
+	   a grid because a prism does that. Simon's word for it was easter egg, and
+	   an easter egg goes at the bottom of the list. */
+	{ key: "prism", label: "Prism", short: "prism" },
 ];
 
 function rememberedTheme () {

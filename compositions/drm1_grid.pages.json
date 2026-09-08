@@ -6,19 +6,14 @@
 			"y": 2
 		},
 		{
-			"name": "bass_recipe/lmtsicdqcgji",
-			"x": 8,
-			"y": 20
-		},
-		{
-			"name": "bass",
-			"x": 27,
-			"y": 9
-		},
-		{
 			"name": "chords",
 			"x": 47,
 			"y": 2
+		},
+		{
+			"name": "bass",
+			"x": 26,
+			"y": 0
 		}
 	],
 	"bass": [

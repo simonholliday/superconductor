@@ -330,3 +330,116 @@ def test_the_recess_reads_its_own_ink () -> None:
 		"the readout is not drawn in `--readout`, so the token is decoration")
 
 	assert "--readout" in set(_every_reference(style)), "nothing reads `--readout`"
+
+
+# --- the one theme that is a rule rather than a set of values (#2190) --------
+
+def _fan () -> tuple[float, int]:
+	"""How far the fan spreads, and how much of a band tints an unlit cell.
+
+	**Read out of the stylesheet rather than written down here.**  Two rules hold
+	one number is how they come to disagree, and this file already exists because
+	a value in a comment is a value nothing checks — so the spread and the tint
+	are parsed from the rule that paints them, and moving either in the sheet
+	moves this test with it.
+	"""
+
+	style = stylesheet()
+
+	spread = re.search(r"calc\(h - var\(--band\) \* (\d+)\)", style)
+	tint = re.search(r"color-mix\(in srgb,[^)]*\)[^,]*\s(\d+)%,\s*var\(--panel\)\)", style,
+	                 re.DOTALL)
+
+	assert spread, "the prism fan's spread is not in the stylesheet where this expects it"
+	assert tint, "the prism tint is not in the stylesheet where this expects it"
+
+	return float(spread.group(1)), int(tint.group(1))
+
+
+def _hsl (hue: float, saturation: float, lightness: float) -> str:
+	"""A `#rrggbb` from HSL, the way `hsl(from …)` resolves one."""
+
+	def channel (n: float) -> int:
+		k = (n + hue / 30) % 12
+		a = saturation * min(lightness, 1 - lightness)
+
+		return round(255 * (lightness - a * max(-1, min(k - 3, 9 - k, 1))))
+
+	return "#" + "".join(f"{channel(n):02x}" for n in (0, 8, 4))
+
+
+def _parts (colour: str) -> tuple[float, float, float]:
+	"""A `#rrggbb` as hue, saturation and lightness."""
+
+	red, green, blue = (int(colour.lstrip("#")[at:at + 2], 16) / 255 for at in (0, 2, 4))
+	high, low = max(red, green, blue), min(red, green, blue)
+	lightness, span = (high + low) / 2, high - low
+
+	if not span:
+		return 0.0, 0.0, lightness
+
+	saturation = span / (1 - abs(2 * lightness - 1))
+
+	if high == red:
+		hue = 60 * (((green - blue) / span) % 6)
+	elif high == green:
+		hue = 60 * ((blue - red) / span + 2)
+	else:
+		hue = 60 * ((red - green) / span + 4)
+
+	return hue, saturation, lightness
+
+
+def _mixed (one: str, other: str, per_cent: int) -> str:
+	"""`color-mix(in srgb, one <per_cent>%, other)`."""
+
+	share = per_cent / 100
+	first = [int(one.lstrip("#")[at:at + 2], 16) for at in (0, 2, 4)]
+	second = [int(other.lstrip("#")[at:at + 2], 16) for at in (0, 2, 4)]
+
+	return "#" + "".join(f"{round(a * share + b * (1 - share)):02x}"
+	                     for a, b in zip(first, second))
+
+
+def test_every_band_of_the_prism_fan_is_legible () -> None:
+	"""**Prism fans its lit colour across the rows of a grid**, which no other
+	theme does — so no other theme has these pairings and nothing else here would
+	measure them.  #2194's own lesson is that every defect in this area was a
+	pairing nobody had measured rather than a floor nobody had met, and a colour
+	that varies per element is the easiest possible place to acquire one.
+
+	Three things are checked at every step of the fan:
+
+	* the lit band against the control face, which is the ordinary `--on` floor
+	  applied to a colour that is no longer a single value;
+	* `--edge-strong` against the *tinted* unlit cell, because a note grid's
+	  downbeat divider is drawn on one;
+	* the lit band against its own row's unlit ground — **a distinction that
+	  exists in no other theme.**  Tinting the unlit cell narrows the one thing
+	  the grid is for, and this is what stops the tint creeping up: 10% measures
+	  3.14, 14% measures 3.04 and 18% is below the floor.
+	"""
+
+	prism = palettes()["prism"]
+	spread, tint = _fan()
+	hue, saturation, lightness = _parts(prism["--on"])
+
+	tightest = ("", 99.0)
+
+	for step in range(21):
+		band = _hsl((hue - step / 20 * spread) % 360, saturation, lightness)
+		unlit = _mixed(band, prism["--panel"], tint)
+
+		for ink, ground, floor, what in (
+			(band, prism["--panel"], 3.0, "a lit band on the control face"),
+			(prism["--edge-strong"], unlit, 3.0, "the divider on a tinted cell"),
+			(band, unlit, 3.0, "a lit band against its own row unlit"),
+		):
+			got = contrast(ink, ground)
+
+			assert got >= floor, f"{what} at band {step}/20 ({band}): {got:.2f} against {floor}"
+
+			if got - floor < tightest[1]:
+				tightest = (f"{what} at {band}", got - floor)
+
+	assert tightest[1] < 9, "nothing was measured, so this proves nothing"

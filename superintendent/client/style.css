@@ -587,16 +587,17 @@
 	--ink-quiet: #adadb6;
 	--ink-faint: #7c7c85;
 
-	/* Lit — the yellow band, and its edge leaning toward the green beside it */
-	--on: #ffe800;
-	--on-edge: #f4ff5c;
-	--on-ink: #141000;
-	--readout: #ffe800;
+	/* Lit — the violet end of the spectrum, and where the fan below starts.
+	   Every band is this saturation and this lightness; only the hue moves. */
+	--on: #b54dff;
+	--on-edge: #d499ff;
+	--on-ink: #150022;
+	--readout: #b54dff;
 
-	/* In flight — the violet band, and the only band dark enough to part from
-	   the lit one by lightness rather than by hue */
-	--ring: #8f2bff;
-	--ring-ink: #ffffff;
+	/* In flight — the beam before it reaches the glass.  White in, spectrum
+	   out, which is the whole of the picture. */
+	--ring: #f2f2f7;
+	--ring-ink: #12121a;
 
 	/* The four meanings — red, orange, green, and the red band again, deeper */
 	--good: #00d639;
@@ -616,6 +617,57 @@
 	--shadow-near: rgba(0, 0, 0, 0.45);
 	--shadow-far: rgba(0, 0, 0, 0.6);
 	--sunk-shadow: rgba(0, 0, 0, 0.6);
+}
+
+/* **The prism, doing the one thing a prism does** — the lit colour fanned across
+ * the rows of a grid, violet at the top down to red at the bottom.
+ *
+ * **This is the only theme in the sheet that is a rule rather than a set of
+ * values**, and it is worth knowing why that was allowed.  A theme is normally
+ * tokens alone, because a rule written for one theme is a rule that is wrong in
+ * the other eleven — so this one is scoped to its own attribute and changes
+ * nothing anywhere else.
+ *
+ * **It derives from `--on` rather than naming colours.**  `hsl(from …)` takes the
+ * saturation and lightness of the theme's own lit colour and moves only the hue,
+ * so the fan follows the token: change `--on` and the whole spectrum moves with
+ * it.  A rule that spelled out six colours would be six colours the theme cannot
+ * reach, which is the fault `test_no_rule_in_the_stylesheet_names_a_colour_of_its_own`
+ * exists to catch.
+ *
+ * `--band` is where a row sits in its grid, 0 to 1, set by the client on every
+ * cell in every theme.  It is a *position*, not a colour — the eleven themes that
+ * ignore it pay nothing, and a grid of any height fans across its whole spread
+ * rather than wrapping.
+ *
+ * **The floor is the reason for the lightness.** Every hue has to clear 3:1 on a
+ * control face, and blue is the one that struggles: at 55% lightness it measures
+ * 2.22 and at 65% it measures 3.32.  So 65% is not taste, it is the first value
+ * where the whole spectrum is legible — `tests/test_themes.py` walks the fan and
+ * says so, because nothing else in this sheet varies a colour per element and a
+ * pairing nobody measures is how all three defects in this area happened. */
+[data-theme="prism"] .cell.on,
+[data-theme="prism"] .grid.notes .note {
+	background: hsl(from var(--on) calc(h - var(--band) * 275) s l);
+}
+
+[data-theme="prism"] .cell.on {
+	border-color: hsl(from var(--on-edge) calc(h - var(--band) * 275) s l);
+}
+
+/* **And the unlit cell carries its band too, faintly**, so the spectrum is there
+ * before anybody has drawn a note — on the cover the light is a continuous fan,
+ * not a scattering.
+ *
+ * **Ten per cent is a measured ceiling rather than a taste.**  Tinting the unlit
+ * cell narrows the one distinction the grid exists to make — a step that sounds
+ * against one that does not — and that pairing exists in no other theme, because
+ * no other theme varies a cell's ground per row.  At 10% it measures 3.14, at 14%
+ * it is 3.04, and at 18% it is 2.89 and below the floor.  `tests/test_themes.py`
+ * walks it. */
+[data-theme="prism"] .cell {
+	background: color-mix(in srgb,
+		hsl(from var(--on) calc(h - var(--band) * 275) s l) 10%, var(--panel));
 }
 
 [data-theme="constructor"] {
