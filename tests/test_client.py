@@ -139,8 +139,32 @@ def test_no_rule_in_the_stylesheet_names_a_colour_of_its_own () -> None:
 	# theme block is nothing but literals, which is also the point.
 	code = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
 	code = test_themes.THEME_BLOCK.sub("", code)
+
+	# **And a rule scoped to one theme is the third legitimate place**, which
+	# Prism established: a theme may be a rule as well as a set of values, and a
+	# colour in `[data-theme="x"] .thing` is as reachable by that theme as one in
+	# its block. What is forbidden is a colour in an *ordinary* rule, which works
+	# in the theme it was picked for and is wrong in every other.
+	code = re.sub(r'^[^{}\n]*\[data-theme="[a-z]+"\][^{}]*\{[^{}]*\}',
+	              "", code, flags=re.MULTILINE)
+
 	code = re.sub(r"light-dark\((?:[^()]|\([^()]*\))*\)", "", code)
-	loose = re.findall(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)", code)
+
+	# **Every way CSS can name a colour, not just the two this used to know.**
+	# It looked for `#rrggbb` and `rgb()` alone, so `hsl()`, `color-mix()` and
+	# the named colours went straight through — measured on 2026-09-08 by
+	# planting all three in an ordinary rule and watching this pass. That hole
+	# was harmless while nothing used those forms and stopped being harmless the
+	# moment a theme did: the next person copies what they see.
+	loose = re.findall(
+		r"#[0-9a-fA-F]{3,8}\b"
+		r"|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\("
+		# Not followed by a hyphen or a letter, or `white-space` is a colour and
+		# every rule in the sheet names one.
+		r"|\b(?:red|green|blue|white|black|yellow|orange|purple|pink|cyan"
+		r"|magenta|grey|gray|silver|gold|teal|navy|olive|maroon|lime|aqua"
+		r"|fuchsia|rebeccapurple)(?![-\w])",
+		code)
 
 	assert loose == [], f"these colours belong to no theme: {loose}"
 

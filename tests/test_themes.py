@@ -467,3 +467,38 @@ def test_the_prism_swatch_is_the_fan_it_stands_for () -> None:
 
 		assert contrast(band, palettes()["prism"]["--panel"]) >= 3.0, (
 			f"the swatch's {band} would not be legible as a lit cell")
+
+
+def test_only_the_themes_with_a_guard_are_allowed_to_be_rules () -> None:
+	"""**A theme may be a rule as well as a set of values, and the 25 checks do
+	not measure a rule.**
+
+	Every floor in this file is computed from *declared tokens*.  A theme that
+	paints with a scoped rule — `[data-theme="x"] .cell.on { … }` — is painting
+	something no contrast check here can see, and #2194's own lesson is that
+	every defect in this area was a pairing nobody had measured.
+
+	Prism is the one theme that does it, and it is measured: the fan is walked at
+	21 steps against three floors and its swatch is checked against the spread.
+	Both of those tests name it, because a colour that varies per element cannot
+	be checked generically without rendering the page.
+
+	So this is a tripwire rather than a rule.  A second theme reaching for a
+	scoped rule turns the suite red and says what is missing, instead of shipping
+	a palette that clears 25 checks while painting something none of them
+	measured.
+	"""
+
+	scoped = set(re.findall(
+		r'^[^{}\n]*\[data-theme="([a-z]+)"\][^{}]*\{', stylesheet(), re.MULTILINE))
+
+	# A theme's own block is `[data-theme="x"] {`, which the pattern above also
+	# finds; what marks a *rule* is anything between the attribute and the brace.
+	rules = {name for name in scoped
+	         if re.search(rf'\[data-theme="{name}"\]\s*[^\s{{][^{{}}]*\{{', stylesheet())}
+
+	assert rules == {"prism"}, (
+		f"these themes paint with a rule and not only with tokens: {sorted(rules)}."
+		" The 25 contrast checks read declared tokens and cannot see a rule, so"
+		" each one needs a guard of its own — see"
+		" test_every_band_of_the_prism_fan_is_legible for the shape of it.")
