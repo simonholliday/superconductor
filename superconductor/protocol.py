@@ -1,4 +1,4 @@
-"""The frame vocabulary spoken over every Superintendent socket.
+"""The frame vocabulary spoken over every Superconductor socket.
 
 One JSON object per frame, in UTF-8, named by its ``t`` field.  The panel and
 each app speak the same vocabulary, so a frame crossing the service is usually
@@ -453,7 +453,7 @@ def layout (app: str, page: str, parts: list[Frame], client: str, seq: int) -> F
 
 
 def service (version: str | None, build: str | None) -> Frame:
-	"""Which Superintendent the panel has reached, sent whenever it says hello.
+	"""Which Superconductor the panel has reached, sent whenever it says hello.
 
 	The panel compares ``build`` against the one stamped on the page it is
 	actually running.  A difference means the service has newer files than the

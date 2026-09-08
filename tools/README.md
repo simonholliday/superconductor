@@ -40,7 +40,7 @@ is to run the first before restarting anything.
 
 | File | What it does |
 | --- | --- |
-| `capture_state.py` | Joins as a panel, keeps the first snapshot of every connected app, and writes it out. Defaults to `/home/si/superintendent-state.json` — on disk rather than in tmpfs, so it survives a reboot as well as a restart. |
+| `capture_state.py` | Joins as a panel, keeps the first snapshot of every connected app, and writes it out. Defaults to `/home/si/superconductor-state.json` — on disk rather than in tmpfs, so it survives a reboot as well as a restart. |
 | `restore_state.py` | Replays that file through the panel's own socket, every value as an ordinary `set`. Nothing reaches into a composition, so a restore is exactly as legitimate as a tap. |
 
 ```

@@ -7,7 +7,7 @@ So this is the last step of adding a theme, and it existed as a throwaway script
 twice before being kept.
 
 Needs a service running with an app dialled in, because a picture of an empty
-panel says nothing about a palette.  Writes to `/home/si/superintendent-shots/`,
+panel says nothing about a palette.  Writes to `/home/si/superconductor-shots/`,
 which is disk rather than tmpfs and survives a reboot.
 
     python tools/theme_shot.py prism
@@ -24,7 +24,7 @@ import playwright.sync_api
 import typing
 
 
-WHERE = pathlib.Path("/home/si/superintendent-shots/themes")
+WHERE = pathlib.Path("/home/si/superconductor-shots/themes")
 
 SIZE: typing.Any = {"width": 1920, "height": 1080}
 """The development panel's own size.  A palette read at another size is a
@@ -54,7 +54,7 @@ def main () -> int:
 
 		# The key is the `localStorage` value as well as the selector, so this is
 		# the same act as choosing it on the glass (#2194).
-		page.evaluate(f"() => localStorage.setItem('superintendent.theme', {key!r})")
+		page.evaluate(f"() => localStorage.setItem('superconductor.theme', {key!r})")
 		page.reload(wait_until="load")
 
 		page.wait_for_selector(".cell", timeout=15_000)

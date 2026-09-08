@@ -11,7 +11,7 @@ import typing
 
 import pytest
 
-import superintendent.subsequence_adapter as adapter
+import superconductor.subsequence_adapter as adapter
 
 
 ROWS = ["kick", "snare", "hihat_1_closed"]

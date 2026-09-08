@@ -1,6 +1,6 @@
 """The rig's own composition, where an instrument definition meets the panel.
 
-Nothing here tests the Superintendent package — it tests the join a composition
+Nothing here tests the Superconductor package — it tests the join a composition
 has to make, and it lives in this suite because the join has a trap in it that
 would otherwise be found by a chord going silent on a Matriarch.
 
@@ -24,8 +24,8 @@ import pymididefs.instruments
 import subsequence.pattern
 import subsequence.pattern_builder
 
-import superintendent.service
-import superintendent.subsequence_adapter
+import superconductor.service
+import superconductor.subsequence_adapter
 
 
 def _composition () -> typing.Any:
@@ -313,7 +313,7 @@ def test_every_control_this_composition_declares_reaches_a_page (rig: typing.Any
 	"""
 
 	drawn = {name for name, control in rig.link.controls.items()
-	         if not isinstance(control, superintendent.subsequence_adapter.Transport)}
+	         if not isinstance(control, superconductor.subsequence_adapter.Transport)}
 	placed = {part for page in rig.link.pages for part in page.parts}
 
 	assert drawn - placed == set(), f"declared and on no page: {sorted(drawn - placed)}"
@@ -333,7 +333,7 @@ def test_the_page_set_still_fits_the_row_of_named_buttons (rig: typing.Any) -> N
 	places holding one number is how they come to disagree.
 	"""
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
 	limit = re.search(r"^const PAGE_BUTTONS = (\d+);$", source, re.MULTILINE)
 
 	assert limit, "the client no longer names a page-button limit"
@@ -389,8 +389,8 @@ def test_every_pattern_can_be_given_a_generator (rig: typing.Any) -> None:
 	"""
 
 	grids = {name for name, control in rig.link.controls.items()
-	         if isinstance(control, (superintendent.subsequence_adapter.StepGrid,
-	                                 superintendent.subsequence_adapter.NoteGrid))}
+	         if isinstance(control, (superconductor.subsequence_adapter.StepGrid,
+	                                 superconductor.subsequence_adapter.NoteGrid))}
 
 	built = {control.declaration()["builds"] for control in rig.link.controls.values()
 	         if control.declaration().get("type") == "recipe"}
@@ -415,7 +415,7 @@ def test_a_stack_offers_the_pitches_of_the_pattern_it_builds (rig: typing.Any) -
 	"""
 
 	stacks = {name: control for name, control in rig.link.controls.items()
-	          if isinstance(control, superintendent.subsequence_adapter.Recipe)}
+	          if isinstance(control, superconductor.subsequence_adapter.Recipe)}
 
 	assert set(stacks) >= {"drum_recipe", "bass_recipe", "chord_recipe"}
 

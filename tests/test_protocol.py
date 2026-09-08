@@ -2,21 +2,21 @@
 
 import pytest
 
-import superintendent.protocol
+import superconductor.protocol
 
 
 def test_a_frame_survives_the_round_trip () -> None:
 	"""What is encoded is what comes back."""
 
-	frame = superintendent.protocol.set_frame("subsequence", "grid/kick/4", True, "panel-1", 7)
+	frame = superconductor.protocol.set_frame("subsequence", "grid/kick/4", True, "panel-1", 7)
 
-	assert superintendent.protocol.decode(superintendent.protocol.encode(frame)) == frame
+	assert superconductor.protocol.decode(superconductor.protocol.encode(frame)) == frame
 
 
 def test_a_changed_frame_names_the_hand_that_moved_it () -> None:
 	"""A panel's own write carries the client and sequence that asked for it."""
 
-	frame = superintendent.protocol.changed(
+	frame = superconductor.protocol.changed(
 		"subsequence", "grid/kick/4", True, 12, by="panel", client="panel-1", seq=7)
 
 	assert frame["by"] == "panel"
@@ -27,7 +27,7 @@ def test_a_changed_frame_names_the_hand_that_moved_it () -> None:
 def test_a_change_the_app_made_itself_names_no_client () -> None:
 	"""Nothing pretends a composition's own edit came from a finger."""
 
-	frame = superintendent.protocol.changed("subsequence", "grid/kick/4", True, 12, by="app")
+	frame = superconductor.protocol.changed("subsequence", "grid/kick/4", True, 12, by="app")
 
 	assert "client" not in frame
 	assert "seq" not in frame
@@ -36,15 +36,15 @@ def test_a_change_the_app_made_itself_names_no_client () -> None:
 def test_hello_carries_a_token_field_that_is_not_used_yet () -> None:
 	"""Its absence would force a protocol change the day the panel is remote."""
 
-	assert "token" in superintendent.protocol.hello("panel-1", "grid")
+	assert "token" in superconductor.protocol.hello("panel-1", "grid")
 
 
 @pytest.mark.parametrize("raw", ["not json", "[1, 2, 3]", '"a string"', '{"no": "kind"}', '{"t": 3}'])
 def test_a_frame_that_is_not_a_named_object_is_refused (raw: str) -> None:
 	"""Anything without a kind is refused rather than half-understood."""
 
-	with pytest.raises(superintendent.protocol.ProtocolError):
-		superintendent.protocol.decode(raw)
+	with pytest.raises(superconductor.protocol.ProtocolError):
+		superconductor.protocol.decode(raw)
 
 
 def test_a_number_off_the_wire_is_read_rather_than_assumed () -> None:
@@ -57,26 +57,26 @@ def test_a_number_off_the_wire_is_read_rather_than_assumed () -> None:
 	this module has for exactly "a frame that could not be read".
 	"""
 
-	assert superintendent.protocol.whole({"t": "set", "seq": 4}, "seq", -1) == 4
-	assert superintendent.protocol.whole({"t": "set"}, "seq", -1) == -1
+	assert superconductor.protocol.whole({"t": "set", "seq": 4}, "seq", -1) == 4
+	assert superconductor.protocol.whole({"t": "set"}, "seq", -1) == -1
 
 	# JSON has one number type, so a whole float is a whole number.
-	assert superintendent.protocol.whole({"t": "set", "seq": 4.0}, "seq", -1) == 4
+	assert superconductor.protocol.whole({"t": "set", "seq": 4.0}, "seq", -1) == 4
 
 	for bad in ("oops", None, 4.5, True, [4], {"n": 4}, float("nan"), float("inf")):
-		with pytest.raises(superintendent.protocol.ProtocolError):
-			superintendent.protocol.whole({"t": "set", "seq": bad}, "seq", -1)
+		with pytest.raises(superconductor.protocol.ProtocolError):
+			superconductor.protocol.whole({"t": "set", "seq": bad}, "seq", -1)
 
-	assert superintendent.protocol.number({"t": "ping", "ts": 1.5}, "ts", 0.0) == 1.5
-	assert superintendent.protocol.number({"t": "ping"}, "ts", 0.0) == 0.0
+	assert superconductor.protocol.number({"t": "ping", "ts": 1.5}, "ts", 0.0) == 1.5
+	assert superconductor.protocol.number({"t": "ping"}, "ts", 0.0) == 0.0
 
 	for bad in ("later", None, True, float("nan"), float("inf")):
-		with pytest.raises(superintendent.protocol.ProtocolError):
-			superintendent.protocol.number({"t": "ping", "ts": bad}, "ts", 0.0)
+		with pytest.raises(superconductor.protocol.ProtocolError):
+			superconductor.protocol.number({"t": "ping", "ts": bad}, "ts", 0.0)
 
 
 @pytest.mark.parametrize(("spoken", "gap"), [
-	(superintendent.protocol.CONTRACT_VERSION, None),
+	(superconductor.protocol.CONTRACT_VERSION, None),
 	# The same major, so it is behind rather than incompatible — which is the
 	# distinction the whole thing turns on.
 	("1.0.0", "older"),
@@ -101,7 +101,7 @@ def test_a_version_on_the_wire_is_compared_rather_than_carried (
 	field reads as `None`, which is what an end too old to send it looks like.
 	"""
 
-	assert superintendent.protocol.contract_gap(spoken) == gap
+	assert superconductor.protocol.contract_gap(spoken) == gap
 
 
 def test_which_side_is_behind_is_named_and_not_left_to_the_caller () -> None:
@@ -113,14 +113,14 @@ def test_which_side_is_behind_is_named_and_not_left_to_the_caller () -> None:
 	comes to assert nothing.
 	"""
 
-	major, minor, patch = (int(one) for one in superintendent.protocol.CONTRACT_VERSION.split("."))
+	major, minor, patch = (int(one) for one in superconductor.protocol.CONTRACT_VERSION.split("."))
 
-	assert superintendent.protocol.contract_gap(f"{major}.{minor + 1}.0") == "newer"
-	assert superintendent.protocol.contract_gap(f"{major}.{minor}.{patch + 1}") == "newer"
-	assert superintendent.protocol.contract_gap(f"{major + 1}.0.0") == "major"
+	assert superconductor.protocol.contract_gap(f"{major}.{minor + 1}.0") == "newer"
+	assert superconductor.protocol.contract_gap(f"{major}.{minor}.{patch + 1}") == "newer"
+	assert superconductor.protocol.contract_gap(f"{major + 1}.0.0") == "major"
 
 	if minor:
-		assert superintendent.protocol.contract_gap(f"{major}.{minor - 1}.99") == "older"
+		assert superconductor.protocol.contract_gap(f"{major}.{minor - 1}.99") == "older"
 
 	if patch:
-		assert superintendent.protocol.contract_gap(f"{major}.{minor}.{patch - 1}") == "older"
+		assert superconductor.protocol.contract_gap(f"{major}.{minor}.{patch - 1}") == "older"

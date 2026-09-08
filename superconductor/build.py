@@ -42,7 +42,7 @@ def version () -> str | None:
 	"""
 
 	try:
-		found = importlib.metadata.version("superintendent")
+		found = importlib.metadata.version("superconductor")
 
 	except importlib.metadata.PackageNotFoundError:
 		return None

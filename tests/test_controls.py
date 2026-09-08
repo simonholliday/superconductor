@@ -4,7 +4,7 @@ import typing
 
 import pytest
 
-import superintendent.controls
+import superconductor.controls
 
 
 GRID: dict[str, typing.Any] = {
@@ -16,24 +16,24 @@ GRID: dict[str, typing.Any] = {
 def test_an_address_names_a_control_and_the_way_into_it () -> None:
 	"""How many parts follow depends on the kind of control, so both shapes parse."""
 
-	assert superintendent.controls.parse_path("grid/kick/4") == ("grid", ["kick", "4"])
-	assert superintendent.controls.parse_path("transport/bpm") == ("transport", ["bpm"])
+	assert superconductor.controls.parse_path("grid/kick/4") == ("grid", ["kick", "4"])
+	assert superconductor.controls.parse_path("transport/bpm") == ("transport", ["bpm"])
 
 
 @pytest.mark.parametrize("path", ["", "grid", "grid/", "/kick/4"])
 def test_an_address_naming_no_control_or_nothing_within_it_is_refused (path: str) -> None:
 	"""A path has to say both what it addresses and what part of it."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.parse_path(path)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.parse_path(path)
 
 
 @pytest.mark.parametrize("path", ["grid/kick", "grid/kick/4/5", "grid/kick/last"])
 def test_an_address_of_the_wrong_shape_for_a_grid_is_refused (path: str) -> None:
 	"""A grid cell is a row and a step; the check belongs where the kind is known."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, GRID, path, True)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, GRID, path, True)
 
 
 def test_a_transport_field_is_written_by_name () -> None:
@@ -41,8 +41,8 @@ def test_a_transport_field_is_written_by_name () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, GRID, "transport/silenced", True)
-	superintendent.controls.apply_change(state, GRID, "transport/bpm", 137.5)
+	superconductor.controls.apply_change(state, GRID, "transport/silenced", True)
+	superconductor.controls.apply_change(state, GRID, "transport/bpm", 137.5)
 
 	assert state["transport"] == {"silenced": True, "bpm": 137.5}
 
@@ -51,8 +51,8 @@ def test_a_transport_field_is_written_by_name () -> None:
 def test_a_transport_field_that_was_not_declared_is_refused (path: str) -> None:
 	"""The declaration is the boundary here too."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, GRID, path, 1)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, GRID, path, 1)
 
 
 def test_switching_a_cell_on_adds_its_step_in_order () -> None:
@@ -60,8 +60,8 @@ def test_switching_a_cell_on_adds_its_step_in_order () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, GRID, "grid/kick/8", True)
-	superintendent.controls.apply_change(state, GRID, "grid/kick/0", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/8", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/0", True)
 
 	assert state["grid"]["kick"] == [0, 8]
 
@@ -71,7 +71,7 @@ def test_switching_a_cell_off_removes_it () -> None:
 
 	state: dict[str, typing.Any] = {"grid": {"kick": [0, 4, 8]}}
 
-	superintendent.controls.apply_change(state, GRID, "grid/kick/4", False)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4", False)
 
 	assert state["grid"]["kick"] == [0, 8]
 
@@ -81,8 +81,8 @@ def test_writing_the_same_value_twice_changes_nothing () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, GRID, "grid/kick/4", True)
-	superintendent.controls.apply_change(state, GRID, "grid/kick/4", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4", True)
 
 	assert state["grid"]["kick"] == [4]
 
@@ -91,8 +91,8 @@ def test_writing_the_same_value_twice_changes_nothing () -> None:
 def test_a_cell_outside_what_the_app_declared_is_refused (path: str) -> None:
 	"""The declaration is the boundary; nothing outside it is written."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, GRID, path, True)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, GRID, path, True)
 
 
 RANGED: dict[str, typing.Any] = {
@@ -107,7 +107,7 @@ def test_a_range_takes_two_numbers_in_order () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", [30, 50])
+	superconductor.controls.apply_change(state, RANGED, "recipe/velocity", [30, 50])
 
 	assert state == {"recipe": {"velocity": [30, 50]}}
 
@@ -121,7 +121,7 @@ def test_a_range_may_have_both_ends_together () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", [100, 100])
+	superconductor.controls.apply_change(state, RANGED, "recipe/velocity", [100, 100])
 
 	assert state["recipe"]["velocity"] == [100, 100]
 
@@ -135,7 +135,7 @@ def test_a_range_arriving_as_a_tuple_is_kept_as_a_list () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, RANGED, "recipe/velocity", (30, 50))
+	superconductor.controls.apply_change(state, RANGED, "recipe/velocity", (30, 50))
 
 	assert state["recipe"]["velocity"] == [30, 50]
 	assert isinstance(state["recipe"]["velocity"], list)
@@ -161,7 +161,7 @@ def test_choices_takes_several_of_the_pool_and_keeps_the_order () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", ["snare", "kick"])
+	superconductor.controls.apply_change(state, SEVERAL, "recipe/pitches", ["snare", "kick"])
 
 	assert state == {"recipe": {"pitches": ["snare", "kick"]}}
 
@@ -175,7 +175,7 @@ def test_choices_may_be_empty () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", [])
+	superconductor.controls.apply_change(state, SEVERAL, "recipe/pitches", [])
 
 	assert state["recipe"]["pitches"] == []
 
@@ -190,7 +190,7 @@ def test_choices_keeps_its_own_list_rather_than_the_caller_s () -> None:
 	state: dict[str, typing.Any] = {}
 	sent = ["kick", "snare"]
 
-	superintendent.controls.apply_change(state, SEVERAL, "recipe/pitches", sent)
+	superconductor.controls.apply_change(state, SEVERAL, "recipe/pitches", sent)
 	sent.append("clap")
 
 	assert state["recipe"]["pitches"] == ["kick", "snare"]
@@ -208,15 +208,15 @@ def test_a_transposition_is_kept_and_bounded_by_what_the_app_declared () -> None
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, MOVED, "bass/transpose", -5)
+	superconductor.controls.apply_change(state, MOVED, "bass/transpose", -5)
 
 	assert state == {"bass": {"transpose": -5}}
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, MOVED, "bass/transpose", 6)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, MOVED, "bass/transpose", 6)
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, MOVED, "bass/transpose", 1.5)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, MOVED, "bass/transpose", 1.5)
 
 
 def test_labels_and_unreachable_are_kept_and_checked_against_the_rows () -> None:
@@ -225,13 +225,13 @@ def test_labels_and_unreachable_are_kept_and_checked_against_the_rows () -> None
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, MOVED, "bass/labels", {"C2": "D2"})
-	superintendent.controls.apply_change(state, MOVED, "bass/unreachable", ["D2"])
+	superconductor.controls.apply_change(state, MOVED, "bass/labels", {"C2": "D2"})
+	superconductor.controls.apply_change(state, MOVED, "bass/unreachable", ["D2"])
 
 	assert state["bass"] == {"labels": {"C2": "D2"}, "unreachable": ["D2"]}
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, MOVED, "bass/labels", {"G9": "x"})
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, MOVED, "bass/labels", {"G9": "x"})
 
 
 def test_clearing_a_grid_keeps_everything_that_is_not_a_row () -> None:
@@ -240,9 +240,9 @@ def test_clearing_a_grid_keeps_everything_that_is_not_a_row () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, MOVED, "bass/enabled", False)
-	superintendent.controls.apply_change(state, MOVED, "bass/transpose", 3)
-	superintendent.controls.apply_change(state, MOVED, "bass/rows", {})
+	superconductor.controls.apply_change(state, MOVED, "bass/enabled", False)
+	superconductor.controls.apply_change(state, MOVED, "bass/transpose", 3)
+	superconductor.controls.apply_change(state, MOVED, "bass/rows", {})
 
 	assert state["bass"] == {"enabled": False, "transpose": 3}
 
@@ -265,7 +265,7 @@ def test_an_action_is_checked_and_then_deliberately_not_remembered () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, ACTS, "moog/voicing", "four")
+	superconductor.controls.apply_change(state, ACTS, "moog/voicing", "four")
 
 	# The control's own entry is created, as it is for any control the service
 	# is told about — what must not appear is a value under the action's name.
@@ -277,8 +277,8 @@ def test_an_action_is_checked_and_then_deliberately_not_remembered () -> None:
 def test_an_action_still_refuses_what_the_app_did_not_offer () -> None:
 	"""Storing nothing is not a reason to check nothing."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, ACTS, "moog/voicing", "sixteen")
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, ACTS, "moog/voicing", "sixteen")
 
 
 @pytest.mark.parametrize("value", [
@@ -292,8 +292,8 @@ def test_choices_that_are_not_several_of_the_pool_are_refused (value: typing.Any
 	"""The service keeps the app's state, so a value the app could not have
 	reported has to be refused rather than stored."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, SEVERAL, "recipe/pitches", value)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, SEVERAL, "recipe/pitches", value)
 
 
 @pytest.mark.parametrize("value", [
@@ -309,8 +309,8 @@ def test_a_range_that_is_not_two_numbers_in_bounds_is_refused (value: typing.Any
 	"""The service keeps the app's state, so a value the app could not have
 	reported has to be refused rather than stored."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, RANGED, "recipe/velocity", value)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, RANGED, "recipe/velocity", value)
 
 
 STACK: dict[str, typing.Any] = {
@@ -337,7 +337,7 @@ def test_a_stack_is_set_whole_because_its_order_is_part_of_its_value () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
 
 	assert state["recipe"]["layers"] == [
 		{"id": "a", "kind": "generator", "generator": "euclidean",
@@ -353,7 +353,7 @@ def test_a_layer_may_take_from_a_pattern_instead_of_a_generator () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [
 		{"id": "a", "kind": "pattern", "source": "shared"}])
 
 	assert state["recipe"]["layers"] == [
@@ -368,8 +368,8 @@ def test_a_layer_may_not_take_from_a_pattern_the_app_does_not_offer () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, STACK, "recipe/layers", [
 			{"id": "a", "kind": "pattern", "source": "nowhere"}])
 
 
@@ -385,7 +385,7 @@ def test_a_layers_number_survives_the_service () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [
 		{"id": "a", "generator": "euclidean", "index": 3, "params": {}}])
 
 	assert state["recipe"]["layers"][0]["index"] == 3
@@ -397,7 +397,7 @@ def test_a_layer_with_no_number_is_not_given_one_here () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [
 		{"id": "a", "generator": "euclidean", "params": {}},
 		{"id": "b", "generator": "euclidean", "index": 0, "params": {}},
 		{"id": "c", "generator": "euclidean", "index": "two", "params": {}},
@@ -415,8 +415,8 @@ def test_the_order_a_stack_is_given_in_is_the_order_it_is_kept_in () -> None:
 		{"id": "b", "generator": "thin", "params": {}},
 	]
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", stack)
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", list(reversed(stack)))
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", stack)
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", list(reversed(stack)))
 
 	assert [layer["id"] for layer in state["recipe"]["layers"]] == ["b", "a"]
 
@@ -426,8 +426,8 @@ def test_one_knob_of_one_layer_moves_without_sending_the_stack () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
-	superintendent.controls.apply_change(state, STACK, "recipe/a/velocity", [30, 50])
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+	superconductor.controls.apply_change(state, STACK, "recipe/a/velocity", [30, 50])
 
 	assert state["recipe"]["layers"][0]["params"] == {"pulses": 7, "velocity": [30, 50]}
 
@@ -435,8 +435,8 @@ def test_one_knob_of_one_layer_moves_without_sending_the_stack () -> None:
 def test_a_layer_naming_a_generator_the_app_does_not_offer_is_refused () -> None:
 	"""The catalogue comes from the app, so this can only be a fault in the panel."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{}, STACK, "recipe/layers", [{"id": "a", "generator": "invented", "params": {}}])
 
 
@@ -444,8 +444,8 @@ def test_a_parameter_no_generator_has_is_refused () -> None:
 	"""Validated through the same path an instrument's settings take, so a
 	range or a bound behaves identically wherever it appears."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{}, STACK, "recipe/layers",
 			[{"id": "a", "generator": "thin", "params": {"pulses": 7}}])
 
@@ -453,8 +453,8 @@ def test_a_parameter_no_generator_has_is_refused () -> None:
 def test_a_parameter_out_of_its_declared_bounds_is_refused () -> None:
 	"""The service keeps the app's copy; a value the app could not hold is a lie."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{}, STACK, "recipe/layers",
 			[{"id": "a", "generator": "thin", "params": {"amount": 4.0}}])
 
@@ -463,8 +463,8 @@ def test_two_layers_may_not_share_an_id () -> None:
 	"""A parameter is addressed by its layer's id, so a repeat makes one of the
 	two unreachable — and which one would depend on the order of a search."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, STACK, "recipe/layers", [
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, STACK, "recipe/layers", [
 			{"id": "a", "generator": "euclidean", "params": {}},
 			{"id": "a", "generator": "thin", "params": {}},
 		])
@@ -475,10 +475,10 @@ def test_a_bad_layer_leaves_the_stack_that_was_there_alone () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, STACK, "recipe/layers", [
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, STACK, "recipe/layers", [
 			{"id": "a", "generator": "euclidean", "params": {}},
 			{"id": "b", "generator": "invented", "params": {}},
 		])
@@ -491,10 +491,10 @@ def test_a_parameter_of_a_layer_that_is_not_there_is_refused () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", _one_layer())
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(state, STACK, "recipe/gone/pulses", 3)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(state, STACK, "recipe/gone/pulses", 3)
 
 
 def test_a_layer_says_what_kind_of_contribution_it_is () -> None:
@@ -509,7 +509,7 @@ def test_a_layer_says_what_kind_of_contribution_it_is () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(
+	superconductor.controls.apply_change(
 		state, STACK, "recipe/layers", [{"id": "a", "generator": "euclidean"}])
 
 	assert state["recipe"]["layers"][0]["kind"] == "generator"
@@ -518,8 +518,8 @@ def test_a_layer_says_what_kind_of_contribution_it_is () -> None:
 def test_a_kind_of_contribution_this_version_does_not_know_is_refused () -> None:
 	"""Rather than kept as a layer nothing will ever play."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{}, STACK, "recipe/layers",
 			[{"id": "a", "kind": "invented", "generator": "euclidean"}])
 
@@ -539,7 +539,7 @@ def test_a_layer_keeps_a_field_this_version_has_never_heard_of () -> None:
 	state: dict[str, typing.Any] = {}
 	layer = {**_one_layer()[0], "swing": 0.6, "notes_played": ["a", "b"]}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", [layer])
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [layer])
 
 	kept = state["recipe"]["layers"][0]
 
@@ -558,12 +558,12 @@ def test_a_layer_field_this_version_does_understand_is_still_judged () -> None:
 	state: dict[str, typing.Any] = {}
 	layer = {**_one_layer()[0], "index": -4}
 
-	superintendent.controls.apply_change(state, STACK, "recipe/layers", [layer])
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [layer])
 
 	assert "index" not in state["recipe"]["layers"][0]
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			state, STACK, "recipe/layers", [{**_one_layer()[0], "kind": "invention"}])
 
 
@@ -576,12 +576,12 @@ def test_a_note_keeps_a_field_this_version_does_not_know_about () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, MOVED, "bass/C2/0", True)
-	superintendent.controls.apply_change(state, MOVED, "bass/C2/0/tie", True)
+	superconductor.controls.apply_change(state, MOVED, "bass/C2/0", True)
+	superconductor.controls.apply_change(state, MOVED, "bass/C2/0/tie", True)
 
 	assert state["bass"]["C2"]["0"]["tie"] is True
 
-	superintendent.controls.apply_change(state, MOVED, "bass/rows", {
+	superconductor.controls.apply_change(state, MOVED, "bass/rows", {
 		"C2": {"0": {"length": 2, "velocity": 90, "probability": 0.4}}})
 
 	assert state["bass"]["C2"]["0"] == {"length": 2, "velocity": 90, "probability": 0.4}

@@ -1,4 +1,4 @@
-"""Superintendent — a touchscreen control surface for Simon's music software.
+"""Superconductor — a touchscreen control surface for Simon's music software.
 
 The service serves one HTML page to a touchscreen's browser and holds a single
 WebSocket to it, while each music app dials in over a WebSocket of its own and

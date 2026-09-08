@@ -8,8 +8,8 @@ import typing
 
 import pytest
 
-import superintendent.controls
-import superintendent.subsequence_adapter as adapter
+import superconductor.controls
+import superconductor.subsequence_adapter as adapter
 
 
 def _params () -> tuple[adapter.Params, typing.Any, list[tuple[str, typing.Any]]]:
@@ -102,15 +102,15 @@ def test_the_service_checks_a_setting_against_what_was_declared () -> None:
 	state: dict[str, typing.Any] = {}
 	controls = {"moog": declared}
 
-	superintendent.controls.apply_change(state, controls, "moog/glide", True)
-	superintendent.controls.apply_change(state, controls, "moog/rate", 100)
-	superintendent.controls.apply_change(state, controls, "moog/shape", "exp")
+	superconductor.controls.apply_change(state, controls, "moog/glide", True)
+	superconductor.controls.apply_change(state, controls, "moog/rate", 100)
+	superconductor.controls.apply_change(state, controls, "moog/shape", "exp")
 
 	assert state["moog"] == {"glide": True, "rate": 100, "shape": "exp"}
 
 	for path, value in (("moog/rate", 200), ("moog/shape", "wobble"), ("moog/glide", 1)):
-		with pytest.raises(superintendent.controls.ControlError):
-			superintendent.controls.apply_change(state, controls, path, value)
+		with pytest.raises(superconductor.controls.ControlError):
+			superconductor.controls.apply_change(state, controls, path, value)
 
 
 def test_every_setting_is_asserted_to_the_instrument_after_declaring () -> None:

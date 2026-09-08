@@ -12,8 +12,8 @@ import socket
 
 import uvicorn
 
-import superintendent.config
-import superintendent.service
+import superconductor.config
+import superconductor.service
 
 
 def main (argv: list[str] | None = None) -> int:
@@ -24,10 +24,10 @@ def main (argv: list[str] | None = None) -> int:
 	logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s  %(message)s")
 
 	try:
-		config = superintendent.config.Config.load(args.config)
+		config = superconductor.config.Config.load(args.config)
 
-	except superintendent.config.ConfigError as error:
-		print(f"superintendent: {error}")
+	except superconductor.config.ConfigError as error:
+		print(f"superconductor: {error}")
 		return 1
 
 	config = dataclasses.replace(
@@ -37,9 +37,9 @@ def main (argv: list[str] | None = None) -> int:
 	)
 
 	for address in _addresses(config.host):
-		print(f"Superintendent is serving the panel at http://{address}:{config.port}/")
+		print(f"Superconductor is serving the panel at http://{address}:{config.port}/")
 
-	uvicorn.run(superintendent.service.build(config), host=config.host, port=config.port, log_level="warning")
+	uvicorn.run(superconductor.service.build(config), host=config.host, port=config.port, log_level="warning")
 
 	return 0
 
@@ -48,7 +48,7 @@ def _parse_args (argv: list[str] | None) -> argparse.Namespace:
 	"""Read the few things that can be said on the command line."""
 
 	parser = argparse.ArgumentParser(
-		prog="superintendent", description="Serve the touchscreen control surface.")
+		prog="superconductor", description="Serve the touchscreen control surface.")
 
 	parser.add_argument(
 		"--config", type=pathlib.Path, default=None,
@@ -58,7 +58,7 @@ def _parse_args (argv: list[str] | None) -> argparse.Namespace:
 		help="address to listen on (default: every interface)")
 	parser.add_argument(
 		"--port", type=int, default=None,
-		help=f"port to listen on (default: {superintendent.config.DEFAULT_PORT})")
+		help=f"port to listen on (default: {superconductor.config.DEFAULT_PORT})")
 
 	return parser.parse_args(argv)
 

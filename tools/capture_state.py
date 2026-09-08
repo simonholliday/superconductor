@@ -8,7 +8,7 @@ restarting anything.
 
     python tools/capture_state.py [where-to-write.json]
 
-Defaults to /home/si/superintendent-state.json, which is on disk rather than in
+Defaults to /home/si/superconductor-state.json, which is on disk rather than in
 tmpfs and so survives a reboot as well as a restart.
 """
 
@@ -20,11 +20,11 @@ import time
 
 import websockets.asyncio.client
 
-import superintendent.protocol
+import superconductor.protocol
 
 
 URL = "ws://127.0.0.1:8090/ws/panel"
-WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superintendent-state.json")
+WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superconductor-state.json")
 
 
 async def main () -> None:
@@ -38,8 +38,8 @@ async def main () -> None:
 		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
 		# advice for spotting a stale process is to read the contract off a
 		# socket. Nothing checks it today, which is exactly why it drifted.
-		await socket.send(superintendent.protocol.encode(
-			superintendent.protocol.hello("capture", None)))
+		await socket.send(superconductor.protocol.encode(
+			superconductor.protocol.hello("capture", None)))
 
 		deadline = time.monotonic() + 5
 
@@ -60,7 +60,7 @@ async def main () -> None:
 	# without this line is older than the stamp and restore_state.py converts
 	# it (contract 1.12.0).
 	WHERE.write_text(json.dumps(
-		{"contract": superintendent.protocol.CONTRACT_VERSION, "apps": held},
+		{"contract": superconductor.protocol.CONTRACT_VERSION, "apps": held},
 		indent="\t") + "\n")
 
 	for app, state in held.items():

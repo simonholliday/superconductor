@@ -14,13 +14,13 @@ import logging
 import time
 import typing
 
-import superintendent.controls
-import superintendent.protocol
+import superconductor.controls
+import superconductor.protocol
 
 
 LOG = logging.getLogger(__name__)
 
-Sender = typing.Callable[[superintendent.protocol.Frame], typing.Awaitable[None]]
+Sender = typing.Callable[[superconductor.protocol.Frame], typing.Awaitable[None]]
 """How the hub writes one frame to one socket, whatever is on the other end."""
 
 
@@ -104,10 +104,10 @@ class Hub:
 
 		self.panels.append(panel)
 
-		await panel.send(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
+		await panel.send(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
 
 		for app in self.apps.values():
-			await panel.send(superintendent.protocol.snapshot(app.name, app.state, app.version))
+			await panel.send(superconductor.protocol.snapshot(app.name, app.state, app.version))
 
 		LOG.info("panel %s joined; %d now connected", panel.client, len(self.panels))
 
@@ -159,9 +159,9 @@ class Hub:
 
 		self.apps[app.name] = app
 
-		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
-		await self.to_panels(superintendent.protocol.app_presence(app.name, True))
-		await self.to_panels(superintendent.protocol.snapshot(app.name, app.state, app.version))
+		await self.to_panels(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
+		await self.to_panels(superconductor.protocol.app_presence(app.name, True))
+		await self.to_panels(superconductor.protocol.snapshot(app.name, app.state, app.version))
 
 		LOG.info("app %r declared %d control(s) at version %d", app.name, len(app.controls), app.version)
 
@@ -187,8 +187,8 @@ class Hub:
 
 		del self.apps[app.name]
 
-		await self.to_panels(superintendent.protocol.manifest(self._declarations(), self.page, self._pages()))
-		await self.to_panels(superintendent.protocol.app_presence(app.name, False))
+		await self.to_panels(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
+		await self.to_panels(superconductor.protocol.app_presence(app.name, False))
 
 		LOG.info("app %r disconnected", app.name)
 
@@ -205,7 +205,7 @@ class Hub:
 
 		return {
 			name: {
-				control: declared if declared.get("type") in superintendent.controls.KINDS
+				control: declared if declared.get("type") in superconductor.controls.KINDS
 				else {**declared, "unsupported": declared.get("type")}
 				for control, declared in app.controls.items()
 			}
@@ -223,7 +223,7 @@ class Hub:
 		        for name, app in sorted(self.apps.items())
 		        for page in app.pages]
 
-	async def to_panels (self, frame: superintendent.protocol.Frame) -> None:
+	async def to_panels (self, frame: superconductor.protocol.Frame) -> None:
 		"""Send one frame to every panel, surviving any that has gone quiet.
 
 		A panel whose socket has already failed is dropped rather than allowed
@@ -239,7 +239,7 @@ class Hub:
 				LOG.warning("panel %s could not be written to; dropping it", panel.client, exc_info=True)
 				self.panel_left(panel)
 
-	async def layout_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
+	async def layout_requested (self, panel: PanelLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass a page's layout to the app that declared the page.
 
 		Handled exactly as a tap is, and for the same reason: the app is the
@@ -252,14 +252,14 @@ class Hub:
 		app = self.apps.get(name) if isinstance(name, str) else None
 
 		if app is None:
-			await panel.send(superintendent.protocol.nack(
+			await panel.send(superconductor.protocol.nack(
 				str(name), str(frame.get("page", "")), panel.client,
-				superintendent.protocol.whole(frame, "seq", 0), f"{name} is not connected"))
+				superconductor.protocol.whole(frame, "seq", 0), f"{name} is not connected"))
 			return
 
 		await app.send(frame)
 
-	async def set_requested (self, panel: PanelLink, frame: superintendent.protocol.Frame) -> None:
+	async def set_requested (self, panel: PanelLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass a panel's tap to the app that owns the control it names.
 
 		Nothing is applied here and nothing is acknowledged here.  The app is
@@ -271,16 +271,16 @@ class Hub:
 		app = self.apps.get(name) if isinstance(name, str) else None
 
 		if app is None:
-			await panel.send(superintendent.protocol.nack(
+			await panel.send(superconductor.protocol.nack(
 				str(name), str(frame.get("path", "")), panel.client,
-				superintendent.protocol.whole(frame, "seq", -1), f"{name} is not connected"))
+				superconductor.protocol.whole(frame, "seq", -1), f"{name} is not connected"))
 			return
 
-		await app.send(superintendent.protocol.set_frame(
+		await app.send(superconductor.protocol.set_frame(
 			app.name, str(frame.get("path", "")), frame.get("v"), panel.client,
-			superintendent.protocol.whole(frame, "seq", -1)))
+			superconductor.protocol.whole(frame, "seq", -1)))
 
-	async def change_reported (self, app: AppLink, frame: superintendent.protocol.Frame) -> None:
+	async def change_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:
 		"""Record what an app applied, tell every panel, and confirm to the asker.
 
 		The panel that asked gets an ``ack`` as well as the ``changed`` every
@@ -290,18 +290,18 @@ class Hub:
 
 		path = str(frame.get("path", ""))
 		value = frame.get("v")
-		app.version = superintendent.protocol.whole(frame, "ver", app.version + 1)
+		app.version = superconductor.protocol.whole(frame, "ver", app.version + 1)
 
 		try:
-			superintendent.controls.apply_change(app.state, app.controls, path, value)
+			superconductor.controls.apply_change(app.state, app.controls, path, value)
 
-		except superintendent.controls.ControlError:
+		except superconductor.controls.ControlError:
 			LOG.warning("app %r reported a change this service cannot place: %s", app.name, path, exc_info=True)
 
 		client = frame.get("client")
 		seq = frame.get("seq")
 
-		await self.to_panels(superintendent.protocol.changed(
+		await self.to_panels(superconductor.protocol.changed(
 			app.name, path, value, app.version,
 			by=str(frame.get("by", "app")),
 			client=client if isinstance(client, str) else None,
@@ -309,9 +309,9 @@ class Hub:
 		))
 
 		if isinstance(client, str) and isinstance(seq, int):
-			await self.to_panel(client, superintendent.protocol.ack(app.name, client, seq, app.version))
+			await self.to_panel(client, superconductor.protocol.ack(app.name, client, seq, app.version))
 
-	async def refusal_reported (self, app: AppLink, frame: superintendent.protocol.Frame) -> None:
+	async def refusal_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass an app's refusal back to the panel that asked for it.
 
 		An app refuses when it cannot do what was asked — a transport that
@@ -325,7 +325,7 @@ class Hub:
 		if isinstance(client, str):
 			await self.to_panel(client, dict(frame, app=app.name))
 
-	async def to_panel (self, client: str, frame: superintendent.protocol.Frame) -> None:
+	async def to_panel (self, client: str, frame: superconductor.protocol.Frame) -> None:
 		"""Send one frame to one named panel, if it is still connected."""
 
 		for panel in list(self.panels):
@@ -333,7 +333,7 @@ class Hub:
 				await panel.send(frame)
 				return
 
-	async def event_reported (self, app: AppLink, frame: superintendent.protocol.Frame) -> None:
+	async def event_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass on something the app reports that nobody asked for.
 
 		The beat is the one that matters here: it is what the playhead on the

@@ -27,7 +27,7 @@ at its own boundary is worse than the document that says to check by hand.
 import re
 import typing
 
-import superintendent.service
+import superconductor.service
 
 
 # A token block has no nested braces, which is what lets this be a regex at all.
@@ -76,7 +76,7 @@ SWATCH_ONLY = {"system"}
 
 
 def stylesheet () -> str:
-	return (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	return (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 
 def declared (body: str) -> dict[str, str]:
@@ -88,7 +88,7 @@ def declared (body: str) -> dict[str, str]:
 def offered () -> list[str]:
 	"""The theme keys the client offers, in the order the picker lists them."""
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
 	listing = THEME_LIST.search(source)
 	assert listing, "the client no longer has a `THEMES` list, or it has been reshaped"
 
@@ -278,7 +278,7 @@ def test_a_theme_key_is_the_selector_and_the_stored_value () -> None:
 	and in the stylesheet's comments.
 	"""
 
-	page = (superintendent.service.CLIENT_DIR / "index.html").read_text(encoding="utf-8")
+	page = (superconductor.service.CLIENT_DIR / "index.html").read_text(encoding="utf-8")
 
 	guard = re.search(r"/\^(\[a-z\]\+)\$/", page)
 	assert guard, "index.html no longer checks the stored theme by shape"
@@ -302,7 +302,7 @@ def test_the_swatch_paints_itself_rather_than_a_copy_of_the_theme () -> None:
 	swatch is what somebody picks a theme *by*.
 	"""
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
 	style = stylesheet()
 
 	assert "<i data-theme=${theme.key}>" in source, (

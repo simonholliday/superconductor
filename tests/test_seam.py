@@ -23,8 +23,8 @@ import typing
 
 import pytest
 
-import superintendent.controls
-import superintendent.subsequence_adapter as adapter
+import superconductor.controls
+import superconductor.subsequence_adapter as adapter
 
 
 class Composition:
@@ -60,7 +60,7 @@ def _agree (control: typing.Any, rest: list[str], value: typing.Any) -> None:
 	# write is not what was asked for.
 	wire = control.applied(rest, value)
 
-	superintendent.controls.apply_change(held, declared, "/".join([name, *rest]), wire)
+	superconductor.controls.apply_change(held, declared, "/".join([name, *rest]), wire)
 
 	assert held[name] == control.snapshot(), (
 		f"after {rest!r} the service holds {held[name]!r} "
@@ -196,8 +196,8 @@ def test_a_pitch_pool_the_app_would_refuse_does_not_reach_the_service_either () 
 	with pytest.raises(adapter.Refused):
 		stack.apply(["a", "pitches"], ["C2", "F#9"])
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{"recipe": stack.snapshot()}, {"recipe": stack.declaration()},
 			"recipe/a/pitches", ["C2", "F#9"])
 
@@ -240,11 +240,11 @@ def test_a_transposed_grid_and_the_service_agree () -> None:
 	grid.apply(["transpose"], 2)
 
 	# Everything the app put on the wire, in the order it said it.
-	superintendent.controls.apply_change(
+	superconductor.controls.apply_change(
 		held, declared, f"{grid.name}/transpose", grid.applied(["transpose"], 2))
 
 	for path, value in link.reported:
-		superintendent.controls.apply_change(held, declared, path, value)
+		superconductor.controls.apply_change(held, declared, path, value)
 
 	assert held[grid.name] == grid.snapshot(), (
 		f"the service holds {held[grid.name]!r} and the app holds {grid.snapshot()!r}")
@@ -265,12 +265,12 @@ def test_a_rows_write_no_longer_carries_off_whatever_sits_beside_them () -> None
 
 	for rest, value in ((["enabled"], False), (["transpose"], 7)):
 		grid.apply(rest, value)
-		superintendent.controls.apply_change(
+		superconductor.controls.apply_change(
 			held, declared, "/".join([grid.name, *rest]), grid.applied(rest, value))
 
 	# And now the clear that used to take them with it.
 	grid.apply(["rows"], {})
-	superintendent.controls.apply_change(
+	superconductor.controls.apply_change(
 		held, declared, f"{grid.name}/rows", grid.applied(["rows"], {}))
 
 	assert held[grid.name]["enabled"] is False, "clearing the grid took the mute away"
@@ -311,7 +311,7 @@ def test_an_action_reaches_the_service_by_not_reaching_it () -> None:
 
 	# And if a frame ever did arrive by another route — an app reporting it, a
 	# tool replaying a capture — the service still must not keep it.
-	superintendent.controls.apply_change(held, declared, "moog/voicing", "four")
+	superconductor.controls.apply_change(held, declared, "moog/voicing", "four")
 
 	assert held["moog"] == settings.snapshot()
 	assert "voicing" not in held["moog"]
@@ -341,7 +341,7 @@ def test_a_whole_grid_write_is_answered_with_rows_and_not_the_snapshot () -> Non
 			f"{grid.name}'s whole-grid write carries the mute among its rows: {wire!r}")
 
 		# And the service agrees, rather than this being true only by inspection.
-		superintendent.controls.apply_change(
+		superconductor.controls.apply_change(
 			{grid.name: grid.snapshot()}, {grid.name: grid.declaration()},
 			f"{grid.name}/rows", wire)
 
@@ -429,8 +429,8 @@ def test_a_transform_named_as_a_generator_is_refused_by_both () -> None:
 
 	declared = {"stack": stack.declaration()}
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
 			{"stack": stack.snapshot()}, declared, "stack/layers",
 			[{"id": "a", "generator": "swing", "params": {}}])
 
@@ -502,8 +502,8 @@ def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
 	with pytest.raises(adapter.Refused):
 		rack.apply(["grids"], nameless)
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(held, declared, "rack/grids", nameless)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(held, declared, "rack/grids", nameless)
 
 	twice = [{"id": "a", "rows": ["kick"], "steps": 8},
 	         {"id": "a", "rows": ["snare"], "steps": 8}]
@@ -511,5 +511,5 @@ def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
 	with pytest.raises(adapter.Refused):
 		rack.apply(["grids"], twice)
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change(held, declared, "rack/grids", twice)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(held, declared, "rack/grids", twice)

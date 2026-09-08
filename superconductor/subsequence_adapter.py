@@ -35,13 +35,13 @@ import zlib
 import websockets.asyncio.client
 import websockets.exceptions
 
-import superintendent.build
-import superintendent.protocol
+import superconductor.build
+import superconductor.protocol
 
 
 LOG = logging.getLogger(__name__)
 
-LOADED_BUILD = superintendent.build.package_build()
+LOADED_BUILD = superconductor.build.package_build()
 """The package this app is running, hashed **as this module is imported** (#2220).
 
 Taken here and never again, because the question it answers is *what did this
@@ -92,7 +92,7 @@ class Control:
 	"""What to call this on the glass, if not the name it is addressed by.
 
 	The app names its own parts and the panel repeats them (#2071).  Nothing in
-	Superintendent knows that a row called ``kick`` is a drum or that a grid is
+	Superconductor knows that a row called ``kick`` is a drum or that a grid is
 	a pattern for one, so a title is the composition's to give: it is the same
 	rule as the row names, and the same reason.
 	"""
@@ -3093,7 +3093,7 @@ class AppLink:
 		self._socket: typing.Any = None
 
 		self._outbound: collections.OrderedDict[
-			typing.Any, superintendent.protocol.Frame] = collections.OrderedDict()
+			typing.Any, superconductor.protocol.Frame] = collections.OrderedDict()
 		"""Frames waiting for the socket, newest last (#2242).  Ordered because
 		the oldest is what goes when it is full, and keyed because an event about
 		a control supersedes a waiting one for the same control."""
@@ -3119,10 +3119,10 @@ class AppLink:
 		for control in self.controls.values():
 			control.attach(self)
 
-		self._thread = threading.Thread(target=self._run_link, name="superintendent-link", daemon=True)
+		self._thread = threading.Thread(target=self._run_link, name="superconductor-link", daemon=True)
 		self._thread.start()
 
-		LOG.info("Superintendent link started; dialling %s", self.url)
+		LOG.info("Superconductor link started; dialling %s", self.url)
 
 	def stop (self) -> None:
 		"""Stop dialling and let the link thread finish."""
@@ -3158,14 +3158,14 @@ class AppLink:
 		grid = next(
 			(c for c in self.controls.values() if isinstance(c, (StepGrid, NoteGrid))), None)
 
-		self._emit(superintendent.protocol.event(
+		self._emit(superconductor.protocol.event(
 			self.app_name, "beat", beat=beat, ts=now, interval=interval,
 			steps=grid.steps if grid else None, beats=grid.beats if grid else None))
 
 		for control in self.controls.values():
 			for path, value in control.poll():
 				self.version += 1
-				self._emit(superintendent.protocol.changed(
+				self._emit(superconductor.protocol.changed(
 					self.app_name, path, value, self.version, by="app"))
 
 			# Asked here because a beat is how we know the clock is running, and
@@ -3190,12 +3190,12 @@ class AppLink:
 
 		except Refused as refusal:
 			LOG.info("refused %r: %s", path, refusal)
-			self._emit(superintendent.protocol.nack(self.app_name, path, client, seq, str(refusal)))
+			self._emit(superconductor.protocol.nack(self.app_name, path, client, seq, str(refusal)))
 			return
 
 		except Exception:
 			LOG.warning("applying %r failed", path, exc_info=True)
-			self._emit(superintendent.protocol.nack(self.app_name, path, client, seq, "the app could not do that"))
+			self._emit(superconductor.protocol.nack(self.app_name, path, client, seq, "the app could not do that"))
 			return
 
 		if not changed:
@@ -3203,7 +3203,7 @@ class AppLink:
 
 		self.version += 1
 
-		self._emit(superintendent.protocol.changed(
+		self._emit(superconductor.protocol.changed(
 			self.app_name, path, control.applied(rest.split("/"), value), self.version,
 			by="panel", client=client, seq=seq))
 
@@ -3237,7 +3237,7 @@ class AppLink:
 		this time round.  Nothing applies one to any control's state.
 		"""
 
-		self._emit(superintendent.protocol.event(self.app_name, name, **fields))
+		self._emit(superconductor.protocol.event(self.app_name, name, **fields))
 
 	def report (self, path: str, value: typing.Any) -> None:
 		"""Announce something the app did of its own accord, on the clock loop.
@@ -3248,7 +3248,7 @@ class AppLink:
 
 		self.version += 1
 
-		self._emit(superintendent.protocol.changed(
+		self._emit(superconductor.protocol.changed(
 			self.app_name, path, value, self.version, by="app"))
 
 	def _settle (self, control: Control, owed: list[tuple[str, typing.Any]]) -> None:
@@ -3274,7 +3274,7 @@ class AppLink:
 
 		control.settle(owed)
 
-	def _emit (self, frame: superintendent.protocol.Frame) -> None:
+	def _emit (self, frame: superconductor.protocol.Frame) -> None:
 		"""Hand a frame to the link thread, in the order it was produced.
 
 		Called on the clock loop and never blocking there: the send itself
@@ -3297,7 +3297,7 @@ class AppLink:
 
 		asyncio.run_coroutine_threadsafe(self._drain(), loop)
 
-	def _queue (self, frame: superintendent.protocol.Frame) -> None:
+	def _queue (self, frame: superconductor.protocol.Frame) -> None:
 		"""Put one frame in line, superseding what it makes untrue.
 
 		Separate from `_emit` so it can be tested without a link thread, and
@@ -3337,7 +3337,7 @@ class AppLink:
 				"the link is behind: frames are being dropped after %d waiting. "
 				"Nothing further is logged until it catches up.", OUTBOUND_CAP)
 
-	def _supersedes (self, frame: superintendent.protocol.Frame) -> typing.Any:
+	def _supersedes (self, frame: superconductor.protocol.Frame) -> typing.Any:
 		"""What a frame replaces while it waits, or a key of its own if nothing."""
 
 		if frame.get("t") == "event":
@@ -3391,13 +3391,13 @@ class AppLink:
 					self._socket = socket
 					delay = RECONNECT_FLOOR
 
-					LOG.info("connected to Superintendent at %s", self.url)
+					LOG.info("connected to Superconductor at %s", self.url)
 
 					await self._declare()
 					await self._serve(socket)
 
 			except (OSError, websockets.exceptions.WebSocketException) as error:
-				LOG.debug("Superintendent not reachable (%s); retrying in %.2fs", error, delay)
+				LOG.debug("Superconductor not reachable (%s); retrying in %.2fs", error, delay)
 
 			finally:
 				self._socket = None
@@ -3417,7 +3417,7 @@ class AppLink:
 		for control in self.controls.values():
 			control.declared()
 
-		await self._send(superintendent.protocol.declare(
+		await self._send(superconductor.protocol.declare(
 			self.app_name,
 			{name: control.declaration() for name, control in self.controls.items()},
 			{name: control.snapshot() for name, control in self.controls.items()},
@@ -3431,9 +3431,9 @@ class AppLink:
 
 		async for raw in socket:
 			try:
-				frame = superintendent.protocol.decode(raw)
+				frame = superconductor.protocol.decode(raw)
 
-			except superintendent.protocol.ProtocolError:
+			except superconductor.protocol.ProtocolError:
 				LOG.warning("service sent a frame that could not be read", exc_info=True)
 				continue
 
@@ -3443,7 +3443,7 @@ class AppLink:
 			elif frame["t"] == "layout":
 				await self._keep_layout(frame)
 
-	async def _keep_layout (self, frame: superintendent.protocol.Frame) -> None:
+	async def _keep_layout (self, frame: superconductor.protocol.Frame) -> None:
 		"""Write a page's layout down, and tell every panel it landed.
 
 		Handled on the link thread and never crossed onto the clock loop: this
@@ -3459,13 +3459,13 @@ class AppLink:
 		parts = _readable_arrangement(frame.get("parts"))
 
 		if parts is None:
-			await self._send(superintendent.protocol.nack(
+			await self._send(superconductor.protocol.nack(
 				self.app_name, page_id, str(frame.get("client", "")),
 				int(frame.get("seq", 0)), "that arrangement could not be read"))
 			return
 
 		if self.page_store is None:
-			await self._send(superintendent.protocol.nack(
+			await self._send(superconductor.protocol.nack(
 				self.app_name, page_id, str(frame.get("client", "")),
 				int(frame.get("seq", 0)), "this composition keeps no page file to save into"))
 			return
@@ -3476,7 +3476,7 @@ class AppLink:
 		except OSError as error:
 			LOG.warning("could not save the arrangement of %r", page_id, exc_info=True)
 
-			await self._send(superintendent.protocol.nack(
+			await self._send(superconductor.protocol.nack(
 				self.app_name, page_id, str(frame.get("client", "")),
 				int(frame.get("seq", 0)), f"the arrangement could not be written: {error.strerror}"))
 			return
@@ -3487,7 +3487,7 @@ class AppLink:
 		# an arrangement made on one panel belongs on the others too.
 		await self._declare()
 
-	def _cross (self, frame: superintendent.protocol.Frame) -> None:
+	def _cross (self, frame: superconductor.protocol.Frame) -> None:
 		"""Hand one request to the clock loop, the only place it may land.
 
 		This is the crossing Subroutine #2046 chose: one per message, no
@@ -3508,7 +3508,7 @@ class AppLink:
 			int(frame.get("seq", -1)),
 		)
 
-	async def _send (self, frame: superintendent.protocol.Frame) -> None:
+	async def _send (self, frame: superconductor.protocol.Frame) -> None:
 		"""Write one frame, forgiving a socket that has closed underneath it."""
 
 		socket = self._socket
@@ -3517,7 +3517,7 @@ class AppLink:
 			return
 
 		try:
-			await socket.send(superintendent.protocol.encode(frame))
+			await socket.send(superconductor.protocol.encode(frame))
 
 		except websockets.exceptions.WebSocketException:
 			LOG.debug("frame dropped: the service went away mid-send")

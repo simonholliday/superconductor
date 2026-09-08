@@ -13,8 +13,8 @@ import subprocess
 
 import pytest
 
-import superintendent.protocol
-import superintendent.service
+import superconductor.protocol
+import superconductor.service
 
 # One parser for the stylesheet's theme blocks, rather than a second regex here
 # answering a slightly different question and drifting from the first.
@@ -60,7 +60,7 @@ def test_the_client_parses () -> None:
 	if engine is None:
 		pytest.skip("no JavaScript engine on this host, not even Playwright's own")
 
-	for script in sorted(superintendent.service.CLIENT_DIR.glob("*.js")):
+	for script in sorted(superconductor.service.CLIENT_DIR.glob("*.js")):
 		done = subprocess.run(
 			[str(engine), "--input-type=module", "--check"],
 			input=script.read_text(encoding="utf-8"), capture_output=True, text=True)
@@ -96,7 +96,7 @@ def test_every_size_in_the_stylesheet_comes_from_the_scale () -> None:
 	controls beside it did not. A convention would drift again; this cannot.
 	"""
 
-	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	declared = re.findall(r"font-size:\s*([^;]+);", style)
 	loose = [one.strip() for one in declared if not one.strip().startswith("var(--type-")]
@@ -108,7 +108,7 @@ def test_the_scale_is_small_and_every_step_of_it_is_used () -> None:
 	"""A scale nobody uses all of is a scale with a spare step in it, and a
 	spare step is where the next inconsistency goes."""
 
-	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	defined = set(re.findall(r"(--type-[a-z-]+):", style))
 	used = set(re.findall(r"var\((--type-[a-z-]+)\)", style))
@@ -132,7 +132,7 @@ def test_no_rule_in_the_stylesheet_names_a_colour_of_its_own () -> None:
 	`test_themes.py` is what now holds them to declaring the same set.
 	"""
 
-	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	# Comments carry item numbers, which look exactly like short hex colours;
 	# the two halves of a pair are of course literals, which is the point; and a
@@ -173,7 +173,7 @@ def test_every_colour_is_named_once_and_read_somewhere () -> None:
 	"""A colour written into a rule is a colour the theme cannot reach, and a
 	colour named and never read is where the next one goes."""
 
-	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	defined = set(re.findall(r"^\t(--[a-z-]+):\s*(?:light-dark|rgba?\(|#)", style, re.MULTILINE))
 	used = set(re.findall(r"var\((--[a-z-]+)\)", style))
@@ -185,7 +185,7 @@ def test_the_client_speaks_the_contract_python_does () -> None:
 	"""The version is written in both languages and cannot be shared between
 	them, so the only thing keeping them together is this."""
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
 
 	# Both spellings, so moving the literal into a constant cannot make this
 	# test pass by finding nothing — an empty set would otherwise equal an empty
@@ -195,8 +195,8 @@ def test_the_client_speaks_the_contract_python_does () -> None:
 
 	assert spoken, "the client names no contract version anywhere"
 
-	assert spoken == {superintendent.protocol.CONTRACT_VERSION}, (
-		f"the client says {spoken} and Python says {superintendent.protocol.CONTRACT_VERSION!r}")
+	assert spoken == {superconductor.protocol.CONTRACT_VERSION}, (
+		f"the client says {spoken} and Python says {superconductor.protocol.CONTRACT_VERSION!r}")
 
 
 def test_the_page_asks_for_the_assets_the_service_stamps () -> None:
@@ -204,7 +204,7 @@ def test_the_page_asks_for_the_assets_the_service_stamps () -> None:
 	differently the rewrite silently stops happening, and the caching guarantee
 	goes with it."""
 
-	markup = (superintendent.service.CLIENT_DIR / "index.html").read_text(encoding="utf-8")
+	markup = (superconductor.service.CLIENT_DIR / "index.html").read_text(encoding="utf-8")
 
 	for asset in ("/client/style.css", "/client/app.js"):
 		assert f'"{asset}"' in markup, f"{asset} is not spelled the way the service rewrites it"
@@ -214,8 +214,8 @@ def test_the_gap_between_cells_is_the_same_number_in_both_languages () -> None:
 	"""The lattice is arithmetic in JavaScript and layout in CSS, and the two
 	only agree because they use the same gap. Nothing else would notice."""
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
-	styles = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	styles = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 
 	in_script = next(line for line in source.splitlines() if line.startswith("const GAP = "))
 	in_styles = next(line for line in styles.splitlines() if line.strip().startswith("--gap:"))
@@ -245,7 +245,7 @@ def test_both_languages_agree_about_what_a_contract_gap_is () -> None:
 	if node is None:
 		pytest.skip("no JavaScript engine on this machine")
 
-	source = (superintendent.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
 
 	spoken = re.search(r'^const CONTRACT = "([^"]+)";$', source, re.MULTILINE)
 	assert spoken, "the client no longer names a contract version in one place"
@@ -283,7 +283,7 @@ def test_both_languages_agree_about_what_a_contract_gap_is () -> None:
 
 	said, odd = (json.loads(line) for line in run.stdout.strip().splitlines())
 
-	assert said == [superintendent.protocol.contract_gap(one) for one in cases], (
+	assert said == [superconductor.protocol.contract_gap(one) for one in cases], (
 		f"the two languages disagree: JavaScript said {said}")
 
-	assert odd == [superintendent.protocol.contract_gap(one) for one in (None, None, 5)]
+	assert odd == [superconductor.protocol.contract_gap(one) for one in (None, None, 5)]

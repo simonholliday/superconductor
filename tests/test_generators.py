@@ -22,7 +22,7 @@ import subsequence
 import subsequence.pattern
 import subsequence.pattern_builder
 
-import superintendent.subsequence_adapter as adapter
+import superconductor.subsequence_adapter as adapter
 
 
 ROWS = ["C2", "E2", "G2"]
@@ -222,7 +222,7 @@ def _sweep (caplog: typing.Any) -> dict[str, str]:
 
 		caplog.clear()
 
-		with caplog.at_level(logging.WARNING, logger="superintendent.subsequence_adapter"):
+		with caplog.at_level(logging.WARNING, logger="superconductor.subsequence_adapter"):
 			one.build(builder)
 
 		if caplog.records:

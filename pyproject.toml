@@ -3,7 +3,7 @@ requires = ["setuptools>=77.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "superintendent"
+name = "superconductor"
 description = "Touchscreen control surface for Subsequence, Subsample and Substation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ dev = [
 	"types-PyYAML",
 	# The compositions are type-checked and tested along with the package, and
 	# they read instrument definitions. It is not a dependency of the package —
-	# nothing under `superintendent/` imports it, and nothing may (#1465) — but
+	# nothing under `superconductor/` imports it, and nothing may (#1465) — but
 	# mypy has needed it since `files` grew to cover `compositions/` and said so
 	# only by not being run without it.
 	"pymididefs[instruments]>=0.4",
@@ -54,10 +54,10 @@ dev = [
 ]
 
 [project.scripts]
-superintendent = "superintendent.cli:main"
+superconductor = "superconductor.cli:main"
 
 [tool.setuptools]
-packages = ["superintendent"]
+packages = ["superconductor"]
 
 # The page, its stylesheet, the vendored libraries and the bundled face are not
 # Python, so they are carried as data.  Without this a built copy has nothing to
@@ -71,7 +71,7 @@ packages = ["superintendent"]
 # the first review's finding that the client was not in the distributable at
 # all, arriving a second time through a directory added later.
 [tool.setuptools.package-data]
-superintendent = ["client/*", "client/vendor/*", "client/fonts/*"]
+superconductor = ["client/*", "client/vendor/*", "client/fonts/*"]
 
 [tool.setuptools_scm]
 # Used when there is no git repository to read a version from — "git init" is
@@ -82,7 +82,7 @@ fallback_version = "0.0.0"
 # Kept off this directory: it is a CIFS mount shared between machines, which
 # mypy's cache does not reliably tolerate, and a cache written on one machine
 # has nothing to say to the other.
-cache_dir = "/tmp/superintendent-mypy-cache"
+cache_dir = "/tmp/superconductor-mypy-cache"
 python_version = "3.11"
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -95,7 +95,7 @@ disallow_untyped_defs = true
 # not, and the unchecked ones included both halves of the restart safety net —
 # `capture_state.py` and `restore_state.py`, whose whole justification is that
 # losing a pattern happens silently.  Settled on 2026-09-06 (#2140).
-files = ["superintendent", "tests", "tools", "compositions"]
+files = ["superconductor", "tests", "tools", "compositions"]
 
 [[tool.mypy.overrides]]
 module = ["uvicorn.*"]
@@ -121,7 +121,7 @@ warn_return_any = false
 
 [tool.pytest.ini_options]
 # Off the mount, for the same reason as the mypy cache above.
-cache_dir = "/tmp/superintendent-pytest-cache"
+cache_dir = "/tmp/superconductor-pytest-cache"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 

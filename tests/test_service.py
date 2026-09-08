@@ -9,24 +9,24 @@ import pytest
 import starlette.testclient
 import starlette.websockets
 
-import superintendent
-import superintendent.config
-import superintendent.protocol
-import superintendent.service
+import superconductor
+import superconductor.config
+import superconductor.protocol
+import superconductor.service
 
 
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 16, "beats": 4}}
 
 
-def _read_until (socket: typing.Any, kind: str, limit: int = 12) -> superintendent.protocol.Frame:
+def _read_until (socket: typing.Any, kind: str, limit: int = 12) -> superconductor.protocol.Frame:
 	"""Read frames until one of *kind* arrives, so ordering is not asserted."""
 
 	for _ in range(limit):
 		frame = socket.receive_json()
 
 		if frame["t"] == kind:
-			return typing.cast(superintendent.protocol.Frame, frame)
+			return typing.cast(superconductor.protocol.Frame, frame)
 
 	raise AssertionError(f"no {kind!r} frame arrived")
 
@@ -34,14 +34,14 @@ def _read_until (socket: typing.Any, kind: str, limit: int = 12) -> superintende
 def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 	"""The full round trip, with the service holding both ends."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare(
+		app.send_json(superconductor.protocol.declare(
 			"subsequence", CONTROLS, {"grid": {"kick": [0, 4]}}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 
 			manifest = _read_until(panel, "manifest")
 			snapshot = _read_until(panel, "snapshot")
@@ -56,7 +56,7 @@ def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 			assert asked["path"] == "grid/snare/12"
 			assert asked["client"] == "panel-1"
 
-			app.send_json(superintendent.protocol.changed(
+			app.send_json(superconductor.protocol.changed(
 				"subsequence", "grid/snare/12", True, 2, by="panel",
 				client=asked["client"], seq=asked["seq"]))
 
@@ -71,10 +71,10 @@ def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 def test_a_panel_that_arrives_before_any_app_is_told_so () -> None:
 	"""Starting the panel first is ordinary, and it must not look broken."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
-		panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 
 		assert _read_until(panel, "manifest")["apps"] == {}
 
@@ -82,16 +82,16 @@ def test_a_panel_that_arrives_before_any_app_is_told_so () -> None:
 def test_a_beat_reaches_the_glass_so_the_playhead_has_something_to_follow () -> None:
 	"""The events the sequencer reports are passed on unchanged."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 			_read_until(panel, "manifest")
 
-			app.send_json(superintendent.protocol.event("subsequence", "beat", beat=2, interval=0.5))
+			app.send_json(superconductor.protocol.event("subsequence", "beat", beat=2, interval=0.5))
 
 			event = _read_until(panel, "event")
 
@@ -102,10 +102,10 @@ def test_a_beat_reaches_the_glass_so_the_playhead_has_something_to_follow () -> 
 def test_the_panel_is_answered_when_it_checks_the_service_is_alive () -> None:
 	"""The echoed timestamp is also how the playhead places the two clocks."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
-		panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 		panel.send_json({"t": "ping", "ts": 1234.5})
 
 		assert _read_until(panel, "pong")["ts"] == 1234.5
@@ -114,7 +114,7 @@ def test_the_panel_is_answered_when_it_checks_the_service_is_alive () -> None:
 def test_the_page_is_served () -> None:
 	"""The page, its script and both sockets share one origin."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	assert client.get("/").status_code == 200
 	assert client.get("/client/app.js").status_code == 200
@@ -129,11 +129,11 @@ def test_the_page_ships_inside_the_package () -> None:
 	can find it.
 	"""
 
-	assert superintendent.service.CLIENT_DIR.parent == pathlib.Path(superintendent.__file__).resolve().parent
-	assert (superintendent.service.CLIENT_DIR / "index.html").exists()
-	assert (superintendent.service.CLIENT_DIR / "app.js").exists()
-	assert (superintendent.service.CLIENT_DIR / "vendor").is_dir()
-	assert (superintendent.service.CLIENT_DIR / "fonts").is_dir()
+	assert superconductor.service.CLIENT_DIR.parent == pathlib.Path(superconductor.__file__).resolve().parent
+	assert (superconductor.service.CLIENT_DIR / "index.html").exists()
+	assert (superconductor.service.CLIENT_DIR / "app.js").exists()
+	assert (superconductor.service.CLIENT_DIR / "vendor").is_dir()
+	assert (superconductor.service.CLIENT_DIR / "fonts").is_dir()
 
 
 def _globbed (pattern: str) -> typing.Any:
@@ -172,16 +172,16 @@ def test_everything_the_page_needs_is_named_in_the_package_data () -> None:
 	"""
 
 	settings = tomllib.loads(
-		(pathlib.Path(superintendent.__file__).resolve().parent.parent / "pyproject.toml")
+		(pathlib.Path(superconductor.__file__).resolve().parent.parent / "pyproject.toml")
 		.read_text(encoding="utf-8"))
 
 	globs = [_globbed(one) for one in
-	         settings["tool"]["setuptools"]["package-data"]["superintendent"]]
+	         settings["tool"]["setuptools"]["package-data"]["superconductor"]]
 
-	inside = pathlib.Path(superintendent.__file__).resolve().parent
+	inside = pathlib.Path(superconductor.__file__).resolve().parent
 	missed = []
 
-	for file in sorted(superintendent.service.CLIENT_DIR.rglob("*")):
+	for file in sorted(superconductor.service.CLIENT_DIR.rglob("*")):
 		if not file.is_file() or "__pycache__" in file.parts:
 			continue
 
@@ -196,19 +196,19 @@ def test_everything_the_page_needs_is_named_in_the_package_data () -> None:
 def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
 	"""A control that will not move must say why, or the person is left guessing."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 			_read_until(panel, "manifest")
 
 			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/cowbell/0", "v": True, "seq": 9})
 			asked = _read_until(app, "set")
 
-			app.send_json(superintendent.protocol.nack(
+			app.send_json(superconductor.protocol.nack(
 				"subsequence", asked["path"], asked["client"], asked["seq"], "this grid has no 'cowbell' row"))
 
 			refusal = _read_until(panel, "nack")
@@ -221,13 +221,13 @@ def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
 def test_a_refusal_for_a_panel_that_has_gone_troubles_nobody () -> None:
 	"""An app may answer after the panel that asked has closed its socket."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
-		app.send_json(superintendent.protocol.nack("subsequence", "grid/kick/0", "nobody", 1, "gone"))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superconductor.protocol.nack("subsequence", "grid/kick/0", "nobody", 1, "gone"))
 
-		app.send_json(superintendent.protocol.event("subsequence", "beat", beat=0))
+		app.send_json(superconductor.protocol.event("subsequence", "beat", beat=0))
 
 
 def test_a_page_set_reaches_the_panel_with_the_app_that_owns_it () -> None:
@@ -236,14 +236,14 @@ def test_a_page_set_reaches_the_panel_with_the_app_that_owns_it () -> None:
 
 	pages = [{"id": "both", "title": "Both", "parts": ["grid"]}]
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare(
+		app.send_json(superconductor.protocol.declare(
 			"subsequence", CONTROLS, {"grid": {"kick": [0]}}, 1, pages))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "both"))
 
 			manifest = _read_until(panel, "manifest")
 
@@ -254,13 +254,13 @@ def test_an_app_that_declares_no_pages_says_so_rather_than_nothing () -> None:
 	"""Which is what keeps a panel written for pages working against a
 	composition that has never heard of them."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", None))
+			panel.send_json(superconductor.protocol.hello("panel-1", None))
 
 			manifest = _read_until(panel, "manifest")
 
@@ -271,17 +271,17 @@ def test_an_arrangement_is_carried_to_the_app_that_owns_the_page () -> None:
 	"""The service holds no page files and writes nothing (#2075): a page set
 	belongs to the composition that declared it, so the composition decides."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare(
+		app.send_json(superconductor.protocol.declare(
 			"subsequence", CONTROLS, {}, 1, [{"id": "both", "title": "Both", "parts": ["grid"]}]))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "both"))
 			_read_until(panel, "manifest")
 
-			panel.send_json(superintendent.protocol.layout(
+			panel.send_json(superconductor.protocol.layout(
 				"subsequence", "both", [{"name": "grid", "x": 3, "y": 1}], "panel-1", 7))
 
 			carried = _read_until(app, "layout")
@@ -295,12 +295,12 @@ def test_an_arrangement_for_an_app_that_is_gone_is_refused_with_a_reason () -> N
 	"""So the person is told their layout was not kept, rather than finding out
 	at the next reload."""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
-		panel.send_json(superintendent.protocol.hello("panel-1", "both"))
+		panel.send_json(superconductor.protocol.hello("panel-1", "both"))
 
-		panel.send_json(superintendent.protocol.layout(
+		panel.send_json(superconductor.protocol.layout(
 			"nobody", "both", [{"name": "grid", "x": 0, "y": 0}], "panel-1", 1))
 
 		refusal = _read_until(panel, "nack")
@@ -319,13 +319,13 @@ def test_a_control_this_service_is_too_old_for_is_declared_as_such () -> None:
 
 	controls = {"mystery": {"type": "hologram", "shimmer": 3}, **CONTROLS}
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", controls, {}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", controls, {}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", None))
+			panel.send_json(superconductor.protocol.hello("panel-1", None))
 
 			manifest = _read_until(panel, "manifest")
 
@@ -350,17 +350,17 @@ def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
 	wakes every time the screen does.
 	"""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
 			for _ in range(3):
-				panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+				panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 				_read_until(panel, "manifest")
 
-			app.send_json(superintendent.protocol.event("subsequence", "beat", beat=7, interval=0.5))
+			app.send_json(superconductor.protocol.event("subsequence", "beat", beat=7, interval=0.5))
 
 			# **Fenced by a pong**, because the question is *how many* beats
 			# arrive and there is no other way to know when to stop reading. A
@@ -395,13 +395,13 @@ def test_a_malformed_frame_does_not_take_the_socket_down_with_a_traceback () -> 
 	to die with a `ValueError` instead.
 	"""
 
-	client = starlette.testclient.TestClient(superintendent.service.build(superintendent.config.Config()))
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
-		app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
 
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel-1", "grid"))
+			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 			_read_until(panel, "manifest")
 
 			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/kick/0",
@@ -431,15 +431,15 @@ def test_a_panel_speaking_a_different_contract_is_said_out_loud (
 	"""
 
 	client = starlette.testclient.TestClient(
-		superintendent.service.build(superintendent.config.Config()))
+		superconductor.service.build(superconductor.config.Config()))
 
-	with caplog.at_level("DEBUG", logger="superintendent.service"):
+	with caplog.at_level("DEBUG", logger="superconductor.service"):
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json({**superintendent.protocol.hello("panel", None), "contract": spoken})
+			panel.send_json({**superconductor.protocol.hello("panel", None), "contract": spoken})
 
 			# Carried rather than closed: the greeting still arrives.
 			assert _read_until(panel, "service")["contract"] \
-				== superintendent.protocol.CONTRACT_VERSION
+				== superconductor.protocol.CONTRACT_VERSION
 
 	complaints = [one for one in caplog.records if one.levelname == level and said in one.getMessage()]
 
@@ -457,16 +457,16 @@ def test_an_app_speaking_a_different_contract_is_said_out_loud (caplog: typing.A
 	"""
 
 	client = starlette.testclient.TestClient(
-		superintendent.service.build(superintendent.config.Config()))
+		superconductor.service.build(superconductor.config.Config()))
 
-	with caplog.at_level("DEBUG", logger="superintendent.service"):
+	with caplog.at_level("DEBUG", logger="superconductor.service"):
 		with client.websocket_connect("/ws/app") as app:
 			app.send_json({
-				**superintendent.protocol.declare("subsequence", CONTROLS, {}, 1),
+				**superconductor.protocol.declare("subsequence", CONTROLS, {}, 1),
 				"contract": "1.0.0"})
 
 			with client.websocket_connect("/ws/panel") as panel:
-				panel.send_json(superintendent.protocol.hello("panel", None))
+				panel.send_json(superconductor.protocol.hello("panel", None))
 				_read_until(panel, "manifest")
 
 	complaints = [one.getMessage() for one in caplog.records
@@ -484,11 +484,11 @@ def test_a_matching_contract_says_nothing_at_all (caplog: typing.Any) -> None:
 	"""
 
 	client = starlette.testclient.TestClient(
-		superintendent.service.build(superintendent.config.Config()))
+		superconductor.service.build(superconductor.config.Config()))
 
-	with caplog.at_level("DEBUG", logger="superintendent.service"):
+	with caplog.at_level("DEBUG", logger="superconductor.service"):
 		with client.websocket_connect("/ws/panel") as panel:
-			panel.send_json(superintendent.protocol.hello("panel", None))
+			panel.send_json(superconductor.protocol.hello("panel", None))
 			_read_until(panel, "service")
 
 	assert [one.getMessage() for one in caplog.records if "contract" in one.getMessage()] == []
@@ -513,19 +513,19 @@ def test_one_app_replacing_another_of_the_same_name_is_said_out_loud (
 	"""
 
 	client = starlette.testclient.TestClient(
-		superintendent.service.build(superintendent.config.Config()))
+		superconductor.service.build(superconductor.config.Config()))
 
-	with caplog.at_level("DEBUG", logger="superintendent.hub"):
+	with caplog.at_level("DEBUG", logger="superconductor.hub"):
 		with client.websocket_connect("/ws/app") as first:
-			first.send_json(superintendent.protocol.declare("substation", CONTROLS, {}, 1))
+			first.send_json(superconductor.protocol.declare("substation", CONTROLS, {}, 1))
 
 			with client.websocket_connect("/ws/app") as second:
-				second.send_json(superintendent.protocol.declare("substation", CONTROLS, {}, 1))
+				second.send_json(superconductor.protocol.declare("substation", CONTROLS, {}, 1))
 
 				# Read something back, so the second declaration has certainly
 				# been handled before the log is inspected.
 				with client.websocket_connect("/ws/panel") as panel:
-					panel.send_json(superintendent.protocol.hello("panel", None))
+					panel.send_json(superconductor.protocol.hello("panel", None))
 					_read_until(panel, "manifest")
 
 	said = [one.getMessage() for one in caplog.records
@@ -548,15 +548,15 @@ def test_an_app_declaring_twice_on_one_socket_is_not_a_replacement (
 	"""
 
 	client = starlette.testclient.TestClient(
-		superintendent.service.build(superintendent.config.Config()))
+		superconductor.service.build(superconductor.config.Config()))
 
-	with caplog.at_level("DEBUG", logger="superintendent.hub"):
+	with caplog.at_level("DEBUG", logger="superconductor.hub"):
 		with client.websocket_connect("/ws/app") as app:
-			app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 1))
-			app.send_json(superintendent.protocol.declare("subsequence", CONTROLS, {}, 2))
+			app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {}, 1))
+			app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {}, 2))
 
 			with client.websocket_connect("/ws/panel") as panel:
-				panel.send_json(superintendent.protocol.hello("panel", None))
+				panel.send_json(superconductor.protocol.hello("panel", None))
 				assert _read_until(panel, "manifest")
 
 	assert [one.getMessage() for one in caplog.records if "replacing" in one.getMessage()] == []

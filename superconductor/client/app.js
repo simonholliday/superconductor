@@ -95,7 +95,7 @@ const pageBuild = new URL(import.meta.url).searchParams.get("v");
  *
  * A `?page=` in the address wins, so a performer's tablet can be pointed once
  * and left alone. */
-const PAGE_KEY = "superintendent.page";
+const PAGE_KEY = "superconductor.page";
 const PAGE_BUTTONS = 6;
 
 const SEPARATION = 1;
@@ -178,7 +178,7 @@ function rememberedPage () {
 	}
 }
 
-const LOCK_KEY = "superintendent.layout-locked";
+const LOCK_KEY = "superconductor.layout-locked";
 
 /* Whether the layout is held still. Remembered, because a person who works with
    it unlocked should not have to say so again every time they reload.
@@ -211,7 +211,7 @@ function rememberLock (locked) {
 	}
 }
 
-const SIZE_KEY = "superintendent.cell-size";
+const SIZE_KEY = "superconductor.cell-size";
 
 /* The sizes a cell can be.
  *
@@ -2234,7 +2234,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
 
 /* One part: a titled block holding one control.
  *
- * The title comes from the app, never from here (#2071). Superintendent does
+ * The title comes from the app, never from here (#2071). Superconductor does
  * not know that a grid is a drum pattern or that a row is a voice, and a title
  * invented here would be the one place a rig's names leaked into the package.
  * An app that offers none gets its address tidied up, which is honest about
@@ -3769,7 +3769,7 @@ function useOnGlass (open) {
  * The attribute is also written by `index.html` before the first paint, so a
  * pinned theme does not flash the other one on the way in. This writes it again
  * on mount, which costs nothing and means the two cannot disagree. */
-const THEME_KEY = "superintendent.theme";
+const THEME_KEY = "superconductor.theme";
 
 /* **The name carries the reference without claiming it** (#2194). Each of the
    eight is drawn from a machine or a record, and which one is in #2190 and in
@@ -5073,7 +5073,7 @@ function Panel () {
 			<div class="notice">
 				${status === "up"
 					? "Waiting for a music app to dial in and say what it offers."
-					: "Waiting for the Superintendent service."}
+					: "Waiting for the Superconductor service."}
 			</div>`;
 	}
 

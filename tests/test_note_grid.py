@@ -8,8 +8,8 @@ import typing
 
 import pytest
 
-import superintendent.controls
-import superintendent.subsequence_adapter as adapter
+import superconductor.controls
+import superconductor.subsequence_adapter as adapter
 
 
 DECLARED: dict[str, typing.Any] = {
@@ -85,7 +85,7 @@ def test_a_note_is_placed_with_the_shape_the_app_declared () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(state, {"bass": DECLARED}, "bass/C2/4", True)
+	superconductor.controls.apply_change(state, {"bass": DECLARED}, "bass/C2/4", True)
 
 	assert state["bass"]["C2"]["4"] == {"length": 1, "velocity": 100}
 
@@ -96,9 +96,9 @@ def test_a_note_can_be_lengthened_and_weighted () -> None:
 	state: dict[str, typing.Any] = {}
 	controls = {"bass": DECLARED}
 
-	superintendent.controls.apply_change(state, controls, "bass/C2/4", True)
-	superintendent.controls.apply_change(state, controls, "bass/C2/4/length", 3)
-	superintendent.controls.apply_change(state, controls, "bass/C2/4/velocity", 64)
+	superconductor.controls.apply_change(state, controls, "bass/C2/4", True)
+	superconductor.controls.apply_change(state, controls, "bass/C2/4/length", 3)
+	superconductor.controls.apply_change(state, controls, "bass/C2/4/velocity", 64)
 
 	assert state["bass"]["C2"]["4"] == {"length": 3, "velocity": 64}
 
@@ -106,8 +106,8 @@ def test_a_note_can_be_lengthened_and_weighted () -> None:
 def test_shaping_a_note_that_is_not_there_is_refused () -> None:
 	"""A length without a note is not a state the app could have reported."""
 
-	with pytest.raises(superintendent.controls.ControlError):
-		superintendent.controls.apply_change({}, {"bass": DECLARED}, "bass/C2/4/length", 3)
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change({}, {"bass": DECLARED}, "bass/C2/4/length", 3)
 
 
 def test_a_row_with_no_notes_left_is_forgotten () -> None:
@@ -116,8 +116,8 @@ def test_a_row_with_no_notes_left_is_forgotten () -> None:
 	state: dict[str, typing.Any] = {}
 	controls = {"bass": DECLARED}
 
-	superintendent.controls.apply_change(state, controls, "bass/C2/4", True)
-	superintendent.controls.apply_change(state, controls, "bass/C2/4", False)
+	superconductor.controls.apply_change(state, controls, "bass/C2/4", True)
+	superconductor.controls.apply_change(state, controls, "bass/C2/4", False)
 
 	assert state["bass"] == {}
 
@@ -483,13 +483,13 @@ def test_the_service_bounds_a_note_by_the_positions_a_grid_declared () -> None:
 	declared = {**DECLARED, "divisions": 6}
 	state: dict[str, typing.Any] = {}
 
-	superintendent.controls.apply_change(
+	superconductor.controls.apply_change(
 		state, {"bass": declared}, "bass/C2/9", True)
 
 	assert set(state["bass"]["C2"]) == {"9"}
 
-	with pytest.raises(superintendent.controls.ControlError, match="48 positions wide"):
-		superintendent.controls.apply_change(
+	with pytest.raises(superconductor.controls.ControlError, match="48 positions wide"):
+		superconductor.controls.apply_change(
 			state, {"bass": declared}, "bass/C2/48", True)
 
 

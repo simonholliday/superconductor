@@ -7,8 +7,8 @@ import typing
 
 import pytest
 
-import superintendent.protocol
-import superintendent.subsequence_adapter
+import superconductor.protocol
+import superconductor.subsequence_adapter
 
 
 ROWS = ["kick", "snare"]
@@ -88,18 +88,18 @@ class FakeComposition:
 			self.is_paused = False
 
 
-def _link () -> tuple[superintendent.subsequence_adapter.AppLink, list[superintendent.protocol.Frame]]:
+def _link () -> tuple[superconductor.subsequence_adapter.AppLink, list[superconductor.protocol.Frame]]:
 	"""A link over a fake composition, with everything it would send recorded."""
 
 	composition = FakeComposition()
-	link = superintendent.subsequence_adapter.AppLink(
+	link = superconductor.subsequence_adapter.AppLink(
 		composition,
 		controls=[
-			superintendent.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16),
-			superintendent.subsequence_adapter.Transport(composition),
+			superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16),
+			superconductor.subsequence_adapter.Transport(composition),
 		],
 	)
-	sent: list[superintendent.protocol.Frame] = []
+	sent: list[superconductor.protocol.Frame] = []
 
 	link._emit = sent.append  # type: ignore[assignment, method-assign]
 
@@ -248,12 +248,12 @@ def test_the_grid_is_offered_whole_with_every_row_named () -> None:
 	assert link.controls["grid"].snapshot() == {"kick": [4], "snare": [], "enabled": True}
 
 
-def _transport () -> tuple[superintendent.subsequence_adapter.Transport, FakeComposition]:
+def _transport () -> tuple[superconductor.subsequence_adapter.Transport, FakeComposition]:
 	"""A transport over a composition that can hold its clock."""
 
 	composition = FakeComposition()
 
-	return superintendent.subsequence_adapter.Transport(composition), composition
+	return superconductor.subsequence_adapter.Transport(composition), composition
 
 
 def test_pausing_asks_the_composition_to_hold_its_clock () -> None:
@@ -280,7 +280,7 @@ def test_a_refused_pause_is_reported_rather_than_left_waiting () -> None:
 	transport, composition = _transport()
 	composition.refuses_pause = True
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["paused"], True)
 
 
@@ -322,10 +322,10 @@ def test_a_tempo_is_passed_through_and_one_outside_the_range_is_refused () -> No
 	assert transport.apply(["bpm"], 137.5) is True
 	assert composition.bpm_set_to == [137.5]
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["bpm"], 5000)
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["bpm"], "quickly")
 
 
@@ -361,7 +361,7 @@ def test_a_composition_that_cannot_pause_does_not_offer_the_field () -> None:
 		pause = None  # type: ignore[assignment]
 		resume = None  # type: ignore[assignment]
 
-	transport = superintendent.subsequence_adapter.Transport(WithoutPause())
+	transport = superconductor.subsequence_adapter.Transport(WithoutPause())
 
 	assert transport.declaration()["fields"] == ["bpm"]
 	assert "paused" not in transport.snapshot()
@@ -395,7 +395,7 @@ def test_a_grid_that_drives_a_pattern_mutes_it () -> None:
 			self.silenced.append(("unmute", name))
 
 	composition = Muting()
-	grid = superintendent.subsequence_adapter.StepGrid(
+	grid = superconductor.subsequence_adapter.StepGrid(
 		composition, rows=["kick"], name="grid", pattern="drums")
 
 	assert grid.apply(["enabled"], False) is True
@@ -422,7 +422,7 @@ def test_a_composition_that_cannot_mute_is_not_an_error () -> None:
 
 			self.data: dict[str, typing.Any] = {}
 
-	grid = superintendent.subsequence_adapter.StepGrid(
+	grid = superconductor.subsequence_adapter.StepGrid(
 		Old(), rows=["kick"], name="grid", pattern="drums")
 
 	assert grid.apply(["enabled"], False) is True
@@ -442,10 +442,10 @@ def test_a_transport_refuses_a_field_it_does_not_have () -> None:
 
 	transport, _ = _transport()
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["tempo"], 120.0)
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["bpm", "extra"], 120.0)
 
 	# And "nothing changed" is still allowed to mean exactly that.
@@ -462,9 +462,9 @@ def test_a_composition_that_cannot_pause_says_so_rather_than_ignoring_it () -> N
 		pause = None  # type: ignore[assignment]
 		resume = None  # type: ignore[assignment]
 
-	transport = superintendent.subsequence_adapter.Transport(WithoutPause())
+	transport = superconductor.subsequence_adapter.Transport(WithoutPause())
 
-	with pytest.raises(superintendent.subsequence_adapter.Refused):
+	with pytest.raises(superconductor.subsequence_adapter.Refused):
 		transport.apply(["paused"], True)
 
 
@@ -486,15 +486,15 @@ def test_a_beat_carries_a_pitched_grid_s_geometry_when_that_is_all_there_is () -
 	"""
 
 	composition = FakeComposition()
-	link = superintendent.subsequence_adapter.AppLink(
+	link = superconductor.subsequence_adapter.AppLink(
 		composition,
 		controls=[
-			superintendent.subsequence_adapter.NoteGrid(
+			superconductor.subsequence_adapter.NoteGrid(
 				composition, rows=["C2"], steps=12, beats=3, data_key="bass", name="bass"),
 		],
 	)
 
-	sent: list[superintendent.protocol.Frame] = []
+	sent: list[superconductor.protocol.Frame] = []
 	link._emit = sent.append  # type: ignore[assignment, method-assign]
 	link._clock_loop = asyncio.new_event_loop()
 
@@ -531,15 +531,15 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 	composition = FakeComposition()
 	told: list[tuple[str, typing.Any]] = []
 
-	settings = superintendent.subsequence_adapter.Params(
+	settings = superconductor.subsequence_adapter.Params(
 		composition,
-		parameters=[superintendent.subsequence_adapter.Parameter("glide", "switch", default=False)],
+		parameters=[superconductor.subsequence_adapter.Parameter("glide", "switch", default=False)],
 		data_key="moog", name="moog",
 		on_change=lambda name, value: told.append((name, value)))
 
 	composition.data["moog"] = {"glide": True}
 
-	link = superintendent.subsequence_adapter.AppLink(composition, controls=[settings])
+	link = superconductor.subsequence_adapter.AppLink(composition, controls=[settings])
 	link._emit = lambda frame: None  # type: ignore[method-assign]
 
 	settings.declared()
@@ -580,7 +580,7 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 		loop.close()
 
 
-def _link_with_no_thread () -> superintendent.subsequence_adapter.AppLink:
+def _link_with_no_thread () -> superconductor.subsequence_adapter.AppLink:
 	"""An app link that has never dialled, for testing what it queues.
 
 	`_queue` is deliberately separate from `_emit` so this is possible: the
@@ -588,7 +588,7 @@ def _link_with_no_thread () -> superintendent.subsequence_adapter.AppLink:
 	test that needed a link thread to reach it would be testing asyncio.
 	"""
 
-	return superintendent.subsequence_adapter.AppLink(
+	return superconductor.subsequence_adapter.AppLink(
 		FakeComposition(), controls=[], app_name="app")
 
 
@@ -602,8 +602,8 @@ def test_an_event_about_a_control_supersedes_one_still_waiting () -> None:
 
 	link = _link_with_no_thread()
 
-	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 1}))
-	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 2}))
+	link._queue(superconductor.protocol.event("app", "realised", control="grid", cells={"a": 1}))
+	link._queue(superconductor.protocol.event("app", "realised", control="grid", cells={"a": 2}))
 
 	assert len(link._outbound) == 1
 
@@ -617,8 +617,8 @@ def test_an_event_about_another_control_supersedes_nothing () -> None:
 
 	link = _link_with_no_thread()
 
-	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={}))
-	link._queue(superintendent.protocol.event("app", "realised", control="bass", cells={}))
+	link._queue(superconductor.protocol.event("app", "realised", control="grid", cells={}))
+	link._queue(superconductor.protocol.event("app", "realised", control="bass", cells={}))
 
 	assert len(link._outbound) == 2
 
@@ -633,7 +633,7 @@ def test_a_change_never_supersedes_anything () -> None:
 	link = _link_with_no_thread()
 
 	for step in range(5):
-		link._queue(superintendent.protocol.changed(
+		link._queue(superconductor.protocol.changed(
 			"app", "grid/kick/0", step, step, by="app"))
 
 	assert len(link._outbound) == 5
@@ -649,16 +649,16 @@ def test_a_burst_drops_the_oldest_and_keeps_the_newest () -> None:
 
 	link = _link_with_no_thread()
 
-	for step in range(superintendent.subsequence_adapter.OUTBOUND_CAP + 50):
-		link._queue(superintendent.protocol.changed(
+	for step in range(superconductor.subsequence_adapter.OUTBOUND_CAP + 50):
+		link._queue(superconductor.protocol.changed(
 			"app", "grid/kick/0", step, step, by="app"))
 
-	assert len(link._outbound) == superintendent.subsequence_adapter.OUTBOUND_CAP
+	assert len(link._outbound) == superconductor.subsequence_adapter.OUTBOUND_CAP
 	assert link._dropped == 50
 
 	newest = list(link._outbound.values())[-1]
 
-	assert newest["v"] == superintendent.subsequence_adapter.OUTBOUND_CAP + 49, "the newest frame was the one dropped"
+	assert newest["v"] == superconductor.subsequence_adapter.OUTBOUND_CAP + 49, "the newest frame was the one dropped"
 
 
 def test_a_superseded_frame_keeps_its_place_rather_than_jumping_the_queue () -> None:
@@ -667,9 +667,9 @@ def test_a_superseded_frame_keeps_its_place_rather_than_jumping_the_queue () -> 
 
 	link = _link_with_no_thread()
 
-	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 1}))
-	link._queue(superintendent.protocol.changed("app", "grid/kick/0", True, 1, by="app"))
-	link._queue(superintendent.protocol.event("app", "realised", control="grid", cells={"a": 2}))
+	link._queue(superconductor.protocol.event("app", "realised", control="grid", cells={"a": 1}))
+	link._queue(superconductor.protocol.changed("app", "grid/kick/0", True, 1, by="app"))
+	link._queue(superconductor.protocol.event("app", "realised", control="grid", cells={"a": 2}))
 
 	kinds = [frame["t"] for frame in link._outbound.values()]
 

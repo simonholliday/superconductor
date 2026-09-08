@@ -1,4 +1,4 @@
-# Superintendent
+# Superconductor
 
 A touchscreen control surface for music software.
 
@@ -59,8 +59,8 @@ product is for.
 
 ```
 pip install -e ".[dev]"
-superintendent                 # serves on port 8090
-superintendent --port 9000     # or wherever you like
+superconductor                 # serves on port 8090
+superconductor --port 9000     # or wherever you like
 ```
 
 Then open `http://<that machine>:8090/` on the touchscreen.
@@ -165,12 +165,12 @@ given a function to call when one moves — which is where a message gets sent,
 if that is what the setting stands for:
 
 ```python
-superintendent.subsequence_adapter.Params(
+superconductor.subsequence_adapter.Params(
     composition,
     parameters=[
-        superintendent.subsequence_adapter.Parameter("glide", "switch", label="Glide"),
-        superintendent.subsequence_adapter.Parameter("rate", "number", default=24),
-        superintendent.subsequence_adapter.Parameter(
+        superconductor.subsequence_adapter.Parameter("glide", "switch", label="Glide"),
+        superconductor.subsequence_adapter.Parameter("rate", "number", default=24),
+        superconductor.subsequence_adapter.Parameter(
             "shape", "choice", options=[("lcr", "LCR"), ("exp", "EXP")]),
     ],
     on_change=send_setting,
@@ -204,11 +204,11 @@ it is saved to the application that declared the page, not to your browser. For 
 composition itself, so a piece and the way you look at it travel together:
 
 ```python
-link = superintendent.subsequence_adapter.AppLink(
+link = superconductor.subsequence_adapter.AppLink(
     composition,
     controls=[...],
     pages=[...],
-    page_store=superintendent.subsequence_adapter.PageStore(
+    page_store=superconductor.subsequence_adapter.PageStore(
         pathlib.Path(__file__).with_suffix(".pages.json")),
 )
 ```
@@ -220,15 +220,15 @@ panel sees it too.
 
 ## Connecting an application
 
-`superintendent/subsequence_adapter.py` is the worked example. A composition
+`superconductor/subsequence_adapter.py` is the worked example. A composition
 builds a link, gives it the controls it wants to offer, and starts it:
 
 ```python
-link = superintendent.subsequence_adapter.AppLink(
+link = superconductor.subsequence_adapter.AppLink(
     composition,
     controls=[
-        superintendent.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16),
-        superintendent.subsequence_adapter.Transport(composition),
+        superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16),
+        superconductor.subsequence_adapter.Transport(composition),
     ],
 )
 link.start()
@@ -244,7 +244,7 @@ this package free of any dependency on a particular piece of music software.
 
 ## Keeping it running
 
-None of this is required. Superintendent is an ordinary process: start it from a
+None of this is required. Superconductor is an ordinary process: start it from a
 terminal, from your window manager's autostart, from a `tmux` session, or from
 whatever you already use. It needs no supervisor, and it does not need systemd
 to exist.
@@ -260,17 +260,17 @@ Both of these have placeholders in capitals. They will not start until you have
 replaced them, which is deliberate: a unit file that half-works with someone
 else's paths in it is worse than one that refuses.
 
-A system unit, at `/etc/systemd/system/superintendent.service`:
+A system unit, at `/etc/systemd/system/superconductor.service`:
 
 ```ini
 [Unit]
-Description=Superintendent control surface
+Description=Superconductor control surface
 After=network-online.target
 
 [Service]
 Type=simple
 User=REPLACE_WITH_YOUR_USERNAME
-ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superintendent
+ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superconductor
 Restart=on-failure
 RestartSec=2
 
@@ -279,18 +279,18 @@ WantedBy=multi-user.target
 ```
 
 ```
-sudo systemctl enable --now superintendent
+sudo systemctl enable --now superconductor
 ```
 
-A user unit, at `~/.config/systemd/user/superintendent.service`:
+A user unit, at `~/.config/systemd/user/superconductor.service`:
 
 ```ini
 [Unit]
-Description=Superintendent control surface
+Description=Superconductor control surface
 
 [Service]
 Type=simple
-ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superintendent
+ExecStart=/REPLACE/WITH/YOUR/VENV/bin/superconductor
 Restart=on-failure
 RestartSec=2
 
@@ -299,7 +299,7 @@ WantedBy=default.target
 ```
 
 ```
-systemctl --user enable --now superintendent
+systemctl --user enable --now superconductor
 loginctl enable-linger $USER      # only if it should run before you log in
 ```
 
@@ -311,7 +311,7 @@ restarted without the others being told.
 
 ```
 pytest
-mypy superintendent
+mypy superconductor
 ```
 
 The suite includes tests that drive the page in a real Firefox, so it needs the
@@ -325,7 +325,7 @@ Firefox rather than all three browsers — it is a third of the packages, and it
 is the browser this is built for. No `sudo` was needed here.
 
 The page is plain ES modules with no build step: Preact and htm are vendored
-under `superintendent/client/vendor/`, with their licences recorded there. Edit
+under `superconductor/client/vendor/`, with their licences recorded there. Edit
 the files and reload the browser.
 
 ## Licence
@@ -336,4 +336,4 @@ redistribute it for any purpose except competing with it, and each version
 converts to Apache 2.0 two years after its release.
 
 The libraries it carries keep their own permissive licences, recorded in
-`superintendent/client/vendor/README.md`.
+`superconductor/client/vendor/README.md`.

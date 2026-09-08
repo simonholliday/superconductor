@@ -12,7 +12,7 @@ import typing
 
 import pytest
 
-import superintendent.subsequence_adapter as adapter
+import superconductor.subsequence_adapter as adapter
 
 
 CATALOGUE: list[dict[str, typing.Any]] = [
@@ -1140,7 +1140,7 @@ def test_a_stack_already_building_says_so_rather_than_failing_silently (
 	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
 	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
 
-	with caplog.at_level(logging.WARNING, logger="superintendent.subsequence_adapter"):
+	with caplog.at_level(logging.WARNING, logger="superconductor.subsequence_adapter"):
 		recipe.build(Builder())
 
 	said = " ".join(record.getMessage() for record in caplog.records)

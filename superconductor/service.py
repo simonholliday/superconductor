@@ -21,15 +21,15 @@ import starlette.routing
 import starlette.staticfiles
 import starlette.websockets
 
-import superintendent.build
-import superintendent.config
-import superintendent.hub
-import superintendent.protocol
+import superconductor.build
+import superconductor.config
+import superconductor.hub
+import superconductor.protocol
 
 
 LOG = logging.getLogger(__name__)
 
-LOADED_BUILD = superintendent.build.package_build()
+LOADED_BUILD = superconductor.build.package_build()
 """The package this service is running, hashed as this module is imported.
 
 The counterpart to the adapter's constant of the same name, and it answers the
@@ -48,10 +48,10 @@ service with no page is not a service.
 """
 
 
-def build (config: superintendent.config.Config) -> starlette.applications.Starlette:
+def build (config: superconductor.config.Config) -> starlette.applications.Starlette:
 	"""Assemble the service: the page, the static files and the two sockets."""
 
-	hub = superintendent.hub.Hub(page={"name": config.page})
+	hub = superconductor.hub.Hub(page={"name": config.page})
 
 	async def index (request: starlette.requests.Request) -> starlette.responses.Response:
 		"""Serve the page itself, with its assets stamped by the build they are.
@@ -70,7 +70,7 @@ def build (config: superintendent.config.Config) -> starlette.applications.Starl
 			return starlette.responses.PlainTextResponse(f"No page to serve: {page} is missing.", status_code=500)
 
 		markup = page.read_text(encoding="utf-8")
-		build = superintendent.build.client_build(CLIENT_DIR)
+		build = superconductor.build.client_build(CLIENT_DIR)
 
 		if build is not None:
 			for asset in ("/client/style.css", "/client/app.js"):
@@ -119,7 +119,7 @@ def _origin (websocket: starlette.websockets.WebSocket) -> str:
 	return f"{client.host}:{client.port}" if client else "an unnamed socket"
 
 
-def _note_contract (side: str, who: str, frame: superintendent.protocol.Frame) -> None:
+def _note_contract (side: str, who: str, frame: superconductor.protocol.Frame) -> None:
 	"""Say so when something dials in speaking a different contract (#2164).
 
 	**It is said and not acted on, deliberately.** Refusing an old panel is
@@ -141,13 +141,13 @@ def _note_contract (side: str, who: str, frame: superintendent.protocol.Frame) -
 	the reason in a log nobody is reading.
 	"""
 
-	gap = superintendent.protocol.contract_gap(frame.get("contract"))
+	gap = superconductor.protocol.contract_gap(frame.get("contract"))
 
 	if gap is None:
 		return
 
 	spoken = frame.get("contract")
-	ours = superintendent.protocol.CONTRACT_VERSION
+	ours = superconductor.protocol.CONTRACT_VERSION
 
 	if gap == "major":
 		LOG.error("%s %r speaks contract %r against this service's %r; a frame either"
@@ -197,20 +197,20 @@ def _note_builds (who: str, spoken: object) -> None:
 	if LOADED_BUILD is None or spoken == LOADED_BUILD:
 		return
 
-	LOG.warning("app %r loaded superintendent build %r and this service loaded"
+	LOG.warning("app %r loaded superconductor build %r and this service loaded"
 	            " %r — the two are not running the same code, so on a shared"
 	            " filesystem one of them was started before a change and wants"
 	            " restarting", who, spoken, LOADED_BUILD)
 
 
-async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
+async def _serve_panel (hub: superconductor.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
 	"""Greet one panel, then carry its frames until it goes away."""
 
-	panel: superintendent.hub.PanelLink | None = None
+	panel: superconductor.hub.PanelLink | None = None
 
 	try:
 		while True:
-			frame = superintendent.protocol.decode(await websocket.receive_text())
+			frame = superconductor.protocol.decode(await websocket.receive_text())
 			kind = frame["t"]
 
 			if kind == "hello":
@@ -230,15 +230,15 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 
 				_note_contract("panel", str(frame.get("client", "panel")), frame)
 
-				panel = superintendent.hub.PanelLink(
+				panel = superconductor.hub.PanelLink(
 					client=str(frame.get("client", "panel")), send=_sender(websocket))
 
 				# Said before anything else, and said again on every hello, so a
 				# panel that reconnects to a restarted service learns at once
 				# whether the page it is still running has been left behind.
-				await panel.send(superintendent.protocol.service(
-					superintendent.build.version(),
-					superintendent.build.client_build(CLIENT_DIR)))
+				await panel.send(superconductor.protocol.service(
+					superconductor.build.version(),
+					superconductor.build.client_build(CLIENT_DIR)))
 
 				await hub.panel_joined(panel)
 
@@ -253,8 +253,8 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 				await hub.layout_requested(panel, frame)
 
 			elif kind == "ping":
-				await panel.send(superintendent.protocol.pong(
-					superintendent.protocol.number(frame, "ts", 0.0)))
+				await panel.send(superconductor.protocol.pong(
+					superconductor.protocol.number(frame, "ts", 0.0)))
 
 			else:
 				LOG.debug("panel %s sent %r, which this version ignores", panel.client, kind)
@@ -262,7 +262,7 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 	except starlette.websockets.WebSocketDisconnect:
 		LOG.debug("panel socket closed")
 
-	except superintendent.protocol.ProtocolError:
+	except superconductor.protocol.ProtocolError:
 		LOG.warning("panel sent a frame that could not be read; closing", exc_info=True)
 
 	finally:
@@ -270,10 +270,10 @@ async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websoc
 			hub.panel_left(panel)
 
 
-async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
+async def _serve_app (hub: superconductor.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
 	"""Take one app's declaration, then carry what it reports until it goes."""
 
-	app: superintendent.hub.AppLink | None = None
+	app: superconductor.hub.AppLink | None = None
 
 	# One token for the life of this socket, so a second declaration down the
 	# *same* socket — which is how an app says its controls have changed — is not
@@ -282,7 +282,7 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 
 	try:
 		while True:
-			frame = superintendent.protocol.decode(await websocket.receive_text())
+			frame = superconductor.protocol.decode(await websocket.receive_text())
 			kind = frame["t"]
 
 			if kind == "declare":
@@ -297,12 +297,12 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 				if app is None:
 					_note_builds(str(frame.get("app", "app")), frame.get("build"))
 
-				app = superintendent.hub.AppLink(
+				app = superconductor.hub.AppLink(
 					name=str(frame.get("app", "app")),
 					send=_sender(websocket),
 					controls=dict(frame.get("controls") or {}),
 					state=dict(frame.get("state") or {}),
-					version=superintendent.protocol.whole(frame, "ver", 0),
+					version=superconductor.protocol.whole(frame, "ver", 0),
 					pages=list(frame.get("pages") or []),
 					origin=_origin(websocket),
 					connection=connection,
@@ -328,7 +328,7 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 	except starlette.websockets.WebSocketDisconnect:
 		LOG.debug("app socket closed")
 
-	except superintendent.protocol.ProtocolError:
+	except superconductor.protocol.ProtocolError:
 		LOG.warning("app sent a frame that could not be read; closing", exc_info=True)
 
 	finally:
@@ -336,12 +336,12 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 			await hub.app_left(app)
 
 
-def _sender (websocket: starlette.websockets.WebSocket) -> superintendent.hub.Sender:
+def _sender (websocket: starlette.websockets.WebSocket) -> superconductor.hub.Sender:
 	"""Give the hub one way to write to this socket, knowing nothing else about it."""
 
-	async def send (frame: superintendent.protocol.Frame) -> None:
+	async def send (frame: superconductor.protocol.Frame) -> None:
 		"""Write one frame."""
 
-		await websocket.send_text(superintendent.protocol.encode(frame))
+		await websocket.send_text(superconductor.protocol.encode(frame))
 
-	return typing.cast(superintendent.hub.Sender, send)
+	return typing.cast(superconductor.hub.Sender, send)

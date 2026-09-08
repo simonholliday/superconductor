@@ -1,12 +1,12 @@
 """A 16-step drum pattern for a Vermona DRM1 MkIV, played from the touchscreen.
 
-This is the first thing Superintendent was built to do (Subroutine #2047).  Run
-it beside the Superintendent service and the grid appears on the panel: tapping
+This is the first thing Superconductor was built to do (Subroutine #2047).  Run
+it beside the Superconductor service and the grid appears on the panel: tapping
 a cell switches that step, and a step switched here appears on the glass.
 
 **Everything about this particular studio lives in this file** — which MIDI
 port the drum machine is on, which channel it listens to, and which of its
-voices sits on which row.  The Superintendent package knows none of it, and
+voices sits on which row.  The Superconductor package knows none of it, and
 another rig is another copy of this file with different names at the top.
 
 The grid itself is a plain dict on ``composition.data``: rows keyed by voice,
@@ -26,7 +26,7 @@ import subsequence.constants.durations
 import subsequence.constants.instruments.vermona_drm1_drums as drm1
 import subsequence.constants.midi_notes as midi_notes
 
-import superintendent.subsequence_adapter
+import superconductor.subsequence_adapter
 
 
 # --- This rig -------------------------------------------------------------
@@ -44,7 +44,7 @@ DRUM_CHANNEL = 10
 """The channel the DRM1 is set to receive on."""
 
 SERVICE_URL = "ws://127.0.0.1:8090/ws/app"
-"""The Superintendent service, running on this machine."""
+"""The Superconductor service, running on this machine."""
 
 VELOCITY = 100
 """One fixed velocity per hit: a cell is on or off, with no accent (#2046)."""
@@ -500,7 +500,7 @@ def _panel_parameter (
 	default: typing.Any,
 	group: str | None = None,
 	instrument: typing.Any = None,
-) -> superintendent.subsequence_adapter.Parameter:
+) -> superconductor.subsequence_adapter.Parameter:
 	"""One of the instrument's controls, as something the panel knows how to draw.
 
 	The definition says what the control *is*; this says what it is called here.
@@ -534,17 +534,17 @@ def _panel_parameter (
 	# Filed upstream; the fallback stays either way, because it costs one branch
 	# and the alternative is a blank row nobody can explain.
 	if control.kind == pymididefs.instruments.CHOICE and control.values:
-		return superintendent.subsequence_adapter.Parameter(
+		return superconductor.subsequence_adapter.Parameter(
 			panel, "choice", label=label, default=default, group=group,
 			options=[(state, state.replace("_", " ")) for state in control.values])
 
 	if control.kind == pymididefs.instruments.SWITCH:
-		return superintendent.subsequence_adapter.Parameter(
+		return superconductor.subsequence_adapter.Parameter(
 			panel, "switch", label=label, default=default, group=group)
 
 	low, high = control.range
 
-	return superintendent.subsequence_adapter.Parameter(
+	return superconductor.subsequence_adapter.Parameter(
 		panel, "number", label=label, default=default, group=group,
 		minimum=low, maximum=high)
 
@@ -860,7 +860,7 @@ def _stack_for (pattern: str, name: str, title: str,
 	makes a stack on a bassline different from a stack on a kit: the catalogue
 	knows a parameter is a pitch and cannot know which pitches exist, and only
 	this file knows that one grid's rows are a DRM1's voices and another's are
-	notes a Minitaur can reach (#1465, #2085).  Superintendent is handed both and
+	notes a Minitaur can reach (#1465, #2085).  Superconductor is handed both and
 	names neither.
 
 	``steps`` is how long the pattern this stack builds actually is, and every
@@ -873,7 +873,7 @@ def _stack_for (pattern: str, name: str, title: str,
 
 	beats = steps * STEP_DURATION
 
-	return superintendent.subsequence_adapter.Recipe(
+	return superconductor.subsequence_adapter.Recipe(
 		composition,
 		catalogue=subsequence.generators(),
 
@@ -934,7 +934,7 @@ drum_recipe = _stack_for("grid", "drum_recipe", "DRM1 — generators")
 The catalogue is Subsequence's own description of itself, and the ten voices
 are this rig's — which is the whole division: the app knows a parameter is a
 pitch and cannot know which pitches exist, and only this file knows they are a
-DRM1's (#1465, #2085).  Superintendent is handed both and names neither.
+DRM1's (#1465, #2085).  Superconductor is handed both and names neither.
 
 ``builds`` names the pattern this stack contributes to.  The panel draws the
 two joined and puts the stack's own "add a generator" on the grid it feeds,
@@ -1035,7 +1035,7 @@ def _make_grid (spec: dict[str, typing.Any]) -> typing.Any:
 	# and the rack asks for a declaration as soon as it has made this.
 	SHARED[key] = play
 
-	return superintendent.subsequence_adapter.StepGrid(
+	return superconductor.subsequence_adapter.StepGrid(
 		composition, rows=list(spec["rows"]), steps=int(spec["steps"]),
 		beats=int(spec["steps"]) * STEP_DURATION,
 		data_key=key, name=key,
@@ -1054,7 +1054,7 @@ def _unmake_grid (name: str) -> None:
 	SHARED.pop(name, None)
 
 
-made_grids = superintendent.subsequence_adapter.GridRack(
+made_grids = superconductor.subsequence_adapter.GridRack(
 	composition,
 	make=_make_grid,
 	unmake=_unmake_grid,
@@ -1068,7 +1068,7 @@ made_grids = superintendent.subsequence_adapter.GridRack(
 	# (#2228).
 	steps=(1, STEPS),
 	opening_steps=STEPS,
-	store=superintendent.subsequence_adapter.PageStore(
+	store=superconductor.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".grids.json")),
 	data_key="made_grids", name="made_grids", title="Make a grid",
 	about=[("", "no instrument")])
@@ -1082,7 +1082,7 @@ worth saying plainly rather than discovering.
 """
 
 
-bass_grid = superintendent.subsequence_adapter.NoteGrid(
+bass_grid = superconductor.subsequence_adapter.NoteGrid(
 	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 	data_key="bass", name="bass", title="Minitaur — bass",
 	relabel=_relabel(BASS_NOTE_MAP, MINITAUR),
@@ -1093,7 +1093,7 @@ bass_grid = superintendent.subsequence_adapter.NoteGrid(
 	visible_rows=12)
 
 
-chord_grid = superintendent.subsequence_adapter.NoteGrid(
+chord_grid = superconductor.subsequence_adapter.NoteGrid(
 	composition, rows=CHORD_ROWS, steps=STEPS, beats=BEATS,
 	data_key="chords", name="chords", title="Matriarch — chords",
 	relabel=_relabel(CHORD_NOTE_MAP, MATRIARCH),
@@ -1111,10 +1111,10 @@ grid has to be a thing this file can refer to (#2144).
 """
 
 
-link = superintendent.subsequence_adapter.AppLink(
+link = superconductor.subsequence_adapter.AppLink(
 	composition,
 	controls=[
-		superintendent.subsequence_adapter.StepGrid(
+		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="grid", name="grid", title="DRM1 — pattern 1",
 			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
@@ -1122,7 +1122,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		# A grid with no instrument behind it: no channel, no note map, no
 		# pattern function of its own. It makes no sound until something routes
 		# it, and then it makes that thing's sound (#2108).
-		superintendent.subsequence_adapter.StepGrid(
+		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="shared", name="shared", title="Shared — drums",
 			about=[("", "no instrument")]),
@@ -1130,7 +1130,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		# The same mechanism as `shared`, one row wide. It lands on the snare
 		# and nowhere else because `snare` is the only row it has, which is all
 		# "route a lane to one voice" has ever meant here (#2228).
-		superintendent.subsequence_adapter.StepGrid(
+		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=["snare"], steps=STEPS, beats=BEATS,
 			data_key="snare_lane", name="snare_lane", title="Snare lane",
 			about=[("", "no instrument")]),
@@ -1139,17 +1139,17 @@ link = superintendent.subsequence_adapter.AppLink(
 		# its own, nine steps against the sixteen. Drawn narrower than its
 		# neighbours because it *is* narrower, which is the thing that makes a
 		# polyrhythm legible on a page rather than only audible in a room.
-		superintendent.subsequence_adapter.StepGrid(
+		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
 			data_key="nine", name="nine", title="DRM1 — nine",
 			about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
 			pattern="nine"),
 		bass_grid,
 		chord_grid,
-		superintendent.subsequence_adapter.Params(
+		superconductor.subsequence_adapter.Params(
 			composition,
 			parameters=[
-				superintendent.subsequence_adapter.Parameter(
+				superconductor.subsequence_adapter.Parameter(
 					"voicing", "action", label="Set voicing", group="Keyboard",
 					# Lowest first, and labelled with the count rather than the
 					# band name: "1" is what is written beside the switch on the
@@ -1168,14 +1168,14 @@ link = superintendent.subsequence_adapter.AppLink(
 			about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
 			configures="chords",
 			on_change=send_chord_setting),
-		superintendent.subsequence_adapter.Params(
+		superconductor.subsequence_adapter.Params(
 			composition,
 			parameters=[
 				*(_panel_parameter(*setting) for setting in BASS_SETTINGS),
 
 				# The specification's own switch rather than the Minitaur's, so
 				# it comes from `pymididefs.cc` and not from the definition.
-				superintendent.subsequence_adapter.Parameter(
+				superconductor.subsequence_adapter.Parameter(
 					LOCAL_CONTROL, "switch", label="Front panel controls", default=True),
 			],
 			data_key="minitaur", name="minitaur", title="Minitaur — settings",
@@ -1192,7 +1192,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		snare_recipe,
 		nine_recipe,
 		made_grids,
-		superintendent.subsequence_adapter.Transport(composition),
+		superconductor.subsequence_adapter.Transport(composition),
 	],
 	pages=[
 		# Everything that makes a sound, on one page.  The voicing button is
@@ -1200,24 +1200,24 @@ link = superintendent.subsequence_adapter.AppLink(
 		# MIDI notes monophonically until its voice mode is asserted over MIDI,
 		# whatever the front panel says (#2177), so a chord grid beside a bass
 		# and a kit would quietly play one note at a time.
-		superintendent.subsequence_adapter.Page(
+		superconductor.subsequence_adapter.Page(
 			"band", parts=["grid", "bass", "chords", "matriarch"], title="Band"),
 
 		# The DRM1 with the things that write into it and the things that can be
 		# patched to it: generators, cables, and a grid with no instrument behind
 		# it.  All of the routing this rig can currently show is on this page.
-		superintendent.subsequence_adapter.Page(
+		superconductor.subsequence_adapter.Page(
 			"drums", parts=["grid", "drum_recipe", "shared", "shared_recipe",
 			                "snare_lane", "snare_recipe", "nine", "nine_recipe",
 			                "made_grids"],
 			title="Drums"),
 
-		superintendent.subsequence_adapter.Page(
+		superconductor.subsequence_adapter.Page(
 			"bass", parts=["bass", "bass_recipe", "minitaur"], title="Bass"),
-		superintendent.subsequence_adapter.Page(
+		superconductor.subsequence_adapter.Page(
 			"chords", parts=["chords", "chord_recipe", "matriarch"], title="Chords"),
 	],
-	page_store=superintendent.subsequence_adapter.PageStore(
+	page_store=superconductor.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),
 	url=SERVICE_URL,
 )

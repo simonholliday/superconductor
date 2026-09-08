@@ -7,8 +7,8 @@ import functools
 import pathlib
 import typing
 
-import superintendent.hub
-import superintendent.protocol
+import superconductor.hub
+import superconductor.protocol
 
 
 def _on_a_loop_of_its_own (
@@ -57,14 +57,14 @@ class Recorder:
 	def __init__ (self) -> None:
 		"""Start with nothing written."""
 
-		self.frames: list[superintendent.protocol.Frame] = []
+		self.frames: list[superconductor.protocol.Frame] = []
 
-	async def send (self, frame: superintendent.protocol.Frame) -> None:
+	async def send (self, frame: superconductor.protocol.Frame) -> None:
 		"""Keep a frame instead of putting it on a wire."""
 
 		self.frames.append(frame)
 
-	def of_kind (self, kind: str) -> list[superintendent.protocol.Frame]:
+	def of_kind (self, kind: str) -> list[superconductor.protocol.Frame]:
 		"""Every frame of one kind, in the order it was sent."""
 
 		return [frame for frame in self.frames if frame["t"] == kind]
@@ -73,13 +73,13 @@ class Recorder:
 CONTROLS: dict[str, typing.Any] = {"grid": {"type": "step_grid", "rows": ["kick"], "steps": 16}}
 
 
-async def _hub_with_app () -> tuple[superintendent.hub.Hub, superintendent.hub.AppLink, Recorder]:
+async def _hub_with_app () -> tuple[superconductor.hub.Hub, superconductor.hub.AppLink, Recorder]:
 	"""A hub with one app dialled in and nothing on the glass yet."""
 
-	hub = superintendent.hub.Hub(page={"name": "grid"})
+	hub = superconductor.hub.Hub(page={"name": "grid"})
 	recorder = Recorder()
 
-	app = superintendent.hub.AppLink(
+	app = superconductor.hub.AppLink(
 		name="subsequence", send=recorder.send, controls=CONTROLS, state={"grid": {"kick": [0, 4]}})
 	await hub.app_declared(app)
 
@@ -93,7 +93,7 @@ async def test_a_panel_is_told_what_to_draw_the_moment_it_arrives () -> None:
 	hub, _, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 
 	manifest = glass.of_kind("manifest")[0]
 	snapshot = glass.of_kind("snapshot")[0]
@@ -106,11 +106,11 @@ async def test_a_panel_is_told_what_to_draw_the_moment_it_arrives () -> None:
 async def test_a_panel_already_open_learns_when_an_app_arrives () -> None:
 	"""Starting the composition second is the ordinary case, not an error."""
 
-	hub = superintendent.hub.Hub(page={"name": "grid"})
+	hub = superconductor.hub.Hub(page={"name": "grid"})
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
-	await hub.app_declared(superintendent.hub.AppLink(
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.app_declared(superconductor.hub.AppLink(
 		name="subsequence", send=Recorder().send, controls=CONTROLS, state={"grid": {}}))
 
 	assert glass.of_kind("manifest")[-1]["apps"]["subsequence"] == CONTROLS
@@ -123,7 +123,7 @@ async def test_a_tap_is_passed_to_the_app_and_not_applied_here () -> None:
 
 	hub, _, app_socket = await _hub_with_app()
 	glass = Recorder()
-	panel = superintendent.hub.PanelLink(client="panel-1", send=glass.send)
+	panel = superconductor.hub.PanelLink(client="panel-1", send=glass.send)
 
 	await hub.panel_joined(panel)
 	await hub.set_requested(panel, {"t": "set", "app": "subsequence", "path": "grid/kick/8", "v": True, "seq": 3})
@@ -140,9 +140,9 @@ async def test_a_tap_is_passed_to_the_app_and_not_applied_here () -> None:
 async def test_a_tap_for_an_app_that_is_not_there_is_refused_by_name () -> None:
 	"""A ring that would never clear is worse than being told at once."""
 
-	hub = superintendent.hub.Hub(page={"name": "grid"})
+	hub = superconductor.hub.Hub(page={"name": "grid"})
 	glass = Recorder()
-	panel = superintendent.hub.PanelLink(client="panel-1", send=glass.send)
+	panel = superconductor.hub.PanelLink(client="panel-1", send=glass.send)
 
 	await hub.panel_joined(panel)
 	await hub.set_requested(panel, {"t": "set", "app": "subsequence", "path": "grid/kick/8", "v": True, "seq": 3})
@@ -160,10 +160,10 @@ async def test_what_the_app_applied_reaches_every_panel_and_confirms_to_the_aske
 	hub, app, _ = await _hub_with_app()
 	first, second = Recorder(), Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=first.send))
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-2", send=second.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=first.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-2", send=second.send))
 
-	await hub.change_reported(app, superintendent.protocol.changed(
+	await hub.change_reported(app, superconductor.protocol.changed(
 		"subsequence", "grid/kick/8", True, 5, by="panel", client="panel-1", seq=3))
 
 	assert first.of_kind("changed")[0]["v"] is True
@@ -178,11 +178,11 @@ async def test_the_service_keeps_its_own_copy_so_a_late_panel_sees_the_grid () -
 
 	hub, app, _ = await _hub_with_app()
 
-	await hub.change_reported(app, superintendent.protocol.changed(
+	await hub.change_reported(app, superconductor.protocol.changed(
 		"subsequence", "grid/kick/8", True, 5, by="app"))
 
 	late = Recorder()
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-2", send=late.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-2", send=late.send))
 
 	assert late.of_kind("snapshot")[0]["state"]["grid"]["kick"] == [0, 4, 8]
 
@@ -194,7 +194,7 @@ async def test_an_app_going_away_is_shown_on_the_glass () -> None:
 	hub, app, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 	await hub.app_left(app)
 
 	assert glass.of_kind("app")[-1] == {"t": "app", "app": "subsequence", "up": False}
@@ -214,11 +214,11 @@ async def test_a_control_that_appears_after_the_app_declared_reaches_an_open_pan
 	hub, _, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 
 	grown = dict(CONTROLS, recipe={"type": "params", "settings": []})
 
-	await hub.app_declared(superintendent.hub.AppLink(
+	await hub.app_declared(superconductor.hub.AppLink(
 		name="subsequence", send=Recorder().send, controls=grown, state={"grid": {}, "recipe": {}}))
 
 	assert set(glass.of_kind("manifest")[-1]["apps"]["subsequence"]) == {"grid", "recipe"}
@@ -236,9 +236,9 @@ async def test_a_control_that_has_gone_stops_being_offered () -> None:
 	hub, _, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 
-	await hub.app_declared(superintendent.hub.AppLink(
+	await hub.app_declared(superconductor.hub.AppLink(
 		name="subsequence", send=Recorder().send, controls={}, state={}))
 
 	assert glass.of_kind("manifest")[-1]["apps"]["subsequence"] == {}
@@ -264,10 +264,10 @@ async def test_a_reconnecting_app_is_not_erased_by_its_own_old_socket () -> None
 	hub, first, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 
 	# The composition comes back on a socket of its own.
-	second = superintendent.hub.AppLink(
+	second = superconductor.hub.AppLink(
 		name="subsequence", send=Recorder().send,
 		controls=CONTROLS, state={"grid": {"kick": [2]}})
 
@@ -293,7 +293,7 @@ async def test_an_app_that_really_goes_away_still_goes_away () -> None:
 	hub, app, _ = await _hub_with_app()
 	glass = Recorder()
 
-	await hub.panel_joined(superintendent.hub.PanelLink(client="panel-1", send=glass.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 	await hub.app_left(app)
 
 	assert "subsequence" not in hub.apps
@@ -309,10 +309,10 @@ async def test_two_panels_reporting_one_name_are_two_registrations () -> None:
 	report the same client string.
 	"""
 
-	hub = superintendent.hub.Hub(page={"name": "grid"})
+	hub = superconductor.hub.Hub(page={"name": "grid"})
 
-	one = superintendent.hub.PanelLink(client="panel", send=Recorder().send)
-	two = superintendent.hub.PanelLink(client="panel", send=Recorder().send)
+	one = superconductor.hub.PanelLink(client="panel", send=Recorder().send)
+	two = superconductor.hub.PanelLink(client="panel", send=Recorder().send)
 
 	await hub.panel_joined(one)
 	await hub.panel_joined(two)

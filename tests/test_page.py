@@ -12,8 +12,8 @@ import typing
 import pytest
 
 import conftest
-import superintendent.protocol
-import superintendent.service
+import superconductor.protocol
+import superconductor.service
 
 
 playwright_api = pytest.importorskip("playwright.sync_api")
@@ -402,9 +402,9 @@ def test_a_page_left_behind_by_the_service_says_so_and_offers_the_way_back (
 	fetch the new page and there would be nothing left to detect.
 	"""
 
-	import superintendent.service
+	import superconductor.service
 
-	marker = superintendent.service.CLIENT_DIR / ".build-changed-by-a-test"
+	marker = superconductor.service.CLIENT_DIR / ".build-changed-by-a-test"
 
 	try:
 		marker.write_text("any content at all changes the hash")
@@ -557,12 +557,12 @@ def test_a_remembered_page_that_is_no_longer_offered_is_not_forgotten (
 	"""A composition restarted without one pattern should not cost a performer
 	the page they had set, once it comes back."""
 
-	panel.evaluate("() => localStorage.setItem('superintendent.page', 'a-page-that-went-away')")
+	panel.evaluate("() => localStorage.setItem('superconductor.page', 'a-page-that-went-away')")
 	panel.reload()
 	panel.wait_for_selector(".cell", timeout=10_000)
 
 	_on_the_all_page(panel)
-	assert panel.evaluate("() => localStorage.getItem('superintendent.page')") == "a-page-that-went-away"
+	assert panel.evaluate("() => localStorage.getItem('superconductor.page')") == "a-page-that-went-away"
 
 
 def test_parts_are_placed_on_the_lattice_and_their_steps_line_up (
@@ -4745,7 +4745,7 @@ def test_no_button_declares_a_size_of_its_own (panel: typing.Any) -> None:
 	used somewhere else.  That is exactly how this went wrong.
 	"""
 
-	style = (superintendent.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
 	code = re.sub(r"/\*.*?\*/", "", style, flags=re.DOTALL)
 
 	loose = []
@@ -5677,7 +5677,7 @@ def _at_contract (panel: typing.Any, service_url: str, monkeypatch: typing.Any,
 	to stand in front of a mismatched service without running two of them.
 	"""
 
-	monkeypatch.setattr(superintendent.protocol, "CONTRACT_VERSION", spoken)
+	monkeypatch.setattr(superconductor.protocol, "CONTRACT_VERSION", spoken)
 
 	panel.goto(service_url)
 	panel.wait_for_selector(".bar .build", timeout=10_000)
@@ -5702,7 +5702,7 @@ def test_the_panel_says_when_the_service_speaks_a_different_contract (
 	restart, rather than offering a reload that would do nothing.
 	"""
 
-	major, minor, _ = (int(one) for one in superintendent.protocol.CONTRACT_VERSION.split("."))
+	major, minor, _ = (int(one) for one in superconductor.protocol.CONTRACT_VERSION.split("."))
 
 	behind = _at_contract(panel, service_url, monkeypatch, f"{major}.{minor - 1}.0")
 	assert "service is behind this page" in behind, behind

@@ -7,7 +7,7 @@ same kind of fact, travelling the same path, checked at the same door (#2227).
 import json
 import pathlib
 
-import superintendent.subsequence_adapter as adapter
+import superconductor.subsequence_adapter as adapter
 
 
 def test_a_piece_nobody_has_arranged_yet_has_no_arrangement (tmp_path: pathlib.Path) -> None:

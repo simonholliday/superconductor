@@ -19,11 +19,11 @@ import typing
 
 import websockets.asyncio.client
 
-import superintendent.protocol
+import superconductor.protocol
 
 
 URL = "ws://127.0.0.1:8090/ws/panel"
-WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superintendent-state.json")
+WHERE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "/home/si/superconductor-state.json")
 
 
 DERIVED: frozenset[str] = frozenset({"labels", "unreachable"})
@@ -156,8 +156,8 @@ async def main () -> None:
 		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
 		# advice for spotting a stale process is to read the contract off a
 		# socket. Nothing checks it today, which is exactly why it drifted.
-		await socket.send(superintendent.protocol.encode(
-			superintendent.protocol.hello("restore", None)))
+		await socket.send(superconductor.protocol.encode(
+			superconductor.protocol.hello("restore", None)))
 
 		# Read the manifest before sending anything, because converting an old
 		# file needs the resolutions the apps are declaring right now — there is

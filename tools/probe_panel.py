@@ -6,7 +6,7 @@ import time
 
 import websockets.asyncio.client
 
-import superintendent.protocol
+import superconductor.protocol
 
 
 def _first_step_grid (manifest: dict | None) -> tuple[str | None, str | None, str | None]:
@@ -38,8 +38,8 @@ async def main () -> None:
 		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
 		# advice for spotting a stale process is to read the contract off a
 		# socket. Nothing checks it today, which is exactly why it drifted.
-		await ws.send(superintendent.protocol.encode(
-			superintendent.protocol.hello("fake-panel", "grid")))
+		await ws.send(superconductor.protocol.encode(
+			superconductor.protocol.hello("fake-panel", "grid")))
 
 		seen: list[dict] = []
 		deadline = time.monotonic() + 3.0

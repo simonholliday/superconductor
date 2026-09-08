@@ -12,7 +12,7 @@ import typing
 
 import websockets.asyncio.client
 
-import superintendent.protocol
+import superconductor.protocol
 
 
 URL = "ws://127.0.0.1:8090/ws/panel"
@@ -64,8 +64,8 @@ async def main () -> None:
 		# and two said 1.5.0 against a current 1.13.0 — while CLAUDE.md's own
 		# advice for spotting a stale process is to read the contract off a
 		# socket. Nothing checks it today, which is exactly why it drifted.
-		await ws.send(superintendent.protocol.encode(
-			superintendent.protocol.hello("transport-test", "grid")))
+		await ws.send(superconductor.protocol.encode(
+			superconductor.protocol.hello("transport-test", "grid")))
 
 		greeting: list[dict] = []
 		await collect(ws, 2.5, greeting)

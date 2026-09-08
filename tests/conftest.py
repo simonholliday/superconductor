@@ -1,6 +1,6 @@
 """Fixtures for the tests that drive the page in a real browser.
 
-The page is the half of Superintendent that a person actually touches, and the
+The page is the half of Superconductor that a person actually touches, and the
 only way to test it honestly is to run it: serve it, connect something that
 behaves like an app, and drive the glass. These fixtures provide the first two.
 """
@@ -17,10 +17,10 @@ import pytest
 import uvicorn
 import websockets.asyncio.client
 
-import superintendent.config
-import superintendent.controls
-import superintendent.protocol
-import superintendent.service
+import superconductor.config
+import superconductor.controls
+import superconductor.protocol
+import superconductor.service
 
 
 CONTROLS: dict[str, typing.Any] = {
@@ -204,7 +204,7 @@ class FakeApp:
 		"""Connect on a thread of its own and wait until the socket is up."""
 
 		self.url = url
-		self.sets: list[superintendent.protocol.Frame] = []
+		self.sets: list[superconductor.protocol.Frame] = []
 		self.arrangements: dict[str, list[dict[str, typing.Any]]] = {}
 		self.version = 1
 
@@ -240,12 +240,12 @@ class FakeApp:
 		async with websockets.asyncio.client.connect(self.url) as socket_:
 			self._socket = socket_
 
-			await socket_.send(superintendent.protocol.encode(self._declaration()))
+			await socket_.send(superconductor.protocol.encode(self._declaration()))
 
 			self._ready.set()
 
 			async for raw in socket_:
-				frame = superintendent.protocol.decode(raw)
+				frame = superconductor.protocol.decode(raw)
 
 				if frame["t"] == "set":
 					self.sets.append(frame)
@@ -253,9 +253,9 @@ class FakeApp:
 				elif frame["t"] == "layout":
 					self.arrangements[str(frame.get("page"))] = list(frame.get("parts") or [])
 
-					await socket_.send(superintendent.protocol.encode(self._declaration()))
+					await socket_.send(superconductor.protocol.encode(self._declaration()))
 
-	def _declaration (self) -> superintendent.protocol.Frame:
+	def _declaration (self) -> superconductor.protocol.Frame:
 		"""What this app offers, including any arrangement it has been given.
 
 		Re-sent after an arrangement is kept, which is how a page set stays
@@ -266,7 +266,7 @@ class FakeApp:
 		                     if page["id"] in self.arrangements else {})}
 		         for page in PAGES]
 
-		return superintendent.protocol.declare(
+		return superconductor.protocol.declare(
 			"subsequence", CONTROLS, self.state, self.version, pages)
 
 	def redeclare (self, controls: dict[str, typing.Any],
@@ -281,17 +281,17 @@ class FakeApp:
 
 		self.version += 1
 
-		self.send(superintendent.protocol.declare(
+		self.send(superconductor.protocol.declare(
 			"subsequence", controls, self.state, self.version,
 			PAGES if pages is None else pages))
 
-	def send (self, frame: superintendent.protocol.Frame) -> None:
+	def send (self, frame: superconductor.protocol.Frame) -> None:
 		"""Put one frame on the wire from the app's side."""
 
 		assert self._loop is not None and self._socket is not None
 
 		asyncio.run_coroutine_threadsafe(
-			self._socket.send(superintendent.protocol.encode(frame)), self._loop).result(5.0)
+			self._socket.send(superconductor.protocol.encode(frame)), self._loop).result(5.0)
 
 	def confirm (self, path: str, value: typing.Any, by: str = "panel",
 	             client: str | None = None, seq: int | None = None) -> None:
@@ -301,10 +301,10 @@ class FakeApp:
 
 		# By the service's own rules, so what the fake remembers and what the
 		# service remembers cannot come apart.
-		with contextlib.suppress(superintendent.controls.ControlError):
-			superintendent.controls.apply_change(self.state, CONTROLS, path, value)
+		with contextlib.suppress(superconductor.controls.ControlError):
+			superconductor.controls.apply_change(self.state, CONTROLS, path, value)
 
-		self.send(superintendent.protocol.changed(
+		self.send(superconductor.protocol.changed(
 			"subsequence", path, value, self.version, by=by, client=client, seq=seq))
 
 	def beat (self, beat: int, interval: float = 0.5,
@@ -317,7 +317,7 @@ class FakeApp:
 		sequencer actually running.
 		"""
 
-		self.send(superintendent.protocol.event(
+		self.send(superconductor.protocol.event(
 			"subsequence", "beat", beat=beat, ts=0.0, interval=interval,
 			steps=steps, beats=beats))
 
@@ -338,7 +338,7 @@ class FakeApp:
 		# row may name the layer that produced it. Sending two events instead
 		# would not do: each replaces the control's cells entirely, which is
 		# what a cycle's report is.
-		self.send(superintendent.protocol.event(
+		self.send(superconductor.protocol.event(
 			"subsequence", "realised", control=control,
 			cells={
 				row: {step: {"v": loud, "from": (sources or {}).get(row, source)}
@@ -348,7 +348,7 @@ class FakeApp:
 	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
 		"""Refuse a request, the way an app that cannot do it does."""
 
-		self.send(superintendent.protocol.nack("subsequence", path, client, seq, reason))
+		self.send(superconductor.protocol.nack("subsequence", path, client, seq, reason))
 
 	def stop (self) -> None:
 		"""Close the socket and let the thread that owns it finish.
@@ -388,7 +388,7 @@ class FakeApp:
 		with contextlib.suppress(Exception):
 			self._loop.close()
 
-	def await_set (self, path: str, limit: float = 5.0) -> superintendent.protocol.Frame:
+	def await_set (self, path: str, limit: float = 5.0) -> superconductor.protocol.Frame:
 		"""Wait for the panel to ask for a path, and return what it asked."""
 
 		deadline = time.monotonic() + limit
@@ -426,10 +426,10 @@ def service_url () -> typing.Iterator[str]:
 	"""A real service, on a real port, for the whole session."""
 
 	held, port = _held_port()
-	config = superintendent.config.Config(host="127.0.0.1", port=port)
+	config = superconductor.config.Config(host="127.0.0.1", port=port)
 
 	server = uvicorn.Server(uvicorn.Config(
-		superintendent.service.build(config), host="127.0.0.1", port=port, log_level="error"))
+		superconductor.service.build(config), host="127.0.0.1", port=port, log_level="error"))
 
 	thread = threading.Thread(target=lambda: server.run(sockets=[held]), daemon=True)
 	thread.start()
