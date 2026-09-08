@@ -3116,7 +3116,15 @@ class AppLink:
 
 		self.composition.on_event("beat", self._on_beat)
 
-		for control in self.controls.values():
+		# **A snapshot, because attaching a control can register more of them.**
+		# A rack puts back the grids somebody made before this started (#2226),
+		# and each one becomes a control on this link — so the dict grows while
+		# it is being walked, and Python raises rather than quietly skipping
+		# one. It cannot fire until a grid has been made *and* the app started
+		# again, which is why it outlived the rack landing and appeared on the
+		# first restart afterwards. The rack attaches every grid it
+		# materialises, so a snapshot loses nothing.
+		for control in list(self.controls.values()):
 			control.attach(self)
 
 		self._thread = threading.Thread(target=self._run_link, name="superconductor-link", daemon=True)

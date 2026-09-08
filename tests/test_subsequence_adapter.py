@@ -674,3 +674,57 @@ def test_a_superseded_frame_keeps_its_place_rather_than_jumping_the_queue () -> 
 	kinds = [frame["t"] for frame in link._outbound.values()]
 
 	assert kinds == ["event", "changed"], f"the queue reordered itself: {kinds}"
+
+
+class _NoThread:
+	"""A thread that is never started, so `start` can be exercised on its own.
+
+	The link's own thread dials a real socket, and on this machine port 8090
+	is usually the running rig — so a test that started it would reach out of
+	the suite and into the studio.
+	"""
+
+	def __init__ (self, **rest: typing.Any) -> None:
+		"""Take what a real thread takes, and keep none of it."""
+
+	def start (self) -> None:
+		"""Do nothing, which is the whole point."""
+
+
+def test_starting_a_link_survives_a_control_that_registers_more_controls (
+	monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A rack puts back the grids somebody made before this started (#2226), and
+	each becomes a control on this link — so attaching one grows the very dict
+	`start` is walking, and Python raises rather than quietly missing one.
+
+	**It cannot fire until a grid has been made and the app started again**,
+	which is why it outlived the rack landing: the rig ran for eight hours with
+	an empty rack, Simon made a grid on the glass, and the next start died.
+	Nothing in the suite had ever started a link with a rack that already held
+	something.
+
+	The rack calls `attach` on every grid it materialises, so walking a snapshot
+	loses nothing.
+	"""
+
+	composition = FakeComposition()
+	rack = superconductor.subsequence_adapter.GridRack(
+		composition,
+		make=lambda spec: superconductor.subsequence_adapter.StepGrid(
+			composition, rows=spec["rows"], steps=spec["steps"],
+			data_key=spec["name"], name=spec["name"]),
+		rows=ROWS, data_key="rack", name="rack")
+
+	# What a page store puts back: one grid, made before any of this started.
+	composition.data["rack"] = {"grids": [{"id": "a", "rows": ["kick"], "steps": 8}]}
+
+	link = superconductor.subsequence_adapter.AppLink(composition, controls=[rack])
+
+	monkeypatch.setattr(
+		superconductor.subsequence_adapter.threading, "Thread", _NoThread)
+
+	link.start()
+
+	assert rack.link is link, "the walk never reached the rack"
+	assert "rack-a" in link.controls, "the grid the rack put back never reached the link"
+	assert rack.made() == ["rack-a"], "the rack does not know what it put there"
