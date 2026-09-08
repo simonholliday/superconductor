@@ -2029,6 +2029,30 @@ html, body {
 		var(--ring) 72% 100%);
 }
 
+/* **Prism's swatch is its fan, sampled** — the start, the middle and the end of
+ * the same spread the grid draws, so the thing you pick a theme by is the thing
+ * you get.
+ *
+ * Every other theme's swatch shows the chassis, the lit colour and the in-flight
+ * colour, which are the three *that* theme is judged on.  Prism's lit colour is
+ * an achromatic beam and its whole point is what happens after the glass, so
+ * those three would have drawn black, grey and violet — true, and a picture of
+ * the one thing this theme is not about.
+ *
+ * **The element itself carries the attribute**, so this is `i[data-theme=…]` and
+ * not a descendant selector: the swatch *is* the theme, and a descendant rule
+ * would repaint every swatch in the list whenever prism was the page's theme.
+ *
+ * The three hues are the fan at 0, a half and 1 — `tests/test_themes.py` asserts
+ * that against the spread it already reads out of the rule above, so the two
+ * cannot drift apart. */
+.theme .choices i[data-theme="prism"] {
+	background: linear-gradient(135deg,
+		hsl(0 100% 65%) 0 34%,
+		hsl(137.5 100% 65%) 34% 68%,
+		hsl(275 100% 65%) 68% 100%);
+}
+
 /* What is running. Quiet by design — it is provenance, not a control, and it
    earns its place in the bar only by costing no glass at all. */
 /* A version and a build hash: identifiers made of figures, and read character

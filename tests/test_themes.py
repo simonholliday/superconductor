@@ -33,7 +33,16 @@ import superintendent.service
 # A token block has no nested braces, which is what lets this be a regex at all.
 # If one ever grows a nested rule, this stops matching it and the completeness
 # test below fails loudly rather than skipping it — which is the right way round.
-THEME_BLOCK = re.compile(r'\[data-theme="([a-z]+)"\]\s*\{([^{}]*)\}')
+THEME_BLOCK = re.compile(
+	r'^\[data-theme="([a-z]+)"\]\s*\{([^{}]*)\}', re.MULTILINE)
+"""A theme's own block: the attribute alone, as a whole selector, at a line start.
+
+**Anchored, because a theme may also be a rule.**  Prism scopes rules to itself —
+`[data-theme="prism"] .cell.on`, and a swatch as `i[data-theme="prism"]` — and an
+unanchored pattern read those as blocks and then as palettes, which fails the
+token count with a message about a theme declaring nothing.  The two are told
+apart by what follows the attribute: a block has only the brace.
+"""
 
 ROOT_BLOCK = re.compile(r"^:root \{$(.*?)^\}$", re.MULTILINE | re.DOTALL)
 
@@ -421,3 +430,40 @@ def test_every_band_of_the_prism_fan_is_legible () -> None:
 				tightest = (f"{what} at {band}", got - floor)
 
 	assert tightest[1] < 9, "nothing was measured, so this proves nothing"
+
+
+def test_the_prism_swatch_is_the_fan_it_stands_for () -> None:
+	"""**The thing you pick a theme by should be the thing you get.**
+
+	Every other swatch draws the chassis, the lit colour and the in-flight colour
+	— the three that theme is judged on.  Prism's lit colour is an achromatic
+	beam and its whole point is what happens after the glass, so those three
+	would have drawn black, grey and violet: true, and a picture of the one thing
+	this theme is not about.
+
+	So its swatch samples the fan at nought, a half and one — and that is three
+	numbers written twice, here and in the rule that paints the grid.  This is
+	what stops them drifting: the spread is read from the fan, and the swatch is
+	checked against it.
+	"""
+
+	spread, saturation, lightness, _ = _fan()
+
+	stops = re.findall(
+		r'i\[data-theme="prism"\]\s*\{[^}]*?linear-gradient\(135deg,'
+		r'\s*hsl\(([\d.]+) \d+% \d+%\)[^,]*,'
+		r'\s*hsl\(([\d.]+) \d+% \d+%\)[^,]*,'
+		r'\s*hsl\(([\d.]+) \d+% \d+%\)',
+		stylesheet(), re.DOTALL)
+
+	assert stops, "the prism swatch is not in the stylesheet in the shape this expects"
+
+	assert [float(one) for one in stops[0]] == [0.0, spread / 2, spread], (
+		f"the swatch draws {stops[0]} where the fan spreads {spread}")
+
+	# And every stop is a band, so it answers the same floor the grid does.
+	for hue in (float(one) for one in stops[0]):
+		band = _hsl(hue, saturation, lightness)
+
+		assert contrast(band, palettes()["prism"]["--panel"]) >= 3.0, (
+			f"the swatch's {band} would not be legible as a lit cell")

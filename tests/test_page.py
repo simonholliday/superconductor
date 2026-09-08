@@ -3068,6 +3068,20 @@ def test_a_theme_swatch_is_the_theme_it_offers (panel: typing.Any) -> None:
 
 	It is the swatch somebody picks a theme *by*, so a picker drifting from the
 	palette is wrong in the one direction nobody would check.
+
+	**One theme is exempt from the lit-colour half, and named here so the
+	exemption cannot spread.**  Prism's lit colour is the beam going *into* the
+	prism — an achromatic grey — and everything that theme is about happens after
+	the glass, so a swatch of its chassis, its lit colour and its in-flight
+	colour would be three true values and a false picture.  Its swatch samples
+	its own fan instead.
+
+	The rule it must still obey is the one that matters: **it is painted by the
+	theme rather than hand-copied**, so it cannot drift.  What guards that is
+	`test_themes.py::test_the_prism_swatch_is_the_fan_it_stands_for`, which
+	reads the swatch's three hues out of the stylesheet and checks them against
+	the spread the grid is drawn with.  The distinctness check below still
+	applies to it, as does everything else here.
 	"""
 
 	_pick_theme(panel, "Dark", "dark")
@@ -3078,9 +3092,16 @@ def test_a_theme_swatch_is_the_theme_it_offers (panel: typing.Any) -> None:
 	assert len(shown) >= 3, f"the picker offers almost nothing: {sorted(shown)}"
 
 	for name, (bands, lit) in sorted(shown.items()):
+		if name == "prism":
+			continue
+
 		assert lit in bands, (
 			f"the {name} swatch does not paint that theme's own lit colour:"
 			f" {lit} is not in {bands}")
+
+	assert "prism" in shown, (
+		"the one theme exempted above is not in the picker, so the exemption is"
+		" guarding nothing and should go")
 
 	# Every theme but "match system" is a palette of its own, so no two of them
 	# may draw the same swatch: two identical squares in a picker is a choice
