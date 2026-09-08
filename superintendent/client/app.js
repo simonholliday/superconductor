@@ -4180,8 +4180,23 @@ function Panel () {
 	/* In the order the app declared them, which is the order every other block
 	   list here is in — where a block actually sits is the arrangement's, and a
 	   stack that arrives this way is placed by the same rule as any other. */
+	/* **And a settings block goes wherever the pattern it configures goes**, for
+	 * exactly the same reason and found the same way: Simon tapped the settings
+	 * latch on the Minitaur's pattern on the Band page, the cable to a generator
+	 * flickered, and no settings appeared.
+	 *
+	 * The latch is drawn from `settingsFor`, which searches *every* control — so
+	 * it was offered on every page carrying the pattern, while the block it
+	 * reveals was drawn only on a page that also named the settings.  Tapping it
+	 * changed `showing`, which re-laid the page out and then drew nothing: the
+	 * flicker was the re-fit, and the missing panel was this filter.
+	 *
+	 * Matriarch worked because the Band page happens to name `matriarch` in its
+	 * parts and does not name `minitaur` — so the fault was invisible on the one
+	 * instrument anybody tested it on. */
 	const gridNames = declaredGrids.filter((name) => listed.includes(name)
-		|| (kindOf(name) === "recipe" && listed.includes(controls[name].builds)));
+		|| (kindOf(name) === "recipe" && listed.includes(controls[name].builds))
+		|| (kindOf(name) === "params" && listed.includes(controls[name].configures)));
 
 	/* A stack says which pattern it contributes to, and that one fact places its
 	   buttons: the pattern grows an "add a generator", not the stack. */

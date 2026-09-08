@@ -6027,3 +6027,42 @@ def test_a_transform_block_is_marked_apart_from_a_generator (
 	assert marked.evaluate("el => getComputedStyle(el).borderBottomColor") \
 		!= plain.evaluate("el => getComputedStyle(el).borderBottomColor"), \
 		"a transform's bar is drawn exactly like a generator's"
+
+
+def test_settings_are_reachable_on_a_page_that_names_only_their_pattern (
+	panel: typing.Any) -> None:
+	"""Simon, 2026-09-08: the latch flickered a cable and revealed nothing.
+
+	`settingsFor` searches *every* control, so the latch is offered on any page
+	carrying the pattern — while the block it reveals was drawn only where the
+	page also named the settings. Tapping it changed which blocks were showing,
+	which re-laid the page out and then drew nothing: the flicker was the re-fit.
+
+	**The Matriarch worked and the Minitaur did not**, because the rig's Band
+	page happens to name one and not the other — so the fault was invisible on
+	the instrument anybody happened to test.
+
+	This is #2211 one layer up, and the same rule settles it: a thing that
+	belongs to a pattern is drawn wherever that pattern is drawn.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="bass"]', timeout=5_000)
+	_settled(panel)
+
+	latch = panel.locator('.part[data-part="bass"] .part-foot button.settings')
+
+	assert latch.count() == 1, "the pattern offers no way to reach its instrument"
+	assert panel.locator('.part[data-part="moog"]').count() == 0, (
+		"the settings were open before anybody asked")
+
+	latch.click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+
+	assert panel.locator('.part[data-part="moog"] .setting').count() > 0, (
+		"the block appeared with nothing in it")
+
+	# And away again, because a latch that only opens is a trap on a surface
+	# with no keyboard.
+	latch.click()
+	panel.wait_for_selector('.part[data-part="moog"]', state="detached", timeout=5_000)

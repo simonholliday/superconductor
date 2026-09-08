@@ -117,7 +117,13 @@ PAGES: list[dict[str, typing.Any]] = [
 	# than `PAGE_BUTTONS`, and the row of named buttons gives way to previous
 	# and next — which is correct behaviour and takes every test that reaches a
 	# page by its name down with it.
-	{"id": "bass", "title": "Bass", "parts": ["bass", "fine", "moog"]},
+	# **The settings are deliberately not named here**, and that is the case the
+	# rig actually has: the Band page carries the Minitaur's pattern and not its
+	# settings, so the latch was offered where the block could not be drawn and
+	# tapping it flickered the layout and revealed nothing. Naming `moog` on this
+	# page hid that for a month. A settings block goes wherever the pattern it
+	# configures goes, exactly as a stack does (#2211).
+	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
 	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack"]},
 	{"id": "alone", "title": "Stack alone", "parts": ["stack"]},
