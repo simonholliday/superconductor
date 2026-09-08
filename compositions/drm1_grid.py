@@ -1013,6 +1013,75 @@ Offering sixteen would be offering a control whose top half cannot land.
 """
 
 
+def _make_grid (spec: dict[str, typing.Any]) -> typing.Any:
+	"""Turn one asked-for grid into a control this rig can route (#2226).
+
+	**Everything the package is not allowed to know is decided here** — how long
+	a step lasts, what a row name means, and that a grid with no instrument
+	behind it is played by being routed.  The rack holds a list and knows how
+	long it is; this is where a list entry becomes a thing that can make a sound.
+	"""
+
+	key = str(spec["name"])
+
+	composition.data.setdefault(key, {row: [] for row in spec["rows"]})
+
+	def play (p: typing.Any) -> None:
+		"""Put this grid's notes onto whatever routed it."""
+
+		_play(p, composition.data[key])
+
+	# Routable the moment it exists: a stack reads `sources` when it declares,
+	# and the rack asks for a declaration as soon as it has made this.
+	SHARED[key] = play
+
+	return superintendent.subsequence_adapter.StepGrid(
+		composition, rows=list(spec["rows"]), steps=int(spec["steps"]),
+		beats=int(spec["steps"]) * STEP_DURATION,
+		data_key=key, name=key,
+		title=str(spec.get("title") or "Made"),
+		about=[("", "no instrument")])
+
+
+def _unmake_grid (name: str) -> None:
+	"""Stop offering a grid that has gone, as a thing to route from.
+
+	The notes stay in ``composition.data`` and are simply unreachable, which is
+	the same thing a removed layer's parameters do; what must not stay is the
+	*source*, or a stack goes on offering a cable to a grid nobody can see.
+	"""
+
+	SHARED.pop(name, None)
+
+
+made_grids = superintendent.subsequence_adapter.GridRack(
+	composition,
+	make=_make_grid,
+	unmake=_unmake_grid,
+	rows=ROWS,
+
+	# **Bounded by what a routed grid can actually play.**  A grid patched into a
+	# pattern plays at the *destination's* resolution, so a twenty-step grid
+	# routed into this rig's sixteen would be a truncated bar — a control that
+	# looks set up and quietly drops four steps.  A cycle of a different length
+	# is the other mechanism entirely, and it is a pattern rather than a grid
+	# (#2228).
+	steps=(1, STEPS),
+	opening_steps=STEPS,
+	store=superintendent.subsequence_adapter.PageStore(
+		pathlib.Path(__file__).with_suffix(".grids.json")),
+	data_key="made_grids", name="made_grids", title="Make a grid",
+	about=[("", "no instrument")])
+"""Grids this rig's panel can make for itself, and where they are remembered.
+
+**What they cannot do yet is take generators.**  A stack is declared against the
+pattern it builds, and nothing here declares one for a grid that did not exist
+when this file was read.  A made grid is drawn on by hand and routed into a
+pattern whose stack does the generating, which is enough to be useful and is
+worth saying plainly rather than discovering.
+"""
+
+
 bass_grid = superintendent.subsequence_adapter.NoteGrid(
 	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 	data_key="bass", name="bass", title="Minitaur — bass",
@@ -1122,6 +1191,7 @@ link = superintendent.subsequence_adapter.AppLink(
 		shared_recipe,
 		snare_recipe,
 		nine_recipe,
+		made_grids,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -1138,7 +1208,8 @@ link = superintendent.subsequence_adapter.AppLink(
 		# it.  All of the routing this rig can currently show is on this page.
 		superintendent.subsequence_adapter.Page(
 			"drums", parts=["grid", "drum_recipe", "shared", "shared_recipe",
-			                "snare_lane", "snare_recipe", "nine", "nine_recipe"],
+			                "snare_lane", "snare_recipe", "nine", "nine_recipe",
+			                "made_grids"],
 			title="Drums"),
 
 		superintendent.subsequence_adapter.Page(

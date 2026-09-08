@@ -582,3 +582,54 @@ def test_a_stack_is_bounded_by_the_pattern_it_builds (rig: typing.Any) -> None:
 
 	assert ceiling(rig.nine_recipe, "euclidean", "pulses") == 9
 	assert ceiling(rig.drum_recipe, "euclidean", "pulses") == 16
+
+
+def test_a_grid_the_panel_makes_can_be_routed_the_moment_it_exists (
+	rig: typing.Any) -> None:
+	"""A grid with no instrument behind it makes no sound until something routes
+	it, so a made grid that was not a source would be a block that can never do
+	anything (#2226).
+
+	A stack reads `sources` when it declares, and the rack asks for a declaration
+	as soon as it has made one — so the two land together.
+	"""
+
+	before = set(rig.SHARED)
+	made = rig._make_grid({"name": "made_grids-x", "rows": ["snare"], "steps": 8})
+
+	assert made.name == "made_grids-x"
+	assert set(rig.SHARED) - before == {"made_grids-x"}
+
+	# And the source plays what is drawn on it, on the voice its rows name.
+	landed = _built(
+		rig, lambda p: rig.SHARED["made_grids-x"](p), 8)
+
+	assert landed == [], "an untouched grid placed something"
+
+	rig.composition.data["made_grids-x"]["snare"] = [0, 4]
+	landed = _built(rig, lambda p: rig.SHARED["made_grids-x"](p), 8)
+
+	assert {note.pitch for note in landed} == {
+		rig.drm1.VERMONA_DRM1_DRUM_MAP["snare"]}
+
+	rig._unmake_grid("made_grids-x")
+
+	assert "made_grids-x" not in rig.SHARED, (
+		"a stack would go on offering a cable to a grid nobody can see")
+
+
+def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
+	rig: typing.Any) -> None:
+	"""A grid patched into a pattern plays at the **destination's** resolution,
+	so a twenty-step grid routed into this rig's sixteen would be a truncated bar
+	— a control that looks set up and quietly drops four steps.
+
+	A cycle of a different length is the other mechanism and it is a pattern
+	rather than a grid (#2228).
+	"""
+
+	declared = rig.link.controls["made_grids"].declaration()
+
+	assert declared["type"] == "grids"
+	assert declared["max_steps"] == rig.STEPS
+	assert declared["rows"] == rig.ROWS

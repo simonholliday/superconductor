@@ -2479,6 +2479,7 @@ class GridRack (Control):
 		composition: typing.Any,
 		make: collections.abc.Callable[[dict[str, typing.Any]], Control],
 		rows: collections.abc.Sequence[str],
+		unmake: collections.abc.Callable[[str], None] | None = None,
 		steps: tuple[int, int] = (1, 32),
 		opening_steps: int = 16,
 		store: "PageStore | None" = None,
@@ -2491,6 +2492,21 @@ class GridRack (Control):
 
 		self.composition = composition
 		self.make = make
+
+		self.unmake = unmake
+		"""What to undo when a grid leaves, given the control's name.
+
+		**Taking the control off the link is not the whole of removing a grid**,
+		because making one may have done more than build it: on this rig it also
+		registers a play function, so the grid can be routed.  Left behind, that
+		is a source a stack still offers for a grid nobody can see any more — a
+		control that looks connected and plays something invisible, which is the
+		exact fault this project ranks worst.
+
+		Optional, because what making does is the composition's business and it
+		may do nothing that needs undoing.
+		"""
+
 		self.rows = list(rows)
 		self.steps = steps
 		self.opening_steps = opening_steps
@@ -2655,7 +2671,13 @@ class GridRack (Control):
 		moved = False
 
 		for gone in [one for one in self._made if one not in wanted]:
-			self.link.controls.pop(self._made.pop(gone), None)
+			name = self._made.pop(gone)
+
+			self.link.controls.pop(name, None)
+
+			if self.unmake is not None:
+				self.unmake(name)
+
 			moved = True
 
 		for one, spec in wanted.items():

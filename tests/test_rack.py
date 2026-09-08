@@ -209,3 +209,40 @@ def test_what_somebody_made_comes_back_after_a_restart (
 
 	assert [one["id"] for one in again.grids()] == ["a"]
 	assert link.controls["rack-a"].steps == 9
+
+
+def test_a_grid_that_goes_is_unmade_as_well_as_undeclared () -> None:
+	"""**Taking the control off the link is not the whole of removing a grid.**
+
+	Making one may have done more than build it — on the rig it also registers a
+	play function, so the grid can be routed.  Left behind, that is a source a
+	stack still offers for a grid nobody can see, which plays notes from a block
+	that is not on the glass.
+	"""
+
+	undone: list[str] = []
+
+	rack = adapter.GridRack(
+		Composition(), make=_made, unmake=undone.append, rows=ROWS,
+		data_key="rack", name="rack")
+
+	rack.attach(typing.cast(typing.Any, Link()))
+	rack.apply(["grids"], [_grid("a"), _grid("b")])
+
+	assert undone == [], "nothing has gone yet"
+
+	rack.apply(["grids"], [_grid("b")])
+
+	assert undone == ["rack-a"]
+
+
+def test_a_rack_with_nothing_to_undo_needs_no_undoing () -> None:
+	"""What making does is the composition's business, and it may do nothing that
+	needs reversing — so the second half is optional and its absence is not a
+	special case anywhere."""
+
+	rack, link = _rack()
+	rack.apply(["grids"], [_grid("a")])
+	rack.apply(["grids"], [])
+
+	assert [name for name in link.controls if name.startswith("rack-")] == []
