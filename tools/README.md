@@ -59,6 +59,7 @@ and both look like a pattern.
 
 | File | What it does |
 | --- | --- |
+| `theme_separation.py` | Does a theme's lit state stay apart from its state in flight for somebody who cannot see one of the three cones? Computes the one rule of #2194 the suite deliberately does not assert — OKLab distance under three simulated dichromacies — because the matrices are approximations and a test that cannot be trusted at its own boundary is worse than a note saying to look. **Its numbers do not reproduce #2190's**; see the file. |
 | `play_loudly.py` | Runs a composition with logging configured, so every `LOG.info` in the adapter — the link connecting, a setting asserted to an instrument, a refusal — is printed instead of going nowhere. |
 
 ```
