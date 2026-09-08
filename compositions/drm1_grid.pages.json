@@ -2,33 +2,23 @@
 	"band": [
 		{
 			"name": "grid",
-			"x": 9,
-			"y": 0
-		},
-		{
-			"name": "bass",
-			"x": 30,
-			"y": 0
-		},
-		{
-			"name": "chords",
-			"x": 63,
+			"x": 5,
 			"y": 2
 		},
 		{
-			"name": "bass_recipe/lmtrqew7ngsc",
-			"x": 15,
-			"y": 26
+			"name": "bass_recipe/lmtsicdqcgji",
+			"x": 8,
+			"y": 20
 		},
 		{
-			"name": "chord_recipe/lmtrqgghn8kv",
-			"x": 50,
-			"y": 14
+			"name": "bass",
+			"x": 27,
+			"y": 9
 		},
 		{
-			"name": "minitaur",
-			"x": 18,
-			"y": 14
+			"name": "chords",
+			"x": 47,
+			"y": 2
 		}
 	],
 	"bass": [
@@ -50,19 +40,17 @@
 			"y": 1
 		},
 		{
-			"name": "drum_recipe/lmtrmfricy9d",
-			"x": 19,
-			"y": 1
-		},
-		{
-			"name": "drum_recipe/lmtrmiesjrto",
-			"x": 29,
-			"y": 6
-		},
-		{
 			"name": "shared",
-			"x": 16,
-			"y": 22
+			"x": 8,
+			"y": 4
+		}
+	],
+	"chords": [
+		{
+			"name": "chords",
+			"x": 0,
+			"y": 0,
+			"rows": 15
 		}
 	]
 }
