@@ -6066,3 +6066,111 @@ def test_settings_are_reachable_on_a_page_that_names_only_their_pattern (
 	# with no keyboard.
 	latch.click()
 	panel.wait_for_selector('.part[data-part="moog"]', state="detached", timeout=5_000)
+
+
+# --- a block's height is part of the arrangement (#2227) ---------------------
+
+def test_a_block_can_be_pulled_to_a_different_height (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-07: *"they might want to work within 4 octaves and be able
+	to see all the notes as they play — without scrolling."*
+
+	`visible_rows` was the app's alone and fixed, so the rig's bass grid had 25
+	rows and showed 12 with no way to see the rest.  How many rows a grid *has*
+	is the app's fact; how many you want in front of you is the person's, and it
+	belongs beside the x and y that already travel with a page.
+	"""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="grid"]')
+	before = block.bounding_box()
+	grip = panel.locator('.part[data-part="grid"] .part-grip').bounding_box()
+
+	middle = grip["x"] + grip["width"] / 2
+
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2 - 90, steps=8)
+	panel.mouse.up()
+
+	_settled(panel)
+
+	assert block.bounding_box()["height"] < before["height"], (
+		"the block did not shrink when its bottom edge was pulled up")
+
+	# The frame crosses two sockets and lands on the app's own thread.
+	deadline = time.monotonic() + 5
+
+	while "all" not in fake_app.arrangements and time.monotonic() < deadline:
+		time.sleep(0.05)
+
+	kept = {one["name"]: one for one in fake_app.arrangements.get("all") or []}
+
+	assert kept.get("grid", {}).get("rows") == 1, (
+		f"the height did not reach the app: {kept.get('grid')}")
+
+
+def test_a_height_outlives_a_reload (panel: typing.Any) -> None:
+	"""It travels the same path as a position and is kept in the same file, so a
+	height that vanished on reload would be the one half of an arrangement that
+	did not survive — which is worse than not having it, because nothing would
+	say which half was real."""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="grid"]')
+	grip = panel.locator('.part[data-part="grid"] .part-grip').bounding_box()
+	middle = grip["x"] + grip["width"] / 2
+
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2 - 90, steps=8)
+	panel.mouse.up()
+
+	_locked(panel)
+	_settled(panel)
+
+	shorter = block.bounding_box()
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
+
+	assert abs(panel.locator('.part[data-part="grid"]').bounding_box()["height"]
+		- shorter["height"]) < 2
+
+
+def test_a_block_with_one_row_is_offered_no_grip (panel: typing.Any) -> None:
+	"""Height is not a question there, and a control that cannot do anything is
+	worse than one that is absent — this project's own rule, and the reason
+	`rotate` is filed as a defect rather than a feature.
+
+	`second` declares a single row: there is nothing to reveal and nothing to
+	give back.
+	"""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	assert panel.locator('.part[data-part="grid"] .part-grip').count() == 1
+	assert panel.locator('.part[data-part="second"] .part-grip').count() == 0
+
+
+def test_a_generator_block_is_offered_no_grip (panel: typing.Any) -> None:
+	"""A stack and a settings block both name the pattern they belong to, because
+	that is how they come to be drawn wherever it is (#2211).  Asking about the
+	control alone therefore put a resize grip on a stack of knobs and offered to
+	show it more drum voices — found by the placement test, not by reading.
+	"""
+
+	panel.locator(".pages button", has_text="Generators").click()
+	panel.wait_for_selector('.part[data-part^="stack/"]', timeout=10_000)
+	_unlocked(panel)
+	_settled(panel)
+
+	assert panel.locator('.part[data-part^="stack/"]').count() > 0, (
+		"no generator block on the page to check")
+	assert panel.locator('.part[data-part^="stack/"] .part-grip').count() == 0

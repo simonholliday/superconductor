@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.19.0";
+const CONTRACT = "1.21.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1278,7 +1278,7 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, 
  *
  * Snap starts at one drawn cell, which is what every gesture did before there
  * was a choice. */
-function NoteBlock ({ name, control, notes, drawn, kinds, cell, pending, failed, onSet }) {
+function NoteBlock ({ name, control, shows, notes, drawn, kinds, cell, pending, failed, onSet }) {
 	const divisions = Math.max(1, control.divisions || 1);
 	const steps = control.steps;
 	const beats = control.beats || 4;
@@ -1308,7 +1308,7 @@ function NoteBlock ({ name, control, notes, drawn, kinds, cell, pending, failed,
 			${/* What a stack put here this cycle, and what a weight is measured
 			     against — the same two facts the drum grid is given (#2218). */ ""}
 			drawn=${drawn} kinds=${kinds} weights=${control.velocity_range}
-			notes=${notes} cell=${cell} window=${control.visible_rows}
+			notes=${notes} cell=${cell} window=${shows || control.visible_rows}
 			labels=${notes.labels} unreachable=${notes.unreachable}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
@@ -2160,9 +2160,10 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, onMove, onRaise, onHold, onSettled, onTouch, onClose, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, rows, mostRows, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
+	const stretching = useRef(null);
 
 	const place = {
 		left: `${(at ? at.x : 0) * pitch}px`,
@@ -2223,6 +2224,68 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 		if (moved) onSettled();
 	};
 
+	/* **Taking hold of the bottom edge, which is the only free edge a block has**
+	   — the title bar is the move grip and nothing else competes for it (#2227).
+	   Stopping propagation matters here for the same reason it does on the close
+	   button: without it this drag starts the block moving under the same finger.
+
+	   **A row's height is measured rather than worked out**, because the two
+	   grids disagree about it: a step grid puts a gap between its cells and a
+	   note grid does not, so `cell + GAP` is right for one and wrong for the
+	   other. Dividing what is actually on the glass by the rows actually in it
+	   is right for both, and stays right if a third grid is ever drawn
+	   differently again (`188722c` learned this the expensive way). */
+	const takeGrip = (event) => {
+		if (locked || !onResize) return;
+
+		event.preventDefault();
+		event.stopPropagation();
+		event.currentTarget.setPointerCapture(event.pointerId);
+
+		const body = event.currentTarget.parentElement.querySelector(".part-body");
+		const box = body && body.getBoundingClientRect();
+
+		stretching.current = {
+			pointer: event.pointerId,
+			fromY: event.clientY,
+			rows,
+			perRow: box && rows ? box.height / rows : pitch,
+		};
+
+		onRaise(name);
+		onHold(true);
+	};
+
+	/* Measured from where the finger started rather than from the last frame,
+	   exactly as a move is, so a slow drag cannot accumulate rounding into a
+	   drift. Never past what the control actually has: rows that do not exist
+	   would draw an empty band a person could not get rid of by dragging back,
+	   because there would be nothing under the grip to aim at. */
+	const stretch = (event) => {
+		const from = stretching.current;
+
+		if (!from || from.pointer !== event.pointerId) return;
+
+		const wanted = Math.max(1, from.rows + Math.round((event.clientY - from.fromY) / from.perRow));
+		const capped = mostRows ? Math.min(mostRows, wanted) : wanted;
+
+		if (capped !== rows) {
+			from.moved = true;
+			onResize(name, capped);
+		}
+	};
+
+	const letGo = (event) => {
+		if (!stretching.current || stretching.current.pointer !== event.pointerId) return;
+
+		const moved = stretching.current.moved;
+
+		stretching.current = null;
+		onHold(false);
+
+		if (moved) onSettled();
+	};
+
 	return html`
 		<section
 			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
@@ -2277,6 +2340,21 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 			</header>
 			<div class="part-body">${children}</div>
 			${footer}
+			${/* Offered only where there is something to reveal. A block already
+			     showing everything it has is a block whose height is not a
+			     question, and a grip that can only ever shrink is a control that
+			     lies about what it is for. */ ""}
+			${onResize && html`
+				<div
+					class="part-grip" data-grip=${name}
+					role="separator" aria-orientation="horizontal"
+					aria-label=${`rows shown in ${title || name.replace(/_/g, " ")}`}
+					title="how many rows to show"
+					onPointerDown=${takeGrip}
+					onPointerMove=${stretch}
+					onPointerUp=${letGo}
+					onPointerCancel=${letGo}
+				></div>`}
 		</section>`;
 }
 
@@ -4424,7 +4502,13 @@ function Panel () {
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 				+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
 				+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
-					? LANE_CELLS : 0) + 1,
+					? LANE_CELLS : 0) + 1
+				/* The title is the `+ 1` above and the grip is this one. A block
+				   measures a whole number of lattice cells and this arithmetic is
+				   what places it, so a fitting the count does not know about puts
+				   every block a cell out — measured at 18px against a 39px cell by
+				   the test that exists to say so (`188722c`). */
+				+ (controls[name].rows.length > 1 ? 1 : 0),
 			steps: controls[name].steps,
 		});
 	}
@@ -4522,7 +4606,8 @@ function Panel () {
 			const forPage = was[pageId] || {};
 			const order = [...(forPage.order || []).filter((one) => one !== name), name];
 			const placed = at
-				? { ...(forPage.placed || {}), [name]: at }
+				? { ...(forPage.placed || {}),
+					[name]: { ...(forPage.placed || {})[name], ...at } }
 				: forPage.placed || {};
 
 			return { ...was, [pageId]: { placed, order } };
@@ -4545,9 +4630,20 @@ function Panel () {
 	   which is the shared one every panel sees; then anything moved here since,
 	   which is what the finger is doing right now. */
 	const kept = (page && page.layout) || [];
-	const keptPlaces = Object.fromEntries(kept.map((one) => [one.name, { x: one.x, y: one.y }]));
+	const keptPlaces = Object.fromEntries(kept.map(
+		(one) => [one.name, one.rows ? { x: one.x, y: one.y, rows: one.rows } : { x: one.x, y: one.y }]));
 
-	const layout = { ...defaults, ...keptPlaces, ...(arranged.placed || {}) };
+	/* **Merged field by field rather than entry by entry**, because the three
+	   layers no longer carry the same fields: where a block sits and how tall it
+	   has been pulled arrive from different gestures and one must not erase the
+	   other. Replacing whole entries was identical while both layers held only
+	   x and y, and would silently drop a height the moment a block was dragged
+	   after being resized (#2227). */
+	const placedHere = arranged.placed || {};
+	const layout = Object.fromEntries(
+		[...new Set([...Object.keys(defaults), ...Object.keys(keptPlaces), ...Object.keys(placedHere)])]
+			.map((name) => [name,
+				{ ...defaults[name], ...keptPlaces[name], ...placedHere[name] }]));
 
 	/* Drawn back to front. A name that has been moved sits after every name
 	   that has not, and later moves sit after earlier ones.
@@ -4796,6 +4892,43 @@ function Panel () {
 		if (landed) addLayer(landed.stack, { kind: "pattern", source: landed.source });
 	};
 
+	/* **How many rows a block shows, which is three answers in order of
+	   authority** (#2227): what somebody has pulled it to, then the height its
+	   app opened it at, then all of them.
+
+	   `visible_rows` used to be the whole answer and was the app's alone, which
+	   made the bass grid 25 rows tall and 12 of them visible with no way to see
+	   the rest. How many rows a grid *has* is the app's fact and does not move;
+	   how many you want in front of you changes with what you are working on,
+	   and belongs beside the x and y that already travel with a page. */
+	const rowsShown = (one) => {
+		const control = controls[one.control];
+
+		if (!control || !Array.isArray(control.rows)) return null;
+
+		const pulled = layout[one.key] && layout[one.key].rows;
+
+		return pulled || control.visible_rows || control.rows.length;
+	};
+
+	/* Only where height is a question at all. A one-row block has nothing to
+	   reveal and nothing to give back, so a grip on it would be a control that
+	   cannot do anything — and this codebase's own rule is that one of those is
+	   worse than none. Everything else gets one, because making a block *shorter*
+	   to fit something else on the page is as much of a want as making it
+	   taller. */
+	const stretchy = (one) => {
+		const control = controls[one.control];
+
+		/* `key === control` is the block that *is* that control. A generator
+		   block and a settings block both name the pattern they belong to in
+		   `control` — that is how they are drawn wherever it is (#2211) — so
+		   asking about the control alone would put a grip on a stack of knobs
+		   and offer to show it more drum voices. */
+		return Boolean(one.key === one.control
+			&& control && Array.isArray(control.rows) && control.rows.length > 1);
+	};
+
 	/* Where every block on this page has ended up, sent to the app that owns
 	   the page. Called when a finger lifts from a block that actually moved. */
 	const keep = () => {
@@ -4803,7 +4936,9 @@ function Panel () {
 
 		link.current.layout(appName, pageId, stacked
 			.filter((name) => layout[name])
-			.map((name) => ({ name, x: layout[name].x, y: layout[name].y })));
+			.map((name) => (layout[name].rows
+				? { name, x: layout[name].x, y: layout[name].y, rows: layout[name].rows }
+				: { name, x: layout[name].x, y: layout[name].y })));
 	};
 
 	/* Both halves have to be known before they can disagree: a page served
@@ -4890,6 +5025,14 @@ function Panel () {
 					onRaise=${(who) => rearrange(who, null)}
 					onHold=${setDragging}
 					onSettled=${keep}
+					${/* The block's own height, and the most it could usefully be.
+					     Both are numbers rather than "unset", because the grip
+					     measures a row off what is actually drawn and needs to
+					     know how many rows that was. */ ""}
+					rows=${rowsShown(one)}
+					mostRows=${controls[one.control] && Array.isArray(controls[one.control].rows)
+						? controls[one.control].rows.length : null}
+					onResize=${stretchy(one) ? (who, rows) => rearrange(who, { rows }) : null}
 					onTouch=${setTouched}
 					${/* A generator's close takes it out of the stack, which is a
 					     change to the music. A settings block's close only puts
@@ -4968,6 +5111,7 @@ function Panel () {
 						: kindOf(one.control) === "note_grid"
 						? html`
 							<${NoteBlock} name=${one.control} control=${controls[one.control]}
+								shows=${rowsShown(one)}
 								notes=${(state[appName] || {})[one.control] || {}} cell=${size.cell}
 								drawn=${up ? realised[one.control] : null}
 								kinds=${layerKinds(one.control)}
@@ -4988,7 +5132,7 @@ function Panel () {
 								     with the event: the panel already holds the
 								     layers, and a second copy could disagree. */ ""}
 								kinds=${layerKinds(one.control)}
-								visible=${controls[one.control].visible_rows} cell=${size.cell}
+								visible=${rowsShown(one)} cell=${size.cell}
 								pending=${pending} failed=${failed} onTap=${request} />`}
 					${up && one.clear && html`
 						<${Playhead} anchor=${anchor} steps=${controls[one.control].steps}

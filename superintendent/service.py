@@ -29,6 +29,16 @@ import superintendent.protocol
 
 LOG = logging.getLogger(__name__)
 
+LOADED_BUILD = superintendent.build.package_build()
+"""The package this service is running, hashed as this module is imported.
+
+The counterpart to the adapter's constant of the same name, and it answers the
+same question about this half: *what did this process load*.  Taken here, once,
+on the main thread at start-up — which is the only place this package may read a
+disk it does not have to, because every other place is a socket handler on the
+event loop and this working tree is a CIFS mount that hangs.
+"""
+
 CLIENT_DIR = pathlib.Path(__file__).resolve().parent / "client"
 """The page and its scripts, which ship inside the package.
 
@@ -149,6 +159,50 @@ def _note_contract (side: str, who: str, frame: superintendent.protocol.Frame) -
 		            side, who, gap, spoken, ours)
 
 
+def _note_builds (who: str, spoken: object) -> None:
+	"""Say so when an app and this service are not running the same code (#2220).
+
+	Both halves hash the package **as they import it** and neither ever reads the
+	disk again.  So this compares *what that process loaded* with *what this one
+	loaded*, and the two differing means one of them started before a change —
+	which is the staleness a contract version cannot see, because a fix inside an
+	adapter moves no frame and both ends go on agreeing about the wire while one
+	of them executes yesterday's Python.  That cost a round trip on 2026-09-07,
+	an hour after the contract check was built to prevent the same class of thing.
+
+	**Comparing against what is on disk *now* would be the better question and is
+	not worth what it costs.**  It would name which half is behind rather than
+	only that they differ.  It also means reading eleven files inside the socket
+	handler, and this working tree is a CIFS mount with a live kernel bug in it:
+	the suite deadlocked outright the first time this was written that way, and on
+	a rig the same read would stop the whole service — no panel, no taps — on a
+	filesystem that has already hung this machine twice.  A check that can take
+	the thing it is checking off the air is not a check.  So it asks a slightly
+	weaker question for free, and never touches a disk on a socket.
+
+	**Said as two facts and not as a verdict**, because the same difference means
+	two things and only the reader knows which.  Where the two share a filesystem
+	it means one of them wants restarting.  Where they do not — an app on another
+	host, which the service is bound to every interface to allow — it means the
+	halves were installed from different sources, which is worth knowing and is
+	not a fault (#2049).  Naming either setup unsupported would be this package
+	deciding how somebody's studio is wired.
+
+	An app too old to send a build says nothing, and nothing is checked.
+	"""
+
+	if not isinstance(spoken, str) or not spoken:
+		return
+
+	if LOADED_BUILD is None or spoken == LOADED_BUILD:
+		return
+
+	LOG.warning("app %r loaded superintendent build %r and this service loaded"
+	            " %r — the two are not running the same code, so on a shared"
+	            " filesystem one of them was started before a change and wants"
+	            " restarting", who, spoken, LOADED_BUILD)
+
+
 async def _serve_panel (hub: superintendent.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
 	"""Greet one panel, then carry its frames until it goes away."""
 
@@ -233,6 +287,15 @@ async def _serve_app (hub: superintendent.hub.Hub, websocket: starlette.websocke
 
 			if kind == "declare":
 				_note_contract("app", str(frame.get("app", "app")), frame)
+
+				# **Only on the first declaration down this socket.** A second
+				# one is how an app says its controls changed, and that happens
+				# every time somebody drags a block: a layout save re-declares so
+				# the other panels learn the arrangement. The build it carries is
+				# a constant taken as that process started, so checking it again
+				# could only repeat the same line once a drag.
+				if app is None:
+					_note_builds(str(frame.get("app", "app")), frame.get("build"))
 
 				app = superintendent.hub.AppLink(
 					name=str(frame.get("app", "app")),

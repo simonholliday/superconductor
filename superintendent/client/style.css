@@ -975,6 +975,61 @@ html, body {
 	white-space: nowrap;
 }
 
+/* **The bottom edge, which is how many rows this block shows** (#2227).
+ *
+ * The title bar moves a block and this one sizes it, so the two grips are at
+ * opposite ends and neither can be reached for by mistake. It is the only free
+ * edge a block has, which is why the decision went here rather than to a corner.
+ *
+ * A row across and a full lattice cell tall, because it can be dragged and a
+ * fitting that can be dragged is a target rather than a mark. Its ground is the
+ * title bar's, so the block reads as something with a top and a bottom rather
+ * than as a grid that stops.
+ *
+ * `touch-action: none` for the same reason every target here has it (#2073): a
+ * finger dragging this must not also be scrolling the page underneath. */
+.part-grip {
+	height: max(24px, var(--cell));
+	margin-top: var(--gap);
+
+	border-radius: 0 0 3px 3px;
+	background: var(--title-ground);
+	border-top: 1px solid var(--edge);
+
+	touch-action: none;
+	cursor: ns-resize;
+}
+
+/* The three lines every resize grip has had for as long as there have been
+   windows, drawn in the ink a mark answers to rather than the ink a sentence
+   does — nothing here is read (#2196). */
+.part-grip::after {
+	content: "";
+	display: block;
+	height: 100%;
+	background:
+		repeating-linear-gradient(
+			to bottom,
+			transparent 0 calc(50% - 4px),
+			var(--ink-faint) calc(50% - 4px) calc(50% - 3px),
+			transparent calc(50% - 3px) calc(50% - 1px),
+			var(--ink-faint) calc(50% - 1px) calc(50%),
+			transparent calc(50%) calc(50% + 2px),
+			var(--ink-faint) calc(50% + 2px) calc(50% + 3px),
+			transparent calc(50% + 3px) 100%);
+	background-repeat: no-repeat;
+	background-size: 28px 100%;
+	background-position: center;
+}
+
+/* Nothing to take hold of while the layout is held still, and saying so is the
+   padlock's job rather than this one's: the grip stays where it is and stops
+   inviting a finger. */
+.grid-wrap:not(.unlocked) .part-grip {
+	opacity: 0.35;
+	cursor: default;
+}
+
 /* The name keeps its size until there is nothing else to give, because the name
    is what a block is found by. */
 .part-title > b {

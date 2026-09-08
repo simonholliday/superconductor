@@ -22,20 +22,40 @@ Subroutine #1972 and is still open.
 import asyncio
 import collections
 import collections.abc
+import inspect
 import json
 import logging
 import pathlib
+import random
 import threading
 import time
 import typing
+import zlib
 
 import websockets.asyncio.client
 import websockets.exceptions
 
+import superintendent.build
 import superintendent.protocol
 
 
 LOG = logging.getLogger(__name__)
+
+LOADED_BUILD = superintendent.build.package_build()
+"""The package this app is running, hashed **as this module is imported** (#2220).
+
+Taken here and never again, because the question it answers is *what did this
+process load* — and a process that re-read the files would answer *what is on
+disk*, which is the service's question and the other half of the comparison.
+An app importing this at start-up therefore carries its own age with it for the
+whole of its life, which is the one thing nothing could see before: a page knows
+when it is behind and a service is caught by the contract, but a fix inside an
+adapter moves no frame, so the contract agrees while a composition plays code
+from before lunch.
+
+Module level rather than per link, so two links in one process cannot disagree
+about the age of the code they share.
+"""
 
 OUTBOUND_CAP = 256
 """How many frames may wait for the socket before the oldest is dropped (#2242).
@@ -1654,6 +1674,16 @@ class Recipe (Control):
 		self.link: "AppLink | None" = None
 		"""How a stack says what it realised, and where it finds the grid it feeds."""
 
+		self._seeds: dict[str, bool] = {}
+		"""Which layers will take a stream of their own, asked once each.
+
+		Read off the live method rather than the catalogue, because the
+		catalogue deliberately leaves ``seed`` out — it is a machine's parameter
+		and not a person's, so it is never *offered* (#2233).  Supplying one is
+		a different act from offering it.  Cached because ``inspect.signature``
+		is far too slow to run once a layer once a bar on the clock's thread.
+		"""
+
 		self._complained: set[str] = set()
 		"""Generators that have already failed once, so a bar does not flood a log.
 
@@ -2022,6 +2052,29 @@ class Recipe (Control):
 
 		before = self._reads(pattern) if self.pulses_per_beat else None
 
+		# **One draw, before any layer runs, and every layer keys off it**
+		# (#2233).  A pattern has one random stream and every layer used to draw
+		# from it in call order, so a layer's notes depended on its neighbours:
+		# measured, turning `pulses` from 7 to 3 on the layer *above* moved the
+		# one below from [0, 18, 36, 54] to [0, 18, 36, 72].  Reorder, bypass and
+		# knob are the whole gesture set of a rack, and all three did this.
+		#
+		# Taking the base here rather than per layer is what makes it a fix: the
+		# shared stream is drawn from exactly once whatever the stack holds, so
+		# adding, moving or silencing a layer cannot move the base.
+		#
+		# **And it is one draw rather than a constant so a layer still evolves.**
+		# Seeding each layer from its id alone — which is what #2233 proposed —
+		# freezes it: `seed=` builds a fresh `Random(seed)` for that call, so the
+		# layer would place the same bar for ever.  Measured over three cycles,
+		# identical.  The stream advances a cycle at a time, so a base drawn from
+		# it moves with the music and holds still exactly when Subsequence says
+		# it should: `lock()` re-deals the stream from a fixed seed each cycle,
+		# so a locked pattern draws the same base and every layer under it lands
+		# in the same place.  A freeze gesture of our own (#2232) is then a
+		# question of what goes in the key, not of a second mechanism.
+		base = self._base(pattern)
+
 		# **Read between the layers, not only around them.** A dot could say
 		# that *something* put a note there and not what — so Simon went looking
 		# for a generator behind a note the routed grid had contributed, and
@@ -2103,8 +2156,14 @@ class Recipe (Control):
 					f"this Subsequence has no such {layer['kind']}")
 				continue
 
+			arguments = self._arguments(generator, layer["params"])
+			seed = self._seed_for(method, generator, str(layer["id"]), base)
+
+			if seed is not None:
+				arguments["seed"] = seed
+
 			try:
-				method(**self._arguments(generator, layer["params"]))
+				method(**arguments)
 
 			except Exception as error:
 				self._complain(generator, str(error))
@@ -2270,6 +2329,82 @@ class Recipe (Control):
 		grid = self.link.controls.get(self.builds)
 
 		return grid if isinstance(grid, (StepGrid, NoteGrid)) else None
+
+	@staticmethod
+	def _base (pattern: typing.Any) -> int | None:
+		"""Today's number, drawn once from the pattern's own stream.
+
+		None when this pattern has no stream to draw from, which is a
+		composition older than the read-back or an object that is something else
+		entirely — the same courtesy :meth:`_reads` pays, and with the same
+		result: everything works exactly as it did before, and one improvement
+		is quietly absent rather than an app being broken by this package.
+		"""
+
+		stream = getattr(pattern, "rng", None)
+
+		return stream.getrandbits(32) if isinstance(stream, random.Random) else None
+
+	def _seed_for (
+		self,
+		method: typing.Any,
+		generator: str,
+		layer_id: str,
+		base: int | None,
+	) -> int | None:
+		"""The stream this layer draws from, or None to leave it on the pattern's.
+
+		Derived the way Subsequence derives a named stream from a composition
+		seed and a scratch builder derives a child from its parent — ``crc32`` of
+		the two joined by a colon, because it is stable across processes where
+		``hash()`` is not.  Deriving it a second way here would be a second
+		answer to a question that already has one.
+
+		The name is the layer's **id**, which is minted when somebody adds the
+		layer and kept for the whole of its life.  So a layer's notes follow the
+		layer: drag it, bypass what is above it, turn a neighbour's knob, and it
+		lands where it landed.  Its position is not in the key, which is the
+		whole point.
+
+		**Measured on the clock's thread, because that is where it runs**: 4.5 us
+		a layer, so a build of eight goes from 0.067 ms to 0.103 ms against a
+		pulse budget of 20.  Of that, 3.6 us is Subsequence building a ``Random``
+		from the seed and 0.14 us is the line below — so there is nothing here
+		worth trading the shared derivation for, and the obvious saving
+		(``crc32(name, base)``, which takes an initial value) buys 0.08 us of the
+		4.5 and a second answer to a settled question.
+		"""
+
+		if base is None or not self._takes_seed(method, generator):
+			return None
+
+		return zlib.crc32(f"{base}:{layer_id}".encode())
+
+	def _takes_seed (self, method: typing.Any, generator: str) -> bool:
+		"""Whether this layer will accept a stream of its own, asked once each.
+
+		Twenty of the forty-six offered here will not, and there is nothing to
+		fix in that: fourteen of them draw no random numbers at all, so no
+		neighbour can disturb them.  The remaining six cannot be called from a
+		panel at all today — a separate defect of the same family as #2248, with
+		its own evidence and its own fix.
+		"""
+
+		held = self._seeds.get(generator)
+
+		if held is None:
+			try:
+				held = "seed" in inspect.signature(method).parameters
+
+			# A builtin, or anything else without a readable signature. Not an
+			# error: it means this layer keeps the pattern's stream, which is
+			# where every layer was before this.
+			except (TypeError, ValueError):
+				held = False
+
+			self._seeds[generator] = held
+
+		return held
 
 	def _arguments (self, generator: str, params: dict[str, typing.Any]) -> dict[str, typing.Any]:
 		"""A layer's parameters as the generator's own call expects them.
@@ -2487,6 +2622,21 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 	Coordinates are floored at zero and coerced to whole cells: a lattice
 	position is a count, and a fractional one would put a block between two
 	squares for ever.
+
+	``rows`` is how tall somebody has pulled the block, and it is **optional in
+	both directions** (#2227).  A part that carries none is a block nobody has
+	resized, and it opens at the height its control declares — which is what
+	every block did before a height could be arranged.  So a panel too old to
+	send one loses nothing, and a block that has never been touched is not
+	recorded as having a height, which would freeze it at whatever the app
+	happened to declare on the day it was first drawn.
+
+	**Floored at one, because zero is unrecoverable.**  A block of no rows would
+	be a block nobody can take hold of to make taller again, and it would come
+	back that way after a restart, which is the exact class of thing this
+	function exists to stop.  There is no ceiling here: how many rows a control
+	*has* is the panel's to know, and clamping to a number this end cannot see
+	would be a guess written to disk.
 	"""
 
 	if not isinstance(parts, list):
@@ -2504,7 +2654,16 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 		except (KeyError, TypeError, ValueError):
 			return None
 
-		kept.append({"name": part["name"], "x": max(0, x), "y": max(0, y)})
+		placed: dict[str, typing.Any] = {"name": part["name"], "x": max(0, x), "y": max(0, y)}
+
+		if part.get("rows") is not None:
+			try:
+				placed["rows"] = max(1, int(part["rows"]))
+
+			except (TypeError, ValueError):
+				return None
+
+		kept.append(placed)
 
 	return kept
 
@@ -2944,6 +3103,7 @@ class AppLink:
 			{name: control.snapshot() for name, control in self.controls.items()},
 			self.version,
 			[page.declaration(kept.get(page.page_id)) for page in self.pages],
+			LOADED_BUILD,
 		))
 
 	async def _serve (self, socket: typing.Any) -> None:

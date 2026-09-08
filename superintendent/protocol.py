@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.19.0"
+CONTRACT_VERSION = "1.21.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -104,6 +104,36 @@ meaning anything: a generator invents notes and a transform acts on everything
 above it, so *which came first* is the only thing that says what a stack does.
 Two kinds of connection must not look alike (#2119), and this is the third time
 that rule has decided something here.
+
+1.20.0 adds ``build`` to ``declare`` — a hash of the Python the app loaded when
+it started.  Additive in the ordinary way: an app that sends none says nothing,
+and the service checks nothing, which is what every app did before.
+
+**It exists because a contract version cannot see this** (#2220).  A page knows
+when it is behind, because its build is stamped on the script URL; a service is
+caught by this very number.  An app is caught by neither: it runs the package
+inside its own process, so a fix *behind* the wire moves no frame and the
+contract goes on agreeing while a composition executes code from before lunch.
+That is most of what an adapter is, and it cost a round trip an hour after the
+contract check was built to prevent the same class of thing.
+
+**The app sends what it loaded and never what is on disk**, and the service
+compares it against what *it* loaded rather than against the files — so the
+statement is *these two are not running the same code*, which on a shared
+filesystem means one of them wants restarting.  Reading the disk here would say
+which one, and would put a CIFS read inside a socket handler to do it; the
+weaker question is free and cannot take the service off the air.
+
+1.21.0 lets a part of a ``layout`` carry ``rows``: how tall somebody has pulled
+that block, in lattice cells.  Additive in both directions — a panel that sends
+none says the block has never been resized, and it opens at the height its
+control declares, which is what every block did before.
+
+**A height is an arrangement and not a declaration** (#2227).  How many rows a
+grid *has* is the app's fact and does not move; how many of them you want to see
+at once is the person's, changes with what they are working on, and belongs
+beside the x and y that already travel this way.  So ``visible_rows`` stops being
+a fixed height and becomes an opening one.
 
 Naming the function in its own field is what lets an older panel behave well: it
 finds no ``generator`` on such a layer and draws nothing, rather than drawing it
@@ -349,13 +379,17 @@ def hello (client: str, page: str | None, versions: dict[str, int] | None = None
 
 
 def declare (app: str, controls: Frame, state: Frame, version: int,
-             pages: list[Frame] | None = None) -> Frame:
+             pages: list[Frame] | None = None, build: str | None = None) -> Frame:
 	"""An app introducing itself and saying what it can be controlled by.
 
 	``pages`` is how a composition offers several views over those controls
 	(#2075).  It is optional in both directions: an app with nothing to say
 	about arrangement sends none, and a panel then shows everything declared,
 	which is what every panel did before pages existed.
+
+	``build`` is the package this app *loaded*, taken once as it started (#2220).
+	It is not what is on disk, and the difference is the entire point — see the
+	1.20.0 note above.
 	"""
 
 	return {
@@ -366,6 +400,7 @@ def declare (app: str, controls: Frame, state: Frame, version: int,
 		"state": state,
 		"ver": version,
 		"pages": pages or [],
+		"build": build,
 	}
 
 

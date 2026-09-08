@@ -1,4 +1,8 @@
-"""Keeping a page's arrangement beside the composition that owns the page."""
+"""Keeping a page's arrangement beside the composition that owns the page.
+
+An arrangement is where the blocks sit and how tall they have been pulled — the
+same kind of fact, travelling the same path, checked at the same door (#2227).
+"""
 
 import json
 import pathlib
@@ -67,3 +71,59 @@ def test_a_page_declares_the_arrangement_it_has_been_given () -> None:
 	assert "layout" not in page.declaration()
 	assert page.declaration([{"name": "grid", "x": 2, "y": 0}])["layout"] == [
 		{"name": "grid", "x": 2, "y": 0}]
+
+
+# --- a height is part of an arrangement (#2227) ------------------------------
+
+def test_a_part_may_say_how_tall_it_has_been_pulled () -> None:
+	"""How many rows a grid *has* is the app's fact and does not move; how many
+	of them somebody wants in front of them is theirs, and changes with what
+	they are working on."""
+
+	kept = adapter._readable_arrangement([{"name": "bass", "x": 0, "y": 0, "rows": 18}])
+
+	assert kept == [{"name": "bass", "x": 0, "y": 0, "rows": 18}]
+
+
+def test_a_part_nobody_has_resized_is_not_recorded_as_having_a_height () -> None:
+	"""Rather than being written down at whatever the app happened to declare on
+	the day it was first drawn — which would freeze it there, and would mean a
+	panel too old to send a height silently pinned every block it touched."""
+
+	kept = adapter._readable_arrangement([{"name": "bass", "x": 1, "y": 2}])
+
+	assert kept == [{"name": "bass", "x": 1, "y": 2}]
+	assert "rows" not in (kept or [{}])[0]
+
+
+def test_a_height_of_nothing_is_refused_by_being_floored () -> None:
+	"""A block of no rows is a block nobody can take hold of to make taller
+	again, and it would come back that way after a restart.  This is the door
+	that exists to stop an undrawable shape surviving one."""
+
+	assert adapter._readable_arrangement(
+		[{"name": "bass", "x": 0, "y": 0, "rows": 0}]) == [
+		{"name": "bass", "x": 0, "y": 0, "rows": 1}]
+
+	assert adapter._readable_arrangement(
+		[{"name": "bass", "x": 0, "y": 0, "rows": -5}]) == [
+		{"name": "bass", "x": 0, "y": 0, "rows": 1}]
+
+
+def test_a_height_that_is_not_a_number_costs_the_whole_arrangement () -> None:
+	"""The same answer this gives a position that cannot be read, and for the
+	same reason: an arrangement is written to disk and handed back to every
+	panel, so half of one is worse than none."""
+
+	assert adapter._readable_arrangement(
+		[{"name": "bass", "x": 0, "y": 0, "rows": "tall"}]) is None
+
+
+def test_a_page_hands_back_the_height_with_the_position () -> None:
+	"""Both halves or neither: a panel that got the position and not the height
+	would draw an arrangement nobody made."""
+
+	page = adapter.Page("bass", parts=["bass"], title="Bass")
+	placed = [{"name": "bass", "x": 2, "y": 0, "rows": 18}]
+
+	assert page.declaration(placed)["layout"] == placed

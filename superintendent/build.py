@@ -14,6 +14,7 @@ the client as it is on disk right now, so it changes the moment the page does.
 Only the second can tell a panel that it is behind.
 """
 
+import collections.abc
 import hashlib
 import importlib.metadata
 import pathlib
@@ -49,6 +50,29 @@ def version () -> str | None:
 	return None if found in UNKNOWN_VERSIONS else found
 
 
+PACKAGE_DIR = pathlib.Path(__file__).resolve().parent
+"""Where this package's own source is, which is what `package_build` hashes."""
+
+
+def _digest (
+	directory: pathlib.Path,
+	files: collections.abc.Iterable[pathlib.Path],
+) -> str | None:
+	"""One hash over *files*, named relative to *directory*, or None if there are none."""
+
+	digest = hashlib.sha256()
+	found = False
+
+	for path in sorted(files):
+		found = True
+
+		# The name as well as the bytes, so a rename is a new build.
+		digest.update(str(path.relative_to(directory)).encode("utf-8"))
+		digest.update(path.read_bytes())
+
+	return digest.hexdigest()[:BUILD_LENGTH] if found else None
+
+
 def client_build (directory: pathlib.Path) -> str | None:
 	"""A short hash of every file the page is made of, or None if there are none.
 
@@ -62,14 +86,43 @@ def client_build (directory: pathlib.Path) -> str | None:
 	if not directory.exists():
 		return None
 
-	digest = hashlib.sha256()
-	found = False
+	return _digest(directory, (p for p in directory.rglob("*") if p.is_file()))
 
-	for path in sorted(p for p in directory.rglob("*") if p.is_file()):
-		found = True
 
-		# The name as well as the bytes, so a rename is a new build.
-		digest.update(str(path.relative_to(directory)).encode("utf-8"))
-		digest.update(path.read_bytes())
+def package_build () -> str | None:
+	"""A short hash of the Python in this package, as it is on disk right now.
 
-	return digest.hexdigest()[:BUILD_LENGTH] if found else None
+	The mirror of `client_build` for the half that has no glass, and the answer
+	to #2220: a **page** knows when it is behind because the build is stamped on
+	its script URL, and a **service** is caught by the contract — but an *app*
+	runs this package inside its own process, so a fix here moves no frame and
+	the contract goes on agreeing while a composition executes code from before
+	lunch. That cost a round trip on 2026-09-07, an hour after the contract
+	check was built to stop exactly this.
+
+	**Both callers take it once, as they start, and neither ever asks again.**
+	Each then holds *the code I loaded*, and the two differing says one of them
+	started before a change — which is the whole mechanism.
+
+	**That is a weaker question than `client_build` asks, and deliberately so.**
+	Reading on demand would name *which* half is behind rather than only that they
+	differ, and `client_build` does exactly that for the page because it is
+	answered on an HTTP request that can afford to take its time. This is answered
+	inside a socket handler on the event loop, and this working tree is a CIFS
+	mount with a live kernel bug in it: written that way the suite deadlocked
+	outright, and on a rig the same read would take the whole service off the air
+	— no panel, no taps — in order to check whether a composition needed
+	restarting. A check that can stop the thing it is checking is not a check.
+
+	`__pycache__` is left out because it is written by the act of importing, so
+	including it would make a fresh checkout and an imported one report different
+	builds for identical source. Only `.py` files count: the client has a build
+	of its own and a compiled artefact is not source.
+	"""
+
+	if not PACKAGE_DIR.exists():
+		return None
+
+	return _digest(PACKAGE_DIR, (
+		path for path in PACKAGE_DIR.rglob("*.py")
+		if "__pycache__" not in path.parts))

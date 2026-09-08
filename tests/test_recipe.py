@@ -7,6 +7,7 @@ about the rule it is testing.
 """
 
 import logging
+import random
 import typing
 
 import pytest
@@ -1183,3 +1184,178 @@ def test_a_guard_that_has_been_tripped_does_not_stay_tripped () -> None:
 
 	assert [name for name, _ in builder.calls] == ["euclidean"], (
 		"the stack stayed shut after the loop was removed")
+
+
+class Stream (Builder):
+	"""A builder with a random stream of its own, as a real pattern has.
+
+	The two generators differ in one thing only, and it is the thing under test:
+	``euclidean`` names ``seed`` in its signature and ``evolve`` does not.  That
+	is exactly how this package tells them apart, because the catalogue leaves
+	``seed`` out on purpose — a seed is a machine's parameter, so it is supplied
+	and never offered.
+
+	**And each draws the way a real generator draws**: from the stream it was
+	handed if it was handed one, and from the pattern's own if it was not.  A
+	fake that never touched the stream would pass the test below against the
+	very code it exists to catch.
+	"""
+
+	def __init__ (self, rng: random.Random) -> None:
+		"""A builder over *rng*, which stands for the pattern's own stream."""
+
+		super().__init__()
+		self.rng = rng
+
+	def euclidean (self, seed: int | None = None, **arguments: typing.Any) -> None:
+		"""A layer that draws, and will take a stream of its own."""
+
+		self.calls.append(("euclidean", {**arguments, "seed": seed}))
+		(random.Random(seed) if seed is not None else self.rng).random()
+		self.notes.extend(self.lands)
+
+	def evolve (self, **arguments: typing.Any) -> None:
+		"""A layer that draws, and will not."""
+
+		self.calls.append(("evolve", arguments))
+		self.rng.random()
+
+
+def _played (
+	recipe: adapter.Recipe,
+	layers: list[dict[str, typing.Any]],
+	rng: random.Random,
+) -> list[int | None]:
+	"""Play *layers* on *rng* and hand back the seed each was given, in order."""
+
+	recipe.apply(["layers"], layers)
+	builder = Stream(rng)
+	recipe.build(builder)
+
+	return [arguments.get("seed") for _, arguments in builder.calls]
+
+
+def _stack (*ids: str) -> list[dict[str, typing.Any]]:
+	"""A stack of euclideans, one per id."""
+
+	return [{"id": one, "generator": "euclidean", "params": {}} for one in ids]
+
+
+def test_a_layer_draws_the_same_wherever_it_sits_in_the_stack () -> None:
+	"""The whole of #2233, in one line.
+
+	Every layer used to draw from the pattern's one stream in call order, so a
+	layer's notes depended on how many numbers its neighbours had taken first.
+	Measured against real generators before the fix: turning ``pulses`` from 7 to
+	3 on the layer *above* moved the one below from [0, 18, 36, 54] to
+	[0, 18, 36, 72].  Reorder, bypass and knob are the whole gesture set of a
+	rack, and all three did this.
+
+	The same stream is dealt to both builds, which is what isolates the variable:
+	the only difference between them is what sits above the layer under test.
+	"""
+
+	recipe, _ = _recipe()
+
+	alone = _played(recipe, _stack("two"), random.Random(7))
+	below = _played(recipe, _stack("one", "two"), random.Random(7))
+
+	assert alone[0] is not None, "no layer was given a stream of its own"
+	assert below[1] == alone[0], "a layer's stream moved when a neighbour appeared"
+	assert below[0] != below[1], "two layers were dealt the same stream"
+
+
+def test_the_shared_stream_is_drawn_from_once_whatever_the_stack_holds () -> None:
+	"""The property that makes the fix a fix rather than a rearrangement.
+
+	One draw before any layer runs, so nothing a person does to the stack can
+	move it.  If the base were taken per layer, or if the layers still drew from
+	the shared stream themselves, adding one would shift every other.
+	"""
+
+	recipe, _ = _recipe()
+
+	def left (layers: list[dict[str, typing.Any]]) -> float:
+		"""Where the shared stream stands once this stack has played."""
+
+		stream = random.Random(7)
+		_played(recipe, layers, stream)
+
+		return stream.random()
+
+	assert left(_stack("a")) == left(_stack("a", "b", "c", "d"))
+
+
+def test_a_layer_still_moves_from_one_cycle_to_the_next () -> None:
+	"""Because the obvious fix freezes it, and a frozen rack is not a sequencer.
+
+	Seeding a layer from its id alone — which is what #2233 proposed — hands
+	``seed=`` a constant, and Subsequence builds a fresh ``Random(seed)`` for
+	that call: measured over three cycles, the same bar every time.  The base is
+	drawn from the pattern's stream instead, so it moves as the music does.
+	"""
+
+	recipe, _ = _recipe()
+	stream = random.Random(7)
+
+	first = _played(recipe, _stack("one"), stream)
+	second = _played(recipe, _stack("one"), stream)
+
+	assert first[0] is not None
+	assert first != second, "a layer was dealt the same stream two cycles running"
+
+
+def test_a_pattern_dealt_the_same_stream_twice_lands_in_the_same_place () -> None:
+	"""Which is what ``lock()`` is, and it keeps working without being asked to.
+
+	A locked pattern is re-dealt its stream from a fixed seed every cycle.  So
+	the base comes out the same, so every layer under it does — and a freeze
+	gesture of our own (#2232) becomes a question of what goes in the key rather
+	than a second mechanism beside this one.
+	"""
+
+	recipe, _ = _recipe()
+
+	first = _played(recipe, _stack("one", "two"), random.Random(11))
+	second = _played(recipe, _stack("one", "two"), random.Random(11))
+
+	assert first[0] is not None
+	assert first == second
+
+
+def test_a_layer_that_will_not_take_a_stream_is_not_handed_one () -> None:
+	"""Twenty of the forty-six offered here will not, and that is not a fault.
+
+	Fourteen of them draw no random numbers at all, so no neighbour can disturb
+	them; the other six cannot be called from a panel at all today, which is a
+	separate defect of the same family as #2248.  What matters is that this
+	package asks rather than assumes: a generator handed a keyword it does not
+	have raises, and a stack that raises is a block that goes quiet.
+	"""
+
+	recipe, _ = _recipe()
+	recipe.apply(["layers"], [{"id": "one", "generator": "evolve", "params": {}}])
+
+	builder = Stream(random.Random(7))
+	recipe.build(builder)
+
+	assert [name for name, _ in builder.calls] == ["evolve"]
+	assert "seed" not in builder.calls[0][1]
+
+
+def test_a_pattern_with_no_stream_of_its_own_is_left_exactly_as_it_was () -> None:
+	"""A composition older than this, or a pattern object that is something else.
+
+	Not an error and not a warning: it is a stack that behaves the way every
+	stack behaved before, which is the same courtesy the read-back pays a
+	sequencer too old to be asked what it is holding.
+	"""
+
+	recipe, _ = _recipe()
+	recipe.apply(["layers"], _stack("one"))
+
+	builder = Builder()
+	recipe.build(builder)
+
+	assert [name for name, _ in builder.calls] == ["euclidean"]
+	assert "seed" not in builder.calls[0][1]
