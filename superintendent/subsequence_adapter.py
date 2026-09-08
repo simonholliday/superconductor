@@ -271,6 +271,12 @@ class StepGrid (Control):
 	The dict is the composition's: the pattern builder reads it and this writes
 	to it.  Nothing wraps it, which is what #2046 decided and what #1914
 	anticipated a helper would later replace.
+
+	**``beats`` is a float, and a whole number of them is a coincidence.**  A
+	cycle is however long its steps make it, and nine sixteenths is 2.25 —
+	which is the whole point of a nine-step pattern running against a sixteen
+	(#2228).  It was an ``int`` because every grid on the rig had happened to be
+	sixteen steps of a sixteenth, and `int(16 * 0.25)` is 4 without complaint.
 	"""
 
 	def __init__ (
@@ -278,7 +284,7 @@ class StepGrid (Control):
 		composition: typing.Any,
 		rows: collections.abc.Sequence[str],
 		steps: int = 16,
-		beats: int = 4,
+		beats: float = 4,
 		data_key: str = "grid",
 		name: str = "grid",
 		title: str | None = None,
@@ -523,7 +529,7 @@ class NoteGrid (Control):
 		composition: typing.Any,
 		rows: collections.abc.Sequence[str],
 		steps: int = 16,
-		beats: int = 4,
+		beats: float = 4,
 		data_key: str = "notes",
 		name: str = "notes",
 		title: str | None = None,

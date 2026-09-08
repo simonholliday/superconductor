@@ -12,6 +12,7 @@ run, and anything after it that wants a loop of its own fails.
 """
 
 import importlib.util
+import random
 import re
 import sys
 import types
@@ -20,6 +21,8 @@ import typing
 import pytest
 
 import pymididefs.instruments
+import subsequence.pattern
+import subsequence.pattern_builder
 
 import superintendent.service
 import superintendent.subsequence_adapter
@@ -468,3 +471,114 @@ def test_every_settings_default_is_the_shape_its_control_derives (rig: typing.An
 				wrong.append(f"{panel} is a {drawn.kind} opening at {default!r}")
 
 	assert wrong == [], "\n".join(wrong)
+
+
+# --- two mechanisms side by side (#2228) ------------------------------------
+
+def _built (rig: typing.Any, play: typing.Any, steps: int) -> list[typing.Any]:
+	"""Run one play function onto a real pattern and hand back what landed."""
+
+	pattern = subsequence.pattern.Pattern(
+		channel=rig.DRUM_CHANNEL, length=steps * rig.STEP_DURATION)
+
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1),
+		drum_note_map=rig.drm1.VERMONA_DRM1_DRUM_MAP)
+
+	play(builder)
+
+	return list(builder.placed())
+
+
+def test_a_lane_of_one_row_lands_on_that_voice_and_nowhere_else (
+	rig: typing.Any) -> None:
+	"""The whole of "route a lane to one voice", and it is a row name (#2228).
+
+	`_play` walks this rig's ten voices and puts down whatever the grid holds for
+	each, so a grid declaring only `snare` holds nothing for the other nine.  No
+	mechanism was needed: routing has meant this since #2147 and had only ever
+	been exercised with a grid that was the whole kit.
+	"""
+
+	landed = _built(rig, lambda p: rig._play(p, {"snare": [0, 4, 8, 12]}), rig.STEPS)
+
+	assert landed, "the lane placed nothing at all"
+	assert {note.pitch for note in landed} == {
+		rig.drm1.VERMONA_DRM1_DRUM_MAP["snare"]}
+
+
+def test_the_snare_lane_is_declared_one_row_wide (rig: typing.Any) -> None:
+	"""And has no instrument of its own, exactly as the shared grid has none: it
+	makes no sound until something routes it, and then it makes that thing's."""
+
+	declared = rig.link.controls["snare_lane"].declaration()
+
+	assert declared["rows"] == ["snare"]
+	assert "pattern" not in declared or declared.get("pattern") is None
+
+
+def test_a_stack_on_a_one_voice_lane_offers_only_that_voice (
+	rig: typing.Any) -> None:
+	"""A stack's pitches are what make it different, and here there is one.
+
+	A pool that could choose between ten voices would make the lane a kit again —
+	a euclidean added to it could put a kick on a grid whose only row is a snare,
+	and the grid would show nothing while the DRM1 played it.
+	"""
+
+	euclidean = next(one for one in rig.snare_recipe.declaration()["generators"]
+	                 if one["name"] == "euclidean")
+	pitch = next(one for one in euclidean["parameters"] if one["name"] == "pitch")
+
+	assert [one["value"] for one in pitch["options"]] == ["snare"]
+
+
+def test_the_nine_runs_against_the_sixteen_rather_than_inside_it (
+	rig: typing.Any) -> None:
+	"""Subsequence does polyrhythm by independent pattern lengths, so this is a
+	pattern of its own rather than a grid routed into the drums — a routed grid
+	plays at the destination's resolution and would be a truncated bar.
+
+	2.25 beats against 4: the two coincide every nine bars.
+	"""
+
+	nine = rig.link.controls["nine"].declaration()
+	drums = rig.link.controls["grid"].declaration()
+
+	assert nine["steps"] == 9
+	assert nine["beats"] == 2.25
+	assert drums["beats"] == 4
+
+	# Both on the same instrument, which is what makes it one polyrhythm rather
+	# than two unrelated parts.
+	assert nine["rows"] == drums["rows"]
+
+
+def test_a_cycle_that_is_not_a_whole_number_of_beats_survives_declaration (
+	rig: typing.Any) -> None:
+	"""`beats` was an `int` because every grid on this rig had been sixteen
+	sixteenths, and `int(16 * 0.25)` is 4 without complaining.  The first cycle
+	that is not a whole number of beats is the nine, and truncating it to 2 would
+	put its playhead a ninth of a bar out and drift for ever."""
+
+	assert rig.NINE_BEATS == 2.25
+	assert isinstance(rig.link.controls["nine"].declaration()["beats"], float)
+
+
+def test_a_stack_is_bounded_by_the_pattern_it_builds (rig: typing.Any) -> None:
+	"""Offering sixteen pulses on a nine-step pattern would be offering a control
+	whose top half cannot land — the same fault as a filled parameter that means
+	*nothing*, arriving from the other direction (#2248).
+	"""
+
+	def ceiling (recipe: typing.Any, generator: str, parameter: str) -> typing.Any:
+		"""The top of one parameter's range, as the panel is offered it."""
+
+		shape = next(one for one in recipe.declaration()["generators"]
+		             if one["name"] == generator)
+
+		return next(one for one in shape["parameters"]
+		            if one["name"] == parameter)["max"]
+
+	assert ceiling(rig.nine_recipe, "euclidean", "pulses") == 9
+	assert ceiling(rig.drum_recipe, "euclidean", "pulses") == 16

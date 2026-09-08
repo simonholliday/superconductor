@@ -71,8 +71,26 @@ new is invented for the wire.
 
 STEPS = 16
 STEP_DURATION = subsequence.constants.durations.SIXTEENTH
-BEATS = int(STEPS * STEP_DURATION)
+BEATS = STEPS * STEP_DURATION
 """Sixteen sixteenth-notes, which is one bar of four beats."""
+
+NINE_STEPS = 9
+NINE_BEATS = NINE_STEPS * STEP_DURATION
+"""Nine sixteenths — 2.25 beats, which is the whole point (#2228).
+
+**Polyrhythm here is independent pattern lengths**, which is how Subsequence's
+own README says to do it: a second pattern on the same instrument, nine steps
+long, looping against the sixteen and coinciding with it every nine bars.
+
+It is deliberately *not* a routed grid.  A grid patched into the drums plays at
+the destination's resolution, so nine steps routed into a sixteen-step pattern
+would be a truncated bar rather than a cycle of its own — which is the difference
+between the two mechanisms this pair exists to show side by side.
+
+**And 2.25 is why a grid's `beats` had to stop being an integer.**  Every grid on
+this rig had been sixteen sixteenths, and `int(16 * 0.25)` is 4 without
+complaining; the first cycle that is not a whole number of beats is this one.
+"""
 
 
 # --- The Minitaur -----------------------------------------------------------
@@ -386,6 +404,8 @@ composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
 composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
 composition.data["shared"] = {row: [] for row in ROWS}
+composition.data["snare_lane"] = {"snare": []}
+composition.data["nine"] = {row: [] for row in ROWS}
 composition.data["bass"] = {}
 composition.data["chords"] = {}
 
@@ -607,6 +627,32 @@ def drums (p: typing.Any) -> None:
 
 
 @composition.pattern(
+	channel=DRUM_CHANNEL,
+	steps=NINE_STEPS,
+	step_duration=STEP_DURATION,
+	drum_note_map=drm1.VERMONA_DRM1_DRUM_MAP,
+	reschedule_lookahead=1 / 24,
+)
+def nine (p: typing.Any) -> None:
+	"""The same instrument, a cycle of a different length (#2228).
+
+	**Two patterns on one channel and one note map, which Subsequence allows and
+	nothing here had tried.**  This one is 2.25 beats where `drums` is 4, so the
+	two drift against each other and coincide every nine bars — Subsequence's own
+	way of doing polyrhythm, which is by independent pattern lengths rather than
+	by anything inside a bar.
+
+	It opens empty on purpose.  The playheads part company whether or not there
+	is a note under them, so the mechanism is visible before anybody has drawn
+	anything — and what to put on it is a musical decision this file should not
+	be making for whoever is standing at the panel.
+	"""
+
+	_play(p, composition.data["nine"])
+	nine_recipe.build(p)
+
+
+@composition.pattern(
 	channel=BASS_CHANNEL,
 	steps=STEPS,
 	step_duration=STEP_DURATION,
@@ -769,7 +815,25 @@ def _play_shared (p: typing.Any) -> None:
 	shared_recipe.build(p)
 
 
-SHARED: dict[str, collections.abc.Callable[[typing.Any], None]] = {"shared": _play_shared}
+def _play_snare_lane (p: typing.Any) -> None:
+	"""Replay the one-voice lane, and run whatever is stacked on it.
+
+	**The join is a row name and nothing else** (#2228).  ``_play`` walks this
+	rig's ten voices and puts down whatever the grid holds for each; a grid
+	declaring only ``snare`` therefore holds nothing for the other nine and
+	lands on the snare alone.  Routing a lane to one voice needed no mechanism
+	— it is what routing has meant here since #2147, exercised for the first
+	time with a grid that is not the whole kit.
+	"""
+
+	_play(p, composition.data["snare_lane"])
+	snare_recipe.build(p)
+
+
+SHARED: dict[str, collections.abc.Callable[[typing.Any], None]] = {
+	"shared": _play_shared,
+	"snare_lane": _play_snare_lane,
+}
 """Annotated rather than inferred: a dict is invariant in its value type, and a
 named function infers as its own signature rather than as the `Callable` the
 adapter asks for.  It was a lambda before and inferred loosely enough not to
@@ -788,7 +852,8 @@ what this rig can show today.
 
 
 def _stack_for (pattern: str, name: str, title: str,
-                pitches: collections.abc.Sequence[str] = ROWS) -> typing.Any:
+                pitches: collections.abc.Sequence[str] = ROWS,
+                steps: int = STEPS) -> typing.Any:
 	"""A stack of contributions that build one pattern.
 
 	``pitches`` is what this pattern's rows *are*, and it is the whole of what
@@ -797,7 +862,16 @@ def _stack_for (pattern: str, name: str, title: str,
 	this file knows that one grid's rows are a DRM1's voices and another's are
 	notes a Minitaur can reach (#1465, #2085).  Superintendent is handed both and
 	names neither.
+
+	``steps`` is how long the pattern this stack builds actually is, and every
+	bound below that counts steps or beats is derived from it (#2228).  It was
+	``STEPS`` throughout while every pattern on the rig was sixteen; a nine-step
+	pattern offered a euclidean up to sixteen pulses would be offering a control
+	whose top half cannot land — the same fault as a filled parameter that means
+	*nothing*, arriving from the other direction.
 	"""
+
+	beats = steps * STEP_DURATION
 
 	return superintendent.subsequence_adapter.Recipe(
 		composition,
@@ -811,10 +885,10 @@ def _stack_for (pattern: str, name: str, title: str,
 		transforms=subsequence.transforms(),
 		pitches=list(pitches),
 		bounds={
-			"pulses": (0, STEPS),
-			"grid": (1, STEPS),
+			"pulses": (0, steps),
+			"grid": (1, steps),
 			"subdivisions": (1, 8),
-			"duration": (0.05, float(BEATS)),
+			"duration": (0.05, float(beats)),
 
 			# **Two bounds that are about cost rather than about music** (#2231).
 			# A stack builds on the clock loop, and Subsequence contains a
@@ -913,6 +987,31 @@ are the DRM1's because that is what its rows are named after; a shared grid whos
 rows meant something else would be a different declaration in this file.
 """
 
+snare_recipe = _stack_for(
+	"snare_lane", "snare_recipe", "Snare lane — generators", pitches=["snare"])
+"""And on the lane that is one voice wide, where the pitches are the point.
+
+**A stack's pitches are what make it different**, and here there is only one of
+them.  Every generator offered on this lane writes snares, because that is what
+the lane *is* — a euclidean added here cannot put a kick on it, and a pool that
+could choose between ten voices would make the lane a kit again.
+
+Note what this does not need: no channel, no note map, no pattern function.  The
+lane is routed like any other instrument-less grid, and lands on the snare
+because ``snare`` is the only row it has (#2228).
+"""
+
+nine_recipe = _stack_for(
+	"nine", "nine_recipe", "Nine — generators", steps=NINE_STEPS)
+"""And on the nine, where the *bounds* are the point.
+
+Its pitches are the whole kit, exactly as pattern 1's are — the two patterns play
+the same instrument and differ only in how long a cycle lasts.  What differs is
+that every bound counting steps or beats is nine's rather than sixteen's, so a
+euclidean here is offered up to nine pulses and a duration up to 2.25 beats.
+Offering sixteen would be offering a control whose top half cannot land.
+"""
+
 
 bass_grid = superintendent.subsequence_adapter.NoteGrid(
 	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
@@ -958,6 +1057,24 @@ link = superintendent.subsequence_adapter.AppLink(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="shared", name="shared", title="Shared — drums",
 			about=[("", "no instrument")]),
+
+		# The same mechanism as `shared`, one row wide. It lands on the snare
+		# and nowhere else because `snare` is the only row it has, which is all
+		# "route a lane to one voice" has ever meant here (#2228).
+		superintendent.subsequence_adapter.StepGrid(
+			composition, rows=["snare"], steps=STEPS, beats=BEATS,
+			data_key="snare_lane", name="snare_lane", title="Snare lane",
+			about=[("", "no instrument")]),
+
+		# And the other mechanism, beside it: not a routed grid but a pattern of
+		# its own, nine steps against the sixteen. Drawn narrower than its
+		# neighbours because it *is* narrower, which is the thing that makes a
+		# polyrhythm legible on a page rather than only audible in a room.
+		superintendent.subsequence_adapter.StepGrid(
+			composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
+			data_key="nine", name="nine", title="DRM1 — nine",
+			about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
+			pattern="nine"),
 		bass_grid,
 		chord_grid,
 		superintendent.subsequence_adapter.Params(
@@ -1003,6 +1120,8 @@ link = superintendent.subsequence_adapter.AppLink(
 		bass_recipe,
 		chord_recipe,
 		shared_recipe,
+		snare_recipe,
+		nine_recipe,
 		superintendent.subsequence_adapter.Transport(composition),
 	],
 	pages=[
@@ -1018,7 +1137,8 @@ link = superintendent.subsequence_adapter.AppLink(
 		# patched to it: generators, cables, and a grid with no instrument behind
 		# it.  All of the routing this rig can currently show is on this page.
 		superintendent.subsequence_adapter.Page(
-			"drums", parts=["grid", "drum_recipe", "shared", "shared_recipe"],
+			"drums", parts=["grid", "drum_recipe", "shared", "shared_recipe",
+			                "snare_lane", "snare_recipe", "nine", "nine_recipe"],
 			title="Drums"),
 
 		superintendent.subsequence_adapter.Page(
