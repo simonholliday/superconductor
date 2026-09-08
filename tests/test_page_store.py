@@ -127,3 +127,32 @@ def test_a_page_hands_back_the_height_with_the_position () -> None:
 	placed = [{"name": "bass", "x": 2, "y": 0, "rows": 18}]
 
 	assert page.declaration(placed)["layout"] == placed
+
+
+def test_a_grid_a_rack_made_is_drawn_where_the_rack_is () -> None:
+	"""**A part nobody named on a page is drawn nowhere, with nothing saying so**
+	— and a grid somebody has just asked for vanishing is the worst version of
+	that (#2226).
+
+	A page names its parts by hand and a grid made at run time was on none of
+	them.  It is drawn immediately after the rack that made it, which is the
+	rule a stack and a settings block already follow (#2211): a thing belonging
+	to another thing is drawn wherever that thing is.
+	"""
+
+	page = adapter.Page("drums", parts=["grid", "rack"], title="Drums")
+
+	assert page.declaration()["parts"] == ["grid", "rack"], "nothing made, nothing added"
+
+	assert page.declaration(None, {"rack": ["rack-a", "rack-b"]})["parts"] == [
+		"grid", "rack", "rack-a", "rack-b"]
+
+
+def test_a_rack_on_no_page_puts_its_grids_on_none_either () -> None:
+	"""Which is the same answer the rack itself gets, and the only consistent
+	one: a page that drew grids from a rack it does not carry would be showing
+	the output of something the person cannot see or reach."""
+
+	page = adapter.Page("bass", parts=["bass"], title="Bass")
+
+	assert page.declaration(None, {"rack": ["rack-a"]})["parts"] == ["bass"]

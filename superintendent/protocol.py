@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.21.0"
+CONTRACT_VERSION = "1.22.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -134,6 +134,18 @@ grid *has* is the app's fact and does not move; how many of them you want to see
 at once is the person's, changes with what they are working on, and belongs
 beside the x and y that already travel this way.  So ``visible_rows`` stops being
 a fixed height and becomes an opening one.
+
+1.22.0 adds the ``grids`` control kind: a **rack**, whose value is an ordered
+list of grids somebody made from the glass (#2226).  Parallel to ``recipe`` in
+every respect that matters — an ordered list, an id per entry that lives as long
+as the entry does, and adding, removing and reordering all being one write to
+the list.
+
+**And no frame was needed for "make me a control".**  An app re-declaring on the
+socket it already holds is how it has always said its controls changed, so a
+grid a person asks for arrives as an ordinary declared control on the next
+declaration.  The service keeps the rack's list and is not told that the two
+facts are related, because it does not need to be.
 
 Naming the function in its own field is what lets an older panel behave well: it
 finds no ``generator`` on such a layer and draws nothing, rather than drawing it

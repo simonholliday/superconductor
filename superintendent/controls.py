@@ -136,7 +136,22 @@ addition rather than a rewrite.  It was.
 """
 
 
-KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT)
+GRIDS = "grids"
+"""A rack of grids somebody made from the glass, rather than any the app declared.
+
+**Parallel to a recipe and for the same reasons.**  Its value is an ordered list
+whose entries carry an id that lives as long as the grid does, so adding,
+removing and reordering are all one write to the list rather than three verbs.
+
+What each entry *becomes* is entirely the app's business — this keeps a copy of
+the list and nothing else.  The grids themselves arrive as ordinary declared
+controls on the app's next declaration, which is how an app has always said its
+controls changed (#2226); this service does not have to know that the two facts
+are related, and deliberately does not.
+"""
+
+
+KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT, GRIDS)
 """Every kind of control this version of the service understands.
 
 An app may declare one this service has never heard of — it is older than the
@@ -197,6 +212,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 
 	elif kind == TRANSPORT:
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
+
+	elif kind == GRIDS:
+		_apply_rack(state.setdefault(control, {}), rest, value, path)
 
 	else:
 		raise ControlError(f"{control!r} is a {kind!r}, which this version does not know")
@@ -487,6 +505,53 @@ def _apply_recipe (
 		layer.setdefault("params", {}),
 		_offered(declaration, layer.get(running), running),
 		rest[1:], value, path)
+
+
+def _apply_rack (
+	rack: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Keep the list of grids somebody has made (#2226).
+
+	**One shape of address and no second one**, unlike a recipe.  A stack has
+	`recipe/<layer>/<parameter>` as well as the whole list, because turning a
+	knob is by far its commoner change and a whole-stack write would make two
+	people overwrite each other.  A rack has no knobs: a grid's rows and length
+	are fixed when it is made, and everything after that happens on the grid
+	itself, which is a control of its own with its own path.
+
+	So the only change is to the list, and it is checked here for the shape this
+	service keeps — an id and nothing else required, because what a grid *is* is
+	the app's to decide and this holds a copy rather than an opinion.
+	"""
+
+	if rest != ["grids"]:
+		raise ControlError(f"{path!r} names no part of a rack; it takes control/grids")
+
+	if not isinstance(value, list):
+		raise ControlError(f"{path!r} takes a list of grids")
+
+	kept: list[dict[str, typing.Any]] = []
+	seen: set[str] = set()
+
+	for entry in value:
+		if not isinstance(entry, dict):
+			raise ControlError(f"{path!r}: a grid is an object")
+
+		one = entry.get("id")
+
+		if not isinstance(one, str) or not one:
+			raise ControlError(f"{path!r}: a grid needs an id of its own")
+
+		if one in seen:
+			raise ControlError(f"{path!r}: two grids both call themselves {one!r}")
+
+		seen.add(one)
+		kept.append(dict(entry))
+
+	rack["grids"] = kept
 
 
 LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "transform", "params", "index")

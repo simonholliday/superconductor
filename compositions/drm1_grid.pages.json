@@ -36,13 +36,23 @@
 	"drums": [
 		{
 			"name": "grid",
-			"x": 44,
+			"x": 28,
 			"y": 1
 		},
 		{
 			"name": "shared",
-			"x": 8,
-			"y": 4
+			"x": 1,
+			"y": 5
+		},
+		{
+			"name": "nine",
+			"x": 32,
+			"y": 17
+		},
+		{
+			"name": "snare_lane",
+			"x": 3,
+			"y": 22
 		}
 	],
 	"chords": [

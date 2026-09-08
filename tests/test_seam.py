@@ -433,3 +433,83 @@ def test_a_transform_named_as_a_generator_is_refused_by_both () -> None:
 		superintendent.controls.apply_change(
 			{"stack": stack.snapshot()}, declared, "stack/layers",
 			[{"id": "a", "generator": "swing", "params": {}}])
+
+
+# --- a rack of grids somebody made (#2226) -----------------------------------
+
+def _rack () -> typing.Any:
+	"""A rack over three voices, attached to nothing that sends."""
+
+	class Nowhere:
+		"""A link that holds controls and never speaks."""
+
+		def __init__ (self) -> None:
+			"""Nothing offered, nothing said."""
+
+			self.controls: dict[str, typing.Any] = {}
+
+		def redeclare (self) -> None:
+			"""Say nothing, because there is nowhere to say it."""
+
+	rack = adapter.GridRack(
+		Composition(),
+		make=lambda spec: adapter.StepGrid(
+			Composition(), rows=spec["rows"], steps=spec["steps"],
+			beats=spec["steps"] * 0.25,
+			data_key=spec["name"], name=spec["name"]),
+		rows=["kick", "snare", "hihat_1_closed"], steps=(1, 32),
+		data_key="rack", name="rack")
+
+	rack.attach(typing.cast(typing.Any, Nowhere()))
+
+	return rack
+
+
+@pytest.mark.parametrize("value", [
+	[{"id": "a", "rows": ["snare"], "steps": 9}],
+	[{"id": "a", "rows": ["kick", "snare"], "steps": 16, "title": "Fill"}],
+	[{"id": "a", "rows": ["kick"], "steps": 4},
+	 {"id": "b", "rows": ["snare"], "steps": 12}],
+	[],
+])
+def test_a_rack_of_grids_and_the_service_agree (value: typing.Any) -> None:
+	"""The fifth kind to cross this join, and the first whose entries become
+	controls of their own (#2226).
+
+	The service keeps the list and is never told that a grid on it will appear
+	as a declared control — it does not need to be, because an app re-declaring
+	is how it has always said its controls changed.  What has to agree is the
+	list, and a field the service dropped would be a panel that reloaded seeing
+	a grid of a different length from one that stayed connected.
+	"""
+
+	_agree(_rack(), ["grids"], value)
+
+
+def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
+	"""**Every kind offered has to be refused in the same places.**  The app
+	checking something the service waves through is how the two come to hold
+	different things — and this list is checked twice on purpose, because the
+	app knows which rows exist and the service only knows the shape.
+	"""
+
+	rack = _rack()
+	declared = {"rack": rack.declaration()}
+	held: dict[str, typing.Any] = {"rack": rack.snapshot()}
+
+	nameless = [{"rows": ["kick"], "steps": 8}]
+
+	with pytest.raises(adapter.Refused):
+		rack.apply(["grids"], nameless)
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(held, declared, "rack/grids", nameless)
+
+	twice = [{"id": "a", "rows": ["kick"], "steps": 8},
+	         {"id": "a", "rows": ["snare"], "steps": 8}]
+
+	with pytest.raises(adapter.Refused):
+		rack.apply(["grids"], twice)
+
+	with pytest.raises(superintendent.controls.ControlError):
+		superintendent.controls.apply_change(held, declared, "rack/grids", twice)

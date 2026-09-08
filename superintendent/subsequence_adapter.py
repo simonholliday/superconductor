@@ -2443,6 +2443,244 @@ class Recipe (Control):
 			generator, self.name, why)
 
 
+class GridRack (Control):
+	"""Grids a person makes from the glass, the way a stack makes layers (#2226).
+
+	Simon asked whether a grid could be created from nothing, with a size chosen
+	at the time.  **It can, and less was missing than it looked.**  There is no
+	frame meaning *make me a control* and there does not need to be: an app
+	re-declaring on the socket it already holds is how it says its controls have
+	changed, and that has worked since the first day.  Only the asking was
+	missing, and this is the asking.
+
+	**The shape is a rack, deliberately parallel to a stack.**  Its value is an
+	ordered list of specifications, each with an id that lives as long as the
+	grid does; the panel adds, removes and reorders exactly as it does layers.
+	Nothing new crosses the wire but a control kind.
+
+	**What a grid *is* stays the composition's** (#1465).  This holds a list and
+	knows how long it is; it is handed a ``make`` that turns one specification
+	into a control, and that function is where the step duration, the note map,
+	the channel and whether the thing is routable are decided — none of which
+	this package is allowed to know.  A rack that built its own `StepGrid` would
+	be a rack that had opinions about a studio.
+
+	**Persistence is the real cost and it is worse than a lost pattern** (#2067).
+	A restart already discards the notes on a grid; without a store it would
+	discard the grid's *existence*, which is a person losing something they made
+	rather than something they played.  So a rack takes a :class:`PageStore` —
+	the same mechanism a page arrangement already uses, pointed at a file of its
+	own — and what comes back is the grids they made, empty.  Honest, and better
+	than nothing coming back at all.
+	"""
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		make: collections.abc.Callable[[dict[str, typing.Any]], Control],
+		rows: collections.abc.Sequence[str],
+		steps: tuple[int, int] = (1, 32),
+		opening_steps: int = 16,
+		store: "PageStore | None" = None,
+		data_key: str = "rack",
+		name: str = "rack",
+		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+	) -> None:
+		"""Offer a rack over a list the composition keeps."""
+
+		self.composition = composition
+		self.make = make
+		self.rows = list(rows)
+		self.steps = steps
+		self.opening_steps = opening_steps
+		self.store = store
+		self.data_key = data_key
+		self.name = name
+		self.title = title
+		self.about = list(about)
+
+		self.link: "AppLink | None" = None
+
+		self._made: dict[str, str] = {}
+		"""Which control each specification is currently materialised as, by id.
+
+		Kept so a grid that leaves the list can be taken off the link again.  A
+		second copy of the list would be a second copy that can disagree; this
+		is a map from id to *name*, which is the one thing the list does not
+		itself carry.
+		"""
+
+		if store is not None:
+			kept = store.load().get(name)
+
+			if kept:
+				self.composition.data.setdefault(data_key, {})["grids"] = kept
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""What a panel needs in order to offer a new grid and draw the rack."""
+
+		return {
+			"type": "grids",
+			"rows": self.rows,
+			"min_steps": self.steps[0],
+			"max_steps": self.steps[1],
+			"opening_steps": self.opening_steps,
+			**self.said(),
+		}
+
+	def snapshot (self) -> typing.Any:
+		"""Every grid this rack has been asked for, in the order it holds them."""
+
+		return {"grids": self.grids()}
+
+	def grids (self) -> list[dict[str, typing.Any]]:
+		"""The specifications as they stand."""
+
+		held = self.composition.data.get(self.data_key) or {}
+
+		return list(held.get("grids") or [])
+
+	def made (self) -> list[str]:
+		"""What this rack has put on the link, by control name and in its order.
+
+		Read by the link when it declares its pages: a grid is drawn wherever
+		the rack that made it is drawn, so a page carrying the rack carries its
+		grids too.
+		"""
+
+		return [self._made[one["id"]] for one in self.grids() if one["id"] in self._made]
+
+	def attach (self, link: "AppLink") -> None:
+		"""Take the link, and put back whatever was made before this started."""
+
+		self.link = link
+		self._materialise()
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Take a whole rack, checked entire before any of it is kept."""
+
+		if rest != ["grids"]:
+			raise Refused(f"a rack has no {'/'.join(rest)}")
+
+		if not isinstance(value, list):
+			raise Refused("a rack is a list of grids")
+
+		wanted: list[dict[str, typing.Any]] = []
+		seen: set[str] = set()
+
+		for entry in value:
+			if not isinstance(entry, dict):
+				raise Refused("a grid is an object")
+
+			one = str(entry.get("id") or "")
+
+			if not one:
+				raise Refused("a grid needs an id of its own")
+
+			if one in seen:
+				raise Refused(f"two grids both call themselves {one}")
+
+			seen.add(one)
+			wanted.append({
+				"id": one,
+				"rows": self._checked_rows(entry.get("rows")),
+				"steps": self._checked_steps(entry.get("steps")),
+				"title": str(entry["title"]) if entry.get("title") else None,
+			})
+
+		if self.grids() == wanted:
+			return False
+
+		self.composition.data.setdefault(self.data_key, {})["grids"] = wanted
+		self._materialise()
+
+		if self.store is not None:
+			self.store.save(self.name, wanted)
+
+		return True
+
+	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
+		"""What the rack now holds, which is the whole list."""
+
+		return self.grids()
+
+	def _checked_rows (self, rows: typing.Any) -> list[str]:
+		"""The rows asked for, which must all be ones this rack was offered.
+
+		A grid of no rows is refused rather than floored, because unlike a
+		height there is no gesture that gets it back: an empty grid draws
+		nothing to aim at.
+		"""
+
+		if not isinstance(rows, list) or not rows:
+			raise Refused("a grid needs at least one row")
+
+		named = [str(row) for row in rows]
+		strange = [row for row in named if row not in self.rows]
+
+		if strange:
+			raise Refused(f"this rack offers no row called {strange[0]}")
+
+		return named
+
+	def _checked_steps (self, steps: typing.Any) -> int:
+		"""How many steps, inside the bounds the composition set."""
+
+		try:
+			wanted = int(steps)
+
+		except (TypeError, ValueError):
+			raise Refused("a grid's steps must be a whole number") from None
+
+		low, high = self.steps
+
+		if not low <= wanted <= high:
+			raise Refused(f"a grid may be {low} to {high} steps, not {wanted}")
+
+		return wanted
+
+	def _materialise (self) -> None:
+		"""Put every specification on the link as a control, and take off the rest.
+
+		**Called on the clock loop, and it touches no socket.**  The re-declaration
+		that tells a panel any of this happened is scheduled on the link loop by
+		the link itself, for the same reason every other frame is.
+		"""
+
+		if self.link is None:
+			return
+
+		wanted = {one["id"]: one for one in self.grids()}
+		moved = False
+
+		for gone in [one for one in self._made if one not in wanted]:
+			self.link.controls.pop(self._made.pop(gone), None)
+			moved = True
+
+		for one, spec in wanted.items():
+			# **A grid that stays is not rebuilt.**  It holds whatever has been
+			# drawn on it, so remaking it because a neighbour was removed would
+			# empty a pattern for a reason nobody could see.
+			if one in self._made:
+				continue
+
+			made = self.make({**spec, "name": f"{self.name}-{one}"})
+
+			made.attach(self.link)
+			self.link.controls[made.name] = made
+			self._made[one] = made.name
+			moved = True
+
+		# Only when the set of controls actually moved. Re-declaring is every
+		# open panel re-reading everything this app offers, and a rack that
+		# asked for it on a list it had already materialised would do that for
+		# nothing — on the first attach, most often, when the list came back
+		# from a store and the controls were about to be declared anyway.
+		if moved:
+			self.link.redeclare()
+
+
 class Transport (Control):
 	"""Whether the composition is playing, and at what tempo.
 
@@ -2675,7 +2913,17 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 
 
 class PageStore:
-	"""Where a composition keeps the arrangements made on its pages.
+	"""Where a composition keeps what a panel arranged or made.
+
+	**Two things use this and they are the same mechanism.**  A page's
+	arrangement is where somebody put the blocks; a rack's list is what grids
+	somebody made (#2226).  Both are a key against a list of objects, both are
+	the panel's doing rather than the composition author's, and both have to
+	come back after a restart or the person has lost what they did.  A second
+	class would have been the same file format written twice.
+
+	Pointed at a file of its own per use — the keys are a page id in one case
+	and a control name in the other, and they share no namespace.
 
 	A data file beside the composition, not inside it (#2075).  The composition
 	is Python and there is no safe round trip from a dragged block back into
@@ -2760,16 +3008,34 @@ class Page:
 		self.parts = list(parts)
 		self.title = title
 
-	def declaration (self, layout: list[dict[str, typing.Any]] | None = None) -> dict[str, typing.Any]:
+	def declaration (
+		self,
+		layout: list[dict[str, typing.Any]] | None = None,
+		made: dict[str, list[str]] | None = None,
+	) -> dict[str, typing.Any]:
 		"""What a panel needs in order to offer this page and draw it.
 
 		``layout`` is the arrangement somebody has already made, if there is
 		one.  Absent, the panel places the parts itself, left to right and then
 		down, until somebody moves them (#2078).
+
+		``made`` says which parts were created by a control that is on this page
+		— a rack's grids — and each is drawn after the thing that made it
+		(#2226).  **A grid is drawn wherever the rack that made it is drawn**,
+		which is the same rule a stack and a settings block already follow
+		(#2211): a part nobody named on a page is drawn nowhere, with nothing
+		saying so, and a grid a person just asked for vanishing is the worst
+		version of that.
 		"""
 
+		parts: list[str] = []
+
+		for part in self.parts:
+			parts.append(part)
+			parts.extend((made or {}).get(part, []))
+
 		declared: dict[str, typing.Any] = {
-			"id": self.page_id, "title": self.title or self.page_id, "parts": self.parts}
+			"id": self.page_id, "title": self.title or self.page_id, "parts": parts}
 
 		if layout:
 			declared["layout"] = layout
@@ -2918,6 +3184,28 @@ class AppLink:
 		self._emit(superintendent.protocol.changed(
 			self.app_name, path, control.applied(rest.split("/"), value), self.version,
 			by="panel", client=client, seq=seq))
+
+	def redeclare (self) -> None:
+		"""Say what this app offers again, because it has changed (#2226).
+
+		**An app re-declaring on the socket it already holds is how it says its
+		controls changed**, and that has worked since the first day — it is the
+		same path #2133 had to learn to tell apart from a second app arriving.
+		A rack that made a grid therefore needs no frame of its own: it puts the
+		control on the link and asks for this.
+
+		Scheduled on the link loop rather than run here, exactly as `_emit` is
+		and for the same reason: this is called on the clock loop, and building
+		every control's declaration and snapshot is not work a pulse should wait
+		for.
+		"""
+
+		loop = self._link_loop
+
+		if loop is None or self._socket is None:
+			return
+
+		asyncio.run_coroutine_threadsafe(self._declare(), loop)
 
 	def happened (self, name: str, **fields: typing.Any) -> None:
 		"""Announce something that is true for one cycle and stored nowhere.
@@ -3100,6 +3388,10 @@ class AppLink:
 
 		kept = self.page_store.load() if self.page_store is not None else {}
 
+		# What each rack has made, so a page carrying the rack carries its grids.
+		made = {control.name: control.made()
+		        for control in self.controls.values() if isinstance(control, GridRack)}
+
 		for control in self.controls.values():
 			control.declared()
 
@@ -3108,7 +3400,7 @@ class AppLink:
 			{name: control.declaration() for name, control in self.controls.items()},
 			{name: control.snapshot() for name, control in self.controls.items()},
 			self.version,
-			[page.declaration(kept.get(page.page_id)) for page in self.pages],
+			[page.declaration(kept.get(page.page_id), made) for page in self.pages],
 			LOADED_BUILD,
 		))
 
