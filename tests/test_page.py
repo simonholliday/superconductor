@@ -220,6 +220,86 @@ def test_everything_on_the_bar_is_one_height (panel: typing.Any) -> None:
 	assert len(tall) == 1, f"the bar draws its controls at {sorted(tall)}px: {tall}"
 
 
+def test_a_readout_centres_its_figures_and_not_its_boxes (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The counterpart to the test above, and found the same way — by eye.
+
+	Simon: "The numbers ... are aligned more closely to the top of the space
+	than the bottom.  It looks a little cramped."  He was right by 2.3px in a
+	44px chassis: `.lcd-value` declared `line-height: 1` and `.lcd-label` did
+	not, so the label took the body's 1.4 and carried a sentence's leading under
+	one line of panel lettering.
+
+	Centring is done on *boxes*, and a box is not its ink.  Digits and capitals
+	never reach into a font's descender space, so every bit of that leading
+	landed below the label while the figures stayed hard against the top — which
+	is why nothing measuring rectangles could see it, the test above included.
+
+	So this one measures the ink.  `text-box-trim` is the feature that would
+	make the question unnecessary and Firefox 153 does not implement it, so the
+	arithmetic stays ours to get right and ours to hold.
+	"""
+
+	_settled(panel)
+
+	# Both readouts have to be holding figures.  Written against whatever the
+	# page happened to show, this measured the em dash that stands in for a
+	# reading nobody has sent — whose ink is a thin bar near the middle, so it
+	# sits 14px down a 44px chassis and always will.  That is not the rule.
+	fake_app.confirm("transport/paused", True, by="app")
+	fake_app.beat(0)
+	fake_app.confirm("transport/bpm", 137.5, by="app")
+
+	playwright_api.expect(
+		panel.locator(".lcd.count .lcd-value")).to_have_text("001\u00b71\u00b71", timeout=5_000)
+	playwright_api.expect(
+		panel.locator(".lcd:not(.count) .lcd-value")).to_contain_text("137.5", timeout=5_000)
+
+	space = panel.evaluate("""() => {
+		/* Where a font actually puts its ink inside a line box, rather than
+		   where the box is.  `measureText` reports both, and the difference is
+		   the whole defect. */
+		const ink = (el, text) => {
+			const style = getComputedStyle(el);
+			const pen = document.createElement("canvas").getContext("2d");
+
+			pen.font =
+				`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+
+			const m = pen.measureText(text);
+			const box = el.getBoundingClientRect();
+			const lead =
+				(box.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2;
+			const base = box.top + lead + m.fontBoundingBoxAscent;
+
+			return { top: base - m.actualBoundingBoxAscent,
+			         bottom: base + m.actualBoundingBoxDescent };
+		};
+
+		const out = {};
+
+		for (const lcd of document.querySelectorAll(".lcd")) {
+			const box = lcd.getBoundingClientRect();
+			const value = lcd.querySelector(".lcd-value");
+			const label = lcd.querySelector(".lcd-label");
+
+			out[lcd.className] = [
+				ink(value, value.textContent.trim()).top - box.top,
+				box.bottom - ink(label, label.textContent.trim().toUpperCase()).bottom,
+			];
+		}
+
+		return out;
+	}""")
+
+	assert space, "the bar drew no readouts to measure"
+
+	for what, (above, below) in space.items():
+		assert abs(above - below) < 1, (
+			f"`{what}` draws its figures {above:.2f}px from the top of the chassis "
+			f"and its label {below:.2f}px from the bottom")
+
+
 def test_the_tempo_reading_follows_the_app (panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""So a ramp or a poke from elsewhere shows, not just what was last tapped."""
 

@@ -1890,11 +1890,31 @@ html, body {
    reporting. The type scale already says labels and values share a size for the
    same reason. */
 
+/* **A label is not a sentence and does not take a sentence's leading.** The
+ * value above says `line-height: 1` and this said nothing, so it inherited the
+ * body's 1.4 — 4.6px of paragraph leading under one line of panel lettering,
+ * inside a chassis 44px tall.
+ *
+ * A flex column centres *boxes*, and a box is not its ink: digits and capitals
+ * never reach into a font's descender space, so that leading all landed below
+ * the label while the figures stayed hard against the top. Measured at 3.6px
+ * above the numbers and 5.9px below them — which Simon read off the glass as
+ * cramped before any of it was measured.
+ *
+ * With `line-height: 1` on both lines each box is trimmed close to its own ink,
+ * and the two remainders come out at 1.31px and 1.26px: 5.94 above, 5.90 below.
+ * That is not luck. The space above belongs to the *large* text, where cap
+ * height sits close to the ascent, and the space below to the *small* text,
+ * where every inset is small because the font is.
+ *
+ * `text-box-trim` is what this actually wants, and is the reason it cannot have
+ * it — Firefox 153 does not implement it, and Firefox is the panel (#1941). */
 .lcd-label {
 	font-family: var(--face-panel);
 	text-transform: uppercase;
 	letter-spacing: 0.13em;
 	font-size: var(--type-chrome-quiet);
+	line-height: 1;
 	color: var(--ink-faint);
 }
 
