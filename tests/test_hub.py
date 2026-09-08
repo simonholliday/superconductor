@@ -1,9 +1,54 @@
 """Routing: a tap reaches the app, and what the app applied reaches every panel."""
 
+import asyncio
+import collections.abc
+import concurrent.futures
+import functools
+import pathlib
 import typing
 
 import superintendent.hub
 import superintendent.protocol
+
+
+def _on_a_loop_of_its_own (
+	test: collections.abc.Callable[[], collections.abc.Coroutine[typing.Any, typing.Any, None]],
+) -> collections.abc.Callable[[], None]:
+	"""Run one async test on a loop it owns, in a thread it owns.
+
+	`pytest-asyncio` runs a bare ``async def test_`` with ``Runner.run()`` on the
+	**main thread**, and that raises the moment something else is already running
+	a loop there.  Playwright's sync API is exactly that something: it takes the
+	main thread's loop and keeps it for the rest of the session, from the first
+	page test onwards.
+
+	**Serially this never bit, and only because of the alphabet.**  `test_hub`
+	sorts before `test_page`, so these always ran first.  Under `pytest-xdist` a
+	worker takes whatever it is handed and that accident stops holding — measured
+	on 2026-09-08, naming the two files the other way round on one command line
+	failed all twelve of these with *Runner.run() cannot be called from a running
+	event loop*.  A suite that is 5x faster and occasionally wrong for a reason
+	nobody can see is not a bargain.
+
+	A thread of its own has no ambient loop to collide with, so the order stops
+	mattering.  The wrapper being a plain ``def`` is the other half of it: that is
+	what stops `pytest-asyncio` claiming the test back and running it on the main
+	thread after all.
+	"""
+
+	@functools.wraps(test)
+	def run () -> None:
+		"""Drive one coroutine to completion, somewhere with room for it."""
+
+		with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+			pool.submit(asyncio.run, test()).result()
+
+	# `functools.wraps` leaves a `__wrapped__` behind, and anything that unwraps
+	# to decide what it is looking at would find the coroutine function again —
+	# which is the whole thing being hidden.
+	del run.__wrapped__
+
+	return run
 
 
 class Recorder:
@@ -41,6 +86,7 @@ async def _hub_with_app () -> tuple[superintendent.hub.Hub, superintendent.hub.A
 	return hub, app, recorder
 
 
+@_on_a_loop_of_its_own
 async def test_a_panel_is_told_what_to_draw_the_moment_it_arrives () -> None:
 	"""The manifest carries the declaration and the snapshot the grid itself."""
 
@@ -56,6 +102,7 @@ async def test_a_panel_is_told_what_to_draw_the_moment_it_arrives () -> None:
 	assert snapshot["state"] == {"grid": {"kick": [0, 4]}}
 
 
+@_on_a_loop_of_its_own
 async def test_a_panel_already_open_learns_when_an_app_arrives () -> None:
 	"""Starting the composition second is the ordinary case, not an error."""
 
@@ -70,6 +117,7 @@ async def test_a_panel_already_open_learns_when_an_app_arrives () -> None:
 	assert glass.of_kind("app")[-1]["up"] is True
 
 
+@_on_a_loop_of_its_own
 async def test_a_tap_is_passed_to_the_app_and_not_applied_here () -> None:
 	"""The app is the authority; the service never guesses on its behalf."""
 
@@ -88,6 +136,7 @@ async def test_a_tap_is_passed_to_the_app_and_not_applied_here () -> None:
 	assert glass.of_kind("changed") == []
 
 
+@_on_a_loop_of_its_own
 async def test_a_tap_for_an_app_that_is_not_there_is_refused_by_name () -> None:
 	"""A ring that would never clear is worse than being told at once."""
 
@@ -104,6 +153,7 @@ async def test_a_tap_for_an_app_that_is_not_there_is_refused_by_name () -> None:
 	assert refusal["path"] == "grid/kick/8"
 
 
+@_on_a_loop_of_its_own
 async def test_what_the_app_applied_reaches_every_panel_and_confirms_to_the_asker () -> None:
 	"""One panel taps; both see the face move, and only the asker is acked."""
 
@@ -122,6 +172,7 @@ async def test_what_the_app_applied_reaches_every_panel_and_confirms_to_the_aske
 	assert second.of_kind("ack") == []
 
 
+@_on_a_loop_of_its_own
 async def test_the_service_keeps_its_own_copy_so_a_late_panel_sees_the_grid () -> None:
 	"""A panel arriving after the change is not made to wake the app for it."""
 
@@ -136,6 +187,7 @@ async def test_the_service_keeps_its_own_copy_so_a_late_panel_sees_the_grid () -
 	assert late.of_kind("snapshot")[0]["state"]["grid"]["kick"] == [0, 4, 8]
 
 
+@_on_a_loop_of_its_own
 async def test_an_app_going_away_is_shown_on_the_glass () -> None:
 	"""A control nobody can reach must not look reachable."""
 
@@ -149,6 +201,7 @@ async def test_an_app_going_away_is_shown_on_the_glass () -> None:
 	assert glass.of_kind("manifest")[-1]["apps"] == {}
 
 
+@_on_a_loop_of_its_own
 async def test_a_control_that_appears_after_the_app_declared_reaches_an_open_panel () -> None:
 	"""Adding a generator on the glass changes what an app offers while it runs.
 
@@ -171,6 +224,7 @@ async def test_a_control_that_appears_after_the_app_declared_reaches_an_open_pan
 	assert set(glass.of_kind("manifest")[-1]["apps"]["subsequence"]) == {"grid", "recipe"}
 
 
+@_on_a_loop_of_its_own
 async def test_a_control_that_has_gone_stops_being_offered () -> None:
 	"""Removing a layer has to take its block with it.
 
@@ -190,6 +244,7 @@ async def test_a_control_that_has_gone_stops_being_offered () -> None:
 	assert glass.of_kind("manifest")[-1]["apps"]["subsequence"] == {}
 
 
+@_on_a_loop_of_its_own
 async def test_a_reconnecting_app_is_not_erased_by_its_own_old_socket () -> None:
 	"""The window every restart of a composition opens.
 
@@ -231,6 +286,7 @@ async def test_a_reconnecting_app_is_not_erased_by_its_own_old_socket () -> None
 		"the glass was told the app had gone while it was here"
 
 
+@_on_a_loop_of_its_own
 async def test_an_app_that_really_goes_away_still_goes_away () -> None:
 	"""The other half, so the guard above cannot be satisfied by never removing."""
 
@@ -244,6 +300,7 @@ async def test_an_app_that_really_goes_away_still_goes_away () -> None:
 	assert glass.of_kind("app")[-1]["up"] is False
 
 
+@_on_a_loop_of_its_own
 async def test_two_panels_reporting_one_name_are_two_registrations () -> None:
 	"""A panel is its socket, not its name.
 
@@ -265,3 +322,36 @@ async def test_two_panels_reporting_one_name_are_two_registrations () -> None:
 	hub.panel_left(one)
 
 	assert hub.panels == [two], "closing one socket removed the wrong registration"
+
+
+def test_no_test_borrows_the_main_threads_event_loop () -> None:
+	"""The rule above, enforced rather than remembered.
+
+	A bare ``async def test_`` passes today and fails under `pytest-xdist` the
+	moment a worker happens to run a page test first — which is a failure that
+	depends on how work was shared out, so it would arrive looking like flakiness
+	rather than like a rule that was broken.
+
+	Checked as text rather than by importing every module, because importing them
+	is what a test run does and this has to hold for the ones that have not been
+	collected yet.
+	"""
+
+	borrowed = []
+
+	for path in sorted(pathlib.Path(__file__).parent.glob("test_*.py")):
+		lines = path.read_text(encoding="utf-8").splitlines()
+
+		for number, line in enumerate(lines):
+			if not line.startswith("async def test_"):
+				continue
+
+			above = lines[number - 1].strip() if number else ""
+
+			if above != "@_on_a_loop_of_its_own":
+				borrowed.append(f"{path.name}:{number + 1} {line.split('(')[0]}")
+
+	assert not borrowed, (
+		"these run on whatever loop the main thread already has, which is "
+		f"Playwright's once a page test has run: {borrowed}. Decorate them with "
+		"@_on_a_loop_of_its_own, as the rest of this file does.")

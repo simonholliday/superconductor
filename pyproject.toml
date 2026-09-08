@@ -37,6 +37,20 @@ dev = [
 	# download ("playwright install firefox") and needs system libraries the
 	# page tests skip cleanly without.
 	"pytest-playwright>=0.5",
+	# **The suite across every core: 126s to 25s** (measured here on 22 cores,
+	# 2026-09-08, 555 passed either way). Nearly all of that is the 191 page
+	# tests — the other 364 run in 1.2s — so this is really about parallelising
+	# Playwright, and eight workers is where it was measured: the constraint is
+	# a Firefox and a uvicorn per worker rather than cores.
+	#
+	# `--dist worksteal` rather than the default `load`, because the spread here
+	# is extreme — a page test is most of a second and everything else is
+	# microseconds — and a static queue leaves workers idle at the tail.
+	#
+	# **Deliberately not in `addopts`**, so a bare `pytest` stays serial. Worker
+	# start-up is most of a one-test debugging run, and interleaved output is
+	# worst on exactly the runs where reading it is the point.
+	"pytest-xdist>=3.6",
 ]
 
 [project.scripts]
@@ -110,3 +124,19 @@ warn_return_any = false
 cache_dir = "/tmp/superintendent-pytest-cache"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+# **A hung test names itself instead of the run simply never ending.**  Earned on
+# 2026-09-08: a synchronous read of this CIFS mount, added inside the service's
+# socket handler, deadlocked the suite.  It cost most of an hour — two runs killed
+# on the guess that they were merely slow, a wrong theory about which files
+# interacted, and a bisect — and what settled it in one command was this,
+# which dumped every thread and pointed at the exact line.
+#
+# `faulthandler` is pytest's own, so it costs no dependency and nothing to pin.
+#
+# **120 seconds is chosen from both ends.**  The slowest thing here is a page test
+# waiting on Playwright, whose own ceiling is 30s, so this is four times it and
+# cannot fire on a cold browser or a slow mount; and the whole suite is about 130s,
+# so a hang is caught while there is still a person watching.
+faulthandler_timeout = 120
+faulthandler_exit_on_timeout = true

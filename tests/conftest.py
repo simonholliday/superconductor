@@ -161,13 +161,26 @@ the controls most of these tests are about.
 """
 
 
-def _free_port () -> int:
-	"""Take a port the operating system says is free."""
+def _held_port () -> tuple[socket.socket, int]:
+	"""A listening socket, and the port it is holding for as long as it is open.
 
-	with contextlib.closing(socket.socket()) as probe:
-		probe.bind(("127.0.0.1", 0))
+	**Asking for a free port and then letting go of it is a race**, and one that
+	only appears when there is more than one asker: under `pytest-xdist` eight
+	workers start within milliseconds of each other, and between the answer and
+	the moment uvicorn binds there is a window in which the same port is free for
+	somebody else too.  The failure would be one worker's service refusing to
+	start, on a port number, in a run that had been green a minute earlier.
 
-		return int(probe.getsockname()[1])
+	So the socket is never released — it is handed to uvicorn, which serves on it
+	rather than binding one of its own.  There is then no window at all.
+	"""
+
+	held = socket.socket()
+	held.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	held.bind(("127.0.0.1", 0))
+	held.listen()
+
+	return held, int(held.getsockname()[1])
 
 
 class FakeApp:
@@ -402,13 +415,13 @@ def browser_name () -> str:
 def service_url () -> typing.Iterator[str]:
 	"""A real service, on a real port, for the whole session."""
 
-	port = _free_port()
+	held, port = _held_port()
 	config = superintendent.config.Config(host="127.0.0.1", port=port)
 
 	server = uvicorn.Server(uvicorn.Config(
 		superintendent.service.build(config), host="127.0.0.1", port=port, log_level="error"))
 
-	thread = threading.Thread(target=server.run, daemon=True)
+	thread = threading.Thread(target=lambda: server.run(sockets=[held]), daemon=True)
 	thread.start()
 
 	deadline = time.monotonic() + 10.0
@@ -423,6 +436,7 @@ def service_url () -> typing.Iterator[str]:
 
 	server.should_exit = True
 	thread.join(timeout=5.0)
+	held.close()
 
 
 @pytest.fixture
