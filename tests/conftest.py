@@ -60,6 +60,12 @@ CONTROLS: dict[str, typing.Any] = {
 	              "options": [{"value": "one", "label": "1"},
 	                          {"value": "four", "label": "4"}]},
 	         ]},
+	# A rack: its value is the grids somebody made, and the grids themselves
+	# arrive as ordinary declared controls on the app's next declaration (#2226).
+	"rack": {"type": "grids", "title": "Made here",
+	         "rows": ["kick", "snare", "clap"],
+	         "min_steps": 1, "max_steps": 32, "opening_steps": 16},
+
 	"stack": {"type": "recipe", "title": "Generators", "builds": "grid",
 	          "sources": ["second"], "generators": [
 		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
@@ -126,7 +132,10 @@ PAGES: list[dict[str, typing.Any]] = [
 	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
 	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack"]},
-	{"id": "alone", "title": "Stack alone", "parts": ["stack"]},
+	# The rack goes here rather than on a page of its own, because seven pages is
+	# one more than `PAGE_BUTTONS` (see above) — and beside the stack, which is
+	# the other control whose value is a list somebody builds up (#2226).
+	{"id": "alone", "title": "Stack alone", "parts": ["stack", "rack"]},
 ]
 """Two views over the same two grids, one of which carries both.
 
@@ -147,6 +156,7 @@ STATE: dict[str, typing.Any] = {
 	"fine": {"C2": {"0": {"length": 1, "velocity": 100},
 	                "6": {"length": 2, "velocity": 100}}},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
+	"rack": {"grids": []},
 	"stack": {"layers": [
 		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
 		 "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],

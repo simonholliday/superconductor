@@ -2649,6 +2649,62 @@ html, body {
    used to say how its contents were laid out as well — stacked and left-aligned,
    which is right for the two-line options below and wrong everywhere it was
    borrowed. That is `.option` now. */
+/* **What a rack has made** (#2226): a row per grid, and nothing that repeats
+ * what the grid's own block already says.
+ *
+ * A row here is a *mark*, not a target — it is read, not dragged — so it carries
+ * no surface and no edge of its own. The remove at its end is the target, and it
+ * is the same close a title bar has, in the same corner it has always been. */
+.rack {
+	display: flex;
+	flex-direction: column;
+}
+
+.made {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	height: max(24px, var(--cell));
+	padding: 0 0.35rem;
+
+	color: var(--ink);
+	font-family: var(--face-panel);
+	font-size: var(--type-title);
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.made > b {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 600;
+}
+
+.made > .spacer { flex: 1 1 0; min-width: 0; }
+
+/* How long it is, in the face numbers line up in — a length is read against its
+   neighbours, which is the whole reason that face exists. */
+.made > i {
+	font-family: var(--face-figures);
+	font-style: normal;
+	color: var(--ink-quiet);
+}
+
+/* **A block with nothing in it and no sentence reads as broken rather than as
+ * empty**, so it says which it is. */
+.empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: max(24px, var(--cell));
+
+	color: var(--ink-quiet);
+	font-family: var(--face-body);
+	font-size: var(--type-body);
+}
+
 .offer {
 	background: var(--panel);
 	color: var(--ink);

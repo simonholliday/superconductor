@@ -301,7 +301,11 @@ const GRID_KINDS = ["step_grid", "note_grid"];
    transport field called `rows`, so the kind is asked for — the same reason the
    recipe branch beside it asks. */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe"];
+const GRIDS = ["step_grid", "note_grid"];
+/* The kinds that draw a pattern of rows against steps. A rack is not one: it
+   makes them, and declares a `rows` of its own meaning something else. */
+
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -1859,6 +1863,78 @@ function Params ({ name, fields, values, cell, onSet }) {
  * bypassing, reordering — and a single parameter is sent on its own. The split
  * is what lets two people turn different knobs without overwriting each other,
  * while a structural change genuinely is about the list. */
+/* What a rack has made, and nothing else.
+ *
+ * **The grids themselves are not in here.**  Each one is a declared control with
+ * a block of its own, drawn beside this because a grid is drawn wherever the rack
+ * that made it is drawn (#2226, #2211).  This block is the *making*: what exists,
+ * and the way to be rid of one.  Listing them twice would be two places to look
+ * for one fact, and the block that showed a stale copy would be this one.
+ *
+ * A row per grid, one row across, with the remove at the end where a close has
+ * always been. */
+function Rack ({ made, onRemove }) {
+	if (!made.length) {
+		return html`<div class="empty">No grids yet.</div>`;
+	}
+
+	return html`
+		<div class="rack">
+			${made.map((grid) => html`
+				<div class="made" key=${grid.id}>
+					<b>${grid.title || grid.rows.join(", ")}</b>
+					<span class="spacer"></span>
+					<i>${grid.steps}</i>
+					<button
+						class="close" title="remove" aria-label="remove"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onRemove(grid.id);
+						}}
+					><${Icon} of="close" /></button>
+				</div>`)}
+		</div>`;
+}
+
+
+/* The sheet a grid is made in: which rows it has, and how long it is.
+ *
+ * **A form rather than a list**, which is what makes it different from the sheet
+ * that adds a generator.  There is nothing to pick from — a grid is described
+ * rather than chosen — so the two fields are drawn with the same `Setting` a
+ * generator's parameters use, and the only new thing is the button that commits.
+ *
+ * Held here rather than on the page, because a half-described grid is not a thing
+ * the app should be told about: nothing crosses the wire until "make". */
+function NewGrid ({ rows, steps, onMake }) {
+	const [chosen, setChosen] = useState([]);
+	const [length, setLength] = useState(steps.opening);
+
+	const field = { kind: "choices", options: rows.map((row) => ({ value: row, label: row })) };
+	const size = { kind: "number", min: steps.low, max: steps.high, step: 1 };
+
+	return html`
+		<div class="group">rows</div>
+		<${Setting} field=${field} held=${chosen} onSet=${setChosen} />
+
+		<div class="group">length in steps</div>
+		<${Setting} field=${size} held=${length} onSet=${setLength} />
+
+		<button
+			class="offer"
+			disabled=${chosen.length === 0}
+			${/* On release, like every other control that chooses from a sheet
+			     (#2213): this one is read and then committed to, not played. */ ""}
+			onClick=${(event) => {
+				event.preventDefault();
+
+				if (chosen.length) onMake({ rows: chosen, steps: length });
+			}}
+		>${chosen.length ? "make it" : "choose at least one row"}</button>`;
+}
+
+
 function Contribution ({ name, layer, layers, offered, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
@@ -3846,6 +3922,7 @@ function Panel () {
 	const [showing, setShowing] = useState(() => new Set());
 
 	const [adding, setAdding] = useState(null);
+	const [making, setMaking] = useState(null);
 	const [clearing, setClearing] = useState(null);
 	const [sending, setSending] = useState(null);
 	const [moved, setMoved] = useState({});
@@ -4327,6 +4404,23 @@ function Panel () {
 		if (controls[name].unsupported) {
 			windows.push({ key: name, control: name, title: named(name),
 			               rows: 3, steps: PARAM_CELLS });
+			continue;
+		}
+
+		if (kindOf(name) === "grids") {
+			const made = ((state[appName] || {})[name] || {}).grids || [];
+
+			windows.push({
+				key: name, control: name, title: named(name),
+				about: controls[name].about || [],
+				rack: name, made,
+
+				/* The title, then a row per grid it has made — or one row saying
+				   there are none yet, because a block with nothing in it and no
+				   sentence reads as broken rather than as empty. */
+				rows: 1 + Math.max(1, made.length),
+				steps: PARAM_CELLS,
+			});
 			continue;
 		}
 
@@ -4925,7 +5019,12 @@ function Panel () {
 		   `control` — that is how they are drawn wherever it is (#2211) — so
 		   asking about the control alone would put a grip on a stack of knobs
 		   and offer to show it more drum voices. */
+		/* **And only on a grid.** A rack declares `rows` too — the pool a new
+		   grid may be made from — so asking about the field alone would put a
+		   resize grip on it and offer to show it more of a list it does not
+		   draw. The same trap as the one above, one field further down. */
 		return Boolean(one.key === one.control
+			&& GRIDS.includes(kindOf(one.control))
 			&& control && Array.isArray(control.rows) && control.rows.length > 1);
 	};
 
@@ -5058,7 +5157,13 @@ function Panel () {
 								onMove: movePatch,
 								onEnd: endPatch,
 							} : null}
-							onAdd=${one.add ? (event) => {
+							${/* A rack and a stack both add something, and the
+							     footer's one button serves both — what differs
+							     is the word and what the sheet then offers. */ ""}
+							onAdd=${one.rack ? (event) => {
+								cameFrom.current = latticeCellUnder(event.currentTarget);
+								setMaking(one.rack);
+							} : one.add ? (event) => {
 								cameFrom.current = latticeCellUnder(event.currentTarget);
 								setAdding(one.add);
 							} : null}
@@ -5069,7 +5174,7 @@ function Panel () {
 							     cable now, made from the grid being routed, so
 							     this adds the only thing a pattern can be added
 							     *to* with. */ ""}
-							adds="add generator"
+							adds=${one.rack ? "add grid" : "add generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing(one.control) : null}
 							onSettings=${settingsFor[one.control]
@@ -5089,7 +5194,12 @@ function Panel () {
 							onLive=${one.clear
 								? (want) => request(`${one.control}/enabled`, want)
 								: undefined} />`}>
-					${one.layer
+					${one.rack
+						? html`
+							<${Rack} made=${one.made}
+								onRemove=${(id) => request(`${one.rack}/grids`,
+									one.made.filter((grid) => grid.id !== id))} />`
+						: one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
 								layers=${one.layers} offered=${one.offered} onSet=${request} />`
@@ -5147,6 +5257,32 @@ function Panel () {
 				patchable=${{ onTake: beginRepatch, onMove: movePatch, onEnd: endPatch }}
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />
 		</div>
+
+		${making && controls[making] && html`
+			<${Sheet} title="make a grid" onClose=${() => setMaking(null)}>
+				<${NewGrid}
+					rows=${controls[making].rows || []}
+					steps=${{
+						low: controls[making].min_steps || 1,
+						high: controls[making].max_steps || 32,
+						opening: controls[making].opening_steps || 16,
+					}}
+					onMake=${(spec) => {
+						const held = ((state[appName] || {})[making] || {}).grids || [];
+						const id = freshId();
+
+						request(`${making}/grids`, [...held, { id, ...spec }]);
+
+						/* Where the person was looking when they asked, the same
+						   as a new generator block. The grid arrives on the next
+						   declaration, so the place is remembered against the name
+						   it will have. */
+						if (cameFrom.current) rearrange(`${making}-${id}`, cameFrom.current);
+
+						cameFrom.current = null;
+						setMaking(null);
+					}} />
+			<//>`}
 
 		${adding && controls[adding] && (() => {
 			const added = (layer) => {

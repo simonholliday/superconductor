@@ -6174,3 +6174,128 @@ def test_a_generator_block_is_offered_no_grip (panel: typing.Any) -> None:
 	assert panel.locator('.part[data-part^="stack/"]').count() > 0, (
 		"no generator block on the page to check")
 	assert panel.locator('.part[data-part^="stack/"] .part-grip').count() == 0
+
+
+# --- a rack of grids somebody made (#2226) -----------------------------------
+
+def _on_the_rack_page (panel: typing.Any) -> None:
+	"""Go to the page carrying the rack and wait for it to be drawn."""
+
+	panel.locator(".pages button", has_text="Stack alone").click()
+	panel.wait_for_selector('.part[data-part="rack"]', timeout=10_000)
+	_settled(panel)
+
+
+def test_a_rack_with_nothing_in_it_says_so (panel: typing.Any) -> None:
+	"""A block with nothing in it and no sentence reads as broken rather than as
+	empty, and a person who has just been given a way to make grids is exactly
+	the person who would read it that way."""
+
+	_on_the_rack_page(panel)
+
+	assert panel.locator('.part[data-part="rack"] .empty').count() == 1
+	assert panel.locator('.part[data-part="rack"] .made').count() == 0
+
+
+def test_a_rack_offers_to_make_a_grid_rather_than_a_generator (
+	panel: typing.Any) -> None:
+	"""One footer button serves both, and the word is what differs — a rack and a
+	stack both add something and they do not add the same thing."""
+
+	_on_the_rack_page(panel)
+
+	assert panel.locator('.part[data-part="rack"] footer button',
+		has_text="add grid").count() == 1
+
+
+def test_making_a_grid_describes_it_rather_than_choosing_one (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The sheet is a form, not a list**, which is what makes it different from
+	adding a generator: there is nothing to pick from, because a grid is
+	described rather than chosen.
+
+	Nothing crosses the wire until it is committed to — a half-described grid is
+	not a thing the app should be told about.
+	"""
+
+	_on_the_rack_page(panel)
+
+	panel.locator('.part[data-part="rack"] footer button', has_text="add grid").click()
+	panel.wait_for_selector(".sheet", timeout=10_000)
+
+	assert not [one for one in fake_app.sets if one["path"].startswith("rack/")], (
+		"the app was told about a grid before anybody asked for one")
+
+	panel.locator(".sheet .choices button", has_text="snare").click()
+	panel.locator(".sheet .offer", has_text="make it").click()
+
+	deadline = time.monotonic() + 5
+	asked = None
+
+	while asked is None and time.monotonic() < deadline:
+		asked = next((one for one in fake_app.sets if one["path"] == "rack/grids"), None)
+		time.sleep(0.05)
+
+	assert asked, "asking for a grid sent nothing"
+	assert len(asked["v"]) == 1
+	assert asked["v"][0]["rows"] == ["snare"]
+	assert asked["v"][0]["steps"] == 16
+	assert asked["v"][0]["id"], "a grid arrived with no id of its own"
+
+
+def test_a_grid_cannot_be_made_with_no_rows (panel: typing.Any) -> None:
+	"""Refused on the glass as well as in the app, because a control that lets
+	you ask for something impossible and then refuses it is worse than one that
+	does not offer it — and the button says which it is rather than going dead
+	with no reason."""
+
+	_on_the_rack_page(panel)
+
+	panel.locator('.part[data-part="rack"] footer button', has_text="add grid").click()
+	panel.wait_for_selector(".sheet", timeout=10_000)
+
+	make = panel.locator(".sheet .offer")
+
+	assert make.is_disabled()
+	assert "choose at least one row" in make.inner_text().lower()
+
+
+def test_a_made_grid_is_listed_and_can_be_taken_away (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The rack lists what it made and nothing else — each grid is a block of its
+	own drawn beside it, and listing them twice would be two places to look for
+	one fact."""
+
+	_on_the_rack_page(panel)
+
+	fake_app.confirm("rack/grids", [
+		{"id": "a", "rows": ["snare"], "steps": 9},
+		{"id": "b", "rows": ["kick", "clap"], "steps": 16}], by="app")
+
+	panel.wait_for_selector('.part[data-part="rack"] .made', timeout=10_000)
+
+	assert panel.locator('.part[data-part="rack"] .made').count() == 2
+
+	panel.locator('.part[data-part="rack"] .made', has_text="snare").locator(
+		"button.close").click()
+
+	deadline = time.monotonic() + 5
+	asked = None
+
+	while asked is None and time.monotonic() < deadline:
+		asked = next((one for one in fake_app.sets if one["path"] == "rack/grids"), None)
+		time.sleep(0.05)
+
+	assert asked, "removing a grid sent nothing"
+	assert [one["id"] for one in asked["v"]] == ["b"]
+
+
+def test_a_rack_is_offered_no_resize_grip (panel: typing.Any) -> None:
+	"""A rack declares `rows` too — the pool a new grid may be made from — so
+	asking whether that field exists would put a grip on it and offer to show it
+	more of a list it does not draw (#2227, #2226)."""
+
+	_on_the_rack_page(panel)
+	_unlocked(panel)
+
+	assert panel.locator('.part[data-part="rack"] .part-grip').count() == 0
