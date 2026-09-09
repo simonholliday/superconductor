@@ -45,8 +45,29 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install the package and its dev dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
-      - name: Run everything that needs no browser
-        run: python -m pytest --ignore=tests/test_page.py
+      - name: Run everything that needs neither a browser nor the sequencer
+        # test_composition.py and test_generators.py import `subsequence`, and
+        # a runner cannot have it. It is a **rig arrangement** rather than a
+        # dependency — this package must never declare one on a particular app —
+        # so the venv beside the music apps carries it editable and nothing in
+        # pyproject.toml names it.
+        #
+        # Installing it from PyPI was tried and measured on 2026-09-09: the
+        # published 0.6.6 fails at `module 'subsequence' has no attribute
+        # 'generators'`, because the worked composition uses sequencer features
+        # that are not released yet. Pinning a git commit instead would tie this
+        # repository's CI to a branch in another one.
+        #
+        # So those 36 tests stay where the sequencer actually is. They are
+        # exactly the two files that measure this package against the sequencer
+        # an app runs, which is a checkout that moves — a question a runner
+        # cannot ask. If a third file starts importing it, this step fails
+        # loudly with ModuleNotFoundError rather than quietly skipping.
+        run: >
+          python -m pytest
+          --ignore=tests/test_page.py
+          --ignore=tests/test_composition.py
+          --ignore=tests/test_generators.py
       - name: Type-check
         # Configured at python_version = "3.11" over the package, the tests, the
         # tools and the compositions, so this is the same question on every row
