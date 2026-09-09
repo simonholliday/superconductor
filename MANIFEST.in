@@ -1,0 +1,15 @@
+# An sdist is what somebody installs, not the whole workshop.
+#
+# `research/` is 668 files and 16 MB — the probes and raw measurements the design
+# was made from.  It is provenance for documents rather than source for the
+# package, and it is 96% of an sdist that is otherwise under 300 KB.  `reviews/`
+# is the same argument at a smaller size.  Both stay in the repository, which is
+# where somebody who wants them can read them beside the history explaining what
+# they were for.
+prune research
+prune reviews
+
+# Names the project's tracker — the connection, the workspace and the project.
+# It is not a credential and it belongs in the repository, but it is of no use
+# whatever to somebody installing this.
+exclude .subroutine
