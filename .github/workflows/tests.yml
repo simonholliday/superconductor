@@ -1,0 +1,134 @@
+name: Tests
+
+# Runs on every push and pull request. `publish.yml` deliberately does not do
+# this — it fires only on a version tag, which is far too late to learn that
+# something is broken, and that is exactly how a release nearly went out with a
+# stale summary line on 2026-09-09.
+#
+# **The shape follows one measurement**, taken on nuc14 against 605 tests:
+# everything except `test_page.py` is 403 tests in 1.39s, and `test_page.py` is
+# 202 tests in 148s. Two thirds of the suite costs a second and a half. So the
+# fast two thirds run on every Python version the classifiers claim, for
+# nothing, and the browser is confined to one job that is worth being careful
+# about.
+#
+# Pull requests get the page tests too. The repository is public, so Actions
+# minutes are free and there is no cost argument for running less on the branch
+# where a mistake is cheapest to fix.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# A quick succession of pushes would otherwise queue several two-minute browser
+# jobs behind each other, all but the last of them answering a question nobody
+# is still asking.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # one version failing should not hide the others
+      matrix:
+        # Exactly what pyproject.toml's classifiers claim support for.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the package and its dev dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Run everything that needs no browser
+        run: python -m pytest --ignore=tests/test_page.py
+      - name: Type-check
+        # Configured at python_version = "3.11" over the package, the tests, the
+        # tools and the compositions, so this is the same question on every row
+        # — but an install that only breaks on one version breaks it here.
+        run: python -m mypy
+
+  page:
+    name: Page tests, Firefox
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"  # the version publish.yml builds with
+      - name: Install the package and its dev dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Find the Playwright version to key the cache on
+        id: playwright
+        run: |
+          echo "version=$(python -c 'import importlib.metadata; print(importlib.metadata.version("playwright"))')" >> "$GITHUB_OUTPUT"
+      - name: Restore the browser
+        uses: actions/cache@v4
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-firefox-${{ steps.playwright.outputs.version }}
+      - name: Download Firefox
+        # Skipped on a cache hit; the system libraries below are not cached and
+        # are needed either way.
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: python -m playwright install firefox
+      - name: Install the browser's system libraries
+        # Firefox alone rather than all three, which is 125 packages instead of
+        # 274, and Firefox is the target (#1941).
+        run: python -m playwright install-deps firefox
+      - name: Run the page tests
+        # `--browser firefox` is not optional: pytest-playwright defaults to
+        # Chromium. `worksteal` because the spread is extreme — a page test is
+        # most of a second and everything else is microseconds — so a static
+        # queue leaves workers idle at the tail.
+        run: python -m pytest tests/test_page.py --browser firefox -n auto --dist worksteal
+
+  client:
+    name: The client parses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check app.js
+        # `--input-type=module` is load-bearing. `node --check <path>` silently
+        # passes a `const` redeclaration inside an ES module — measured on
+        # 2026-09-05 against a file Firefox then refused to execute at all. This
+        # is a fast filter and the page tests are the actual net.
+        run: node --input-type=module --check < superconductor/client/app.js
+
+  artefact:
+    name: It still builds and publishes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # full history and tags, or setuptools-scm cannot derive a version
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build and check, exactly as publish.yml does
+        # So that anything which would break a release breaks here first, days
+        # earlier, rather than on the tag.
+        run: |
+          pipx run build
+          pipx run twine check dist/*
+      - name: The provenance directories stay out of the sdist
+        # research/ is 668 files and 16 MB uncompressed — 96% of an unpruned
+        # sdist. MANIFEST.in prunes it and nothing else guards that.
+        run: |
+          python - <<'PY'
+          import glob, tarfile
+
+          archive = glob.glob("dist/*.tar.gz")[0]
+          held = tarfile.open(archive).getnames()
+
+          stowaways = [n for n in held if "/research/" in n or "/reviews/" in n]
+          assert not stowaways, f"{len(stowaways)} provenance files reached the sdist, first {stowaways[0]}"
+
+          print(f"{archive}: {len(held)} members, no provenance")
+          PY
