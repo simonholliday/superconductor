@@ -71,15 +71,17 @@ CONTROLS: dict[str, typing.Any] = {
 		{"name": "euclidean", "summary": "Spread pulses evenly.", "partial": False,
 		 "parameters": [
 		     {"name": "pitch", "label": "pitch", "kind": "choice", "role": "pitch",
+		      "required": True,
 		      "options": [{"value": voice, "label": voice}
 		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
 		     {"name": "pulses", "label": "pulses", "kind": "number",
-		      "min": 0, "max": 8, "step": 1},
+		      "min": 0, "max": 8, "step": 1, "required": True},
 		     {"name": "velocity", "label": "velocity", "kind": "range",
-		      "min": 1, "max": 127, "step": 1},
-		     {"name": "duration", "label": "duration", "kind": "number", "step": 1},
+		      "min": 1, "max": 127, "step": 1, "required": False, "default": None},
+		     {"name": "duration", "label": "duration", "kind": "number", "step": 1,
+		      "required": False, "default": None},
 		     {"name": "probability", "label": "probability", "kind": "number",
-		      "min": 0, "max": 1},
+		      "min": 0, "max": 1, "required": False, "default": None},
 		 ]},
 		{"name": "evolve", "summary": "Mutate a sequence.", "partial": True, "parameters": []},
 		# Two pools, because the panel draws a short one flat and a long one
@@ -87,9 +89,10 @@ CONTROLS: dict[str, typing.Any] = {
 		{"name": "chord", "summary": "Sound several pitches together.", "partial": False,
 		 "parameters": [
 		     {"name": "pitches", "label": "pitches", "kind": "choices", "role": "pitch",
+		      "required": True,
 		      "options": [{"value": voice, "label": voice}
 		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
-		     {"name": "shape", "label": "shape", "kind": "choices",
+		     {"name": "shape", "label": "shape", "kind": "choices", "required": False,
 		      "options": [{"value": "up", "label": "up"},
 		                  {"value": "down", "label": "down"}]},
 		 ]},
@@ -101,7 +104,7 @@ CONTROLS: dict[str, typing.Any] = {
 		{"name": "rotate", "summary": "Roll the pattern, wrapping around.", "partial": False,
 		 "parameters": [
 		     {"name": "steps", "label": "steps", "kind": "number",
-		      "min": -8, "max": 8, "step": 1},
+		      "min": -8, "max": 8, "step": 1, "required": True},
 		 ]},
 		{"name": "reverse", "summary": "Flip the pattern backwards.",
 		 "partial": False, "parameters": []},

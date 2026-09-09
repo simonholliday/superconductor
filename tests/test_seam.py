@@ -153,9 +153,10 @@ CATALOGUE: list[dict[str, typing.Any]] = [
 		"summary": "Sound several pitches together.",
 		"partial": False,
 		"parameters": [
-			{"name": "pitches", "label": "pitches", "kind": "pitch", "multiple": True},
+			{"name": "pitches", "label": "pitches", "kind": "pitch",
+			 "multiple": True, "required": True},
 			{"name": "velocity", "label": "velocity", "kind": "range",
-			 "min": 1, "max": 127, "default": 100},
+			 "min": 1, "max": 127, "default": 100, "required": False},
 		],
 	},
 ]
@@ -350,8 +351,9 @@ RESHAPING_CATALOGUE: list[dict[str, typing.Any]] = [
 	{
 		"name": "euclidean", "summary": "A euclidean rhythm.", "partial": False,
 		"parameters": [
-			{"name": "pitch", "label": "pitch", "kind": "pitch"},
-			{"name": "pulses", "label": "pulses", "kind": "number", "step": 1},
+			{"name": "pitch", "label": "pitch", "kind": "pitch", "required": True},
+			{"name": "pulses", "label": "pulses", "kind": "number", "step": 1,
+			 "required": True},
 		],
 	},
 ]
@@ -360,9 +362,10 @@ RESHAPERS: list[dict[str, typing.Any]] = [
 	{
 		"name": "swing", "summary": "Apply swing feel.", "partial": False,
 		"parameters": [
-			{"name": "percent", "label": "percent", "kind": "number", "default": 57.0},
+			{"name": "percent", "label": "percent", "kind": "number", "default": 57.0,
+			 "required": False},
 			{"name": "strength", "label": "strength", "kind": "number",
-			 "min": 0.0, "max": 1.0, "default": 1.0},
+			 "min": 0.0, "max": 1.0, "default": 1.0, "required": False},
 		],
 	},
 	{

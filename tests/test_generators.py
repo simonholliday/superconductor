@@ -168,15 +168,15 @@ def test_a_pattern_dealt_the_same_stream_twice_plays_the_same_bar () -> None:
 # --- the sweep #2214 asks for -----------------------------------------------
 
 WILL_NOT_RUN = {
-	# **A number where the function asked to be told nothing** (#2248, upstream
-	# #2249).  `_required` infers what must be filled from parameter order, and a
-	# parameter with no default reads identically to one defaulting to `None`.
-	"arpeggio": "root", "chord": "root", "strum": "root", "fibonacci": "modulus",
-
-	# **A precondition enforced at run time and never declared** (upstream #2251).
-	# The only consumer that could open these at a legal value is one that already
-	# knew the answer.
-	"duration": "positive", "repeat": "positive", "stretch": "positive",
+	# **Seven layers used to be here and are not any more, which is the point of
+	# writing them down.**  Four were handed a number where the function asked to
+	# be told nothing (#2248, upstream #2249) — `arpeggio`, `chord`, `strum` and
+	# `fibonacci` — and three had a precondition enforced at run time and never
+	# declared (upstream #2251) — `duration`, `repeat` and `stretch`.  Both landed
+	# in Subsequence on 2026-09-09: a parameter now carries `required`, and a
+	# default of `None` is published as `null` rather than as an absent key, so
+	# there is nothing left to infer and `_required` is deleted rather than
+	# patched.  Seventeen became ten, with nothing newly dead.
 
 	# **Partial, and not merely partial** (#2154).  The catalogue drops a
 	# parameter this panel cannot draw, and the parameter is required — so the

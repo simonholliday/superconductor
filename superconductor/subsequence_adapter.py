@@ -1518,34 +1518,6 @@ def offerable (
 	return offered
 
 
-def _required (parameters: collections.abc.Sequence[dict[str, typing.Any]]) -> set[str]:
-	"""Which of a generator's parameters have to be given a value.
-
-	Inferred from their order, because the catalogue does not say.  A parameter
-	with no default at all and one whose default is ``None`` both arrive with no
-	``default`` key, and the two want opposite treatment: the first has to be
-	filled in or the call fails, the second has to be left out or the generator
-	is handed a zero where it expected to be told nothing.
-
-	Python requires parameters without defaults to come first, so everything
-	ahead of the first defaulted one is required.  That holds for every
-	generator in the catalogue as it stands.  It would not hold for a
-	keyword-only parameter declared after a defaulted one, which is legal and
-	which nothing here uses — so this is an assumption with a shelf life, and an
-	explicit flag from the app would retire it.
-	"""
-
-	must: set[str] = set()
-
-	for field in parameters:
-		if "default" in field:
-			break
-
-		must.add(str(field.get("name")))
-
-	return must
-
-
 class Recipe (Control):
 	"""An ordered stack of generators that build one pattern.
 
@@ -1650,8 +1622,22 @@ class Recipe (Control):
 			for generator in self.catalogue
 		}
 
+		# **A parameter says whether it must be supplied, and nothing here infers
+		# it.**  The two cases look identical without the flag — a parameter with
+		# no default at all and one defaulting to ``None`` — and they want
+		# opposite treatment: fill the first or the call fails, leave the second
+		# alone or the generator is handed a zero where it asked to be told
+		# nothing.  This used to be inferred from parameter *order*, which was a
+		# stand-in that said so in its own docstring, and which shipped `rotate`
+		# inert along with eight others.  An app that does not mark a parameter
+		# is taken at its word: nothing is required, and whatever then fails to
+		# run says so once in the log rather than guessing again.
 		self._must_have = {
-			generator.get("name"): _required(generator.get("parameters", []))
+			generator.get("name"): {
+				str(field.get("name"))
+				for field in generator.get("parameters", [])
+				if field.get("required")
+			}
 			for generator in self.catalogue
 		}
 
@@ -1675,7 +1661,11 @@ class Recipe (Control):
 				str(field.get("name")): _as_parameter(field)
 				for field in shape.get("parameters", [])
 			}
-			self._must_have[named] = _required(shape.get("parameters", []))
+			self._must_have[named] = {
+				str(field.get("name"))
+				for field in shape.get("parameters", [])
+				if field.get("required")
+			}
 
 		self.link: "AppLink | None" = None
 		"""How a stack says what it realised, and where it finds the grid it feeds."""

@@ -15,16 +15,24 @@ import pytest
 import superconductor.subsequence_adapter as adapter
 
 
+# **Shaped like a catalogue a real app sends, which since 2026-09-09 means every
+# parameter says whether it is required.**  These carried no such flag while the
+# adapter inferred it from parameter order, and a fake that lags the wire is how
+# two halves come to pass their own tests and fail together — the reason
+# `tests/conftest.py` keeps one `FakeApp` rather than letting each file build
+# frames by hand.  A parameter that is `required: False` with `"default": None`
+# is the case the flag exists for: it must be left out, not filled with a zero.
 CATALOGUE: list[dict[str, typing.Any]] = [
 	{
 		"name": "euclidean",
 		"summary": "Generate a Euclidean rhythm.",
 		"partial": False,
 		"parameters": [
-			{"name": "pitch", "label": "pitch", "kind": "pitch"},
-			{"name": "pulses", "label": "pulses", "kind": "number", "step": 1},
+			{"name": "pitch", "label": "pitch", "kind": "pitch", "required": True},
+			{"name": "pulses", "label": "pulses", "kind": "number", "step": 1,
+			 "required": True},
 			{"name": "velocity", "label": "velocity", "kind": "range",
-			 "min": 1, "max": 127, "default": 100},
+			 "min": 1, "max": 127, "default": 100, "required": False},
 		],
 	},
 	{
@@ -32,9 +40,10 @@ CATALOGUE: list[dict[str, typing.Any]] = [
 		"summary": "Loop a pitch sequence that gradually mutates.",
 		"partial": False,
 		"parameters": [
-			{"name": "pitches", "label": "pitches", "kind": "pitch", "multiple": True},
+			{"name": "pitches", "label": "pitches", "kind": "pitch",
+			 "multiple": True, "required": True},
 			{"name": "drift", "label": "drift", "kind": "number",
-			 "min": 0.0, "max": 1.0, "default": 0.0},
+			 "min": 0.0, "max": 1.0, "default": 0.0, "required": False},
 		],
 	},
 ]
@@ -492,10 +501,14 @@ OPTIONAL: list[dict[str, typing.Any]] = [
 		"summary": "Fill with probability-biased ghost notes.",
 		"partial": False,
 		"parameters": [
-			{"name": "pitch", "label": "pitch", "kind": "pitch"},
+			{"name": "pitch", "label": "pitch", "kind": "pitch", "required": True},
 			{"name": "density", "label": "density", "kind": "number",
-			 "min": 0.0, "max": 1.0, "default": 0.3},
-			{"name": "grid", "label": "grid", "kind": "number", "step": 1},
+			 "min": 0.0, "max": 1.0, "default": 0.3, "required": False},
+			# The whole case this file exists to hold: optional, and its default
+			# really is `None`, which the catalogue now publishes as `null`
+			# rather than by leaving the key out.
+			{"name": "grid", "label": "grid", "kind": "number", "step": 1,
+			 "required": False, "default": None},
 		],
 	},
 ]
@@ -504,10 +517,12 @@ OPTIONAL: list[dict[str, typing.Any]] = [
 def test_a_parameter_the_generator_decides_for_itself_is_left_out () -> None:
 	"""And filling it in silenced the layer while it looked perfectly set up.
 
-	``grid`` has no default in the catalogue because its default is ``None`` —
-	*use the pattern's own grid*.  A required parameter with no default arrives
-	looking exactly the same, so filling both with a number meant handing
+	``grid`` defaults to ``None`` — *use the pattern's own grid*.  It used to
+	arrive looking exactly like a required parameter with no default, because the
+	catalogue left the key out for both, so filling both with a number handed
 	``ghost_fill`` a grid of no steps, which places nothing and says nothing.
+	The catalogue says which is which now (upstream #2249), and this holds that
+	the optional one is still left alone.
 	"""
 
 	recipe = adapter.Recipe(Composition(), catalogue=OPTIONAL, pitches=ROWS)
@@ -518,8 +533,8 @@ def test_a_parameter_the_generator_decides_for_itself_is_left_out () -> None:
 
 
 def test_a_parameter_the_generator_cannot_do_without_is_filled_in () -> None:
-	"""Everything before the first defaulted parameter, which is how Python
-	orders a signature and the only signal the catalogue carries."""
+	"""A parameter the catalogue marks `required` is opened at something; the
+	app says which, and nothing here infers it from parameter order."""
 
 	recipe = adapter.Recipe(Composition(), catalogue=CATALOGUE, pitches=ROWS)
 
