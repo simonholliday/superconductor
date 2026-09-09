@@ -14,8 +14,23 @@ device names live in your own files, never in here.
 
 ## Status
 
-A working proof of concept, not a release. It has been played on real hardware;
-it has not been used by anyone but its author.
+**This is an early release, and it is not polished.** It has been played on real
+hardware most days, by one person — its author — and by nobody else. Expect
+rough edges, and expect the interface to move: very little here is settled
+enough to be promised, and a version that changes how something works is more
+likely than one that does not.
+
+**So far it drives Subsequence, and nothing else.** The package itself knows
+nothing about any particular music software — an application dials in and
+declares what it can be controlled by, and that door is open to anything that
+can hold a WebSocket and speak the protocol. But Subsequence, a generative MIDI
+sequencer, is the only application anyone has written an adapter for, so today
+"an application" means that one. Sampling and radio are intended and not
+started.
+
+If you do not already run Subsequence, there is nothing here you can play yet.
+The service will start, serve its page, and wait for an application that is not
+coming.
 
 What runs today: as many pages as an application declares, holding step grids,
 pitched note grids with sub-step timing, an instrument's own settings, stacks of
@@ -39,6 +54,11 @@ python tools/restore_state.py      # after
 A restore is additive and cannot clear, so a composition that seeds an opening
 pattern comes back with that pattern *plus* whatever was captured.
 
+Those two tools live in the repository rather than in the installed package, as
+does `compositions/drm1_grid.py` below — the only worked example, and the only
+place the application-facing API is written down. Installing from a package
+index gets you the service and the page; the examples are worth the clone.
+
 ## What it needs
 
 Genuinely required:
@@ -58,7 +78,7 @@ product is for.
 ## Running it
 
 ```
-pip install -e ".[dev]"
+pip install superconductor
 superconductor                 # serves on port 8090
 superconductor --port 9000     # or wherever you like
 ```
@@ -309,7 +329,10 @@ restarted without the others being told.
 
 ## Development
 
+From a checkout, rather than from the package index:
+
 ```
+pip install -e ".[dev]"
 pytest
 mypy superconductor
 ```
@@ -327,6 +350,24 @@ is the browser this is built for. No `sudo` was needed here.
 The page is plain ES modules with no build step: Preact and htm are vendored
 under `superconductor/client/vendor/`, with their licences recorded there. Edit
 the files and reload the browser.
+
+## What is in here
+
+| | |
+| --- | --- |
+| `superconductor/` | the package — the service, the protocol, the adapter and the page it serves |
+| `compositions/` | the worked example, and the only place the application-facing API is written down |
+| `tools/` | probes that stand in for a browser, a capture and a restore, and the theme separation check |
+| `tests/` | the suite, including the ones that drive a real Firefox |
+| `research/` | the probes and raw measurements the design was made from |
+| `reviews/` | the code reviews it has been through |
+| `licences/` | notices for the vendored face and icons |
+
+`research/` and `reviews/` are provenance: they record what was true on the day
+they were written and are deliberately not kept up to date. They still say
+*Superintendent*, which is what this was called until September 2026, and they
+cite a tracker you cannot reach. They are here because the documents that cite
+them should be checkable, not because they describe the code as it stands.
 
 ## Licence
 

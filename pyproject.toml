@@ -4,9 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "superconductor"
-description = "Touchscreen control surface for Subsequence, Subsample and Substation"
+description = "A touchscreen control surface for music software — early, and so far only for Subsequence"
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [{name = "Simon Holliday"}]
+keywords = ["midi", "sequencer", "touchscreen", "music", "control-surface", "subsequence"]
+# **Alpha is a claim about the interface, not about whether it works.** It is
+# played daily on real hardware; what is unsettled is the shape of the thing, and
+# a reader deciding whether to depend on it needs that said in the one place a
+# package index will show it.  No `License ::` classifier: the licence travels as
+# `License-Expression` above, and setuptools refuses both.
+classifiers = [
+	"Development Status :: 3 - Alpha",
+	"Environment :: Web Environment",
+	"Framework :: AsyncIO",
+	"Intended Audience :: End Users/Desktop",
+	"Operating System :: OS Independent",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
+	"Programming Language :: Python :: 3.13",
+	"Programming Language :: Python :: 3.14",
+	"Topic :: Multimedia :: Sound/Audio :: MIDI",
+]
 license = "LicenseRef-FSL-1.1-ALv2"
 # The vendored notices travel with the artefact, because they have to: the OFL
 # requires the font's licence to accompany it, and Lucide's icon paths are
@@ -19,6 +39,14 @@ dependencies = [
 	"websockets>=14.0",
 	"PyYAML>=6.0",
 ]
+
+# A package index page is the only thing many people will ever read about this,
+# and a page with nowhere to go from it is a dead end.  Every one of these must
+# resolve for a stranger before anything is uploaded — the repository is private
+# as this is written, and a 404 from a package page is worse than no link.
+[project.urls]
+Repository = "https://github.com/simonholliday/superconductor"
+Issues = "https://github.com/simonholliday/superconductor/issues"
 
 [project.optional-dependencies]
 dev = [

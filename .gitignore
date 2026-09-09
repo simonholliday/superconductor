@@ -10,14 +10,14 @@ config.yaml
 pages/
 
 # **A composition is a studio, and a studio is private.**  Rig facts live here
-# on purpose — MIDI channels, drum maps, device names — because #1465 forbids
-# them in the package, so this directory is where they are allowed to be.  That
-# makes it the wrong thing to publish by default.
+# on purpose — MIDI channels, drum maps, device names — because the package
+# itself may never know about a particular studio, so this directory is where
+# they are allowed to be.  That makes it the wrong thing to publish by default.
 #
 # The exception is the one worked example.  It is what `tests/test_composition.py`
 # imports, and the adapter is duck-typed, so it is also the only place the API
-# is written down at all.  Publishing it is not a breach of #1465: that rule is
-# about what the *package* may import, and this is outside the package.
+# is written down at all.  Publishing it breaks no rule: the constraint is on
+# what the *package* may import, and this is outside the package.
 #
 # The two state files beside it — `.pages.json` and `.grids.json` — are written
 # by the running rig and were tracked by accident, so every session dirtied the
@@ -26,5 +26,5 @@ compositions/*
 !compositions/drm1_grid.py
 
 # The agent brief. Kept out of the repository on purpose and held on backed-up
-# storage instead, as Subsequence does with its own (#1463).
+# storage instead, as the sequencer project does with its own.
 CLAUDE.md
