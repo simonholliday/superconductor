@@ -1,5 +1,8 @@
 # Superconductor
 
+[![Tests](https://github.com/simonholliday/superconductor/actions/workflows/tests.yml/badge.svg)](https://github.com/simonholliday/superconductor/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/superconductor)](https://pypi.org/project/superconductor/)
+
 A touchscreen control surface for music software.
 
 A small service runs beside your music applications, serves one page to a

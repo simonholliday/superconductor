@@ -122,6 +122,36 @@ jobs:
         # is a fast filter and the page tests are the actual net.
         run: node --input-type=module --check < superconductor/client/app.js
 
+  installed:
+    name: The wheel serves what it carries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # setuptools-scm needs the history to derive a version
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Build the wheel
+        run: pipx run build --wheel
+      - name: Install it into a venv of its own
+        run: |
+          python -m venv /tmp/fresh
+          /tmp/fresh/bin/pip install --upgrade pip
+          /tmp/fresh/bin/pip install dist/*.whl
+      - name: Serve it from outside the checkout and fetch everything it asks for
+        # **From /tmp on purpose.** Started in the checkout, `superconductor`
+        # resolves the package from the source tree on sys.path[0] and the wheel
+        # is never exercised at all — which looks exactly like a pass.
+        run: |
+          cd /tmp
+          /tmp/fresh/bin/superconductor --host 127.0.0.1 --port 8099 &
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:8099/ && break
+            sleep 0.5
+          done
+          /tmp/fresh/bin/python "$GITHUB_WORKSPACE/.github/scripts/serves_what_it_carries.py"
+
   artefact:
     name: It still builds and publishes
     runs-on: ubuntu-latest
