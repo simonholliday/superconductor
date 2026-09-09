@@ -247,6 +247,54 @@ which was the point of choosing absolute sets: adding a generator from the
 glass needed no new frame, only a value that happens to be a list (#2085).
 """
 
+PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
+"""What a parameter can be, and so what a panel knows how to draw.
+
+**It lives here because both halves have to agree on it**, and the two that must
+are as far apart as this package gets: `subsequence_adapter.offerable` decides
+what an app offers, and `controls.py` decides what the service will keep.  A
+second copy of a vocabulary is how two ends come to disagree, which is the fault
+this project has been bitten by three times, so there is one.
+
+**A kind outside this tuple is not drawn, it is reported `undrawn`** (#2379).
+Nothing used to check, and the fall-through at both ends was *it is a number* —
+so the first kind Subsequence invented that this package had never seen came
+through as an unbounded dial opening at zero, on a parameter that wanted a chord.
+Refusing to draw what we cannot draw is the honest answer and is already the
+contract: `undrawn` says so, and `partial` follows from it.
+
+A range is two numbers with an order between them, held as ``[low, high]``.  It
+is the shape an algorithm's parameters ask for that an instrument's did not: a
+velocity given as ``(30, 50)`` means a fresh draw between the two on every hit,
+which is most of what makes a generated layer sound played rather than typed.
+
+``choices`` is several of a pool where ``choice`` is one of it, held as a list in
+the order the panel sent.  **It is a kind of its own rather than a flag on
+``choice``**, on the same reasoning that makes ``range`` a kind rather than a
+``number`` that carries a pair: a kind settles the shape of a value, and one that
+means a string here and a list there has stopped settling anything — every reader
+would then have to check a second field before it knew what it was holding.
+
+The order is kept because it can matter: the pitches of a chord are not a set,
+and a generator handed a root first is entitled to use that.  Duplicates are
+refused, because two of one pitch in a pool says nothing a single one does not.
+
+``action`` is the odd one and the only kind that **holds nothing**.  It names
+options like a choice and a press is checked against them, but no value is kept
+by the app, the service or the glass, because the thing it sets cannot be read.
+A Moog Matriarch's voicing is the case it was built for: a front-panel switch
+changes it undetectably, so any state that was remembered would be wrong the
+moment a hand moved that switch, and a panel arriving late would be told a
+confident lie (#2179, #2172).  A panic button is the same shape — there is no
+state after "all notes off" either.
+
+``pitch`` is not in here, and that is deliberate: it never reaches a panel.  An
+app declares one and `offerable` turns it into a ``choice`` or a ``choices`` of
+the pitches a composition actually has, because which pitches exist is the
+composition's to know and never the app's (#1465).
+"""
+
+
 Frame = dict[str, typing.Any]
 
 

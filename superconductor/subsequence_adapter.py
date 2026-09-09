@@ -1436,6 +1436,20 @@ class Params (Control):
 		return checked_value(parameter, value)
 
 
+DRAWABLE = superconductor.protocol.PARAMETER_KINDS + ("pitch",)
+"""Every parameter kind `offerable` will pass to a panel, and nothing else.
+
+``pitch`` is here and is not a kind a panel ever sees: this function turns one
+into a ``choice`` or a ``choices`` of the pitches a composition actually has,
+which is the join the whole arrangement rests on (#1465).  It has to be let
+through to be converted.
+
+The rest is the shared vocabulary rather than a list of its own, because the
+service checks incoming values against the same six and a copy here would be the
+half that goes stale.
+"""
+
+
 def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
 	"""One entry of a catalogue read back as the thing that checks a value.
 
@@ -1502,6 +1516,23 @@ def offerable (
 		undrawn: list[str] = []
 
 		for field in generator.get("parameters", []):
+			# **A kind this package cannot draw is said out loud, not guessed at**
+			# (#2379).  Everything that was not a pitch used to pass straight
+			# through, and the fall-through at both ends of this file is *it is a
+			# number* — so the first kind Subsequence invented that was not in the
+			# vocabulary arrived on the glass as an unbounded dial opening at
+			# zero, on a parameter that wanted a chord, and would have handed that
+			# zero back to the generator.  Nothing was audible, because it landed
+			# on a layer that could not run for another reason; that is luck and
+			# it runs out.
+			#
+			# `undrawn` already means exactly this and has only ever fired on a
+			# pitch with no pitches to offer.  Saying it here covers every kind
+			# yet to be invented rather than this one.
+			if field.get("kind") not in DRAWABLE:
+				undrawn.append(str(field.get("name")))
+				continue
+
 			if field.get("kind") in ("number", "range") and field.get("name") in narrowed:
 				low, high = narrowed[str(field.get("name"))]
 				fields.append({**field, "min": low, "max": high})

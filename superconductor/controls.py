@@ -14,6 +14,8 @@ cell, ``transport/bpm`` for a field.
 
 import typing
 
+import superconductor.protocol
+
 
 STEP_GRID = "step_grid"
 """A grid of rows against steps, where a cell is present or absent."""
@@ -53,33 +55,13 @@ Settled on 2026-09-06 (#2140); the client's own hard-coded 127 was removed under
 the same rule.
 """
 
-PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
-"""What a parameter can be, and so what a panel knows how to draw.
+PARAMETER_KINDS = superconductor.protocol.PARAMETER_KINDS
+"""What a parameter can be, re-exported so this file reads as one vocabulary.
 
-A range is two numbers with an order between them, held as ``[low, high]``.  It
-is the shape an algorithm's parameters ask for that an instrument's did not: a
-velocity given as ``(30, 50)`` means a fresh draw between the two on every hit,
-which is most of what makes a generated layer sound played rather than typed.
-
-``choices`` is several of a pool where ``choice`` is one of it, held as a list in
-the order the panel sent.  **It is a kind of its own rather than a flag on
-``choice``**, on the same reasoning that makes ``range`` a kind rather than a
-``number`` that carries a pair: a kind settles the shape of a value, and one that
-means a string here and a list there has stopped settling anything — every reader
-would then have to check a second field before it knew what it was holding.
-
-The order is kept because it can matter: the pitches of a chord are not a set,
-and a generator handed a root first is entitled to use that.  Duplicates are
-refused, because two of one pitch in a pool says nothing a single one does not.
-
-``action`` is the odd one and the only kind that **holds nothing**.  It names
-options like a choice and a press is checked against them, but no value is kept
-here and none is sent back, because the thing it sets cannot be read.  A Moog
-Matriarch's voicing is the case it was built for: a front-panel switch changes
-it undetectably, so any state this file remembered would be wrong the moment a
-hand moved that switch, and a panel arriving late would be told a confident lie
-(#2179, #2172).  A panic button is the same shape — there is no state after
-"all notes off" either.
+It moved to ``protocol.py`` when ``offerable`` started reading it too (#2379):
+the app half decides what to offer and this half decides what to keep, and a
+tuple naming the same six kinds in both places is two rules holding one fact.
+The docstring explaining each kind went with it.
 """
 
 

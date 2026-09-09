@@ -12,6 +12,7 @@ import typing
 
 import pytest
 
+import superconductor.controls as controls
 import superconductor.subsequence_adapter as adapter
 
 
@@ -222,6 +223,64 @@ def test_a_layer_opens_its_pitch_pool_at_one_pitch_rather_than_a_number () -> No
 	recipe.apply(["layers"], [{"id": "a", "generator": "evolve", "params": {}}])
 
 	assert recipe.layers()[0]["params"]["pitches"] == [ROWS[0]]
+
+
+def test_a_parameter_kind_this_panel_has_never_heard_of_is_not_drawn () -> None:
+	"""An app may be newer than this package, and a kind is how that shows.
+
+	Everything that was not a pitch used to pass straight through, and the
+	fall-through at both ends of the adapter is *it is a number* — so a kind
+	nobody here had heard of arrived on the glass as an unbounded dial opening at
+	zero, and would have handed that zero back to the generator as if somebody
+	had chosen it.  Measured against Subsequence's ``kind: "chord"`` on the day
+	it was written (#2379).
+
+	`undrawn` is the honest answer and already means exactly this.  A panel is
+	told the parameter exists and that this package could not draw it, which is
+	the one thing a person could act on.
+	"""
+
+	catalogue: list[dict[str, typing.Any]] = [{
+		"name": "arpeggio",
+		"summary": "Play a chord one note at a time.",
+		"partial": False,
+		"parameters": [
+			{"name": "chord", "label": "chord", "kind": "chord", "required": True},
+			{"name": "spacing", "label": "spacing", "kind": "number",
+			 "default": 0.25, "required": False},
+		],
+	}]
+
+	recipe = adapter.Recipe(Composition(), catalogue=catalogue, pitches=ROWS)
+	offered = recipe.declaration()["generators"][0]
+
+	assert offered["undrawn"] == ["chord"]
+	assert offered["partial"] is True
+	assert [one["name"] for one in offered["parameters"]] == ["spacing"]
+
+	# **And it is gone from every other answer, not only from the drawing.**
+	# `offerable` is the one choke point the opening value, the validation map
+	# and the declaration all read through, so refusing it once refuses it
+	# everywhere — which is the whole reason the guard lives there.
+	recipe.apply(["layers"], [{"id": "a", "generator": "arpeggio", "params": {}}])
+
+	assert recipe.layers()[0]["params"] == {"spacing": 0.25}
+
+	with pytest.raises(adapter.Refused):
+		recipe.apply(["layers", "a", "params", "chord"], 0)
+
+
+def test_the_drawable_kinds_are_the_ones_the_service_keeps () -> None:
+	"""One vocabulary, read by the half that offers and the half that keeps.
+
+	A tuple naming the same six kinds in two files is two rules holding one fact,
+	which is how the two ends of this package have come to disagree three times.
+	``pitch`` is the one addition and never reaches a panel: it is turned into a
+	choice of the pitches a composition actually has, so it has to be let through
+	to be converted.
+	"""
+
+	assert set(adapter.DRAWABLE) == set(controls.PARAMETER_KINDS) | {"pitch"}
 
 
 def test_a_generator_with_nothing_dropped_carries_no_undrawn_at_all () -> None:

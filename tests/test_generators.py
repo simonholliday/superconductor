@@ -252,8 +252,18 @@ def test_the_layers_that_cannot_run_are_the_ones_already_written_down (
 	  list, and if the `root` four or the `positive` three have gone, #2249 or
 	  #2251 has landed and #2214 may be able to close.
 
-	The reasons are grouped in the constant above; nothing asserts them, because a
-	message is upstream's wording to change and the *name* is the fact.
+	**The reasons are asserted too, and that changed on 2026-09-09** (#2379).
+	They were not, on the reasoning that a message is upstream's wording to
+	change — true of a *phrase* and false of what is actually recorded here,
+	which is a **parameter name**.  A name is a fact about their function, so an
+	unasserted one is a second copy of an upstream fact going stale in silence,
+	which is the thing this file exists to refuse.
+
+	It nearly cost exactly that: Subsequence widened `broken_chord` and told us
+	the blocker had moved from `chord_obj` to `order`, designing the handshake
+	around this test going red.  It would not have.  The name is checked as a
+	substring of the warning, which is loose on purpose — the wording either side
+	of it is still theirs to change.
 	"""
 
 	broken = _sweep(caplog)
@@ -261,3 +271,10 @@ def test_the_layers_that_cannot_run_are_the_ones_already_written_down (
 	assert set(broken) == set(WILL_NOT_RUN), (
 		f"newly dead: {sorted(set(broken) - set(WILL_NOT_RUN))}; "
 		f"no longer dead: {sorted(set(WILL_NOT_RUN) - set(broken))}")
+
+	moved = {name: why for name, why in broken.items()
+	         if WILL_NOT_RUN[name] not in why}
+
+	assert not moved, (
+		"still dead, but not for the reason written down — the blocker moved, so "
+		f"update the reason rather than the list: {moved}")
