@@ -1020,6 +1020,7 @@ class Parameter:
 		options: collections.abc.Sequence[tuple[str, str]] | None = None,
 		default: typing.Any = None,
 		group: str | None = None,
+		role: str | None = None,
 	) -> None:
 		"""Describe one setting: what it is called, what shape it is, what it may be.
 
@@ -1037,6 +1038,15 @@ class Parameter:
 
 		self.name = name
 		self.kind = kind
+
+		self.role = role
+		"""What the values of this parameter *are*, where the kind cannot say.
+
+		A ``choices`` of pitch names and a ``choices`` of waveform names are the
+		same kind and are not the same thing, and only the first may be fed from a
+		set of notes (#2374).  Held here so that the check reading it is the same
+		one every other value passes through.
+		"""
 		self.label = label
 		self.minimum = minimum
 		self.maximum = maximum
@@ -1133,6 +1143,23 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 	the service takes and the app refuses — which was exactly what happened when
 	``choices`` was added, and what `tests/test_seam.py` caught.
 	"""
+
+	# **A reference is checked before a kind is, because it is not one** (#2374).
+	# `{"from": ...}` says take this from somewhere every cycle, and it would fail
+	# every check below — reporting that a pitch pool is not a list, which is true
+	# and useless.  What it may be patched *to* is checked by the caller, which is
+	# the only thing holding the other controls.
+	if isinstance(value, dict) and "from" in value:
+		if value.get("from") != "control":
+			raise Refused(f"{parameter.name} cannot be patched from {value.get('from')}")
+
+		if not isinstance(value.get("id"), str):
+			raise Refused(f"{parameter.name} is patched from nothing this app declared")
+
+		if parameter.kind != "choices" or parameter.role != "pitch":
+			raise Refused(f"{parameter.name} does not take pitches")
+
+		return {"from": "control", "id": value["id"]}
 
 	if parameter.kind == "switch":
 		if not isinstance(value, bool):
@@ -1428,6 +1455,7 @@ def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
 		options=[(one.get("value"), one.get("label", one.get("value")))
 		         for one in field.get("options", [])],
 		default=field.get("default"),
+		role=field.get("role"),
 	)
 
 
@@ -1518,6 +1546,109 @@ def offerable (
 	return offered
 
 
+class PitchSet (Control):
+	"""A set of pitches somebody chose, which sounds nothing and feeds things that do.
+
+	**A note set is a value rather than a placement** (#2374).  Every other
+	control here either makes a sound or arranges one; this one exists only to be
+	*read*, by a generator's pitch parameter that has been patched to it.
+
+	The point is sharing.  A pitch pool typed into one arpeggio layer belongs to
+	that layer; the same pool held here can feed an arpeggio on the Minitaur and
+	another on the Matriarch, and the two cannot drift apart because there is one
+	of it.  Reading is not consuming, so fanning out costs nothing and needs no
+	topology — which is the whole reason a value graph is cheaper than the motif
+	graph #2225 designed.
+
+	**Order is kept as it was chosen**, never sorted.  The pitches of a chord are
+	not a set, and a generator handed a root first is entitled to use that.
+
+	**Each pitch travels with the note it sounds.**  A panel needs it to draw a
+	keyboard at all, and a consumer needs it to fold a choice into its own
+	register — see ``Recipe._folded``.  Which note a row name sounds is the
+	composition's to say (#1465); this holds what it was told.
+	"""
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		name: str = "notes",
+		title: str | None = None,
+		pitches: collections.abc.Mapping[str, int] | None = None,
+		chosen: collections.abc.Sequence[str] = (),
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+	) -> None:
+		"""Hold a set of pitches, from the pool the composition says exists."""
+
+		self.composition = composition
+		self.name = name
+		self.title = title
+		self.about = about
+
+		self.pitches: dict[str, int] = dict(pitches or {})
+		"""Every pitch this set may hold, and the note each one sounds."""
+
+		self.chosen: list[str] = [one for one in chosen if one in self.pitches]
+		"""What is in the set now, in the order it was chosen."""
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""The pool, with the note behind each name."""
+
+		return {
+			"type": "pitch_set",
+			"pitches": [{"value": named, "label": named, "midi": note}
+			            for named, note in self.pitches.items()],
+			**self.said(),
+		}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""What is in the set, and whether it is contributing at all."""
+
+		return {"chosen": list(self.chosen), "enabled": self.enabled}
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Replace the set entire, or switch it off."""
+
+		if rest == ["enabled"]:
+			self.enabled = bool(value)
+			return True
+
+		if rest != ["chosen"]:
+			raise Refused("a pitch set is addressed as control/chosen")
+
+		if not isinstance(value, list):
+			raise Refused("a pitch set takes a list of pitches")
+
+		taken: list[str] = []
+
+		for one in value:
+			if one not in self.pitches:
+				raise Refused(f"this set offers no pitch called {one}")
+
+			if one in taken:
+				raise Refused(f"{one} is named twice, and a pitch is either in the set or not")
+
+			taken.append(str(one))
+
+		self.chosen = taken
+
+		return True
+
+	def notes (self) -> list[int]:
+		"""What is in the set, as the notes they sound, in the order chosen.
+
+		A set that is switched off is empty rather than absent, because an empty
+		pitch list is a thing every consumer already handles: ``arpeggio`` rests
+		on one and says so in its own docstring.  A mute is therefore silence
+		wherever this is patched, with nothing to special-case at the far end.
+		"""
+
+		if not self.enabled:
+			return []
+
+		return [self.pitches[one] for one in self.chosen]
+
+
 class Recipe (Control):
 	"""An ordered stack of generators that build one pattern.
 
@@ -1541,6 +1672,7 @@ class Recipe (Control):
 		composition: typing.Any,
 		catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 		pitches: collections.abc.Sequence[str] = (),
+		pitch_notes: collections.abc.Mapping[str, int] | None = None,
 		bounds: dict[str, tuple[float, float]] | None = None,
 		transforms: collections.abc.Sequence[dict[str, typing.Any]] = (),
 		builds: str | None = None,
@@ -1552,6 +1684,21 @@ class Recipe (Control):
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 	) -> None:
 		"""Offer a stack over a list the composition keeps."""
+
+		self.pitch_notes: dict[str, int] = dict(pitch_notes or {})
+		"""What note each of this stack's own pitches sounds, where the composition said.
+
+		Only needed to *fold* a patched pitch set into this stack's register, and
+		empty is a perfectly good answer: a stack whose rows are drum voices has
+		no register to fold into, and one that is never patched never asks.
+
+		**Without it two instruments cannot share a set of notes.**  The Minitaur
+		here reaches C1 to C3 and the Matriarch C3 to C5, so a literal pitch
+		played through both is silent on one of them — a person patches one set
+		to two arpeggios, hears one instrument, and has nothing to look at.  What
+		they mean by *the same notes* is the same pitch classes, each in its own
+		instrument's register, and that is what folding does.
+		"""
 
 		self.builds = builds
 		"""Which control this stack contributes to, by name.
@@ -2408,16 +2555,117 @@ class Recipe (Control):
 		A range crosses the wire as a two-item list because JSON has no tuple,
 		and a generator that offers ``int | (int, int)`` reads a list as
 		neither.  So it goes back to a tuple on the way in.
+
+		**A parameter may hold a source rather than a value** (#2374), and this is
+		where one becomes the other.  It is resolved on every build because that
+		is the point of it: a set of notes somebody is editing on the glass, or a
+		signal that moves, has to be read at the moment the bar is made and not
+		when the layer was added.
+
+		Measured at 0.28 to 2.25 us a source against a 20 ms pulse, which is less
+		than the 4.5 us a layer already spends deriving its own stream (#2233).
 		"""
 
 		offered = self._offered.get(generator, {})
+		wanted: dict[str, typing.Any] = {}
 
-		return {
-			name: tuple(value) if offered.get(name) is not None
-			and offered[name].kind == "range" and isinstance(value, list)
-			else value
-			for name, value in params.items()
-		}
+		for name, value in params.items():
+			parameter = offered.get(name)
+
+			if isinstance(value, dict) and "from" in value:
+				wanted[name] = self._sourced(value)
+				continue
+
+			if parameter is not None and parameter.kind == "range" and isinstance(value, list):
+				wanted[name] = tuple(value)
+				continue
+
+			wanted[name] = value
+
+		return wanted
+
+	def _sourced (self, patch: dict[str, typing.Any]) -> typing.Any:
+		"""What a patched parameter is worth this cycle.
+
+		**A source that has gone is an empty answer, not a failure.**  A stack
+		whose set of notes was removed should fall silent on that layer and keep
+		playing everything else — the same reasoning as the skip in ``build``,
+		where one bad layer must not cost the part its bar.
+		"""
+
+		named = patch.get("id")
+		held = self.link.controls.get(str(named)) if self.link is not None else None
+
+		if not isinstance(held, PitchSet):
+			return []
+
+		return self._folded(held.notes())
+
+	def _folded (self, notes: collections.abc.Sequence[int]) -> list[str]:
+		"""Somebody's notes, moved into the register this stack can actually play.
+
+		**The same notes means the same shape, not the same numbers.**  One set
+		patched to a bass and to a lead is a person saying *both of these play
+		this*, and taking it literally silences whichever instrument does not
+		reach — on this rig always one of them, because the Minitaur stops at C3
+		and the Matriarch starts there.
+
+		**The whole set moves together, by octaves.**  Folding each note to its own
+		nearest octave was tried first and is wrong: C4 E4 G4 came out of a bass as
+		C3 E2 G2, which is the right three pitch classes and not a chord anybody
+		played.  A triad has a shape and the shape is most of what it is, so one
+		octave shift is chosen for the set and every note takes it.
+
+		A note still outside the range after the shift is folded by octaves until
+		it is inside — a set wider than the instrument cannot keep its shape, and
+		sounding is better than silence.  A pitch class this stack has no row for
+		is dropped, which is honest: there is nowhere for it to sound.
+		"""
+
+		if not self.pitch_notes or not notes:
+			return []
+
+		reach = sorted(self.pitch_notes.values())
+		lowest, highest = reach[0], reach[-1]
+
+		# One shift for the set, chosen so its middle sits nearest the middle of
+		# what this instrument reaches.  Octaves only: anything else would change
+		# the notes rather than move them.
+		middle = (min(notes) + max(notes)) / 2
+		shift = round(((lowest + highest) / 2 - middle) / 12) * 12
+
+		by_note = {note: named for named, note in self.pitch_notes.items()}
+		folded: list[str] = []
+
+		for note in notes:
+			moved = note + shift
+
+			while moved < lowest:
+				moved += 12
+
+			while moved > highest:
+				moved -= 12
+
+			named = by_note.get(moved)
+
+			if named is None:
+				# A row list that is not chromatic — a scale, or one voice. Take
+				# the nearest row of the same pitch class, or nothing.
+				matching = [(other, mine) for other, mine in self.pitch_notes.items()
+				            if mine % 12 == moved % 12]
+
+				if not matching:
+					continue
+
+				named = min(matching, key=lambda pair: abs(pair[1] - moved))[0]
+
+			# A set may name two notes that fold onto one row. Kept once: a
+			# generator handed the same pitch twice plays it twice, which is not
+			# what somebody who chose two different notes meant.
+			if named not in folded:
+				folded.append(named)
+
+		return folded
 
 	def _complain (self, generator: str, why: str) -> None:
 		"""Say once that a layer will not run, not once a bar."""

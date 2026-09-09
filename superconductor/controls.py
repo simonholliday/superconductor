@@ -151,7 +151,42 @@ are related, and deliberately does not.
 """
 
 
-KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT, GRIDS)
+PITCH_SET = "pitch_set"
+"""A set of pitches somebody chose, held as a control in its own right.
+
+**A note set is a value rather than a placement** (#2374).  It sounds nothing on
+its own: it exists so that a generator's pitch parameter can be fed from it
+instead of from a list typed into that one layer, and so that two generators can
+be fed from the *same* one and agree.
+
+Its state is an ordered list, because pick order is musical — the pitches of a
+chord are not a set, and a generator handed a root first is entitled to use that.
+
+**Each pitch carries the note it sounds**, which is the one thing the service
+passes through without interpreting.  A panel needs it to draw a keyboard at all
+(which keys are black is arithmetic on a note number, and nothing else the panel
+holds can answer it), and an app needs it to fold one person's choice into the
+register of whichever instrument is reading — a Minitaur that stops at C3 and a
+Matriarch that starts there cannot both play the literal same notes.
+"""
+
+
+PATCHED = "from"
+"""The key that makes a parameter's value a reference rather than a literal.
+
+``{"from": "control", "id": "notes"}`` on a parameter says *take this from that
+control every cycle*, where a bare value says *use this*.  The service keeps the
+reference and never resolves it: what a source is worth is the app's to work out,
+on the clock, at the moment it builds — the same division as everywhere else here.
+
+The envelope is deliberately wider than the one source it carries today, because
+#2232 wants the same shape for a number driven by a signal, a cycle count or a
+bar.  A parameter holding a source is one mechanism with two payloads, and
+building it twice is how the two would come to disagree.
+"""
+
+
+KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT, GRIDS, PITCH_SET)
 """Every kind of control this version of the service understands.
 
 An app may declare one this service has never heard of — it is older than the
@@ -205,16 +240,19 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 		_apply_note(state.setdefault(control, {}), declaration, rest, value, path)
 
 	elif kind == PARAMS:
-		_apply_parameter(state.setdefault(control, {}), declaration, rest, value, path)
+		_apply_parameter(state.setdefault(control, {}), declaration, rest, value, path, controls)
 
 	elif kind == RECIPE:
-		_apply_recipe(state.setdefault(control, {}), declaration, rest, value, path)
+		_apply_recipe(state.setdefault(control, {}), declaration, rest, value, path, controls)
 
 	elif kind == TRANSPORT:
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
 	elif kind == GRIDS:
 		_apply_rack(state.setdefault(control, {}), rest, value, path)
+
+	elif kind == PITCH_SET:
+		_apply_pitch_set(state.setdefault(control, {}), declaration, rest, value, path)
 
 	else:
 		raise ControlError(f"{control!r} is a {kind!r}, which this version does not know")
@@ -346,6 +384,7 @@ def _apply_parameter (
 	rest: list[str],
 	value: typing.Any,
 	path: str,
+	controls: dict[str, typing.Any],
 ) -> None:
 	"""Write one named setting, refusing anything the app did not offer.
 
@@ -362,6 +401,13 @@ def _apply_parameter (
 
 	if field is None:
 		raise ControlError(f"this app offers no setting called {name!r}")
+
+	# **A reference is checked before a kind is, because it is not one** (#2374).
+	# `{"from": ...}` says take this from somewhere every cycle; it would fail
+	# every check below, and failing them would report the wrong thing entirely.
+	if _patched(value):
+		settings[name] = _readable_patch(controls, field, value, name)
+		return
 
 	kind = field.get("kind")
 
@@ -471,6 +517,7 @@ def _apply_recipe (
 	rest: list[str],
 	value: typing.Any,
 	path: str,
+	controls: dict[str, typing.Any],
 ) -> None:
 	"""Rewrite the whole stack, or change one parameter of one layer.
 
@@ -486,7 +533,7 @@ def _apply_recipe (
 	"""
 
 	if rest == ["layers"]:
-		recipe["layers"] = _readable_layers(declaration, value, path)
+		recipe["layers"] = _readable_layers(declaration, value, path, controls)
 		return
 
 	if len(rest) != 2:
@@ -504,7 +551,100 @@ def _apply_recipe (
 	_apply_parameter(
 		layer.setdefault("params", {}),
 		_offered(declaration, layer.get(running), running),
-		rest[1:], value, path)
+		rest[1:], value, path, controls)
+
+
+def _apply_pitch_set (
+	held: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Replace the whole set, or switch it off.
+
+	The set arrives entire rather than a pitch at a time, for the reason a grid's
+	rows do: a half-applied chord is a chord nobody played, and the panel already
+	holds the whole of what it means.
+
+	Order is kept exactly as it arrived.  It is not sorted and it is not made a
+	set, because the pitches of a chord are not a set and the order somebody
+	chose them in is the order a generator will be handed them.
+	"""
+
+	if rest == ["enabled"]:
+		held["enabled"] = bool(value)
+		return
+
+	if rest != ["chosen"]:
+		raise ControlError(f"{path!r} does not name a pitch set as control/chosen")
+
+	if not isinstance(value, list):
+		raise ControlError(f"{path!r} takes a list of pitches, and {value!r} is not one")
+
+	allowed = [one.get("value") for one in declaration.get("pitches", [])]
+	taken: list[typing.Any] = []
+
+	for one in value:
+		if one not in allowed:
+			raise ControlError(f"this set offers no pitch called {one!r}")
+
+		if one in taken:
+			raise ControlError(f"{one!r} is named twice, and a pitch is either in the set or not")
+
+		taken.append(one)
+
+	held["chosen"] = taken
+
+
+def _patched (value: typing.Any) -> bool:
+	"""Whether a value is a reference to a source rather than a literal."""
+
+	return isinstance(value, dict) and PATCHED in value
+
+
+def _readable_patch (
+	controls: dict[str, typing.Any],
+	field: dict[str, typing.Any],
+	value: dict[str, typing.Any],
+	name: str,
+) -> dict[str, typing.Any]:
+	"""Check a patched value, and keep only the reference it is.
+
+	Refused rather than forgiven, as every other value on this path is: a panel
+	naming a source that does not exist is a fault in the panel, and a stack that
+	silently held a dead reference would go quiet on the glass with the reason
+	nowhere.
+
+	**What it may be patched *to* is checked here and what it is *worth* is not.**
+	This service does not resolve a source and never will — the value is read on
+	the clock, by the app, at the moment it builds.
+	"""
+
+	source = value.get(PATCHED)
+
+	if source != "control":
+		raise ControlError(
+			f"{name!r} is patched from {source!r}, which this version does not know")
+
+	named = value.get("id")
+	declaration = controls.get(named) if isinstance(named, str) else None
+
+	if declaration is None:
+		raise ControlError(f"{name!r} is patched from {named!r}, which this app did not declare")
+
+	if declaration.get("type") != PITCH_SET:
+		raise ControlError(
+			f"{name!r} is patched from {named!r}, which is a "
+			f"{declaration.get('type')!r} rather than a set of pitches")
+
+	# A pitch pool is the only thing a set of pitches can feed. The check is on
+	# the *role* rather than on the kind, because a `choices` of waveform names
+	# is the same kind and would take the cable happily and then be handed notes.
+	if field.get("kind") != "choices" or field.get("role") != "pitch":
+		raise ControlError(f"{name!r} does not take pitches, so nothing can be patched into it")
+
+	return {PATCHED: "control", "id": named}
 
 
 def _apply_rack (
@@ -568,6 +708,7 @@ def _readable_layers (
 	declaration: dict[str, typing.Any],
 	value: typing.Any,
 	path: str,
+	controls: dict[str, typing.Any],
 ) -> list[dict[str, typing.Any]]:
 	"""Check a whole stack before any of it is kept.
 
@@ -633,7 +774,8 @@ def _readable_layers (
 			kept: dict[str, typing.Any] = {}
 
 			for parameter, setting in (held if isinstance(held, dict) else {}).items():
-				_apply_parameter(kept, offered, [parameter], setting, f"{path}/{name}/{parameter}")
+				_apply_parameter(kept, offered, [parameter], setting,
+				                 f"{path}/{name}/{parameter}", controls)
 
 			layer[running] = generator
 			layer["params"] = kept

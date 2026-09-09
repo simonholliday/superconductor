@@ -853,7 +853,8 @@ what this rig can show today.
 
 def _stack_for (pattern: str, name: str, title: str,
                 pitches: collections.abc.Sequence[str] = ROWS,
-                steps: int = STEPS) -> typing.Any:
+                steps: int = STEPS,
+                pitch_notes: collections.abc.Mapping[str, int] | None = None) -> typing.Any:
 	"""A stack of contributions that build one pattern.
 
 	``pitches`` is what this pattern's rows *are*, and it is the whole of what
@@ -884,6 +885,12 @@ def _stack_for (pattern: str, name: str, title: str,
 		# both along and names neither, exactly as it does for the generators.
 		transforms=subsequence.transforms(),
 		pitches=list(pitches),
+
+		# **What this stack's own rows sound**, so a patched set of notes can be
+		# folded into the register this instrument actually reaches (#2374).  Only
+		# this file knows it — the same reason it is the only thing that knows the
+		# rows are notes at all rather than drum voices.
+		pitch_notes=dict(pitch_notes or {}),
 		bounds={
 			"pulses": (0, steps),
 			"grid": (1, steps),
@@ -945,7 +952,8 @@ told to skip a step that already sounds has to see the taps before it runs, and
 the order a stack plays in is the person's to arrange from the glass.
 """
 
-bass_recipe = _stack_for("bass", "bass_recipe", "Minitaur — generators", BASS_ROWS)
+bass_recipe = _stack_for("bass", "bass_recipe", "Minitaur — generators", BASS_ROWS,
+                         pitch_notes=BASS_NOTE_MAP)
 """And the same for the bassline, which is #2147 and is a change to this file.
 
 **Nothing in the package forbade it and nothing had to change there.**  The panel
@@ -961,7 +969,8 @@ picks between ten voices; the same generator here picks between twenty-five
 notes a Minitaur can reach, because that is what this grid's rows *are*.
 """
 
-chord_recipe = _stack_for("chords", "chord_recipe", "Matriarch — generators", CHORD_ROWS)
+chord_recipe = _stack_for("chords", "chord_recipe", "Matriarch — generators", CHORD_ROWS,
+                          pitch_notes=CHORD_NOTE_MAP)
 """And for the chords, where it is worth the most.
 
 A grid of chords is the slowest thing on this rig to type in by hand — three
@@ -970,6 +979,35 @@ compute exactly that.  `arpeggio` in particular came fully drivable when #2155
 landed upstream, so a chord written here can be arpeggiated by a generator rather
 than drawn note by note.
 """
+
+NOTES_RANGE = [midi_notes.note_to_name(note)
+               for note in range(midi_notes.name_to_note("C3"), midi_notes.name_to_note("C5") + 1)]
+"""Two octaves to choose notes from, belonging to no instrument.
+
+**A register of its own on purpose.**  This set is patched into a Minitaur that
+reaches C1 to C3 and a Matriarch that reaches C3 to C5, and picking either of
+their ranges would make the set look like it belonged to that one.  It is folded
+into whichever instrument reads it (#2374), so what matters here is only that it
+is a comfortable two octaves to play a chord in.
+"""
+
+notes = superconductor.subsequence_adapter.PitchSet(
+	composition,
+	name="notes",
+	title="Notes",
+	pitches={row: midi_notes.name_to_note(row) for row in NOTES_RANGE},
+	about=[("feeds", "any generator that takes pitches")],
+)
+"""One set of notes, shared by everything patched to it.
+
+**It plays nothing.**  It has no channel, no pattern and no note map of its own,
+and the only way to hear it is to patch a generator's pitch parameter at it — at
+which point that generator plays those notes, in its own instrument's register.
+
+Two arpeggios patched here are the whole point: one set, two instruments, and no
+way for them to drift apart because there is only one of it.
+"""
+
 
 shared_recipe = _stack_for("shared", "shared_recipe", "Shared — generators")
 """And on the grid with no instrument, which is the one that needed thought.
@@ -1191,6 +1229,7 @@ link = superconductor.subsequence_adapter.AppLink(
 		shared_recipe,
 		snare_recipe,
 		nine_recipe,
+		notes,
 		made_grids,
 		superconductor.subsequence_adapter.Transport(composition),
 	],
@@ -1202,6 +1241,11 @@ link = superconductor.subsequence_adapter.AppLink(
 		# and a kit would quietly play one note at a time.
 		superconductor.subsequence_adapter.Page(
 			"band", parts=["grid", "bass", "chords", "matriarch"], title="Band"),
+		# **One set of notes and both stacks that can read it**, which is the
+		# whole of what this page is for: patch the arpeggios on either side of
+		# it at the same notes and hear two instruments play them (#2374).
+		superconductor.subsequence_adapter.Page(
+			"notes", parts=["notes", "bass_recipe", "chord_recipe"], title="Notes"),
 
 		# The DRM1 with the things that write into it and the things that can be
 		# patched to it: generators, cables, and a grid with no instrument behind

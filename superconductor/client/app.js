@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.22.0";
+const CONTRACT = "1.23.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -305,7 +305,7 @@ const GRIDS = ["step_grid", "note_grid"];
 /* The kinds that draw a pattern of rows against steps. A rack is not one: it
    makes them, and declares a `rows` of its own meaning something else. */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids", "pitch_set"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -1424,7 +1424,41 @@ const weightOf = (velocity, range) => {
  * case: most of a generator's numbers have no natural bound — a duration in
  * beats, a spacing — and a slider with invented ends would be a lie a finger
  * could act on. A stepper works with one finger and no keyboard either way. */
-function Setting ({ field, held, onSet }) {
+function Setting ({ field, held, onSet, sources }) {
+	/* **A pitch pool may be fed from elsewhere instead of chosen here** (#2374).
+	   `{from: "control", id}` says take these notes from that set, every cycle,
+	   which is what lets one set feed an arpeggio on two instruments and keeps
+	   them from drifting apart.
+
+	   Drawn before the pool rather than beside it, because it decides whether the
+	   pool is a control at all: what is patched is not editable here, and showing
+	   thirty-three dead buttons under a cable would be a lie about what a tap
+	   would do.
+
+	   Unpatched it renders itself again without `sources`, which fails the guard
+	   below and reaches the ordinary pool renderer — one copy of that, not two. */
+	const patched = held && typeof held === "object" && !Array.isArray(held) && held.from;
+
+	if (field.kind === "choices" && field.role === "pitch" && (sources || []).length) {
+		const named = patched ? held.id : "";
+
+		return html`
+			<div class="patchable">
+				<div class="menu">
+					<button
+						class=${`picker ${patched ? "patched" : ""}`}
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							onSet(patched ? [] : { from: "control", id: sources[0] });
+						}}
+					>${patched ? `◀ ${named}` : "◀ patch"}</button>
+				</div>
+				${patched
+					? html`<div class="ink-quiet patched-from">from <b>${named}</b></div>`
+					: html`<${Setting} field=${field} held=${held} onSet=${onSet} />`}
+			</div>`;
+	}
+
 	const sliding = useRef(null);
 
 	/* Asked for whatever this parameter turns out to be, because a hook must
@@ -1942,7 +1976,71 @@ function NewGrid ({ rows, steps, onMake }) {
 }
 
 
-function Contribution ({ name, layer, layers, offered, onSet }) {
+/* A set of pitches, drawn as the thing a musician already knows how to read.
+ *
+ * **The value was always right and only the drawing was wrong** (#2374). A pitch
+ * pool has always been an ordered list of note names; offering it as thirty-three
+ * toggle buttons made choosing a triad an exercise in reading a list, which is
+ * what Simon objected to. The same value drawn as a keyboard is chosen with three
+ * taps in the shape of the chord.
+ *
+ * **Which keys are raised is arithmetic on a note number**, not music theory the
+ * panel has been taught: the app says what each name sounds, and twelve semitones
+ * is twelve semitones in every studio. That is the line #2144 draws — a panel may
+ * not work out a *label*, because spelling needs a key, and it may count.
+ *
+ * Pick order is kept, because the pitches of a chord are not a set: the number on
+ * a chosen key is where it sits in the list a generator is handed. */
+function Keyboard ({ pitches, chosen, onSet }) {
+	const held = Array.isArray(chosen) ? chosen : [];
+
+	const toggle = (value) => onSet(
+		held.includes(value)
+			? held.filter((one) => one !== value)
+			: [...held, value]);
+
+	const accidental = (midi) => [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
+
+	/* Naturals lay the row out and accidentals sit over the joins, which is how
+	   a keyboard is built and the only way the widths come out right. A black key
+	   between two whites belongs to neither, so it is placed rather than flowed. */
+	const naturals = pitches.filter((one) => !accidental(one.midi));
+
+	const key = (one) => {
+		const at = naturals.findIndex((natural) => natural.midi > one.midi);
+		const over = at < 0 ? naturals.length : at;
+
+		return html`
+			<button
+				key=${one.value}
+				type="button"
+				class=${`key ${accidental(one.midi) ? "accidental" : "natural"} ${held.includes(one.value) ? "here" : ""}`}
+				style=${accidental(one.midi)
+					? { left: `calc(${over} * var(--natural) - var(--natural) * 0.3)` }
+					: null}
+				aria-pressed=${held.includes(one.value) ? "true" : "false"}
+				title=${one.label || one.value}
+				onPointerDown=${(event) => { event.preventDefault(); toggle(one.value); }}
+			>${held.includes(one.value)
+				? html`<b>${held.indexOf(one.value) + 1}</b>`
+				: ""}</button>`;
+	};
+
+	return html`
+		<div class="keyboard" style=${{ "--natural": `calc(100% / ${naturals.length})` }}>
+			<div class="naturals">${naturals.map(key)}</div>
+			<div class="accidentals">${pitches.filter((one) => accidental(one.midi)).map(key)}</div>
+			${/* What it is worth, in the order it will be played. Without it a
+			     person cannot see the difference between the chord they meant and
+			     the same notes in another order. */ ""}
+			<div class="chosen-notes ink-quiet">
+				${held.length ? held.join(" · ") : "no notes — patched generators will rest"}
+			</div>
+		</div>`;
+}
+
+
+function Contribution ({ name, layer, layers, offered, onSet, sources }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -2001,6 +2099,7 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 								<${Setting}
 									field=${field}
 									held=${(layer.params || {})[field.name]}
+									sources=${sources}
 									onSet=${(value) => onSet(`${name}/${layer.id}/${field.name}`, value)} />
 							</div>`,
 					]).flat()
@@ -4366,6 +4465,15 @@ function Panel () {
 		|| (kindOf(name) === "recipe" && listed.includes(controls[name].builds))
 		|| (kindOf(name) === "params" && listed.includes(controls[name].configures)));
 
+	/* Every set of notes this app declares, whatever page it is drawn on.
+	 *
+	 * **Not filtered to this page, deliberately.** A set of notes belongs to no
+	 * pattern and is drawn wherever somebody put it, so requiring it to share a
+	 * page with what it feeds would make the patch depend on an arrangement —
+	 * which is the mistake #2211 was, in the other direction. One set feeding two
+	 * instruments is the whole point, and those two are rarely on one page. */
+	const pitchSets = Object.keys(controls).filter((name) => kindOf(name) === "pitch_set");
+
 	/* A stack says which pattern it contributes to, and that one fact places its
 	   buttons: the pattern grows an "add a generator", not the stack. */
 	const stackFor = (name) => Object.keys(controls).find(
@@ -4417,6 +4525,18 @@ function Panel () {
 		if (controls[name].unsupported) {
 			windows.push({ key: name, control: name, title: named(name),
 			               rows: 3, steps: PARAM_CELLS });
+			continue;
+		}
+
+		if (kindOf(name) === "pitch_set") {
+			windows.push({
+				key: name, control: name, title: named(name),
+				about: controls[name].about || [],
+
+				/* A keyboard and the line under it saying what is in the set. */
+				rows: 3,
+				steps: PARAM_CELLS,
+			});
 			continue;
 		}
 
@@ -5215,7 +5335,8 @@ function Panel () {
 						: one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
-								layers=${one.layers} offered=${one.offered} onSet=${request} />`
+								layers=${one.layers} offered=${one.offered}
+								sources=${pitchSets} onSet=${request} />`
 						: controls[one.control].unsupported
 						? html`
 							<div class="unsupported">
@@ -5226,6 +5347,12 @@ function Panel () {
 							</div>`
 						: kindOf(one.control) === "recipe"
 						? html`<${Orphan} builds=${controls[one.control].builds} />`
+						: kindOf(one.control) === "pitch_set"
+						? html`
+							<${Keyboard}
+								pitches=${controls[one.control].pitches || []}
+								chosen=${((state[appName] || {})[one.control] || {}).chosen || []}
+								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
 						: kindOf(one.control) === "params"
 						? html`
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}

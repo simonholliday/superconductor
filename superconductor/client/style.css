@@ -3028,7 +3028,7 @@ html, body {
  * the accent already used for the thing that arrives from elsewhere, which is
  * exactly what a transform's input is. */
 .part.reshaping .part-title {
-	border-bottom-color: var(--accent);
+	border-bottom-color: var(--on);
 	box-shadow: inset 0 2px 0 -1px var(--accent);
 }
 
@@ -3406,3 +3406,111 @@ html, body {
    something you look at when you are wondering rather than when you are
    playing. It borrows `.build` for its type and adds only a little air. */
 .bar .trip { margin-left: 0.6rem; }
+
+/* ------------------------------------------------------------------ */
+/* A set of notes, drawn as a keyboard                                 */
+/* ------------------------------------------------------------------ */
+
+/* **The one control here whose shape is borrowed rather than invented** (#2374).
+   Every other control on this panel is drawn as a piece of equipment; this one is
+   drawn as a keyboard, because a musician reading a keyboard is not reading a
+   control at all — they are reading the thing itself.
+
+   A key is a target and takes a target's minimum, which is what sets the height:
+   a white key is a row tall and a black key two thirds of one, and both are wider
+   than a finger. */
+
+.keyboard {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gap);
+	position: relative;
+	width: 100%;
+}
+
+.keyboard .naturals {
+	display: flex;
+	gap: 0;
+	height: var(--row);
+	width: 100%;
+}
+
+.keyboard .accidentals {
+	height: 0;
+	position: relative;
+	width: 100%;
+}
+
+.keyboard .key {
+	align-items: flex-end;
+	border: 1px solid var(--edge-strong);
+	display: flex;
+	justify-content: center;
+	padding: 0 0 calc(var(--gap) / 2) 0;
+}
+
+.keyboard .key.natural {
+	background: var(--panel);
+	border-radius: 0 0 4px 4px;
+	flex: 1 1 0;
+	height: var(--row);
+	min-width: 0;
+}
+
+/* Over the join between two whites, and above them in the stack — which is what
+   a keyboard is, and the only reason these are positioned rather than flowed. */
+.keyboard .key.accidental {
+	background: var(--sunk);
+	border-radius: 0 0 4px 4px;
+	height: calc(var(--row) * 0.62);
+	position: absolute;
+	top: calc(var(--row) * -1);
+	width: calc(var(--natural) * 0.6);
+	z-index: 1;
+}
+
+/* Lit, not merely marked. A chosen key is the same statement a lit cell makes on
+   a grid, because it means the same thing: this one sounds. */
+.keyboard .key.here {
+	background: var(--on);
+	border-color: var(--on);
+}
+
+.keyboard .key b {
+	color: var(--sunk);
+	font: var(--type-note);
+	font-family: var(--face-figures);
+}
+
+.keyboard .key.accidental b {
+	color: var(--ink);
+}
+
+.keyboard .key.here b {
+	color: var(--sunk);
+}
+
+.keyboard .chosen-notes {
+	font: var(--type-chrome-quiet);
+	font-family: var(--face-panel);
+	line-height: 1;
+	padding-top: calc(var(--gap) / 2);
+}
+
+/* A parameter fed from somewhere else, and the button that says so. */
+.patchable {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gap);
+	width: 100%;
+}
+
+.patchable .patched-from {
+	font: var(--type-chrome-quiet);
+	font-family: var(--face-panel);
+	line-height: 1;
+}
+
+.patchable .picker.patched {
+	color: var(--on);
+}

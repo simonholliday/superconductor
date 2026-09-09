@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.22.0"
+CONTRACT_VERSION = "1.23.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
