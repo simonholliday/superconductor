@@ -1883,7 +1883,7 @@ class Recipe (Control):
 		tapped (#1925).  Withheld, it says nothing and behaves exactly as it did.
 		"""
 
-		self.sources = dict(sources or {})
+		self.sources = sources if sources is not None else {}
 		"""Which other grids this stack may take notes from, and how to play one.
 
 		A name the composition also declared as a control, against a function
@@ -1891,6 +1891,19 @@ class Recipe (Control):
 		composition's because turning a grid into notes is** — a velocity, a
 		note map, a length, whether a row is a drum voice or a pitch.  This
 		routes; it does not know what it is routing (#1465).
+
+		**The composition's own mapping is held rather than copied** (#2421), so a
+		source added after this stack was built is offered the next time it
+		declares.  A rack makes a grid at run time (#2226) and every stack here is
+		constructed at import, so a copy taken now is a stack that can never route
+		what the panel makes: the grid is registered, drawn, played on, and refused
+		by both halves as a source that was never declared.  What the copy guarded
+		against was a composition mutating a stack's sources — which is exactly the
+		mechanism that feature needs, so the guard was pointed at the feature.
+
+		Nothing here writes to it, and a stack offering a grid it should not is a
+		composition's mistake to make: which stacks may take from what is the
+		composition's to say, like the rows (#1465).
 
 		Empty by default, which is a stack that offers generators only.  That is
 		what every stack was before #2108 and what a composition with nothing

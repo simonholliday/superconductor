@@ -590,8 +590,16 @@ def test_a_grid_the_panel_makes_can_be_routed_the_moment_it_exists (
 	it, so a made grid that was not a source would be a block that can never do
 	anything (#2226).
 
-	A stack reads `sources` when it declares, and the rack asks for a declaration
-	as soon as it has made one — so the two land together.
+	A stack holds the composition's own `sources` mapping rather than a copy of it
+	(#2421), so writing the grid into `SHARED` is what makes it routable — and the
+	rack asks for a declaration as soon as it has made one, so the two land
+	together.
+
+	**The assertion that matters is the third one**, and this test went without it
+	from the day it was written: the first two say a grid was made and registered,
+	which was true throughout the year this feature did not work.  A stack built at
+	import took a copy, so it offered the sources it was born with for ever, and a
+	route to a made grid was refused by both halves.
 	"""
 
 	before = set(rig.SHARED)
@@ -599,6 +607,9 @@ def test_a_grid_the_panel_makes_can_be_routed_the_moment_it_exists (
 
 	assert made.name == "made_grids-x"
 	assert set(rig.SHARED) - before == {"made_grids-x"}
+
+	assert "made_grids-x" in rig.drum_recipe.declaration()["sources"], (
+		"a stack built at import does not offer a grid the rack made after it")
 
 	# And the source plays what is drawn on it, on the voice its rows name.
 	landed = _built(
@@ -616,6 +627,9 @@ def test_a_grid_the_panel_makes_can_be_routed_the_moment_it_exists (
 
 	assert "made_grids-x" not in rig.SHARED, (
 		"a stack would go on offering a cable to a grid nobody can see")
+
+	assert "made_grids-x" not in rig.drum_recipe.declaration()["sources"], (
+		"a stack goes on offering a cable to a grid nobody can see")
 
 
 def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
