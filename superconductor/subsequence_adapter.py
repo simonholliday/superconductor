@@ -1501,6 +1501,25 @@ def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
 	)
 
 
+def _outside (default: typing.Any, low: float, high: float) -> bool:
+	"""Whether a parameter's own opening value falls outside a proposed bound.
+
+	**Only a default that would actually be sent counts.**  `None` means the
+	parameter opens unset and nothing is handed to the generator (#2249), so no
+	bound can exclude it; a bool is not a number whatever Python thinks.  A
+	`range` may declare a scalar default that widens into a pair (`euclidean`
+	opens at velocity 100), and either end landing outside is enough.
+	"""
+
+	if isinstance(default, (list, tuple)):
+		return any(_outside(one, low, high) for one in default)
+
+	if isinstance(default, bool) or not isinstance(default, (int, float)):
+		return False
+
+	return not low <= default <= high
+
+
 def offerable (
 	catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 	pitches: collections.abc.Sequence[str],
@@ -1563,6 +1582,37 @@ def offerable (
 
 			if field.get("kind") in ("number", "range") and field.get("name") in narrowed:
 				low, high = narrowed[str(field.get("name"))]
+
+				# **A bound that excludes the parameter's own default is not
+				# applied**, because a control born outside its own range is one
+				# whose every write is refused — and refused naming a parameter
+				# nobody touched.
+				#
+				# `bounds` is keyed by parameter *name* and applied across both
+				# catalogues, so one word covering two meanings mis-bounds the
+				# odd one out.  Measured 2026-09-10: `grid` is on eight entries,
+				# seven meaning *how many slots the pattern has* and `swing`
+				# meaning *grid size in beats* — and swing is the only one of the
+				# eight carrying a default, 0.25, which a bound of 1 to 16
+				# forbids.  Simon added a swing layer and could then toggle
+				# nothing on that stack at all: bypass, reorder, add and remove
+				# all write the whole stack, so one impossible value freezes every
+				# control on it, and the refusal names a layer he had not touched.
+				#
+				# Skipped rather than clamped: clamping would give swing a grid of
+				# one whole beat, which is a wrong answer somebody can hear.
+				# Skipped rather than refused: the bound is right for the other
+				# seven, and a composition should not fail to start over it.
+				if _outside(field.get("default"), low, high):
+					LOG.warning(
+						"not bounding %s.%s to %s–%s: the app's own default is %r,"
+						" which that range excludes — one name, two meanings",
+						generator.get("name"), field.get("name"), low, high,
+						field.get("default"))
+
+					fields.append(field)
+					continue
+
 				fields.append({**field, "min": low, "max": high})
 				continue
 

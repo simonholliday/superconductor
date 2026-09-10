@@ -773,6 +773,77 @@ def test_an_instruments_setting_has_no_unset_to_go_back_to () -> None:
 			adapter.checked_value(parameter, None)
 
 
+def test_a_bound_that_would_forbid_the_apps_own_default_is_not_applied () -> None:
+	"""One word, two meanings, and a whole stack frozen by it.
+
+	`bounds` is keyed by parameter **name** and applied across both catalogues,
+	so a name covering two different things mis-bounds the odd one out.
+	Measured on 2026-09-10: `grid` is on eight of Subsequence's entries — seven
+	meaning *how many slots the pattern has*, and `swing` meaning *grid size in
+	beats*, which opens at 0.25.  This rig bounds `grid` to 1–16 for the seven,
+	and swing was the only one of the eight carrying a default at all.
+
+	**A control born outside its own range has every write refused**, and that is
+	worse than it sounds: bypass, reorder, add and remove all write the *whole
+	stack*, so one impossible value freezes every control on it — and the refusal
+	names a layer nobody touched.  Simon added a swing layer and could then
+	toggle nothing on that stack, including the arpeggio above it.
+	"""
+
+	catalogue: list[dict[str, typing.Any]] = [
+		{
+			"name": "slots", "summary": "Counts them.", "partial": False,
+			"parameters": [{"name": "grid", "label": "grid", "kind": "number",
+			                "required": False, "default": None}],
+		},
+		{
+			"name": "feel", "summary": "Measures them in beats.", "partial": False,
+			"parameters": [{"name": "grid", "label": "grid", "kind": "number",
+			                "required": False, "default": 0.25}],
+		},
+	]
+
+	offered = adapter.offerable(catalogue, ROWS, {"grid": (1, 16)})
+	by_name = {one["name"]: one["parameters"][0] for one in offered}
+
+	assert by_name["slots"]["min"] == 1 and by_name["slots"]["max"] == 16, \
+		"the bound is right for the seven and still applies"
+
+	assert "min" not in by_name["feel"] and "max" not in by_name["feel"], \
+		"and is dropped where it would forbid the app's own opening value"
+
+
+def test_a_stack_holding_such_a_layer_can_still_be_rewritten () -> None:
+	"""The symptom rather than the mechanism, because the symptom is what cost
+	an afternoon: every control on the stack went dead at once.
+
+	Asserted through `apply` rather than by reading the declaration, since what
+	broke was the *write* — and the write a person makes when they reach for a
+	bypass carries every layer's parameters, not just the one they touched.
+	"""
+
+	catalogue: list[dict[str, typing.Any]] = [
+		{
+			"name": "feel", "summary": "Grid size in beats.", "partial": False,
+			"parameters": [{"name": "grid", "label": "grid", "kind": "number",
+			                "required": False, "default": 0.25}],
+		},
+	]
+
+	recipe = adapter.Recipe(Composition(), catalogue=catalogue, pitches=ROWS,
+	                        bounds={"grid": (1, 16)})
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "feel", "params": {}}])
+
+	assert recipe.layers()[0]["params"]["grid"] == 0.25, "it opens where the app said"
+
+	# What a bypass sends: the whole stack, every parameter included.
+	held = recipe.layers()
+	recipe.apply(["layers"], [{**held[0], "bypassed": True}])
+
+	assert recipe.layers()[0]["bypassed"] is True
+
+
 def test_a_layer_is_given_a_number_of_its_own () -> None:
 	"""Which is what a window is called on the glass: "Euclidean 1" (#2109).
 
