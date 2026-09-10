@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.25.0";
+const CONTRACT = "1.26.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -2140,7 +2140,7 @@ function Keyboard ({ pitches, chosen, onSet }) {
 }
 
 
-function Contribution ({ name, layer, layers, offered, onSet }) {
+function Contribution ({ name, layer, layers, offered, why, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -2191,6 +2191,37 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 						onPointerDown=${press(() => shift(1))}
 					>↓</button>
 				</div>
+
+				${/* **A layer that will not run says so here, and until now said it
+				     only in a log nobody reads** (#2368).
+				
+				     Ten of the forty-six generators this panel offers can be
+				     added and will never play: the catalogue drops a parameter
+				     they cannot do without, because it is one no control shape
+				     can carry. Nothing is refused when you add one — the value
+				     is accepted, the app stores it, and the refusal happens a
+				     cycle later inside the build. #2230 cost a session to that
+				     silence, and it was the composition's log that ended it in
+				     one command.
+				
+				     **Directly above the parameters**, because the commonest
+				     reason a layer stops is a value in them — Simon's arpeggio
+				     held a `count` that had been sitting dead and silent — so
+				     the sentence and the dial that caused it want to be read
+				     together.
+				
+				     **The app's own words, quoted rather than interpreted.**
+				     Some are written for a person and some are a Python
+				     exception, and this package cannot tell which; what it can
+				     do is say the fact plainly in its own voice first, so the
+				     reader is never left with only a traceback. Rewriting them
+				     would need a table of Subsequence's failure modes living
+				     here, which is the thing #2375 spent four rounds refusing. */ ""}
+				${why && html`
+					<div class="stalled" style=${full}>
+						<b>This is not playing.</b> The application skipped it on the
+						last cycle and said: <q>${why}</q>
+					</div>`}
 
 				${offered
 					? offered.parameters.filter((field) => {
@@ -4226,6 +4257,17 @@ function Panel () {
 	const [touched, setTouched] = useState(null);
 	const [realised, setRealised] = useState({});
 
+	/* Which layers did not run last cycle, by stack, and the app's own words for
+	   why (#2368). Held apart from every control's state for the same reason
+	   `realised` is: this is a report about a cycle, not a value anybody set.
+	
+	   **It is `stalled` and not `failed` because `failed` is taken**, and by a
+	   different thing: a set the app refused, held per cell path. One concept,
+	   one word at each layer it appears in (#2403) — and two concepts sharing a
+	   word is the half of that rule that bites hardest, because both readings
+	   are plausible at the site that reads it. */
+	const [stalled, setStalled] = useState({});
+
 	const theme = useTheme();
 
 	const link = useRef(null);
@@ -4462,10 +4504,12 @@ function Panel () {
 					 * exactly what a thing nothing stores should do. */
 					if (frame.path.endsWith("/paused") && frame.v === true) {
 						setRealised({});
+						setStalled({});
 					}
 
 					if (frame.path.endsWith("/layers")) {
 						setRealised({});
+						setStalled({});
 					}
 
 					/* Answered in substance: the app now holds what was asked
@@ -4520,6 +4564,17 @@ function Panel () {
 					   person's taps stay the only thing anything stores. */
 					if (frame.name === "realised" && typeof frame.control === "string") {
 						setRealised((was) => ({ ...was, [frame.control]: frame.cells || {} }));
+					}
+
+					/* **Which layers were skipped this cycle, and why** (#2368).
+					   The app is the only thing that knows: a generator that
+					   cannot run is not distinguishable in the catalogue, because
+					   the parameter it is missing is not described there at all —
+					   which is what `partial` means and why `partial` cannot be
+					   the signal. So it is a report from the build rather than a
+					   fact in the manifest. */
+					if (frame.name === "stalled" && typeof frame.control === "string") {
+						setStalled((was) => ({ ...was, [frame.control]: frame.layers || {} }));
 					}
 					break;
 			}
@@ -5713,6 +5768,7 @@ function Panel () {
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
 								layers=${one.layers} offered=${one.offered}
+								why=${(stalled[one.control] || {})[one.layer.id]}
 								onSet=${request} />`
 						: controls[one.control].unsupported
 						? html`

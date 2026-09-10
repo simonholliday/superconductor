@@ -1055,6 +1055,127 @@ def test_a_stack_says_which_cells_its_generators_realised () -> None:
 	assert _sources(cells) == {"kick": {"0": "a", "15": "a"}, "snare": {"2": "a"}}
 
 
+def _refusing (builder: "Builder", generator: str, why: str) -> None:
+	"""Make one generator raise, which is how a layer really stops running.
+
+	A generator that is not in the catalogue at all is refused when it is *added*
+	— `apply` will not take it — so the shape this has to be tested at is a layer
+	the panel was right to offer and the function then refuses on its values.
+	That is `arpeggio` handed a `count` beside a pitch list (#2381), and every one
+	of #2154's ten.
+	"""
+
+	def raises (**arguments: typing.Any) -> None:
+		raise ValueError(why)
+
+	setattr(builder, generator, raises)
+
+
+def test_a_layer_that_will_not_run_is_reported_by_the_layer_it_is () -> None:
+	"""#2368: until now it was said once, in a log nobody reads.
+
+	Ten of the forty-six generators this panel offers can be added and will never
+	play, and **nothing is refused when you add one** — the value is accepted,
+	the app stores it, and the refusal happens a cycle later inside the build.
+	#2230 cost a session to exactly that silence.
+
+	**Keyed by layer, not by generator.**  A person looks at a block, and two
+	layers of one generator are two blocks that can disagree — one arpeggio
+	patched at a pitch list and one at a chord.  The log's dedupe stays per
+	generator, because that is what stops a rebuilt bar writing the same line
+	twice a second, and the two audiences want opposite things.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	_refusing(builder, "evolve", "drift= only applies to a seeded sequence")
+
+	recipe.apply(["layers"], [
+		{"id": "good", "generator": "euclidean", "params": {}},
+		{"id": "bad", "generator": "evolve", "params": {}},
+	])
+	recipe.build(builder)
+
+	stalled = [fields for name, fields in speaker.events if name == "stalled"]
+
+	assert len(stalled) == 1
+	assert stalled[0]["control"] == recipe.name
+	assert list(stalled[0]["layers"]) == ["bad"], "the working layer is not named"
+	assert "evolve" not in stalled[0]["layers"], "keyed by layer, not by generator"
+	assert "drift=" in stalled[0]["layers"]["bad"], "in the app's own words"
+
+
+def test_a_stack_where_everything_runs_says_nothing_at_all () -> None:
+	"""Because *nothing is wrong* is what a panel draws with no information.
+
+	`_report_cells` sends every cycle unconditionally and is right to — a
+	euclidean realises the same cells for ever, so a panel comparing with the
+	last answer would wait for a change that never comes.  This is the other
+	case: the answer is almost always nothing, so saying it every cycle would be
+	a frame per stack per cycle carrying no news, and #2230 is what event volume
+	does to a rig.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	assert [name for name, _ in speaker.events] == ["realised"]
+
+
+def test_a_layer_that_starts_working_is_said_to_have_stopped_failing () -> None:
+	"""The clearing frame, sent once and then not again.
+
+	Without it a block would go on saying it is not playing after somebody fixed
+	it, because nothing keeps an event and there is nothing to correct it with.
+	With it sent *every* cycle it would be the frame-per-cycle this avoids.  So:
+	once, on the edge.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	_refusing(builder, "evolve", "no")
+
+	recipe.apply(["layers"], [{"id": "bad", "generator": "evolve", "params": {}}])
+	recipe.build(builder)
+
+	assert [fields for name, fields in speaker.events if name == "stalled"][0]["layers"]
+
+	# Fixed, by moving it to a generator that runs.
+	speaker.events.clear()
+	recipe.apply(["layers"], [{"id": "bad", "generator": "euclidean", "params": {}}])
+	recipe.build(builder)
+
+	cleared = [fields for name, fields in speaker.events if name == "stalled"]
+
+	assert len(cleared) == 1 and cleared[0]["layers"] == {}, "said once that it is well"
+
+	speaker.events.clear()
+	recipe.build(builder)
+
+	assert [name for name, _ in speaker.events] == ["realised"], "and not again"
+
+
+def test_a_bypassed_layer_is_not_reported_as_failing () -> None:
+	"""It is not running because somebody said so, which is not a fault.
+
+	A bypass never reaches the generator at all, so there is nothing to fail —
+	and a block saying *this is not playing* about a layer somebody has just
+	switched off would be the panel restating a gesture as a problem.
+	"""
+
+	recipe, speaker, builder = _watching()
+
+	_refusing(builder, "evolve", "no")
+
+	recipe.apply(["layers"], [
+		{"id": "bad", "generator": "evolve", "params": {}, "bypassed": True}])
+	recipe.build(builder)
+
+	assert [name for name, _ in speaker.events if name == "stalled"] == []
+
+
 def test_what_was_already_there_is_not_reported_as_realised () -> None:
 	"""A person's own taps are placed before the stack runs, so the difference
 	is exactly what the algorithms added — which is the whole point of reading

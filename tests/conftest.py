@@ -414,6 +414,19 @@ class FakeApp:
 				      for step, loud in steps.items()}
 				for row, steps in cells.items()}))
 
+	def stalled (self, control: str, layers: dict[str, str]) -> None:
+		"""Say which layers of a stack did not run this cycle, and why (#2368).
+
+		One place knows the wire's shape, which is why this lives here beside
+		`beat` and `realised` rather than being built by hand in a test: a second
+		helper that built frames itself went on sending the pre-1.13.0 shape
+		after the first had moved on, and every dot drew at one size whatever its
+		velocity.
+		"""
+
+		self.send(superconductor.protocol.event(
+			"subsequence", "stalled", control=control, layers=layers))
+
 	def refuse (self, path: str, client: str, seq: int, reason: str) -> None:
 		"""Refuse a request, the way an app that cannot do it does."""
 

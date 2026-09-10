@@ -2709,6 +2709,34 @@ html, body {
 	text-shadow: 0 1px 2px var(--halo);
 }
 
+/* **A layer the application skipped, said where the person is looking** (#2368).
+ *
+ * Drawn as `.unsupported`'s sibling deliberately: the two are the same kind of
+ * statement — *this is here and it is not working, and here is why* — and a
+ * second visual language for one idea is how a panel stops being read. The
+ * difference is only that this one quotes somebody else.
+ *
+ * `--warn` rather than `--danger`: nothing is broken and nothing was destroyed.
+ * A layer that will not run is a thing to notice and fix, and the ring colour is
+ * spoken for by `action` (#2179). */
+.stalled {
+	padding: 0.6rem 0.2rem 0.4rem;
+	color: var(--warn);
+	font-size: var(--type-note);
+	font-family: var(--face-body);
+	line-height: 1.5;
+}
+
+.stalled b { color: var(--warn); }
+
+/* The app's own words, marked as a quotation because they are not this panel
+   speaking. Some are written for a person and some are a Python exception; the
+   sentence before them is what carries the meaning either way. */
+.stalled q {
+	color: var(--ink-quiet);
+	font-style: italic;
+}
+
 /* A control this service is too old to draw. Said on the glass rather than
    left in a log, because the alternative is a control that appears to work and
    quietly stops following the music. */
@@ -2840,9 +2868,20 @@ html, body {
 
 /* A figure, so it is set in figures and lines up as one. It was taking the body
    face by inheritance, which is what a number does when nobody says otherwise. */
+/* **A basis rather than a floor, so the readout gives way when the row needs
+   the space.** It was `min-width: 4rem`, which nothing could shrink — so a row
+   that grew an `auto` beside it overflowed the block by twelve pixels and the
+   button was clipped to "AU" against the edge (#2368, found in a screenshot).
+   A dial had no such trouble because it is `flex: 1` and shrinks already.
+
+   `0 1 4rem` keeps the width that lines the figures up down the column and lets
+   it be taken back when there is something else on the row, which is
+   size-independent in a way that shaving the number would not have been: `--row`
+   scales with the size chooser and a rem does not. */
 .stepper span {
 	font-family: var(--face-figures);
-	min-width: 4rem;
+	flex: 0 1 4rem;
+	min-width: 0;
 	text-align: center;
 	color: var(--ink);
 	font-size: var(--type-body);

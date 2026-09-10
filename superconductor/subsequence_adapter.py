@@ -1887,6 +1887,16 @@ class Recipe (Control):
 		"""
 
 		self._complained: set[str] = set()
+
+		self._failing: dict[str, str] = {}
+		"""Which layers did not run this cycle, and the app's own words for why.
+
+		Rebuilt from nothing on every build, so a layer that starts working stops
+		being in it without anything having to remember that it once was."""
+
+		self._reported_failing: dict[str, str] = {}
+		"""What the glass was last told, so the frame that clears it is sent once
+		rather than a frame a cycle saying nothing is wrong."""
 		"""Generators that have already failed once, so a bar does not flood a log.
 
 		A pattern is rebuilt every cycle, so anything said here is said twice a
@@ -2302,6 +2312,12 @@ class Recipe (Control):
 	def _play_once (self, pattern: typing.Any) -> None:
 		"""The body of one build, called only when this stack is not already in one."""
 
+		# **Emptied here rather than added to**, so a layer that starts working
+		# again stops being reported without anything having to notice that it
+		# once failed. The verdict is about this cycle and no other, which is the
+		# same discipline `realised` follows (#1965) and for the same reason.
+		self._failing = {}
+
 		before = self._reads(pattern) if self.pulses_per_beat else None
 
 		# **One draw, before any layer runs, and every layer keys off it**
@@ -2343,7 +2359,8 @@ class Recipe (Control):
 				play = self.sources.get(source)
 
 				if play is None:
-					self._complain(source, "this composition offers no such pattern")
+					self._complain(source, "this composition offers no such pattern",
+					               layer=str(layer["id"]))
 					continue
 
 				# A grid switched off contributes nothing, wherever it is routed.
@@ -2379,7 +2396,7 @@ class Recipe (Control):
 					play(pattern)
 
 				except Exception as error:
-					self._complain(source, str(error))
+					self._complain(source, str(error), layer=str(layer["id"]))
 
 				if before is not None:
 					landed.append((str(layer["id"]), self._reads(pattern) or []))
@@ -2405,7 +2422,8 @@ class Recipe (Control):
 			if method is None:
 				self._complain(
 					generator,
-					f"this Subsequence has no such {layer['kind']}")
+					f"this Subsequence has no such {layer['kind']}",
+					layer=str(layer["id"]))
 				continue
 
 			arguments = self._arguments(generator, layer["params"])
@@ -2418,13 +2436,20 @@ class Recipe (Control):
 				method(**arguments)
 
 			except Exception as error:
-				self._complain(generator, str(error))
+				self._complain(generator, str(error), layer=str(layer["id"]))
 
 			if before is not None:
 				landed.append((str(layer["id"]), self._reads(pattern) or []))
 
 		if before is not None:
 			self._say_what_landed(before, landed)
+
+		# **Outside that guard on purpose.** `_say_what_landed` needs a grid it
+		# can address cells on and gives up without one; a stack that will not
+		# run has to say so whether or not anybody can draw its notes, and a
+		# stack whose grid this panel cannot read is exactly where a silent
+		# failure is hardest to spot.
+		self._say_what_failed()
 
 	def _reads (self, pattern: typing.Any) -> list[typing.Any] | None:
 		"""What is on the pattern now, or None if it cannot be read at all.
@@ -2830,8 +2855,25 @@ class Recipe (Control):
 
 		return folded
 
-	def _complain (self, generator: str, why: str) -> None:
-		"""Say once that a layer will not run, not once a bar."""
+	def _complain (self, generator: str, why: str, layer: str | None = None) -> None:
+		"""Say once in the log that a layer will not run, and every cycle on the glass.
+
+		**Two audiences, and they want opposite things** (#2368).  A log wants
+		saying once — a failing layer fails every cycle, and #2230 is what a
+		flooded link does to a rig.  The glass wants saying *every* cycle, for
+		the reason `_report_cells` gives: nothing keeps an event, so a panel that
+		joined after the first one has nowhere to read it from, and staying quiet
+		is indistinguishable from nothing being wrong.
+
+		**Keyed by layer for the glass and by generator for the log.**  A person
+		looks at a block, and two layers of one generator are two blocks that can
+		disagree — one arpeggio patched at a pitch list and one at a chord.  The
+		log's dedupe stays per generator, because that is what stops a rebuilt bar
+		writing the same line twice a second.
+		"""
+
+		if layer is not None:
+			self._failing[layer] = why
 
 		if generator in self._complained:
 			return
@@ -2842,6 +2884,29 @@ class Recipe (Control):
 			"the %r layer of %r will not run and is being skipped: %s. "
 			"Further failures of this generator are not logged.",
 			generator, self.name, why)
+
+	def _say_what_failed (self) -> None:
+		"""Tell the glass which layers did not run, so a block can say so.
+
+		**Sent when there is something to say, and once more when there is not.**
+		`_report_cells` sends every cycle unconditionally and is right to: a
+		euclidean realises the same cells for ever, so a panel comparing with
+		the last answer would wait for a change that never comes.  This is the
+		other case — the answer is *nothing is wrong* almost always, which is
+		what a panel draws with no information at all, so saying it every cycle
+		would be a frame per stack per cycle carrying no news.  The clearing
+		frame is what a panel needs and it is sent, once.
+		"""
+
+		if self.link is None:
+			return
+
+		if not self._failing and not self._reported_failing:
+			return
+
+		self._reported_failing = dict(self._failing)
+
+		self.link.happened("stalled", control=self.name, layers=dict(self._failing))
 
 
 class GridRack (Control):

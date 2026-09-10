@@ -2886,6 +2886,68 @@ def test_a_shared_parameter_is_never_hidden_by_the_other_forms_list (
 	assert "spacing" in _fields_on(part)
 
 
+def test_a_layer_that_will_not_run_says_so_on_its_own_block (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2368, and until now it was said once in a log nobody reads.
+
+	Ten of the forty-six generators this panel offers can be added and will never
+	play. **Nothing is refused when you add one** — the value is accepted, the
+	app stores it, and the refusal happens a cycle later inside the build, so
+	there is no `nack` to show. #2230 cost a session to exactly that silence, and
+	it was the composition's log that ended it in one command.
+	"""
+
+	part = _one_layer(panel, fake_app, "euclidean", {"pitch": "kick", "pulses": 3})
+
+	assert part.locator(".stalled").count() == 0, "nothing is wrong yet"
+
+	fake_app.stalled("stack", {"one": "markov() missing 'transitions'"})
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.stalled').length === 1", timeout=5_000)
+
+	said = part.locator(".stalled").inner_text()
+
+	assert "not playing" in said.lower(), "the fact, in this panel's own voice"
+	assert "transitions" in said, "and the app's own words for why"
+
+
+def test_a_layer_that_starts_working_stops_saying_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Nothing keeps an event (#1965), so without a clearing frame a block would
+	go on saying it is not playing after somebody fixed it — and there would be
+	nothing to correct it with."""
+
+	part = _one_layer(panel, fake_app, "euclidean", {"pitch": "kick", "pulses": 3})
+
+	fake_app.stalled("stack", {"one": "no"})
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.stalled').length === 1", timeout=5_000)
+
+	fake_app.stalled("stack", {})
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.stalled').length === 0", timeout=5_000)
+
+
+def test_a_report_lands_on_the_layer_it_names_and_not_its_neighbour (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Two layers of one generator are two blocks that can disagree — one
+	arpeggio patched at a pitch list and one at a chord.
+
+	This is why the report is keyed by layer where the log is keyed by generator:
+	a block is what a person looks at, and marking both would send somebody to
+	the wrong dial.
+	"""
+
+	_two_generators(panel, fake_app)
+
+	fake_app.stalled("stack", {"two": "no"})
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.stalled').length === 1", timeout=5_000)
+
+	assert panel.locator('.part[data-part="stack/one"] .stalled').count() == 0
+	assert panel.locator('.part[data-part="stack/two"] .stalled').count() == 1
+
+
 def _joins_settled (panel: typing.Any) -> None:
 	"""Wait until the overlay has stopped re-measuring.
 

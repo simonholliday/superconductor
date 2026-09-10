@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.25.0"
+CONTRACT_VERSION = "1.26.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -258,6 +258,14 @@ be accepted changes; what changes is that a parameter which *opened* unset can
 be returned there.  A service too old for it answers a ``nack`` naming the
 parameter, which is the ordinary refusal path and says so on the glass rather
 than in a log (#2381).
+
+1.26.0 adds the ``stalled`` event: which layers of a stack did not run this
+cycle, and the app's own words for why (#2368).  A panel too old for it ignores
+an event name it does not know, exactly as it ignores any frame it does not
+know — which is why this is a minor number, on 1.1.0's precedent.  **It is
+`stalled` and not `failed` because the glass already has a `failed`**, meaning a
+set the app refused: two concepts must not share a word at a layer where both
+readings are plausible (#2403).
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
