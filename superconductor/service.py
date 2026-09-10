@@ -10,6 +10,7 @@ started and stopped without the music software noticing anything but a
 reconnect.
 """
 
+import asyncio
 import logging
 import pathlib
 import typing
@@ -39,6 +40,15 @@ disk it does not have to, because every other place is a socket handler on the
 event loop and this working tree is a CIFS mount that hangs.
 """
 
+LOADED_VERSION = superconductor.build.version()
+"""Which release this process is, read as this module is imported.
+
+Constant for the life of an interpreter by the question's own definition — a
+version describes what was *installed*, not what is on disk — so asking again
+per hello buys nothing and puts a second blocking read on the event loop beside
+the one #2422 was filed about.
+"""
+
 CLIENT_DIR = pathlib.Path(__file__).resolve().parent / "client"
 """The page and its scripts, which ship inside the package.
 
@@ -48,12 +58,110 @@ service with no page is not a service.
 """
 
 
+class _ClientBuild:
+	"""What serving the page last stamped the client's assets with (#2422).
+
+	**A panel's socket reports this and reads no disk to do it.**  Hashing the
+	client is `read_bytes` over every file the page is made of — 6 ms warm,
+	measured — and the `hello` branch used to do it on the event loop that serves
+	the glass.  On 2026-09-10 that happened: a stalled CIFS read left the
+	service's main thread in `netfs_start_io_read`, the control surface went off
+	the air — no panel, no taps — and the composition went on playing, which is
+	the worst shape available: the rig sounds alive and the glass is dead.  **A
+	read that can stop the thing it is serving is not a cost, it is a hazard**,
+	which is the sentence `package_build` was weakened under, applied to the half
+	it was not applied to.
+
+	**Nothing here is read that was not read anyway.**  Serving the page hashes
+	the client already, because the stamp on `/client/app.js?v=…` is that same
+	hash; this keeps the answer instead of throwing it away.
+
+	**And the answer is refreshed rather than frozen, because the page's stamp
+	and this must be allowed to differ** — that difference *is* how a panel
+	learns it is behind (#2164).  The page compares the `?v=` it was fetched
+	under against what it is told here, so a value that could only ever equal
+	that stamp would make "newer page available" unreachable.  A hello asks for a
+	re-read; the re-read happens **off the loop**; a panel is told if it moved.
+
+	**Hashing once at import was the other candidate** and fails the same test,
+	with a second fault on top: the hash is also the cache-buster, so a frozen
+	one would let a browser answer a reload out of its own cache and destroy the
+	property this project leans on — a reload always gets new JavaScript.
+	"""
+
+	def __init__ (self) -> None:
+		self.told: str | None = None
+		"""The answer a panel is given, and the only thing a socket handler reads.
+
+		None until a page has been served in this process — a panel that
+		reconnected without reloading, because the service restarted and the
+		browser did not.  **Silence rather than a guess**: the bar says nothing
+		about a build, and the refresh below fills it a moment later.
+		"""
+
+		self._reading: asyncio.Task[None] | None = None
+		"""The re-read in flight, if there is one.
+
+		**At most one, ever**, and that is what bounds the damage a stalled mount
+		can do: a panel on a reconnect backoff would otherwise start one per
+		attempt and exhaust the default executor — which is the same pool that
+		serves the page and the static files, so the glass would go down by
+		another route.  A read that never returns leaves this pending for the
+		life of the process and nothing is asked again, which is the right answer
+		when the mount is what is broken.
+		"""
+
+	def stamp (self, build: str | None) -> None:
+		"""Keep what serving the page has just worked out."""
+
+		self.told = build
+
+	def refresh (self, hub: superconductor.hub.Hub) -> None:
+		"""Ask, off the loop, whether the client has changed under this service.
+
+		**Returns at once and nothing awaits the answer**, so a greeting is never
+		held up by the disk.  Whoever provoked it is not told; every panel is, and
+		only if there is something to say.
+		"""
+
+		if self._reading is not None and not self._reading.done():
+			return
+
+		self._reading = asyncio.ensure_future(self._reread(hub))
+
+	async def _reread (self, hub: superconductor.hub.Hub) -> None:
+		"""Re-read the client on a worker thread, and say so if it moved."""
+
+		try:
+			found = await asyncio.get_running_loop().run_in_executor(
+				None, superconductor.build.client_build, CLIENT_DIR)
+
+		except OSError:
+			LOG.warning("could not re-read the client to see whether it had changed",
+			            exc_info=True)
+			return
+
+		if found is None or found == self.told:
+			return
+
+		LOG.info("the client changed under this service: %s is now %s", self.told, found)
+		self.told = found
+
+		# **Said to every panel rather than to whichever one provoked the read.**
+		# What changed is the client, and each panel is running a copy of it — so
+		# a panel that happened not to say hello just then is exactly as stale as
+		# the one that did.
+		await hub.to_panels(superconductor.protocol.service(LOADED_VERSION, found))
+
+
 def build (config: superconductor.config.Config) -> starlette.applications.Starlette:
 	"""Assemble the service: the page, the static files and the two sockets."""
 
 	hub = superconductor.hub.Hub(page={"name": config.page})
 
-	async def index (request: starlette.requests.Request) -> starlette.responses.Response:
+	stamped = _ClientBuild()
+
+	def index (request: starlette.requests.Request) -> starlette.responses.Response:
 		"""Serve the page itself, with its assets stamped by the build they are.
 
 		Two decisions about caching live here, and they are deliberate (#2056).
@@ -62,6 +170,14 @@ def build (config: superconductor.config.Config) -> starlette.applications.Starl
 		make it lie about them. Those files keep a content hash in their URL, so
 		a browser holding an old copy cannot serve it in place of a new one —
 		the URL it was cached under no longer exists.
+
+		**Deliberately not `async`** (#2422).  Starlette runs a coroutine
+		endpoint on the event loop and a plain one in a threadpool, and this
+		reads three times off a mount that can stall — `exists`, `read_text` and
+		the client hash.  Written `async def` it is the same hazard the socket
+		was just relieved of, arriving by the other door: a person whose glass
+		looks wrong reloads the page, which is precisely when the read would be
+		on the loop.
 		"""
 
 		page = CLIENT_DIR / "index.html"
@@ -71,6 +187,8 @@ def build (config: superconductor.config.Config) -> starlette.applications.Starl
 
 		markup = page.read_text(encoding="utf-8")
 		build = superconductor.build.client_build(CLIENT_DIR)
+
+		stamped.stamp(build)
 
 		if build is not None:
 			for asset in ("/client/style.css", "/client/app.js"):
@@ -82,7 +200,7 @@ def build (config: superconductor.config.Config) -> starlette.applications.Starl
 		"""Hold one browser's socket for as long as the browser is there."""
 
 		await websocket.accept()
-		await _serve_panel(hub, websocket)
+		await _serve_panel(hub, websocket, stamped)
 
 	async def app_socket (websocket: starlette.websockets.WebSocket) -> None:
 		"""Hold one music app's socket for as long as the app is there."""
@@ -203,7 +321,11 @@ def _note_builds (who: str, spoken: object) -> None:
 	            " restarting", who, spoken, LOADED_BUILD)
 
 
-async def _serve_panel (hub: superconductor.hub.Hub, websocket: starlette.websockets.WebSocket) -> None:
+async def _serve_panel (
+	hub: superconductor.hub.Hub,
+	websocket: starlette.websockets.WebSocket,
+	stamped: _ClientBuild,
+) -> None:
 	"""Greet one panel, then carry its frames until it goes away."""
 
 	panel: superconductor.hub.PanelLink | None = None
@@ -237,10 +359,15 @@ async def _serve_panel (hub: superconductor.hub.Hub, websocket: starlette.websoc
 				# panel that reconnects to a restarted service learns at once
 				# whether the page it is still running has been left behind.
 				await panel.send(superconductor.protocol.service(
-					superconductor.build.version(),
-					superconductor.build.client_build(CLIENT_DIR)))
+					LOADED_VERSION, stamped.told))
 
 				await hub.panel_joined(panel)
+
+				# **Asked for after the greeting and never awaited** (#2422).
+				# This is the one thing here that reads the client, it happens on
+				# a worker thread, and a panel that is behind is told when it
+				# lands rather than being kept waiting to be greeted.
+				stamped.refresh(hub)
 
 			elif panel is None:
 				LOG.warning("panel sent %r before saying hello; closing", kind)
