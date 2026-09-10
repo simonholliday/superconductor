@@ -1021,6 +1021,7 @@ class Parameter:
 		default: typing.Any = None,
 		group: str | None = None,
 		role: str | None = None,
+		may_be_unset: bool = False,
 	) -> None:
 		"""Describe one setting: what it is called, what shape it is, what it may be.
 
@@ -1054,6 +1055,17 @@ class Parameter:
 		self.options = list(options or [])
 		self.default = default
 		self.group = group
+
+		self.may_be_unset = may_be_unset
+		"""Whether this can be put back to holding nothing at all.
+
+		**A parameter that opens unset can be returned to unset** — the rule and
+		why it is not inferred here are `protocol.may_be_unset`.  It is off by
+		default because a *composition* builds these for an instrument's front
+		panel, where there is no such state: a CC always holds a number, and a
+		switch is on or off.  Only a catalogue's own entry says otherwise, and
+		only `_as_parameter` reads one.
+		"""
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to draw this and to know what it may ask."""
@@ -1160,6 +1172,21 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 			raise Refused(f"{parameter.name} does not take pitches")
 
 		return {"from": "control", "id": value["id"]}
+
+	# **`null` is not a value, it is the absence of one** (#2381), and it is
+	# checked here for the reason a reference is: it would fail every kind below
+	# and be refused as *not a number*, which is true and tells nobody anything.
+	#
+	# Only a parameter that opened unset may go back, and the caller is what
+	# acts on it — this says the value is allowed and `_keep_parameter` takes
+	# the key off the layer.  Anything else is refused by name, so a panel that
+	# sends `null` at a parameter which must hold something is told so on the
+	# glass rather than silently handing a generator a `None` it never asked for.
+	if value is None:
+		if not parameter.may_be_unset:
+			raise Refused(f"{parameter.name} has to hold something")
+
+		return None
 
 	if parameter.kind == "switch":
 		if not isinstance(value, bool):
@@ -1470,6 +1497,7 @@ def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
 		         for one in field.get("options", [])],
 		default=field.get("default"),
 		role=field.get("role"),
+		may_be_unset=superconductor.protocol.may_be_unset(field),
 	)
 
 
@@ -2044,7 +2072,17 @@ class Recipe (Control):
 				if parameter not in offered:
 					raise Refused(f"{generator} has no parameter called {parameter}")
 
-				kept[parameter] = checked_value(offered[parameter], setting)
+				checked = checked_value(offered[parameter], setting)
+
+				# A stack arriving with an explicit null carries the same meaning
+				# one parameter at a time does, and has to reach the same place:
+				# not in `kept`, so the merge below leaves it out.  `_opening`
+				# already omits every parameter that opens unset, so absent here
+				# is absent in the layer.
+				if checked is None:
+					continue
+
+				kept[parameter] = checked
 
 			wanted.append({
 				"id": name,
@@ -2137,12 +2175,44 @@ class Recipe (Control):
 			raise Refused(f"{running} has no parameter called {parameter}")
 
 		wanted = checked_value(offered[parameter], value)
-		params = layer.setdefault("params", {})
+		params = dict(layer.get("params") or {})
 
-		if params.get(parameter) == wanted:
+		# **Unset is an absent key, not a stored `None`** (#2381).  A generator
+		# reads its parameters as keyword arguments, so what tells it to decide
+		# for itself is the argument not being passed — `ghost_fill(grid=None)`
+		# and `ghost_fill()` happen to agree, and `arpeggio(pool, count=None)`
+		# and `arpeggio(pool)` do too, but only because the default is `None`.
+		# Storing the null would also make this the one parameter whose held
+		# value a capture writes down and a restore cannot replay.
+		if wanted is None:
+			if parameter not in params:
+				return False
+
+			del params[parameter]
+
+		elif params.get(parameter) == wanted:
 			return False
 
-		params[parameter] = wanted
+		else:
+			params[parameter] = wanted
+
+		# **The dict is replaced rather than edited in place**, because this runs
+		# on the link thread and `build` reads the same layer on the clock.  A
+		# key appearing or disappearing under a reader is the shape of
+		# `a4b7e74`, which killed this composition on start, and of #2341 —
+		# and giving a parameter a way back to unset is what makes a key
+		# *disappear* here for the first time.
+		#
+		# **Measured, and it does not reproduce**: 20,000 set/unset pairs against
+		# a thread calling `layers()` in a loop raised nothing, because the copy
+		# there is `dict(d)`, which CPython does at C level without releasing the
+		# GIL.  `a4b7e74` was a Python-level `for` over a live collection, which
+		# is a different thing and does yield.  So this is not a fix for a fault
+		# anybody has met; it is one store instead of two on the path the clock
+		# reads, and it costs a dict copy of at most a dozen keys on a gesture a
+		# finger makes.  The atomicity it would otherwise lean on is an
+		# implementation detail of one interpreter, and the clock is paramount.
+		layer["params"] = params
 
 		return True
 

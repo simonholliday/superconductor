@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.24.0"
+CONTRACT_VERSION = "1.25.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -251,6 +251,13 @@ sound, and this is a layer merging somebody else's grid into one — and it was
 renamed before a fourth layer kind could arrive and make it expensive (#2403).
 **The old spelling is still read and never written**, so a capture taken before
 the rename restores, and restoring it converts it.
+
+1.25.0 gives ``null`` a meaning as a parameter's value: **put this parameter
+back to unset**.  It was refused by every kind before, so nothing that used to
+be accepted changes; what changes is that a parameter which *opened* unset can
+be returned there.  A service too old for it answers a ``nack`` naming the
+parameter, which is the ordinary refusal path and says so on the glass rather
+than in a log (#2381).
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
@@ -299,6 +306,33 @@ app declares one and `offerable` turns it into a ``choice`` or a ``choices`` of
 the pitches a composition actually has, because which pitches exist is the
 composition's to know and never the app's (#1465).
 """
+
+
+def may_be_unset (field: dict[str, typing.Any]) -> bool:
+	"""Whether a parameter that opened unset can be put back to unset.
+
+	**A parameter that opens unset can be returned to unset, and that is the
+	whole rule.**  It is #2249's sentence read as a permission: ``required``
+	false with an explicit ``default`` of ``null`` means *leave this alone*, so
+	leaving it alone has to stay reachable after somebody has touched it.
+
+	**It lives here for the reason `PARAMETER_KINDS` does.**  The half that
+	decides a value may be cleared is `subsequence_adapter`, and the half that
+	decides the service will drop it is `controls`; measured on 2026-09-10, 42
+	parameters across 21 of the sequencer's 46 catalogue entries answer true, so
+	two copies of this would be two copies of something load-bearing.
+
+	**The `default` key has to be present, not merely null when read.**  An
+	instrument's settings declare no ``default`` at all — `Parameter.declaration`
+	never emits one — so ``field.get("default") is None`` is true of every switch
+	and every dial on a Matriarch, and would have offered a CC an *unset* it has
+	no way to be.  A catalogue says ``"default": null`` on purpose; a settings
+	block says nothing, and the difference between the two is the whole check.
+	"""
+
+	return (not field.get("required")
+	        and "default" in field
+	        and field["default"] is None)
 
 
 Frame = dict[str, typing.Any]

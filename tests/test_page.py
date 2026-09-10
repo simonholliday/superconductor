@@ -2694,6 +2694,94 @@ def _two_generators (panel: typing.Any, fake_app: typing.Any) -> None:
 	_settled(panel)
 
 
+def _one_euclidean (panel: typing.Any, fake_app: typing.Any,
+                    params: dict[str, typing.Any]) -> typing.Any:
+	"""One generator holding exactly what a test wants it to, drawn and settled."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3, **params}},
+	], by="app")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 1", timeout=5_000)
+	_settled(panel)
+
+	return panel.locator('.part[data-part="stack/one"]')
+
+
+def test_a_parameter_holding_nothing_says_auto_rather_than_drawing_a_zero (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2381, and the half of it that no ticket had noticed.
+
+	The stepper drew ``value ?? 0``, so an unset ``root`` and a ``root`` somebody
+	had set to zero were the same three pixels on the glass — while one of them
+	plays and the other kills the layer.  Three shapes draw a number here and all
+	three had it: an unbounded number is a stepper, a bounded one is a dial, and
+	a range is a dial with two handles.
+	"""
+
+	part = _one_euclidean(panel, fake_app, {})
+
+	for field in ("duration", "probability", "velocity"):
+		setting = part.locator(f'.setting[data-field="{field}"]')
+
+		assert setting.locator(".auto").count() == 1, f"{field} should say it holds nothing"
+		assert "auto" in setting.inner_text().lower()
+
+
+def test_a_parameter_that_opened_unset_can_be_put_back_from_the_glass (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The gesture that was missing, and the whole of why #2381 was unrecoverable.
+
+	``count`` and ``root`` on an arpeggio are refused beside a pitch list at
+	*every* number including zero, and the panel drew steppers that could reach
+	zero and could not reach absent.  So a layer was one press from silence with
+	no way back from the glass at all — Simon met exactly that on 2026-09-10 and
+	it took the panel's own socket to undo it.
+
+	What crosses is ``null``, which is a value the contract had no meaning for
+	until 1.25.0.
+	"""
+
+	part = _one_euclidean(panel, fake_app, {"duration": 4})
+	setting = part.locator('.setting[data-field="duration"]')
+
+	assert setting.locator("button.auto").count() == 1, "there is a way back"
+
+	setting.locator("button.auto").click()
+
+	asked = fake_app.await_set("stack/one/duration")
+
+	assert asked["v"] is None, f"the panel sent {asked['v']!r} rather than null"
+
+
+def test_the_way_back_is_absent_rather_than_dead_when_there_is_nothing_to_undo (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A control that looks pressable and does nothing reads as broken (#2107).
+
+	And a parameter that must hold something never grows one at all: `pulses` is
+	required and `pitch` has no unset to go back to, so offering either an "auto"
+	would be offering a state the generator cannot be put into.
+	"""
+
+	part = _one_euclidean(panel, fake_app, {})
+
+	assert part.locator('.setting[data-field="duration"] button.auto').count() == 0, \
+		"nothing to go back from, so no target"
+
+	part = _one_euclidean(panel, fake_app, {"duration": 4})
+
+	# **Asserted in both directions on purpose.** A test that only counts zero
+	# targets passes against a build that draws none at all, which is every build
+	# before this one — so it would have been a guard that could never go red.
+	assert part.locator('.setting[data-field="duration"] button.auto').count() == 1, \
+		"and one appears the moment there is"
+
+	assert part.locator('.setting[data-field="pulses"] button.auto').count() == 0
+	assert part.locator('.setting[data-field="pitch"] button.auto').count() == 0
+
+
 def _joins_settled (panel: typing.Any) -> None:
 	"""Wait until the overlay has stopped re-measuring.
 

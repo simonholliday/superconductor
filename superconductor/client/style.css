@@ -2481,7 +2481,49 @@ html, body {
 .grid.params .setting {
 	display: flex;
 	align-items: center;
+	gap: 0.4rem;
 	min-height: var(--row);
+}
+
+/* **A parameter holding nothing says so, and there is a way back to it** (#2381).
+ *
+ * Two elements, one word. The mark is what a control's readout becomes when the
+ * parameter is unset — it replaced a `0` that was drawn whether or not the
+ * parameter held one, which made an unset `root` and a `root` set to zero the
+ * same three pixels while one played and the other silenced the layer. The
+ * button is the way back, and exists only while there is something to go back
+ * from.
+ *
+ * **Colour and nothing else.** The surface rules above decide how big it is and
+ * what it is set in, and this says neither — a word four characters long needs
+ * no width of its own beside a floor of one row.
+ *
+ * (`tests/test_page.py` would refuse a `width` here in any case. The prose above
+ * says a purpose may set one and the test forbids it on any rule naming a
+ * button; `.outlet` and `.transport .tkey` both set widths and pass only because
+ * neither selector contains the word. That disagreement is worth settling and is
+ * not settled here, because this rule wants no width either way.) */
+.grid.params .setting button.auto {
+	background: var(--panel);
+	color: var(--ink-quiet);
+	white-space: nowrap;
+}
+
+/* The word, not a number, so it is not set in the face that lines figures up.
+ * `.stepper span` and `.dial span` declare `--face-figures` for the value they
+ * usually hold, and "auto" in a tabular face reads as a code rather than a
+ * state. It is one of the three faces, which is what the rule asks.
+ *
+ * **The button is not in this list on purpose.** A purpose may set a control's
+ * colour and its width and nothing else — its type belongs to the surface it
+ * sits on, which is the rule three rows above this one and the reason "send
+ * to…" once came out half again the size of "clear" beside it. */
+.grid.params .dial span.auto,
+.stepper span.auto {
+	font-family: var(--face-panel);
+	font-variant-numeric: normal;
+	letter-spacing: 0.04em;
+	color: var(--ink-quiet);
 }
 
 /* A rocker, drawn the way the options artifact drew it and Simon approved it.
@@ -3557,9 +3599,17 @@ html, body {
    so is not a target — but a row on this surface is a row whether or not a
    finger is going to land on it, and a line of small type floating in a 60px
    row at Large is the block coming apart rather than a saving. */
+/* **The gap is what puts a space between the two words**, and nothing else can.
+ * This is a flex container, so the whitespace between "from" and the name is
+ * discarded along with every other bit of inter-item whitespace — it drew
+ * "fromnotes" on the glass from the day it shipped, and no change to the markup
+ * fixes it because there is no text node left to hold a space. Nothing measured
+ * it: every test asked whether the source's name appeared in the row, and it
+ * did. Simon would have read it off the glass, as he has read the last four. */
 .patched-from {
 	align-items: center;
 	display: flex;
+	gap: 0.35em;
 	font-size: var(--type-chrome-quiet);
 	font-family: var(--face-panel);
 	line-height: 1;

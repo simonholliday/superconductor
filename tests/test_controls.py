@@ -322,6 +322,18 @@ STACK: dict[str, typing.Any] = {
 		{"name": "thin", "parameters": [
 			{"name": "amount", "kind": "number", "min": 0.0, "max": 1.0},
 		]},
+		# **The shape a parameter has when it may be put back to unset**: not
+		# required, and an explicit `default` of null.  Both halves read exactly
+		# that (`protocol.may_be_unset`), so a fake catalogue that left the keys
+		# out would let this file pass while the wire disagreed — which is the
+		# fault `tests/conftest.py` exists to stop and which cost six tests on
+		# 2026-09-09.
+		{"name": "ghost_fill", "parameters": [
+			{"name": "density", "kind": "number", "min": 0.0, "max": 1.0,
+			 "required": False, "default": 0.3},
+			{"name": "grid", "kind": "number", "step": 1,
+			 "required": False, "default": None},
+		]},
 	], "sources": ["shared"]},
 }
 
@@ -565,6 +577,66 @@ def test_a_layer_field_this_version_does_understand_is_still_judged () -> None:
 	with pytest.raises(superconductor.controls.ControlError):
 		superconductor.controls.apply_change(
 			state, STACK, "recipe/layers", [{**_one_layer()[0], "kind": "invention"}])
+
+
+def test_the_service_drops_a_parameter_rather_than_keeping_a_null () -> None:
+	"""Its copy has to be the same shape the app's is, not merely equivalent.
+
+	This copy exists to answer a panel that arrives late (#2085).  A panel told
+	``grid: null`` where the app holds no ``grid`` at all draws the same thing
+	today and diverges the moment either side learns to tell absent from null —
+	which is exactly the class of disagreement `tests/test_seam.py` was written
+	after, where both halves passed their own tests and were wrong together.
+	"""
+
+	state: dict[str, typing.Any] = {}
+	layer = {"id": "a", "generator": "ghost_fill", "params": {"grid": 4}}
+
+	superconductor.controls.apply_change(state, STACK, "recipe/layers", [layer])
+
+	assert state["recipe"]["layers"][0]["params"] == {"grid": 4}
+
+	superconductor.controls.apply_change(state, STACK, "recipe/a/grid", None)
+
+	assert state["recipe"]["layers"][0]["params"] == {}, "the key goes, not the value"
+
+
+def test_the_service_refuses_a_null_at_a_parameter_that_must_hold_something () -> None:
+	"""Because `null` means *you decide* and this one has nothing to decide with.
+
+	`density` opens at 0.3, so it has no unset to go back to; an instrument's
+	settings are the same and for a stronger reason — they declare no `default`
+	key at all, so a looser test would offer every dial on a Matriarch an unset
+	it has no way to be.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superconductor.controls.apply_change(
+		state, STACK, "recipe/layers",
+		[{"id": "a", "generator": "ghost_fill", "params": {"density": 0.5}}])
+
+	with pytest.raises(superconductor.controls.ControlError, match="density"):
+		superconductor.controls.apply_change(state, STACK, "recipe/a/density", None)
+
+	assert state["recipe"]["layers"][0]["params"] == {"density": 0.5}
+
+
+def test_a_whole_stack_carrying_a_null_leaves_that_parameter_out () -> None:
+	"""The other way in, and the one a restore uses.
+
+	A stack arrives entire whenever a layer is added, removed, bypassed or moved,
+	so it can carry a parameter that is unset — and it has to reach the same
+	place a single set does.
+	"""
+
+	state: dict[str, typing.Any] = {}
+
+	superconductor.controls.apply_change(
+		state, STACK, "recipe/layers",
+		[{"id": "a", "generator": "ghost_fill", "params": {"grid": None, "density": 0.5}}])
+
+	assert state["recipe"]["layers"][0]["params"] == {"density": 0.5}
 
 
 def test_a_note_keeps_a_field_this_version_does_not_know_about () -> None:

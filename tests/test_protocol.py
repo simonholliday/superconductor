@@ -124,3 +124,31 @@ def test_which_side_is_behind_is_named_and_not_left_to_the_caller () -> None:
 
 	if patch:
 		assert superconductor.protocol.contract_gap(f"{major}.{minor}.{patch - 1}") == "older"
+
+
+def test_a_parameter_may_be_unset_only_when_it_opened_unset () -> None:
+	"""The permission is #2249's sentence read backwards, and its edge is the
+	*presence* of the key rather than the value read out of it.
+
+	An instrument's settings declare no ``default`` at all — `Parameter.
+	declaration` never emits one — so a test written as
+	``field.get("default") is None`` is true of every switch and every dial on a
+	Matriarch, and would offer a CC an unset it has no way to be.  A catalogue
+	says ``"default": null`` on purpose.  That difference is the whole check, and
+	it is the one thing about this that is easy to get wrong from either end.
+	"""
+
+	may = superconductor.protocol.may_be_unset
+
+	assert may({"name": "grid", "required": False, "default": None}) is True
+	assert may({"name": "grid", "default": None}) is True, "unsaid is not required"
+
+	assert may({"name": "root", "required": True, "default": None}) is False
+	assert may({"name": "beat", "required": False, "default": 0.0}) is False
+	assert may({"name": "beat", "required": False, "default": 0}) is False, \
+		"zero is a value somebody chose"
+	assert may({"name": "on", "required": False, "default": False}) is False, \
+		"and so is false"
+
+	assert may({"name": "cutoff", "kind": "number"}) is False, \
+		"a settings field declares no default and has no unset to go back to"

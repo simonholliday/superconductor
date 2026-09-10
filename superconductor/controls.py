@@ -397,6 +397,23 @@ def _apply_parameter (
 		settings[name] = _readable_patch(controls, field, value, name)
 		return
 
+	# **`null` puts a parameter back to unset** (#2381, contract 1.25.0), and it
+	# is read before a kind for the reason a reference is: it satisfies no kind
+	# below, so the refusal would say *is not a number* about a value that was
+	# never meant to be one.
+	#
+	# **The service drops the key rather than keeping a null**, so that its copy
+	# is the same shape the app's is.  This copy exists to answer a panel that
+	# arrives late (#2085), and a panel told `root: null` where the app holds no
+	# `root` at all would draw the same thing today and diverge the moment either
+	# side learns to tell absent from null.
+	if value is None:
+		if not superconductor.protocol.may_be_unset(field):
+			raise ControlError(f"{name!r} has to hold something, and cannot be unset")
+
+		settings.pop(name, None)
+		return
+
 	kind = field.get("kind")
 
 	if kind == "switch":

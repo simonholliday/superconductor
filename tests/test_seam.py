@@ -356,6 +356,16 @@ RESHAPING_CATALOGUE: list[dict[str, typing.Any]] = [
 			 "required": True},
 		],
 	},
+	{
+		"name": "ghost_fill", "summary": "Ghost notes.", "partial": False,
+		"parameters": [
+			{"name": "pitch", "label": "pitch", "kind": "pitch", "required": True},
+			# Not required, and an explicit null default: the shape that may be
+			# put back to unset, and the one whose *key* comes and goes.
+			{"name": "grid", "label": "grid", "kind": "number", "step": 1,
+			 "required": False, "default": None},
+		],
+	},
 ]
 
 RESHAPERS: list[dict[str, typing.Any]] = [
@@ -414,6 +424,52 @@ def test_moving_one_knob_of_a_transform_crosses_like_any_other () -> None:
 		{"id": "a", "kind": "transform", "transform": "swing", "params": {}}])
 
 	_agree(stack, ["a", "percent"], 64.0)
+
+
+def test_unsetting_a_parameter_leaves_both_halves_holding_the_same_thing () -> None:
+	"""A key that *disappears* is new here, and it is the shape this file is for.
+
+	Every value that has ever crossed this join replaced another one.  Putting a
+	parameter back to unset removes it, and the two halves reach that by
+	different code — the app deletes it from the layer, the service pops it out
+	of its copy — so *equivalent* is not enough: they have to hold the same dict.
+	A service that kept ``{"grid": null}`` where the app kept ``{}`` would show a
+	reloading panel something a connected one never saw, which is this project's
+	most persistent defect and the reason for the one assertion here.
+	"""
+
+	stack = _reshaping_stack()
+	stack.apply(["layers"], [
+		{"id": "a", "generator": "ghost_fill", "params": {"pitch": "kick"}}])
+
+	_agree(stack, ["a", "grid"], 4)
+	_agree(stack, ["a", "grid"], None)
+
+	assert "grid" not in stack.layers()[0]["params"]
+
+
+def test_a_null_refused_by_the_app_is_refused_by_the_service_too () -> None:
+	"""Every kind offered has to appear in both halves, which is #2150's lesson.
+
+	The declaration side grew ``choices`` and `checked_value` did not, so the
+	service would have accepted a value the app refused — caught here on its
+	first run.  ``null`` is the same shape of addition: a value that means
+	something new at one end and must not mean something else at the other.
+	"""
+
+	stack = _reshaping_stack()
+	stack.apply(["layers"], [
+		{"id": "a", "generator": "ghost_fill", "params": {"pitch": "kick"}}])
+
+	with pytest.raises(adapter.Refused):
+		stack.apply(["a", "pitch"], None)
+
+	declared = {stack.name: stack.declaration()}
+	held = {stack.name: stack.snapshot()}
+
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(
+			held, declared, f"{stack.name}/a/pitch", None)
 
 
 def test_a_transform_named_as_a_generator_is_refused_by_both () -> None:

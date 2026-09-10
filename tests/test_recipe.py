@@ -619,6 +619,120 @@ def test_a_parameter_left_out_is_not_passed_to_the_generator () -> None:
 	assert "grid" not in builder.calls[0][1]
 
 
+def test_a_parameter_that_opened_unset_can_be_put_back_to_unset () -> None:
+	"""And before this it could not, which is what made #2381 unrecoverable.
+
+	``root`` and ``count`` on an arpeggio apply to the chord form alone, so
+	moving either one beside a pitch list kills the layer — and **zero does not
+	undo it, only absence does**.  The panel drew steppers that could reach zero
+	and could not reach absent, so a layer was one press from silence with no
+	gesture that returned it; it took the panel's own socket to give Simon his
+	arpeggio back on 2026-09-10.
+
+	The value that says so is ``null``, and what it leaves behind is **no key at
+	all** rather than a stored ``None``: leaving the argument out of the call is
+	the whole mechanism by which a generator is told to decide for itself, and
+	`test_a_parameter_left_out_is_not_passed_to_the_generator` above is the other
+	half of that sentence.
+	"""
+
+	recipe = adapter.Recipe(Composition(), catalogue=OPTIONAL, pitches=ROWS)
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "ghost_fill", "params": {}}])
+
+	assert "grid" not in recipe.layers()[0]["params"], "it opens unset"
+
+	assert recipe.apply(["a", "grid"], 4) is True
+	assert recipe.layers()[0]["params"]["grid"] == 4
+
+	assert recipe.apply(["a", "grid"], None) is True, "and it goes back"
+	assert "grid" not in recipe.layers()[0]["params"]
+
+	assert recipe.apply(["a", "grid"], None) is False, "which is not a change twice"
+
+
+def test_unsetting_a_parameter_stops_it_reaching_the_generator () -> None:
+	"""The point of the gesture, rather than the shape of what it stores.
+
+	A zero is refused by the generators this exists for exactly as any other
+	number is, so a test asserting only that the *key* went would pass against a
+	panel that had put the layer back to silence.
+	"""
+
+	recipe = adapter.Recipe(Composition(), catalogue=OPTIONAL, pitches=ROWS)
+	builder = Builder()
+
+	setattr(builder, "ghost_fill",
+	        lambda **arguments: builder.calls.append(("ghost_fill", arguments)))
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "ghost_fill", "params": {}}])
+	recipe.apply(["a", "grid"], 4)
+	recipe.build(builder)
+
+	assert builder.calls[0][1]["grid"] == 4
+
+	recipe.apply(["a", "grid"], None)
+	builder.calls.clear()
+	recipe.build(builder)
+
+	assert "grid" not in builder.calls[0][1], "the generator decides again"
+
+
+def test_a_parameter_that_has_to_hold_something_refuses_to_be_unset () -> None:
+	"""Because absence means *you decide* and this one has nothing to decide with.
+
+	`density` opens at 0.3 and `pitch` must be supplied, so neither has an unset
+	to return to; a panel sending one is told so by name rather than having a
+	`None` quietly handed to the generator.
+	"""
+
+	recipe = adapter.Recipe(Composition(), catalogue=OPTIONAL, pitches=ROWS)
+
+	recipe.apply(["layers"], [{"id": "a", "generator": "ghost_fill", "params": {}}])
+
+	for parameter in ("density", "pitch"):
+		with pytest.raises(adapter.Refused, match=parameter):
+			recipe.apply(["a", parameter], None)
+
+
+def test_a_whole_stack_carrying_a_null_leaves_that_parameter_out () -> None:
+	"""The two ways in have to agree, and one of them is how a capture comes back.
+
+	A stack arrives entire when a layer is added, removed, bypassed or moved, so
+	a stack sent while a parameter is unset carries the null — and it has to
+	reach the same place a single set does, or a restore would put back a layer
+	holding a `None` that no gesture had asked for.
+	"""
+
+	recipe = adapter.Recipe(Composition(), catalogue=OPTIONAL, pitches=ROWS)
+
+	recipe.apply(["layers"], [
+		{"id": "a", "generator": "ghost_fill", "params": {"grid": None, "density": 0.5}}])
+
+	held = recipe.layers()[0]["params"]
+
+	assert "grid" not in held
+	assert held["density"] == 0.5
+
+
+def test_an_instruments_setting_has_no_unset_to_go_back_to () -> None:
+	"""A CC always holds a number and a switch is on or off.
+
+	The permission is read off a *catalogue's* own entry, and a composition
+	building a settings panel declares no `default` key at all — so a looser test
+	than `protocol.may_be_unset`'s would have offered every dial on a Matriarch
+	an "auto" it has no way to be, and refused nothing when a panel sent one.
+	"""
+
+	for kind, default in (("number", None), ("switch", None), ("choice", None)):
+		parameter = adapter.Parameter("cutoff", kind, default=default)
+
+		assert parameter.may_be_unset is False
+
+		with pytest.raises(adapter.Refused, match="cutoff"):
+			adapter.checked_value(parameter, None)
+
+
 def test_a_layer_is_given_a_number_of_its_own () -> None:
 	"""Which is what a window is called on the glass: "Euclidean 1" (#2109).
 

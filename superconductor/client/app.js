@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.24.0";
+const CONTRACT = "1.25.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1448,6 +1448,31 @@ function PatchedFrom ({ from }) {
 }
 
 
+/* **A parameter that opens unset can be returned to unset** (#2381), which is
+ * `protocol.may_be_unset` in the other language — the same three conditions, and
+ * the same reason the `default` key has to be *present* rather than merely null
+ * when read: an instrument's settings declare no default at all, so a looser
+ * test would offer a Matriarch's filter cutoff an "auto" it has no way to be.
+ *
+ * Read in two places here, which is why it is a function: the control draws
+ * `auto` instead of a value it does not hold, and the row grows a way back. */
+function opensUnset (field) {
+	return !field.required && "default" in field && field.default === null;
+}
+
+
+/* Whether a parameter is holding nothing at the moment.
+ *
+ * **Two spellings arrive and both mean unset.** A snapshot has no key for it at
+ * all, because the app and the service both drop the key rather than storing a
+ * null; a `changed` frame carries an explicit `null`, because that is what the
+ * app reports having kept. A panel that read only one of them would draw `auto`
+ * on a reload and a stale number for the rest of the session. */
+function unset (held) {
+	return held === undefined || held === null;
+}
+
+
 function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
 
@@ -1572,13 +1597,18 @@ function Setting ({ field, held, onSet }) {
 		if (next[0] !== low || next[1] !== high) onSet(next);
 	};
 
+	/* **The readout says `auto` rather than a zero it does not hold** (#2381).
+	   It read `value ?? 0`, so an unset `root` and a `root` somebody had set to
+	   zero were the same three pixels on the glass — and one of them plays while
+	   the other kills the layer. Stepping from unset still starts at zero, which
+	   is what `?? 0` below is for; what changed is only what is *said*. */
 	const stepper = (value, onChange) => html`
 		<div class="stepper">
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
 				onChange(tidy((value ?? 0) - stepOf(field)));
 			}}>−</button>
-			<span>${value ?? 0}</span>
+			<span class=${unset(value) ? "auto" : ""}>${unset(value) ? "auto" : value}</span>
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
 				onChange(tidy((value ?? 0) + stepOf(field)));
@@ -1630,7 +1660,13 @@ function Setting ({ field, held, onSet }) {
 						event.preventDefault();
 						open ? setOpen(false) : show();
 					}}
-				>${chosen ? chosen.label || chosen.value : "choose"}<i>▾</i></button>
+				${/* **"choose" is an instruction and "auto" is a state**, and which
+				     one an empty picker means is the parameter's to say. A
+				     parameter that must be filled is asking; one that opened
+				     unset is reporting that the generator decides (#2381). */ ""}
+				>${chosen
+					? chosen.label || chosen.value
+					: opensUnset(field) ? "auto" : "choose"}<i>▾</i></button>
 
 				${open && where && html`
 					${/* **One framed control, and it says so.** Its rows carry no
@@ -1791,7 +1827,8 @@ function Setting ({ field, held, onSet }) {
 				<i style=${{ left: place(low), width: `${((high - low) / span) * 100}%` }}></i>
 				<b style=${{ left: place(low) }}></b>
 				<b style=${{ left: place(high) }}></b>
-				<span>${low} – ${high}</span>
+				<span class=${unset(held) ? "auto" : ""}>${
+					unset(held) ? "auto" : `${low} – ${high}`}</span>
 			</div>`;
 	}
 
@@ -1812,8 +1849,12 @@ function Setting ({ field, held, onSet }) {
 			onPointerUp=${() => { sliding.current = null; }}
 			onPointerCancel=${() => { sliding.current = null; }}
 		>
-			<i style=${{ width: `${((held - field.min) / (field.max - field.min)) * 100}%` }}></i>
-			<span>${held}</span>
+			<i style=${{
+				width: unset(held)
+					? "0%"
+					: `${((held - field.min) / (field.max - field.min)) * 100}%`,
+			}}></i>
+			<span class=${unset(held) ? "auto" : ""}>${unset(held) ? "auto" : held}</span>
 		</div>`;
 }
 
@@ -2114,6 +2155,42 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 												held=${value}
 												onSet=${(value) =>
 													onSet(`${name}/${layer.id}/${field.name}`, value)} />`}
+
+									${/* **The way back to unset, and it exists only while
+									     there is something to go back from** (#2381).
+									
+									     `root` and `count` on an arpeggio apply to the
+									     chord form alone, so touching either one killed
+									     a pitch-list layer — and zero does not undo it,
+									     only *absence* does. The panel drew steppers
+									     that could reach zero and could not reach
+									     absent, so a layer was one press from silence
+									     with no gesture that returned it. Simon met
+									     exactly that on 2026-09-10 and it took the
+									     panel's own socket to give him his arpeggio
+									     back.
+									
+									     It is a target of its own rather than a press on
+									     the readout, because a dial's whole face is what
+									     a finger slides and a clear living there would
+									     fire on every attempt to turn it. It is absent
+									     rather than dead when the parameter already holds
+									     nothing: a control that looks pressable and does
+									     nothing reads as broken (#2107).
+									
+									     It is `.auto` and deliberately not `.clear`:
+									     that class is the footer's pattern-wipe, drawn
+									     in `--danger` because it destroys somebody's
+									     work. This restores a default. */ ""}
+									${!patched && opensUnset(field) && !unset(value) && html`
+										<button
+											class="auto"
+											title=${`${field.label || field.name} back to auto`}
+											onPointerDown=${(event) => {
+												event.preventDefault();
+												onSet(`${name}/${layer.id}/${field.name}`, null);
+											}}
+										>auto</button>`}
 								</div>`,
 						];
 					}).flat()
