@@ -3125,7 +3125,20 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 							r=${jack * 0.46} />
 					</g>`;
 			})()}
-			${drawn.map((line) => {
+			${/* **A raised line paints first, so it goes under other lines'
+			     fittings.**  SVG paints in document order and nothing sorts
+			     `drawn`, so a live path — which is on this sheet only while a
+			     hand is on it — was laid across every plug, socket and switch
+			     belonging to a line earlier in the list.  A `.hole` is filled
+			     with the ground colour precisely so a socket reads as a hole,
+			     and a stroke across it destroys that reading.
+
+			     Only on the front sheet, and only for the one or two lines a
+			     hand is on, so this sorts almost nothing.  #2107 from the other
+			     side: what can be touched stays in front. */ ""}
+			${[...drawn].sort((one, other) => Number(touched === one.from || touched === one.to)
+			                                - Number(touched === other.from || touched === other.to))
+				.map((line) => {
 				/* **A cable, because that is what this is.** A person who
 				   patches a modular, a mixer or a stage box already knows that
 				   a lead runs from a socket to a socket and hangs a little in

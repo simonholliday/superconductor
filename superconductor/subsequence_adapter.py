@@ -1766,8 +1766,11 @@ class PitchSet (Control):
 		"""Replace the set entire, or switch it off."""
 
 		if rest == ["enabled"]:
-			self.enabled = bool(value)
-			return True
+			# Through the helper every other control uses, rather than setting the
+			# flag here: it short-circuits a no-op, so switching a set off twice
+			# stops emitting a `changed` frame that says nothing (#2429).  The
+			# mute branch inside it is skipped for a set, which drives no pattern.
+			return self._keep_enabled(value)
 
 		if rest != ["chosen"]:
 			raise Refused("a pitch set is addressed as control/chosen")

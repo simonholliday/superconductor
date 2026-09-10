@@ -320,6 +320,15 @@ def test_a_refused_request_says_why_and_gives_the_cell_back (
 	playwright_api.expect(panel.locator(".bar .warn")).to_contain_text("no room", timeout=5_000)
 	assert "on" not in (panel.locator(conftest.cell("grid/kick/1")).get_attribute("class") or "")
 
+	# **The cell says so itself, and not only the bar** (#2429).  `.cell.failed`
+	# is drawn in three places and was asserted in none: the only test naming it
+	# waits for it *not* to appear and passes on timeout, so the class could have
+	# been renamed or dropped and nothing would have noticed but that test
+	# getting seven seconds faster.
+	playwright_api.expect(
+		panel.locator(conftest.cell("grid/kick/1"))).to_have_class(
+			re.compile(r"\bfailed\b"), timeout=5_000)
+
 
 def test_the_cell_size_is_a_setting_and_not_a_constant (panel: typing.Any) -> None:
 	"""The point of #2055: no single target size is right for everybody.
@@ -1973,8 +1982,19 @@ def test_an_action_never_draws_a_chosen_button (
 
 	buttons = panel.locator('.part[data-part="moog"] .setting[data-field="voicing"] .actions button')
 
+	# **Read off the buttons rather than asked of a class that cannot be there**
+	# (#2429).  This asked for `.actions button.here` and got zero from a
+	# selector nothing can match: the action branch emits `""` or `"sent"` and
+	# never `here`, so it would have passed against a build that drew a chosen
+	# state under any other name.
+	def marked () -> list[str]:
+		return panel.eval_on_selector_all(
+			'.part[data-part="moog"] .setting[data-field="voicing"] .actions button',
+			"els => els.map((one) => one.className.trim())"
+			"          .filter((held) => held && held !== 'sent')")
+
 	assert buttons.count() == 2
-	assert panel.locator('.part[data-part="moog"] .actions button.here').count() == 0
+	assert marked() == [], f"an action opened with a state on it: {marked()}"
 
 	buttons.filter(has_text="4").click()
 
@@ -1987,8 +2007,9 @@ def test_an_action_never_draws_a_chosen_button (
 	fake_app.confirm("moog/voicing", "four", by="panel")
 	_settled(panel)
 
-	assert panel.locator('.part[data-part="moog"] .actions button.here').count() == 0, (
-		"an action drew a chosen button, which is a state nobody can verify")
+	assert marked() == [], (
+		f"an action drew a chosen button ({marked()}), which is a state nobody "
+		f"can verify")
 
 
 def test_an_action_says_a_press_left_the_glass (
