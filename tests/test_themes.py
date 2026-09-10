@@ -172,17 +172,42 @@ CHECKS: tuple[tuple[str, str, float], ...] = (
 	("ring", "panel", 3.0),
 	("ring-ink", "ring", 4.5),
 
-	# **A cable is drawn on the page, not on a control**, and until 2026-09-10 no
-	# pairing here said so — `--ring` was measured against a panel and a cable
-	# runs between panels.  A mark's floor, because a cable is a mark: nothing
-	# drawn in it is read as a sentence (#2196).
+	# **A cable is mostly drawn on the page**, and until 2026-09-10 no pairing
+	# here said so — `--ring` was measured against a panel alone.  A mark's
+	# floor, because a cable is a mark: nothing drawn in it is read as a sentence
+	# (#2196).
 	#
-	# `("ring", "ground", 3.0)` belongs beside this and is **not here**, because
-	# it fails: Airports lands at 2.29 with its accent at full strength, its
-	# accent being chosen to sit on a control face.  Adding a check that is red
-	# on its first run teaches everyone to ignore the tick — the same reason
-	# `tools/theme_separation.py` is not in CI — so it is Simon's palette
-	# decision first and a check afterwards.
+	# **"A cable runs between panels" is what this note used to say, and #2417
+	# falsified it the same day.**  A line joined to the block under the hand is
+	# drawn on the *front* sheet, so a raised cable crosses block faces and lit
+	# cells as well as the page.  A cable crosses four grounds — page, block
+	# face, unlit cell, lit cell — and this list measures it against one.
+	#
+	# **Three pairings belong beside this one and none of them is here.  All
+	# three are absent knowingly, so nobody finds a hole that is a decision.**
+	#
+	# `("ink-quiet", "on", 3.0)` — a raised wired line over a lit step. **Simon
+	# accepted it, 2026-09-10 (#2427)**, against my recommendation, and the
+	# figure is 1.09 on Phaedra: a held generator line is invisible over the lit
+	# steps of the shared drum grid, exactly where it was raised to be seen.  The
+	# state is transient — a cable is only over a cell while a hand is on the
+	# block it joins — and both remedies cost more than that is worth.  An
+	# outline is a second stroke on every raised cable and the least
+	# equipment-like thing on the panel; moving the palettes means constraining
+	# `--on`, an accent chosen to sit on a control face, against `--ink-quiet`, a
+	# title-bar ink, across twelve themes that are each already committed
+	# elsewhere.  **No single stroke colour is right for all four grounds**,
+	# which is why this is not a matter of picking a better token.
+	#
+	# `("ring", "ground", 3.0)` — a patch cable on the page.  Fails: Airports
+	# lands at 2.29 with its accent at full strength, its accent being chosen to
+	# sit on a control face.  Open as **#2400**.
+	#
+	# `("ink-quiet", "sunk", 3.0)` — a raised line over a recess.  Unmeasured.
+	#
+	# Adding a check that is red on its first run teaches everyone to ignore the
+	# tick — the same reason `tools/theme_separation.py` is not in CI — so each
+	# is Simon's palette decision first and a check afterwards.
 	("ink-quiet", "ground", 3.0),
 	("edge-strong", "part", 3.0),
 	("edge-strong", "panel", 3.0),               # #2193 was found here
