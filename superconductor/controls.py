@@ -36,9 +36,12 @@ once, are the app's business as they are for every other kind.
 PARAMS = "params"
 """Named settings of an instrument: a switch, a number, a choice of names.
 
-The three shapes an instrument's parameters come in, which between them cover
-every control-change message a Moog Minitaur answers to (#2081) and, very
-likely, most other instruments.
+**The shapes are `protocol.PARAMETER_KINDS` and there are six of them**, which
+is not a fact worth writing down twice — this said *three* from the day it was
+written, when a switch, a number and a choice covered every control-change
+message a Moog Minitaur answers to (#2081).  A Matriarch's voicing is an
+``action`` (#2179), and this rig declares one, so the count was already wrong
+before the tuple grew.
 
 Deliberately carrying no MIDI in it at all.  A panel draws a switch; whether
 that switch is control-change 65 on channel 6 is the composition's business and
@@ -493,8 +496,8 @@ def _offered (
 
 	Shaped so that a layer's parameters can go through ``_apply_parameter``
 	unchanged: a generator's parameter and an instrument's setting are the same
-	four shapes, and validating them twice in two places is how the two would
-	come to disagree.
+	shapes — `protocol.PARAMETER_KINDS`, and there are six — and validating them
+	twice in two places is how the two would come to disagree.
 	"""
 
 	if not isinstance(generator, str):
@@ -792,12 +795,19 @@ def _readable_layers (
 		# its window. Held and never checked: it is the app's to hand out and
 		# nothing here has an opinion about it.
 		#
-		# **Kept rather than rebuilt, because this list is a whitelist.** A field
-		# the service does not name is dropped, and a dropped field is not
-		# missing anywhere a panel can see until that panel reloads — until then
-		# it is reading the `changed` frame, which carries what the app actually
-		# said. So the fault hides: the numbers appeared, and came back without
-		# them. Anything added to a layer has to be added here too.
+		# **Kept rather than rebuilt, and checked rather than merely carried.**
+		# `index` is named in `LAYER_FIELDS`, so it is judged here — dropped when
+		# it is not a positive number, which is a judgement rather than
+		# ignorance — where a field this version has no opinion about rides
+		# through untouched a few lines below (#2128).
+		#
+		# **This comment used to say the opposite**, and said it directly above
+		# the code that contradicts it: that an unnamed field was *dropped*, and
+		# that anything added to a layer had to be added here too.  That was true
+		# before #2128 and the hazard it describes was real — a dropped field is
+		# invisible to a connected panel, which reads the `changed` frame and
+		# sees what the app said, and appears only on a reload.  It is worth
+		# keeping the reasoning and not the rule.
 		number = entry.get("index")
 
 		if isinstance(number, int) and not isinstance(number, bool) and number > 0:

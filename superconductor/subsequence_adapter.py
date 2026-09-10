@@ -1020,7 +1020,10 @@ class NoteGrid (Control):
 		return None
 
 class Parameter:
-	"""One setting of an instrument, in one of the three shapes a panel can draw.
+	"""One setting of an instrument, in one of the shapes a panel can draw.
+
+	Which shapes those are is `protocol.PARAMETER_KINDS`, and saying the number
+	here is how it goes stale: this said *three* while the tuple held six.
 
 	Carries no MIDI.  What a switch is wired to is the composition's business,
 	which is the same rule the rows of a grid follow (#1465).

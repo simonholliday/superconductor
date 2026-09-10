@@ -3082,9 +3082,10 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 	 * dragged window failing to bring its cables with it; it was simpler than
 	 * that, and true of every block all the time.
 	 *
-	 * **Drawn twice from one measurement.** The paths go behind every block,
-	 * which is what a lead does on a real panel and what makes a busy page
-	 * readable. The fittings do not: **every plug, collar, socket and hole sits
+	 * **Drawn twice from one measurement.** The paths go behind every block —
+	 * except the one line a hand is on, which comes forward for as long as it is
+	 * held (#2417) — which is what a lead does on a real panel and what makes a
+	 * busy page readable. The fittings do not: **every plug, collar, socket and hole sits
 	 * over the block it attaches to** — measured, all eight of them on the Notes
 	 * page — so sinking them would hide the very things a finger takes hold of,
 	 * and hide where a cable lands.
@@ -3194,10 +3195,17 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
 						${/* On both sheets, because it addresses the *line* and each
-						     sheet holds half of one: `[data-join=X] .cable` finds the
-						     path on the back sheet and `[data-join=X] .socket` the
-						     fitting on the front, which is what a reader of either
-						     wants. */ ""}
+						     sheet holds half of one.
+
+						     **Which half is on which sheet is not fixed**, and a
+						     selector that assumes it will quietly find nothing:
+						     since #2417 a *live* line's path is on the front sheet
+						     and the back-sheet group is then empty.  `[data-join=X]
+						     path.cable` finds the cable wherever it is; scope to a
+						     sheet only when the state is known, and never for a
+						     path.  A test that scoped to `.joins.under` for a held
+						     line counted an empty `<g>` and passed against any
+						     build (#2424). */ ""}
 						data-join=${`${line.from}>${line.to}`}>
 						${/* **A line comes forward while a hand is on the block it
 						     joins, and goes back when the hand lifts** (#2417,
@@ -5233,6 +5241,12 @@ function Panel () {
 			.filter((one) => one.configures && shown.has(one.configures))
 			.map((one) => ({ from: one.key, to: one.configures, row: null, wired: true })),
 
+		/* **No `shown` guard here, where the settings line above needs one**, and
+		   the asymmetry is correct rather than an omission. A `params` block is
+		   named by a page in its own right, so the pattern it configures may be on
+		   another page and the line would have no anchor. A contribution is only
+		   ever drawn where the pattern it builds is drawn (#2211), so `one.feeds`
+		   being on the page follows from `one` being on it. */
 		...contributions
 			.filter((one) => one.feeds)
 			.map((one) => ({

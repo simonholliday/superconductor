@@ -98,7 +98,8 @@ a generator names one in ``generator``.
 
 **Two catalogues rather than one longer one, and that is the whole of the
 decision.**  The two are reached identically — a name, and parameters in the
-same four shapes — so merging them would work and would be shorter.  It would
+same shapes, which are `PARAMETER_KINDS` — so merging them would work and would
+be shorter.  It would
 also draw a transform as a generator, and then the order of a stack would stop
 meaning anything: a generator invents notes and a transform acts on everything
 above it, so *which came first* is the only thing that says what a stack does.

@@ -3182,9 +3182,11 @@ html, body {
 	   comparison with the blocks alone rather than with the whole page. */
 }
 
-/* **The cables, behind every block.** A lead runs behind a panel, and a page
-   with three generators converging on one grid is unreadable if every one of
-   them is painted across whatever it crosses. A block starts at 1 so this can
+/* **The cables, behind every block, except the one in your hand.** A lead runs
+   behind a panel, and a page with three generators converging on one grid is
+   unreadable if every one of them is painted across whatever it crosses — while
+   the line you are moving is the one you need to see, so a live line is drawn on
+   the front sheet instead for as long as a hand is on either end (#2417). A block starts at 1 so this can
    sit at 0 and still lose to it — the overlay is later in the document, and a
    tie goes to the later element. */
 .joins.under {

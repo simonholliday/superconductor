@@ -42,8 +42,10 @@ dependencies = [
 
 # A package index page is the only thing many people will ever read about this,
 # and a page with nowhere to go from it is a dead end.  Every one of these must
-# resolve for a stranger before anything is uploaded — the repository is private
-# as this is written, and a 404 from a package page is worse than no link.
+# resolve for a stranger before anything is uploaded, and a 404 from a package
+# page is worse than no link.  The repository was private when this was written
+# and has been public since 2026-09-09, which removes the trap rather than the
+# rule: these still want checking before a release (#2273).
 [project.urls]
 Repository = "https://github.com/simonholliday/superconductor"
 Issues = "https://github.com/simonholliday/superconductor/issues"

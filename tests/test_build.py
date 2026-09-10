@@ -209,8 +209,8 @@ def test_nothing_reads_the_disk_while_a_socket_is_open (
 	"""The rule this check was rewritten to obey, asserted rather than remembered.
 
 	The first version compared what an app loaded against what was **on disk now**,
-	which names *which* half is behind and is the better question.  It reads eleven
-	files inside the socket handler to ask it, and this working tree is a CIFS
+	which names *which* half is behind and is the better question.  It reads every
+	`.py` file in the package — nine of them — inside the socket handler to ask it, and this working tree is a CIFS
 	mount with a live kernel bug: the suite deadlocked outright — pytest waiting
 	for ever on a frame the service never sent, both event loops idle — and on a
 	rig the same read would have taken the whole service off the air, no panel and
