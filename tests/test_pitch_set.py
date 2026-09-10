@@ -222,6 +222,73 @@ def test_the_service_refuses_a_patch_to_something_that_is_not_a_set_of_notes () 
 		                      {"from": "control", "id": "nothing_declared"})
 
 
+class Placed:
+	"""What a read-back hands back, reduced to the four fields that are read."""
+
+	def __init__ (self, pitch: int, position: int, origin: str | None = None,
+	              velocity: int = 100) -> None:
+		"""One note somewhere, and whether it says which row it was."""
+
+		self.pitch = pitch
+		self.position = position
+		self.origin = origin
+		self.velocity = velocity
+		self.primary_unmapped = False
+
+
+def test_a_note_that_says_which_row_it_was_is_drawn_on_that_row () -> None:
+	"""The ordinary case, and the one every dot on this rig relied on."""
+
+	stack = _stack(BASS, _set())
+	cells: dict[str, dict[str, typing.Any]] = {}
+
+	stack._gather(cells, {Placed(39, 0, origin="D#2")}, "a", set(BASS), 1.0, 96)
+
+	assert cells == {"D#2": {"0": {"v": 100, "from": "a"}}}
+
+
+def test_a_note_that_says_nothing_is_drawn_where_it_sounds () -> None:
+	"""**A generator may place a note without saying which row it was**, and
+	three of Subsequence's do — `arpeggio`, `chord` and `strum` resolve their
+	pitches to numbers before placing, where `de_bruijn` handed the same list of
+	names keeps them.  Measured 2026-09-10, after Simon patched a set of notes
+	into an arpeggio and saw nothing appear on the Minitaur's grid.
+
+	It *sounded*: the notes were placed and the MIDI went out.  Only the drawing
+	was missing, which is the worst shape this defect could have taken — the
+	panel says an algorithm did nothing while the room hears it working.
+
+	**The pitch is the fact and the name was only ever a way of saying it.**  So
+	a note with no name is matched by what it sounds, through the map the
+	composition handed this stack — nothing here knows anything about pitch that
+	an app did not say (#1465).
+	"""
+
+	stack = _stack(BASS, _set())
+	cells: dict[str, dict[str, typing.Any]] = {}
+
+	stack._gather(cells, {Placed(39, 0)}, "a", set(BASS), 1.0, 96)
+
+	assert cells == {"D#2": {"0": {"v": 100, "from": "a"}}}
+
+
+def test_a_note_outside_this_stack_s_rows_is_still_drawn_nowhere () -> None:
+	"""The fallback widens what can be matched, not what may be drawn.
+
+	A note the primary device will not sound must not appear on the glass — a
+	hit that makes no sound is a lie — and a pitch this stack has no row for is
+	exactly that case.
+	"""
+
+	stack = _stack(BASS, _set())
+	cells: dict[str, dict[str, typing.Any]] = {}
+
+	# C5, which is the Matriarch's territory and off the end of this grid.
+	stack._gather(cells, {Placed(72, 0)}, "a", set(BASS), 1.0, 96)
+
+	assert cells == {}
+
+
 def test_nothing_but_a_pitch_pool_takes_a_cable () -> None:
 	"""A `choices` of waveform names is the same kind and is not the same thing."""
 

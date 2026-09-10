@@ -2429,13 +2429,38 @@ class Recipe (Control):
 	) -> None:
 		"""Fold one layer's new notes into the cells being reported."""
 
+		# **A row for a note that arrived without one**, built from the map this
+		# stack was handed rather than from anything this package knows about
+		# pitch (#1465).  Only where a map is unambiguous: a pitched grid's rows
+		# *are* its notes, so the answer is exact, while a drum map may name two
+		# voices on one note and there is no answer at all.
+		by_note: dict[int, str] = {}
+
+		for named, note_number in (self.pitch_notes or {}).items():
+			if named in known:
+				by_note[note_number] = named if note_number not in by_note else ""
+
 		for note in fresh:
 			row = getattr(note, "origin", None)
 
-			# A note with no named voice cannot be matched to a row, and one the
-			# primary device will not sound must not be drawn as though it will
-			# — a hit on the glass that makes no sound is a lie.
+			# **A generator may place a note without saying which row it was**,
+			# and three of them do: `arpeggio`, `chord` and `strum` resolve their
+			# pitches to numbers before placing, so the name never reaches the
+			# note — where `de_bruijn`, handed the same list of names, keeps it.
+			# Measured 2026-09-10 and reported upstream; it is not this package's
+			# to fix and this is not a workaround for it, because **the panel
+			# should not need a generator's cooperation to draw what it played.**
+			#
+			# The pitch is the fact and the name was only ever a way of saying
+			# it, so a note with no name is matched by what it sounds. Nothing is
+			# invented: the map is the composition's own.
 			if not isinstance(row, str) or row not in known:
+				row = by_note.get(int(getattr(note, "pitch", -1) or -1), "")
+
+			# A note that still cannot be matched to a row must not be drawn, and
+			# neither must one the primary device will not sound — a hit on the
+			# glass that makes no sound is a lie.
+			if not row or row not in known:
 				continue
 
 			if getattr(note, "primary_unmapped", False):
