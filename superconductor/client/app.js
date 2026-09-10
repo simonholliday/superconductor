@@ -2591,7 +2591,7 @@ function sidesOf (box) {
  * The row's height is clamped inside the block, because a pattern taller than
  * its window scrolls: a row that is out of view would otherwise be pointed at
  * somewhere off the block entirely. */
-function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
+function anchorsFor (from, to, level, anchor, slot = 0, slots = 1, wired = false) {
 	if (level === null) {
 		const leaving = sidesOf(from);
 		const arriving = sidesOf(to);
@@ -2625,15 +2625,27 @@ function anchorsFor (from, to, level, anchor, slot = 0, slots = 1) {
 
 	/* **Several generators can land on one voice**, and until now they landed on
 	   one point and merged — the same fault that once made three arrowheads a
-	   smudge at a block's edge. They queue outward from the block instead, one
-	   lug each, and **left to right is the order they run in**: the stack's
-	   order stops being a number in a window and becomes something visible on
-	   the pattern it belongs to, with no new control at all. */
-	const out = (slots - 1 - slot) * anchor * 2.6;
+	   smudge at a block's edge.
+	
+	   **A cable queues outward and a fixed route bundles along the edge**, and
+	   the difference is what each has at its end.  A cable ends in a fitting, so
+	   standing off the block is right: the fitting is the thing being told apart
+	   and it needs room.  A fixed route ends in *nothing* (Simon, 2026-09-10), so
+	   standing off would leave a line stopping in mid-air for no visible reason —
+	   which is the exact ambiguity the lugs were there to settle.  So it stays
+	   **attached**, and several of them enter side by side the way a loom does.
+	
+	   Either way **the stack's order is what the spread says**, which is what
+	   makes it worth doing at all: the order stops being a number in a window and
+	   becomes something visible on the pattern it belongs to, with no new control
+	   at all. */
+	const spread = (slots - 1 - slot) * anchor * 2.6;
+	const out = wired ? 0 : spread;
+	const along = wired ? (slot - (slots - 1) / 2) * anchor * 1.6 : 0;
 
 	return {
 		a: { x: leftward ? from.x + from.w : from.x, y: from.y + from.h / 2 },
-		b: { x: leftward ? to.x - out : to.x + to.w + out, y: held },
+		b: { x: leftward ? to.x - out : to.x + to.w + out, y: held + along },
 
 		/* The source end leaves by the middle of a side like any other line, so
 		   it joins whatever fan is on that edge. The destination end is already
@@ -2815,7 +2827,8 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 
 				const level = join.row ? levelOf(join.to, join.row) : null;
 				const found = anchorsFor(
-					from, to, level, inset, join.slot || 0, join.slots || 1);
+					from, to, level, inset, join.slot || 0, join.slots || 1,
+					Boolean(join.wired));
 
 				laid.push({ ...join, ...found, boxes: { from, to } });
 			}
@@ -2916,14 +2929,23 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				const c1 = { x: line.a.x + reach, y: line.a.y + dip };
 				const c2 = { x: line.b.x - reach, y: line.b.y + dip };
 
-				/* **A loom does not hang.** A hard-wired line is taut and
-				   half the weight, so the two kinds are told apart at a glance
-				   rather than by comparison — which is the whole point of
-				   drawing them differently at all. */
-				const cable = line.wired
-					? `M ${line.a.x} ${line.a.y} L ${line.b.x} ${line.b.y}`
-					: `M ${line.a.x} ${line.a.y}`
-						+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
+				/* **Both kinds hang, and that is Simon's correction of
+				   2026-09-10.**  A hard-wired line used to be drawn taut, on the
+				   reasoning that two shapes are told apart faster than two
+				   colours.  It cost more than it bought: **the sag's own job is
+				   that two crossing cables read as two cables rather than as an
+				   X** (#2119), and that is worth exactly as much to a fixed route
+				   as to a patched one — more, now that three generators converge
+				   on one grid and cross each other doing it.
+				
+				   What tells them apart instead is what a hand cares about:
+				   **fittings.**  A patched cable ends in a plug and a socket you
+				   can take hold of; a fixed one ends in nothing, because there is
+				   nothing to unplug.  That reads at a glance, survives every
+				   theme, and survives colour blindness — which luminance does
+				   not: `--on` and `--ink-quiet` sit 1.09 apart in Phaedra. */
+				const cable = `M ${line.a.x} ${line.a.y}`
+					+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
 
 				/* Where the switch rides. The midpoint of a cubic is
 				   (A + 3C₁ + 3C₂ + B) / 8, which for these control points is
@@ -2931,7 +2953,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				   sag — so the switch sits on the cable rather than beside it. */
 				const middle = {
 					x: (line.a.x + line.b.x) / 2,
-					y: (line.a.y + line.b.y) / 2 + (line.wired ? 0 : dip * 0.75),
+					y: (line.a.y + line.b.y) / 2 + dip * 0.75,
 				};
 
 				/* **Three row-sized targets need a cable long enough to hold
@@ -2960,34 +2982,24 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 							+ `${flip ? " switchable" : ""}`}
 						data-join=${`${line.from}>${line.to}`}>
 						<path class="cable" d=${cable} />
-						${line.wired
-							? html`
-								${/* **Lugs, not fittings.** A wired line is
-								     terminated rather than plugged, so its ends
-								     are square where a patch cable's are round —
-								     shape carrying the difference, as it does
-								     for a routed note against an invented one. */ ""}
-								<rect class="lug" x=${line.a.x - jack * 0.42}
-									y=${line.a.y - jack * 0.42}
-									width=${jack * 0.84} height=${jack * 0.84} />
-								<rect class="lug" x=${line.b.x - jack * 0.42}
-									y=${line.b.y - jack * 0.42}
-									width=${jack * 0.84} height=${jack * 0.84} />`
-							: html`
-								${/* **The ends say which way it runs**, which is
-								     what the arrowhead was for and what a cable
-								     does not say by itself. The source end is a
-								     plug — solid, seated in a collar — and the
-								     destination is a socket, open. Something
-								     plugged *into* something reads as a
-								     direction without a symbol to learn. */ ""}
-								${/* **A fitting you can take hold of is a target,
-								     so it is a row across** — #2107, and the
-								     reason a wired line's lugs stay small is
-								     that they are marks and cannot be moved.
-								     Size follows touchability, which is the
-								     rule saying the same thing from the other
-								     side. */ ""}
+						${/* **A fixed route ends in nothing**, which is the whole of
+						     how it says it cannot be moved.  A patched cable is
+						     plugged in at both ends — a plug at the source and a
+						     socket at the destination, so it says which way it runs
+						     with no symbol to learn — and a fixed one is *grown*
+						     into what it feeds.
+						
+						     It used to end in square lugs.  A lug is still a
+						     fitting, and a fitting on something that cannot be
+						     unplugged is an affordance that is not there: Simon
+						     asked for their removal on exactly that ground.  The
+						     lugs also said nothing about direction, being identical
+						     at both ends — the block titles carry that
+						     (`arpeggio 6 · Minitaur — bass`), so nothing is lost. */ ""}
+						${line.wired ? null : html`
+							${/* **A fitting you can take hold of is a target, so it
+							     is a row across** — #2107, and size following
+							     touchability is the same rule from the other side. */ ""}
 								<circle class="collar" cx=${line.a.x} cy=${line.a.y}
 									r=${fitting}
 									onPointerDown=${holdable

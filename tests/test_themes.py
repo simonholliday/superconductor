@@ -171,6 +171,19 @@ CHECKS: tuple[tuple[str, str, float], ...] = (
 	("edge-strong", "sunk", 3.0),
 	("ring", "panel", 3.0),
 	("ring-ink", "ring", 4.5),
+
+	# **A cable is drawn on the page, not on a control**, and until 2026-09-10 no
+	# pairing here said so — `--ring` was measured against a panel and a cable
+	# runs between panels.  A mark's floor, because a cable is a mark: nothing
+	# drawn in it is read as a sentence (#2196).
+	#
+	# `("ring", "ground", 3.0)` belongs beside this and is **not here**, because
+	# it fails: Airports lands at 2.29 with its accent at full strength, its
+	# accent being chosen to sit on a control face.  Adding a check that is red
+	# on its first run teaches everyone to ignore the tick — the same reason
+	# `tools/theme_separation.py` is not in CI — so it is Simon's palette
+	# decision first and a check afterwards.
+	("ink-quiet", "ground", 3.0),
 	("edge-strong", "part", 3.0),
 	("edge-strong", "panel", 3.0),               # #2193 was found here
 	("good", "part", 3.0),

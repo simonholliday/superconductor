@@ -3323,7 +3323,7 @@ def _fitting (panel: typing.Any, join: str) -> float:
 	_joins_settled(panel)
 
 	return float(panel.eval_on_selector(
-		f'[data-join="{join}"] .socket, [data-join="{join}"] .lug',
+		f'[data-join="{join}"] .socket',
 		"""one => +(one.getAttribute("r") || one.getAttribute("width"))"""))
 
 
@@ -3339,16 +3339,18 @@ def test_a_mark_on_the_lattice_grows_with_the_cell (
 	tap — and this one did not.
 	"""
 
+	# **The fixture's own patched layer, kept**: only a patch cable carries a
+	# fitting now, and `_two_generators` replaces the stack with two euclideans —
+	# which are wired, and a fixed route ends in nothing (Simon, 2026-09-10).
 	_open_the_stack(panel)
-	_two_generators(panel, fake_app)
 
 	_at_size(panel, "Compact", "22px")
-	small = _fitting(panel, "stack/one>grid")
+	small = _fitting(panel, "notes>stack/two")
 	hair = panel.evaluate(
 		"() => parseFloat(getComputedStyle(document.querySelector('.join .cable')).strokeWidth)")
 
 	_at_size(panel, "Large", "60px")
-	large = _fitting(panel, "stack/one>grid")
+	large = _fitting(panel, "notes>stack/two")
 	thicker = panel.evaluate(
 		"() => parseFloat(getComputedStyle(document.querySelector('.join .cable')).strokeWidth)")
 
@@ -3365,10 +3367,9 @@ def test_a_mark_stops_growing_rather_than_running_away (
 	"""
 
 	_open_the_stack(panel)
-	_two_generators(panel, fake_app)
 
 	_at_size(panel, "Large", "60px")
-	large = _fitting(panel, "stack/one>grid")
+	large = _fitting(panel, "notes>stack/two")
 
 	row = panel.evaluate(
 		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))")
@@ -3385,15 +3386,20 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 	"""
 
 	_open_the_stack(panel)
-	_two_generators(panel, fake_app)
 
-	line = _edges(panel, "stack/one>grid")
+	line = _edges(panel, "notes>stack/two")
 
-	# Two lugs, because a generator is hard-wired: a line that stops at an edge
-	# and a line that passes behind a block are the same picture without
-	# something at the end saying which, whichever kind of line it is.
+	# A plug and a socket, because a patch cable stands off the block it feeds:
+	# a line that stops short of an edge and a line that passes behind a block
+	# are the same picture without something at the end saying which.
+	#
+	# **A fixed route answers the same question differently** (Simon,
+	# 2026-09-10): it has no fitting at all, and instead of standing off it stays
+	# *attached* — a line that touches has already said where it stops. Asserted
+	# by the test below rather than here, because they are two answers and not
+	# one rule with an exception.
 	dots = panel.eval_on_selector_all(
-		'[data-join="stack/one>grid"] .lug',
+		'[data-join="notes>stack/two"] circle.plug, [data-join="notes>stack/two"] circle.hole',
 		"""els => els.map((one) => {
 			const box = one.getBBox();
 
@@ -3759,18 +3765,24 @@ def test_the_two_kinds_of_connection_are_drawn_as_two_things (
 	assert wired.count() >= 1, "no generator is drawn as wired to what it builds"
 	assert patched.count() >= 1, "the note set is not drawn as patched into anything"
 
-	# Told apart by what terminates them, not by colour alone: a lug is square
-	# and cannot be moved, a fitting is round and can.
-	assert wired.first.locator("rect.lug").count() == 2, "a wired line has no lugs"
+	# **Told apart by their fittings, and by nothing else** (Simon, 2026-09-10).
+	#
+	# It used to be shape: a cable sagged and a wired line was taut.  That cost
+	# more than it bought — the sag's own job is that two crossing cables read as
+	# two rather than as an X (#2119), which is worth as much to a fixed route as
+	# to a patched one.  So both hang, and what a hand can take hold of is what
+	# says which is which.
 	assert patched.first.locator("circle.plug").count() == 1, "a cable has no plug"
 	assert patched.first.locator("circle.socket").count() == 1, "a cable has no socket"
+	assert wired.first.locator("circle, rect").count() == 0, \
+		"a fixed route drew a fitting, and there is nothing to unplug"
 
-	# And the cable sags where the loom is taut, which is the half of it that
-	# reads at a glance rather than on inspection.
-	assert "C" in (patched.first.locator("path.cable").get_attribute("d") or ""), \
-		"a patch cable is drawn as a straight line"
-	assert "C" not in (wired.first.locator("path.cable").get_attribute("d") or ""), \
-		"a wired line is drawn with a sag"
+	# Both hang.  **Colour cannot carry this on its own** and that is measured:
+	# `--on` and `--ink-quiet` sit 1.09 apart in Phaedra, so a rule resting on
+	# luminance would be no rule at all in one of the eleven themes.
+	for kind, one in (("patched", patched), ("wired", wired)):
+		assert "C" in (one.first.locator("path.cable").get_attribute("d") or ""), \
+			f"a {kind} line is drawn straight rather than hanging"
 
 
 def test_a_note_cable_ends_level_with_the_input_it_feeds (panel: typing.Any) -> None:
@@ -4128,7 +4140,10 @@ def test_only_a_control_on_the_overlay_takes_a_tap (
 
 	assert inert["overlay"] == "none"
 	assert set(inert["cables"]) == {"none"}, f"a cable takes taps: {inert}"
-	assert set(inert["lugs"]) == {"none"}, f"a wired line's lug takes taps: {inert}"
+	# **There are no lugs any more, and that is the assertion** (Simon,
+	# 2026-09-10): a fixed route ends in nothing, because a fitting on something
+	# that cannot be unplugged is an affordance that is not there.
+	assert inert["lugs"] == [], f"a fixed route drew a fitting: {inert}"
 	assert set(inert["inners"]) == {"none"}, f"a fitting's mark takes taps: {inert}"
 
 	assert set(inert["switches"]) == {"all"}, f"a switch takes no taps: {inert}"

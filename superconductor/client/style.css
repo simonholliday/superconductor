@@ -3109,36 +3109,61 @@ html, body {
  * wherever it goes, and can be plugged into as many patterns as you like. That
  * is a real cable and everything the metaphor promises is true of it.
  */
+/* **Patched: the accent, at full strength, because it is a control.**
+ *
+ * Simon, 2026-09-10: a patchable cable must always read as a *control* rather
+ * than as furniture, and in some themes it did not — measured against the ring a
+ * block is drawn with, a patch cable at 0.45 opacity sat **1.04** from the panel
+ * edge in Prism and 1.35 in Modular, which is to say indistinguishable. Full
+ * strength takes those to 2.65 and 3.72.
+ *
+ * **The opacity was the fault, not the hue.** It also put the cable under the
+ * 3:1 floor a mark is held to (#2196) in most themes — 2.00:1 in the default
+ * light. Nothing had caught it because the theme tests measure declared token
+ * *pairs*, and a stroke composited at an opacity over the page ground is neither
+ * of the two colours it is made of. That is #2194's unmeasured-pairing class,
+ * which it says is the expensive kind.
+ *
+ * **Airports is the one that still does not clear it**, at 2.29 solid: its
+ * accent is chosen to sit on a control face, not on the page ground. Recorded
+ * rather than fixed by weakening the rule.
+ */
 .join .cable {
 	fill: none;
 	stroke: var(--ring);
 	stroke-width: max(3px, calc(var(--cell) * 0.06));
-	stroke-opacity: 0.45;
+	stroke-opacity: 1;
 	stroke-linecap: round;
 }
 
-/* Hard-wired: taut, half the weight, and the panel's own quiet ink rather than
+/* Hard-wired: half the weight, and the panel's own quiet ink rather than
    the accent — it is part of the equipment, not something you plugged in. */
+/* the accent — so a hand reads *structure* where the other says *equipment*.
+ *
+ * **Neutral and thin, not faint.**  Following the panel's background more
+ * closely was the first idea and the measurement refused it: `--edge-strong`,
+ * which is the token that means *a division drawn on the equipment*, cannot
+ * reach 3:1 against the page ground at **any** opacity in the light themes,
+ * because it is designed to sit on a control face.  And the old 0.55 already put
+ * this line under the floor in eight of the eleven themes that declare colours —
+ * **1.88:1 in Workbench**, which is the one to judge first.
+ *
+ * So the panel-ness is carried by *shape* — half the weight, and no fittings at
+ * either end — and the colour only has to stay legible and stay neutral.  Thin
+ * and neutral reads as structure; low contrast just reads as faint. */
 .join.wired .cable {
 	stroke: var(--ink-quiet);
 	stroke-width: max(1.5px, calc(var(--cell) * 0.03));
-	stroke-opacity: 0.55;
+	stroke-opacity: 1;
 }
 
-/* Terminated, not plugged: square where a patch fitting is round. Shape carries
-   the difference, as it does for a routed note against an invented one. */
-.join .lug {
-	fill: var(--part);
-	stroke: var(--ink-quiet);
-	stroke-width: 1.5;
-	stroke-opacity: 0.7;
-}
+/* **Live is thicker rather than brighter**, because both kinds now rest at full
+   strength and there is no headroom left in opacity.  A cable under a finger
+   getting fatter is the same sentence a brighter one said. */
+.join.live .cable { stroke-width: max(4px, calc(var(--cell) * 0.08)); }
+.join.live.wired .cable { stroke-width: max(2.5px, calc(var(--cell) * 0.05)); }
 
-.join.live.wired .cable { stroke-opacity: 1; }
-.join.live .lug { stroke-opacity: 1; }
-
-.join.off.wired .cable { stroke-dasharray: 5 4; stroke-opacity: 0.3; }
-.join.off .lug { stroke-opacity: 0.35; }
+.join.off.wired .cable { stroke-dasharray: 5 4; stroke-opacity: 0.45; }
 
 /* **The source end is a plug and the destination end is a socket**, which is
    how a cable says which way it runs now that there is no arrowhead: a thing
@@ -3154,12 +3179,15 @@ html, body {
 	stroke-opacity: 0.7;
 }
 
-.join .plug { fill: var(--ring); fill-opacity: 0.45; }
+/* Seated in its collar at the weight the cable is drawn at, with a little
+   held back so touching it still has something to say. */
+.join .plug { fill: var(--ring); fill-opacity: 0.7; }
 .join .hole { fill: var(--ground); }
 
-/* Brighter under a finger: a cable says "these are related" all the time, and
-   "this one, right now" while a hand is on either end. */
-.join.live .cable { stroke-opacity: 1; }
+/* Under a finger: a cable says "these are related" all the time, and "this one,
+   right now" while a hand is on either end.  **The cable itself answers in
+   weight** — see above, where both kinds now rest at full strength — and its
+   fittings, which do not, answer in brightness as they always did. */
 .join.live .plug { fill-opacity: 1; }
 .join.live .collar, .join.live .socket { stroke-opacity: 1; }
 
