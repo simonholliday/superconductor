@@ -6552,6 +6552,121 @@ def test_every_block_lands_inside_the_glass_at_the_fitted_size (
 # --- What the app did not declare, the panel does not invent (#2049) ---------
 
 
+def test_a_number_says_what_it_is_measured_in_and_only_where_an_app_said_so (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2436, from Simon's decision #2435: *we cannot assume units in any interface.*
+
+	A bare number cannot answer *one what?*, and this panel is a surface for three
+	apps — the next two bring channels, Hz, bit depth and sample rate, so a rule
+	about beats and semitones would have to be renegotiated on first contact.  So
+	the word comes from the app that owns the meaning and is drawn as it was
+	given.
+
+	**Both halves are asserted**, because a panel that drew a unit on everything
+	would be inventing one: `velocity` and `duration` declare theirs and
+	`probability` and `pulses` do not, the latter two being a fraction of one and
+	a count.
+	"""
+
+	_open_the_stack(panel)
+	_one_euclidean(panel, fake_app,
+	               {"duration": 1, "velocity": [40, 80], "probability": 1})
+
+	def unit (field: str) -> str | None:
+		return panel.eval_on_selector(
+			f'.part[data-part="stack/one"] .setting[data-field="{field}"]',
+			"el => { const said = el.querySelector('.unit');"
+			"        return said ? said.textContent.trim() : null; }")
+
+	assert unit("duration") == "beats"
+	assert unit("velocity") == "MIDI velocity", "a range draws its unit too"
+	assert unit("probability") is None, "the panel invented a unit for a fraction"
+	assert unit("pulses") is None, "the panel invented a unit for a count"
+
+
+def test_a_value_the_app_is_choosing_for_itself_is_measured_in_nothing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""`auto` is a state and not a quantity, so "auto beats" is not a thing anybody
+	means (#2381, #2436).
+
+	The readout has one job in that state — saying the parameter holds nothing —
+	and a unit beside it would read as a value that had been set to something.
+	"""
+
+	_open_the_stack(panel)
+
+	row = '.setting[data-field="duration"]'
+	held = _one_euclidean(panel, fake_app, {"duration": 1})
+
+	assert held.locator(f"{row} .unit").count() == 1, \
+		"nothing to take away, so this proves nothing"
+
+	empty = _one_euclidean(panel, fake_app, {})
+
+	assert empty.locator(f"{row} .stepper span.auto").count() == 1, "it does not say auto"
+	assert empty.locator(f"{row} .unit").count() == 0, "auto was given a unit"
+
+
+def test_a_readout_gives_up_its_unit_before_it_gives_up_its_number (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A dial's readout is an end-cap on its track (#2107), so it has whatever the
+	track does not want — and "40 – 80 MIDI velocity" wants more than it gets.
+
+	Two earlier attempts here were thresholds in pixels, and both were guesses
+	about how long a unit is: a unit is a word chosen by an app this package has
+	not met.  The readout is a flex row instead and the shrinking decides — a
+	text run's automatic minimum size is its own width, so the number cannot be
+	squeezed at all, while the unit carries `min-width: 0`.
+
+	**The reading is what must survive**, at any width, which is what this
+	asserts.  Widened past what the legend needs, the whole of it comes back.
+	"""
+
+	_open_the_stack(panel)
+	_one_euclidean(panel, fake_app, {"velocity": [40, 80]})
+
+	row = '.part[data-part="stack/one"] .setting[data-field="velocity"]'
+
+	assert panel.locator(f"{row} .unit").count() == 1, \
+		"no unit is drawn here at all, so there is nothing for a row to give up"
+
+	def measure () -> dict[str, typing.Any]:
+		return panel.eval_on_selector(row, """(el) => {
+			const span = el.querySelector('.dial span');
+			const unit = span.querySelector('.unit');
+
+			/* The number is an anonymous text run, so it is measured with a
+			   range rather than read off an element. */
+			const range = document.createRange();
+			range.selectNodeContents(span);
+			range.setEndBefore(unit);
+
+			const shown = range.getBoundingClientRect();
+			const box = span.getBoundingClientRect();
+
+			return {
+				number: shown.width,
+				spilled: shown.left < box.left - 1 || shown.right > box.right + 1,
+				whole: unit.scrollWidth <= unit.clientWidth + 1,
+			};
+		}""")
+
+	tight = measure()
+
+	assert not tight["spilled"], f"the number was pushed out of its readout: {tight}"
+	assert tight["number"] > 0, "no number was drawn at all, so this proves nothing"
+
+	panel.eval_on_selector(row, "el => { el.style.width = '260px'; }")
+	_settled(panel)
+
+	roomy = measure()
+
+	assert not roomy["spilled"], f"the number spilled at a width that fits: {roomy}"
+	assert roomy["whole"], "the whole unit did not come back when there was room for it"
+	assert abs(roomy["number"] - tight["number"]) < 1.5, \
+		f"the number changed width as the row did: {tight} then {roomy}"
+
+
 def test_a_tempo_with_no_declared_range_is_not_clamped_by_the_panel (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""40 to 240 BPM is a fact about the music a rig plays, not about a transport.

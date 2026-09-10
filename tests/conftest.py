@@ -76,10 +76,17 @@ CONTROLS: dict[str, typing.Any] = {
 		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
 		     {"name": "pulses", "label": "pulses", "kind": "number",
 		      "min": 0, "max": 8, "step": 1, "required": True},
+		     # **Two of these carry a unit and two do not, deliberately** (#2436).
+		     # An app declares one where a value is measured in something and
+		     # leaves it out otherwise — `probability` is a fraction of one and
+		     # `pulses` is a count, and inventing a word for either would be
+		     # worse than the silence.  So a fixture with a unit on every field
+		     # would test only half of what is drawn.
 		     {"name": "velocity", "label": "velocity", "kind": "range",
+		      "unit": "MIDI velocity",
 		      "min": 1, "max": 127, "step": 1, "required": False, "default": None},
 		     {"name": "duration", "label": "duration", "kind": "number", "step": 1,
-		      "required": False, "default": None},
+		      "unit": "beats", "required": False, "default": None},
 		     {"name": "probability", "label": "probability", "kind": "number",
 		      "min": 0, "max": 1, "required": False, "default": None},
 		 ]},

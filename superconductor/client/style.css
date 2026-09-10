@@ -2706,7 +2706,13 @@ html, body {
 	touch-action: none;
 }
 
-.grid.params .dial i {
+/* **The direct child, and that is not tidiness** (#2436).  Written `.dial i` it
+   claimed every `<i>` anywhere inside a dial — so the first one added, a unit
+   inside the readout, was drawn as an absolutely positioned block of `--on`
+   across the whole control, and the value wrapped underneath it.  Found in a
+   screenshot, as the last five have been.  A rule that describes *the fill* has
+   to say so; the fill is a child of the dial and a unit is a grandchild. */
+.grid.params .dial > i {
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -2722,6 +2728,46 @@ html, body {
 	font-size: var(--type-body);
 	font-variant-numeric: tabular-nums;
 	text-shadow: 0 1px 2px var(--halo);
+	white-space: nowrap;
+}
+
+/* **A dial gives up its unit before it gives up its number** (#2436).
+ *
+ * A dial's readout is an end-cap on its track, not a field — #2107's named
+ * exception — so it has whatever the track does not want.  Measured at the size
+ * this page computes for itself: **78px of room against 97px of "40 – 80 MIDI
+ * velocity"**.  Left to wrap it drew two lines across the fill; left to overflow
+ * it clipped the *number*, because the readout is at the end and an over-wide
+ * one spills off the front.
+ *
+ * So the unit is drawn where there is room for it and not where there is not,
+ * whole-word, and what goes is the legend rather than the reading.  A person
+ * working at 22px cells has chosen density over lettering, which is the same
+ * trade `OVERVIEW_AT` makes for a whole pattern.
+ *
+ * **Nothing here is a threshold**, and two attempts at one are why that is said
+ * out loud: a width in pixels has to guess how long a unit is, and a unit is a
+ * word chosen by an app this package has not met.  The readout is a flex row
+ * instead, and the shrinking does the deciding — a text run's automatic minimum
+ * size is its own width, so the number cannot be squeezed at all, while the unit
+ * carries `min-width: 0` and gives up whatever the row needs.  Wide rows keep
+ * the whole legend, narrow ones lose it from the end, and the reading is never
+ * touched at any width.
+ *
+ * A **stepper** needs none of this and deliberately has none: its readout is a
+ * flex basis rather than a floor (#2368), so it gives the row back what it does
+ * not use and "1 beats" fits where "40 – 80 MIDI velocity" cannot. */
+.grid.params .dial span {
+	display: flex;
+	align-items: baseline;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.grid.params .dial .unit {
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
 }
 
 /* **A layer the application skipped, said where the person is looking** (#2368).
@@ -2903,6 +2949,41 @@ html, body {
 	font-variant-numeric: tabular-nums;
 }
 
+/* **The unit a number is measured in** (#2435, #2436), in the app's own words.
+ *
+ * Set in the panel face, because it is lettering on equipment rather than a
+ * figure that has to line up (#2107), and smaller than the reading it belongs
+ * to — **the hierarchy is size and face, and deliberately not colour.**
+ *
+ * `--ink-faint` was the obvious choice and is the wrong one: a dial's readout is
+ * drawn *over the fill*, so a second ink there is a pairing against `--on` that
+ * nothing has measured — which is #2427's whole class of fault, met the week it
+ * was written down.  Inheriting adds no pairing at all: the unit is legible
+ * exactly where the number beside it is, on every ground and in all twelve
+ * themes, and it rides the same `text-shadow` halo that makes the number
+ * readable over the fill.
+ *
+ * **The space is inside the element and `pre` keeps it there**, which is not
+ * fussiness: htm collapses the whitespace *around* an element, so a space in the
+ * markup gives `80MIDI velocity` — the same fault `.patched-from` shipped with
+ * as "fromnotes" — and a margin would look right while reading as one word to
+ * anything that asks for the text.  A space *inside* the element survives both,
+ * and `pre` stops it being collapsed if a readout ever becomes a flex row.
+ *
+ * `pre` also keeps a two-word unit on one line, which is what a legend wants.
+ *
+ * `font-size:` rather than the `font:` shorthand, which carries no family and
+ * therefore drops the whole declaration — measured twice on this stylesheet. */
+.unit {
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	font-style: normal;
+	font-variant-numeric: normal;
+	letter-spacing: 0.04em;
+	white-space: pre;
+	text-overflow: ellipsis;
+}
+
 .pair { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 
 /* A range is one bar with two handles rather than two bars: the gap between
@@ -2910,7 +2991,7 @@ html, body {
    instead of printing two numbers. */
 .grid.params .dial.ranged { justify-content: center; }
 
-.grid.params .dial.ranged i { left: auto; }
+.grid.params .dial.ranged > i { left: auto; }
 
 .grid.params .dial.ranged b {
 	position: absolute;

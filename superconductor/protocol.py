@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.27.0"
+CONTRACT_VERSION = "1.28.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -276,6 +276,34 @@ Subsequence is not, and an app that wants two of itself declares two names.  So
 this is not a refusal and never becomes one; it says on the glass that a name is
 being shared, because the harm of an accidental second copy is outside the
 service entirely and only a person can end it.
+"""
+
+UNIT = "unit"
+"""What a value is measured in, said by the app that owns the meaning (#2435).
+
+A **free string in the app's own words** — `beats`, `steps`, `MIDI velocity`,
+`semitones`, `Hz` — carried beside `min`, `max` and `step` on a parameter, and
+absent where a parameter has no natural unit.  Nothing here enumerates them, and
+nothing here converts between them: a table of units would be this package
+knowing what a hertz is, which is the same mistake as knowing what a drum voice
+is (#1465).
+
+**It is read as well as drawn, and exactly one place may read it.**  Simon's
+decision of 2026-09-10 (#2435): *there is no central vocabulary; each producing
+app commits to a closed set of unit words, pinned by that app's own test, and
+this package may switch on them.*  The place that switches is **the adapter for
+the app that declared it** — `subsequence_adapter.py` knows Subsequence's words
+and nothing else does.  By the time a value reaches this module, `controls.py`
+or the glass, the unit has already become a shape the contract carries: a bound,
+a set of choices, a word beside a number.
+
+So the rule for everything downstream of an adapter is the one `about` has
+(#2071): **shown, never interpreted.**  The reason the field is named here at all
+is that both halves have to agree it exists and rides through untouched.
+
+*"Shown, never read" is what this said until 2026-09-10*, and it was already
+false: #2411's `kind: "position"` declares a unit that says which axis its values
+count along, and no panel can offer them without knowing.
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")

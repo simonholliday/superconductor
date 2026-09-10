@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.27.0";
+const CONTRACT = "1.28.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1669,13 +1669,34 @@ function Setting ({ field, held, onSet }) {
 	   zero were the same three pixels on the glass — and one of them plays while
 	   the other kills the layer. Stepping from unset still starts at zero, which
 	   is what `?? 0` below is for; what changed is only what is *said*. */
+	/* **What a number is measured in, drawn beside it and never converted**
+	   (#2435, #2436).
+
+	   A free string in the app's own words — `beats`, `steps`, `MIDI velocity`,
+	   and one day `kHz` — so nothing here holds a list of units or an opinion
+	   about any of them. It answers the one question a bare number cannot ask
+	   for itself: *one what?*
+
+	   **On the readout rather than beside the name**, which is where a piece of
+	   equipment would put a legend and is the one place this cannot go:
+	   `.row-label` is a flex row that trims an over-long name from its *front*,
+	   so a unit added there would be the part that survived. The readout is also
+	   where the ambiguity actually is.
+
+	   **Nothing is drawn beside `auto`**, because that is a state rather than a
+	   quantity and "auto beats" is not a thing anybody means (#2381). */
+	const measured = (shown) => (field.unit
+		? html`${shown}<i class="unit">${` ${field.unit}`}</i>`
+		: shown);
+
 	const stepper = (value, onChange) => html`
 		<div class="stepper">
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
 				onChange(tidy((value ?? 0) - stepOf(field)));
 			}}>−</button>
-			<span class=${unset(value) ? "auto" : ""}>${unset(value) ? "auto" : value}</span>
+			<span class=${unset(value) ? "auto" : ""}>${
+				unset(value) ? "auto" : measured(value)}</span>
 			<button onPointerDown=${(event) => {
 				event.preventDefault();
 				onChange(tidy((value ?? 0) + stepOf(field)));
@@ -1895,7 +1916,7 @@ function Setting ({ field, held, onSet }) {
 				<b style=${{ left: place(low) }}></b>
 				<b style=${{ left: place(high) }}></b>
 				<span class=${unset(held) ? "auto" : ""}>${
-					unset(held) ? "auto" : `${low} – ${high}`}</span>
+					unset(held) ? "auto" : measured(`${low} – ${high}`)}</span>
 			</div>`;
 	}
 
@@ -1921,7 +1942,7 @@ function Setting ({ field, held, onSet }) {
 					? "0%"
 					: `${((held - field.min) / (field.max - field.min)) * 100}%`,
 			}}></i>
-			<span class=${unset(held) ? "auto" : ""}>${unset(held) ? "auto" : held}</span>
+			<span class=${unset(held) ? "auto" : ""}>${unset(held) ? "auto" : measured(held)}</span>
 		</div>`;
 }
 

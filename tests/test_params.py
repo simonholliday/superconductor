@@ -65,6 +65,51 @@ def test_the_declaration_carries_no_midi_at_all () -> None:
 		{"value": "lcr", "label": "LCR"}, {"value": "exp", "label": "EXP"}]
 
 
+def test_a_parameter_says_what_it_is_measured_in_and_never_what_that_means () -> None:
+	"""#2436, from Simon's decision #2435: *we cannot assume units in any interface.*
+
+	A unit is a **free string in the app's own words**, carried beside `min` and
+	`max` and drawn as it was given.  Nothing here enumerates units, converts
+	between them, or has an opinion about any of them — a table of units would be
+	this package knowing what a hertz is, which is the same mistake as knowing
+	what a drum voice is (#1465).
+
+	**Absent rather than null where there is none**, because most numbers are not
+	measured in anything: a probability is a fraction of one and a count is a
+	count, and inventing a word for either would be worse than the silence.
+	"""
+
+	said = superconductor.subsequence_adapter.Parameter(
+		"cutoff", "number", minimum=0, maximum=127, unit="MIDI").declaration()
+
+	assert said["unit"] == "MIDI"
+
+	bare = superconductor.subsequence_adapter.Parameter(
+		"amount", "number", minimum=0, maximum=1).declaration()
+
+	assert "unit" not in bare, "a parameter with no unit was given an empty one"
+
+
+def test_a_units_word_survives_the_round_trip_through_the_catalogue () -> None:
+	"""The half a declaration test cannot see: a unit reaches a `Parameter` from an
+	app's own catalogue entry and comes back out unchanged.
+
+	`_as_parameter` is the reading in that direction and it had to be told about
+	the field — a value refused by the wrong code is the fault `tests/test_seam.py`
+	exists for, and a unit dropped on the way in is the same shape one layer down.
+	"""
+
+	held = superconductor.subsequence_adapter._as_parameter({
+		"name": "duration", "kind": "number", "min": 0.05, "max": 4.0,
+		"unit": "beats"})
+
+	assert held.unit == "beats"
+	assert held.declaration()["unit"] == "beats"
+
+	assert superconductor.subsequence_adapter._as_parameter(
+		{"name": "probability", "kind": "number"}).unit is None
+
+
 def test_moving_a_setting_tells_the_composition_once () -> None:
 	"""Which is where a control change gets sent, if that is what it stands for."""
 

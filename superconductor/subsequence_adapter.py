@@ -1041,6 +1041,7 @@ class Parameter:
 		default: typing.Any = None,
 		group: str | None = None,
 		role: str | None = None,
+		unit: str | None = None,
 		may_be_unset: bool = False,
 	) -> None:
 		"""Describe one setting: what it is called, what shape it is, what it may be.
@@ -1068,6 +1069,21 @@ class Parameter:
 		set of notes (#2374).  Held here so that the check reading it is the same
 		one every other value passes through.
 		"""
+		self.unit = unit
+		"""What this parameter's values are measured in, in the app's own words.
+
+		`beats`, `steps`, `MIDI velocity` — a free string, drawn beside the
+		number and never converted (`protocol.UNIT`).  Absent where a parameter
+		has no natural unit, which is most of the ones that are counts and all of
+		the ones that are constants: inventing one for `lorenz.sigma` would be
+		worse than the silence.
+
+		**Read only by the half that faces the app that said it.**  A unit is
+		what lets `offerable` tell one `grid` from another and turn a position
+		into the choices a pattern actually has; by the time anything downstream
+		sees a control, that is already a bound or an option list.
+		"""
+
 		self.label = label
 		self.minimum = minimum
 		self.maximum = maximum
@@ -1095,6 +1111,14 @@ class Parameter:
 
 		if self.group is not None:
 			declared["group"] = self.group
+
+		# **Whatever the kind**, because a position that has become a `choices`
+		# is still counted in steps and the glass still wants to say so.  Left
+		# out rather than sent as null where there is none: a panel drawing an
+		# empty unit would put a gap after every number that has no name for
+		# what it is.
+		if self.unit is not None:
+			declared[superconductor.protocol.UNIT] = self.unit
 
 		if self.kind in ("number", "range"):
 			declared["step"] = self.step
@@ -1542,6 +1566,7 @@ def _as_parameter (field: dict[str, typing.Any]) -> Parameter:
 		         for one in field.get("options", [])],
 		default=field.get("default"),
 		role=field.get("role"),
+		unit=field.get(superconductor.protocol.UNIT),
 		may_be_unset=superconductor.protocol.may_be_unset(field),
 	)
 

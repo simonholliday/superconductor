@@ -90,6 +90,26 @@ def test_the_client_checker_would_catch_a_redeclaration () -> None:
 	assert done.returncode != 0, "the syntax check no longer catches a redeclaration"
 
 
+def _rules (name: str = "style.css") -> str:
+	"""One of the client's files with its comments taken out.
+
+	**Every static check here reads prose as though it were code otherwise**, and
+	that is not hypothetical twice over: the colours guard has stripped comments
+	since it was written, because an item number reads exactly like a short hex
+	colour — and the sizes guard did not, so a comment explaining *why* the
+	long-hand size property is used rather than the `font:` shorthand was itself
+	reported as a size outside the scale (2026-09-10).
+
+	The lesson is the guard's rather than the comment's: **a rule about code
+	should be asked of code.**  A test that can be tripped by an explanation
+	teaches people to stop writing them.
+	"""
+
+	held = (superconductor.service.CLIENT_DIR / name).read_text(encoding="utf-8")
+
+	return re.sub(r"/\*.*?\*/", "", held, flags=re.DOTALL)
+
+
 def test_every_size_in_the_stylesheet_comes_from_the_scale () -> None:
 	"""Consistency has to be enforced rather than remembered.
 
@@ -98,9 +118,7 @@ def test_every_size_in_the_stylesheet_comes_from_the_scale () -> None:
 	controls beside it did not. A convention would drift again; this cannot.
 	"""
 
-	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
-
-	declared = re.findall(r"font-size:\s*([^;]+);", style)
+	declared = re.findall(r"font-size:\s*([^;]+);", _rules())
 	loose = [one.strip() for one in declared if not one.strip().startswith("var(--type-")]
 
 	assert loose == [], f"these sizes are outside the scale: {loose}"
@@ -110,7 +128,9 @@ def test_the_scale_is_small_and_every_step_of_it_is_used () -> None:
 	"""A scale nobody uses all of is a scale with a spare step in it, and a
 	spare step is where the next inconsistency goes."""
 
-	style = (superconductor.service.CLIENT_DIR / "style.css").read_text(encoding="utf-8")
+	# Comments too, and for the sharper reason: a step *named* in prose and used
+	# nowhere would satisfy this while being the spare step it exists to forbid.
+	style = _rules()
 
 	defined = set(re.findall(r"(--type-[a-z-]+):", style))
 	used = set(re.findall(r"var\((--type-[a-z-]+)\)", style))
