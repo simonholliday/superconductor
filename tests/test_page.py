@@ -2782,6 +2782,110 @@ def test_the_way_back_is_absent_rather_than_dead_when_there_is_nothing_to_undo (
 	assert part.locator('.setting[data-field="pitch"] button.auto').count() == 0
 
 
+def _one_layer (panel: typing.Any, fake_app: typing.Any, generator: str,
+                params: dict[str, typing.Any]) -> typing.Any:
+	"""One layer of any generator, holding exactly what a test wants it to."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": generator, "index": 1, "bypassed": False,
+		 "params": params},
+	], by="app")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 1", timeout=5_000)
+	_settled(panel)
+
+	return panel.locator('.part[data-part="stack/one"]')
+
+
+def _fields_on (part: typing.Any) -> list[str]:
+	"""Which parameters a block is actually drawing, in order."""
+
+	return [one.get_attribute("data-field") for one in part.locator(".setting").all()]
+
+
+def test_a_dial_belonging_to_the_other_form_is_not_offered (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2381, using what #2410 added upstream.
+
+	`root`, `count` and `inversion` apply to an arpeggio's **chord** form alone,
+	and beside a pitch list every one of them kills the layer — zero included.
+	The panel drew all three as ordinary numbers because that is what they are
+	declared as, so a layer was one press from silence and the dial was a
+	reasonable thing for a musician to reach for.
+	"""
+
+	part = _one_layer(panel, fake_app, "arpeggio", {"notes": ["kick"]})
+	drawn = _fields_on(part)
+
+	assert "notes" in drawn and "spacing" in drawn, "the shared parameters stay"
+
+	for field in ("root", "count", "inversion"):
+		assert field not in drawn, f"{field} belongs to the chord form"
+
+
+def test_a_generator_with_only_a_chord_form_still_offers_all_of_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""`broken_chord` accepts a chord and nothing else, so nothing it owns is
+	ever out of place — there is no other form to be in.
+
+	It also names **two** rather than three, because it has no `count` at all.
+	A panel reading `only` as a fixed triple rather than per entry would be
+	wrong here, which is upstream's own warning on #2410.
+	"""
+
+	part = _one_layer(panel, fake_app, "broken_chord",
+	                  {"chord_obj": ["kick"], "root": 48})
+	drawn = _fields_on(part)
+
+	assert "root" in drawn and "inversion" in drawn
+
+
+def test_a_layer_already_holding_one_is_shown_it_with_the_way_back (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Hiding it would strand a layer that is already dead, which is the exact
+	state Simon's composition was in.
+
+	The value goes on being sent whether or not a dial is drawn for it, so a
+	panel that simply hid the parameter would show a healthy-looking block that
+	makes no sound and offers nothing to do about it — worse than before, because
+	at least the dial was visible.  So the one way these appear beside a pitch
+	list is that somebody set one, and then it appears with the gesture that
+	takes it off.
+	"""
+
+	part = _one_layer(panel, fake_app, "arpeggio",
+	                  {"notes": ["kick"], "count": 3})
+
+	assert "count" in _fields_on(part), "a layer this is killing must say so"
+
+	setting = part.locator('.setting[data-field="count"]')
+
+	assert setting.locator("button.auto").count() == 1
+
+	setting.locator("button.auto").click()
+
+	assert fake_app.await_set("stack/one/count")["v"] is None
+
+
+def test_a_shared_parameter_is_never_hidden_by_the_other_forms_list (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""`spacing` applies to both forms and is declared alongside the three that do
+	not, which is the whole reason the catalogue had to say which is which rather
+	than the panel guessing from the shape.
+
+	**It is left at its opening value deliberately.** Written with a `spacing`
+	somebody had set, this passed against a filter that hid every parameter of a
+	generator with a chord form — because a value that has been chosen is drawn
+	whatever else is true, so the other rule rescued it and the membership check
+	went untested. Measured by breaking it exactly that way.
+	"""
+
+	part = _one_layer(panel, fake_app, "arpeggio", {"notes": ["kick"]})
+
+	assert "spacing" in _fields_on(part)
+
+
 def _joins_settled (panel: typing.Any) -> None:
 	"""Wait until the overlay has stopped re-measuring.
 

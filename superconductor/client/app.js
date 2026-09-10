@@ -1473,6 +1473,68 @@ function unset (held) {
 }
 
 
+/* Whether a parameter is still holding what it opened at, so nobody has chosen
+ * this value.
+ *
+ * **Holding nothing is always untouched, whatever the default says.** An absent
+ * parameter is one the app is not passing to the generator at all, so there is
+ * nothing to be wrong with it — where a parameter *set* to its default has been
+ * sent, and only happens to be sent a harmless value. */
+function untouched (field, value) {
+	if (unset(value)) return true;
+
+	return value === field.default;
+}
+
+
+/* The parameters that belong to a generator's *other* form, which this one has
+ * no use for (#2381, and #2410 upstream is what makes it knowable).
+ *
+ * `arpeggio`, `chord` and `strum` each take either a chord or a pitch list, and
+ * `root`, `count` and `inversion` apply to the chord alone — beside a pitch list
+ * every one of them raises the layer dead, and **zero does not excuse it**. The
+ * panel drew all three as ordinary numbers because that is what they are
+ * declared as, so a layer was one press from silence. Simon met exactly that
+ * with a `count: 3` that had been sitting dead in his composition.
+ *
+ * **Read per entry and never as a fixed list.** `broken_chord` names two rather
+ * than three, because it has no `count` at all — Subsequence filters `only` to
+ * what each verb actually takes, and a panel holding the triple would be wrong
+ * there. That is the whole reason this is asked of the catalogue rather than
+ * written down here: a list of facts about their functions living in this
+ * repository is what #2375 spent four rounds refusing.
+ *
+ * **A parameter still holding a value is drawn anyway**, and that is not a
+ * hedge. Hiding it would strand a layer that is already dead — the value goes on
+ * being sent whether or not a dial is drawn for it, so the block would look
+ * healthy, make no sound, and offer nothing to do about it. So the one way these
+ * appear beside a pitch list is that somebody set one, and then it appears with
+ * the gesture that takes it off. */
+function otherFormOnly (offered, params) {
+	const hidden = new Set();
+
+	for (const field of offered.parameters || []) {
+		const only = field.chord && field.chord.only;
+
+		if (!Array.isArray(only)) continue;
+
+		/* A parameter that cannot take pitches is always in the chord form, so
+		   nothing it owns is ever out of place. `broken_chord` is the case. */
+		if (!(field.accepts || []).includes("pitches")) continue;
+
+		/* A chord is a name and a pool is a list, so the two shapes cannot be
+		   mistaken for one another. A cable carries a set of notes, which is the
+		   pitch form. Unset counts as pitches too: the parameter is required, so
+		   it opens at a pool of one rather than at nothing. */
+		if (typeof (params || {})[field.name] === "string") continue;
+
+		for (const name of only) hidden.add(name);
+	}
+
+	return hidden;
+}
+
+
 function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
 
@@ -2087,6 +2149,11 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 	const index = layers.findIndex((one) => one.id === layer.id);
 	const send = (next) => onSet(`${name}/layers`, next);
 
+	/* Worked out once for the block rather than once per row: it reads every
+	   parameter to answer about any of them, so asking it inside the filter
+	   would walk the list once for each name in it. */
+	const elsewhere = offered ? otherFormOnly(offered, layer.params) : new Set();
+
 	const shift = (by) => {
 		const to = index + by;
 
@@ -2126,7 +2193,15 @@ function Contribution ({ name, layer, layers, offered, onSet }) {
 				</div>
 
 				${offered
-					? offered.parameters.map((field) => {
+					? offered.parameters.filter((field) => {
+						/* **A dial that belongs to the other form is not offered**
+						   (#2381). It is drawn only while it is holding something
+						   somebody chose, because hiding it then would strand a
+						   layer that is already dead. */
+						if (!elsewhere.has(field.name)) return true;
+
+						return !untouched(field, (layer.params || {})[field.name]);
+					}).map((field) => {
 						const value = (layer.params || {})[field.name];
 						const patched = value && typeof value === "object"
 							&& !Array.isArray(value) && value.from;

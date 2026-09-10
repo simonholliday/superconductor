@@ -84,6 +84,50 @@ CONTROLS: dict[str, typing.Any] = {
 		      "min": 0, "max": 1, "required": False, "default": None},
 		 ]},
 		{"name": "evolve", "summary": "Mutate a sequence.", "partial": True, "parameters": []},
+		# **A generator with two forms**, which is the shape #2410 made readable.
+		# `arpeggio`, `chord` and `strum` each take either a chord or a pitch
+		# list, and `root`/`count`/`inversion` apply to the chord alone — so
+		# beside a pitch list the panel must not offer them at all.
+		{"name": "arpeggio", "summary": "Cycle a chord's notes one at a time.",
+		 "partial": False,
+		 "parameters": [
+		     {"name": "notes", "label": "notes", "kind": "choices", "role": "pitch",
+		      "required": True, "accepts": ["chord", "pitches"],
+		      "chord": {"roots": [{"value": "C", "label": "C"}],
+		                "qualities": [{"value": "", "label": "major"}],
+		                "needs": ["root"],
+		                "only": ["root", "count", "inversion"]},
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
+		     {"name": "root", "label": "root", "kind": "number", "step": 1,
+		      "required": False, "default": None},
+		     {"name": "count", "label": "count", "kind": "number", "step": 1,
+		      "required": False, "default": None},
+		     {"name": "inversion", "label": "inversion", "kind": "number", "step": 1,
+		      "required": False, "default": 0},
+		     {"name": "spacing", "label": "spacing", "kind": "number",
+		      "required": False, "default": 0.25},
+		 ]},
+		# **And one with only the chord form**, which is `broken_chord`: it names
+		# two rather than three because it has no `count` at all, so a panel
+		# reading `only` as a fixed triple would be wrong here.  Nothing it owns
+		# is ever out of place, because there is no other form to be in.
+		{"name": "broken_chord", "summary": "Roll a chord's tones in an order.",
+		 "partial": False,
+		 "parameters": [
+		     {"name": "chord_obj", "label": "chord", "kind": "choices", "role": "pitch",
+		      "required": True, "accepts": ["chord"],
+		      "chord": {"roots": [{"value": "C", "label": "C"}],
+		                "qualities": [{"value": "", "label": "major"}],
+		                "needs": ["root"],
+		                "only": ["root", "inversion"]},
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare")]},
+		     {"name": "root", "label": "root", "kind": "number", "step": 1,
+		      "required": True},
+		     {"name": "inversion", "label": "inversion", "kind": "number", "step": 1,
+		      "required": False, "default": 0},
+		 ]},
 		# Two pools, because the panel draws a short one flat and a long one
 		# behind a menu, and the line between them is where a drawing bug hides.
 		{"name": "chord", "summary": "Sound several pitches together.", "partial": False,

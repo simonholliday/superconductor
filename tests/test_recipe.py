@@ -156,6 +156,46 @@ def test_a_pitch_becomes_the_voices_this_composition_actually_has () -> None:
 	assert [one["value"] for one in pitch["options"]] == ROWS
 
 
+def test_the_conditional_facts_survive_a_pitch_becoming_a_choice () -> None:
+	"""Because that conversion rebuilds the field, which is how a field is lost.
+
+	`offerable` turns a `pitch` into a `choice` by writing a new dict, and a
+	panel that cannot see `accepts` and `chord.only` draws every chord-only dial
+	on a generator holding a pitch list — which is #2381, a layer one press from
+	silence.  **This project has lost a field to a rebuild three times**, always
+	the same way: both halves correct by their own tests, wrong together, and
+	nothing asserting that what an app said arrives.
+
+	`only` is checked per entry rather than as a constant on purpose.
+	`broken_chord` names two where `arpeggio` names three, because it has no
+	`count` at all — upstream filters the list to what each verb actually takes,
+	and a panel holding the triple would be wrong there (#2410).
+	"""
+
+	catalogue: list[dict[str, typing.Any]] = [
+		{
+			"name": "arpeggio", "summary": "Two forms.", "partial": False,
+			"parameters": [
+				{"name": "notes", "label": "notes", "kind": "pitch", "multiple": True,
+				 "required": True, "accepts": ["chord", "pitches"],
+				 "chord": {"roots": [], "qualities": [],
+				           "needs": ["root"],
+				           "only": ["root", "count", "inversion"]}},
+			],
+		},
+	]
+
+	recipe = adapter.Recipe(Composition(), catalogue=catalogue, pitches=ROWS)
+	notes = recipe.declaration()["generators"][0]["parameters"][0]
+
+	assert notes["kind"] == "choices", "it is still converted"
+	assert [one["value"] for one in notes["options"]] == ROWS
+
+	assert notes["accepts"] == ["chord", "pitches"], "what the app said survives"
+	assert notes["chord"]["only"] == ["root", "count", "inversion"]
+	assert notes["chord"]["needs"] == ["root"]
+
+
 def test_a_pitch_parameter_that_takes_several_becomes_a_choices () -> None:
 	"""The plural of the join above, and the whole of #2150.
 
