@@ -1241,11 +1241,24 @@ link = superconductor.subsequence_adapter.AppLink(
 		# and a kit would quietly play one note at a time.
 		superconductor.subsequence_adapter.Page(
 			"band", parts=["grid", "bass", "chords", "matriarch"], title="Band"),
-		# **One set of notes and both stacks that can read it**, which is the
-		# whole of what this page is for: patch the arpeggios on either side of
-		# it at the same notes and hear two instruments play them (#2374).
+		# **One set of notes, both stacks that can read it, and both patterns
+		# they write into** — which is the whole of what this page is for: patch
+		# the arpeggios on either side of it at the same notes and hear two
+		# instruments play them (#2374).
+		#
+		# **The patterns are here so both kinds of connection are on one page.**
+		# Without them the page showed generators feeding nothing, and the only
+		# line on it was the patch cable — so the distinction the panel is built
+		# on could not be seen at all.  A generator is tied to the one pattern it
+		# builds and is drawn as a taut wired line with square lugs; a note set
+		# exists on its own and feeds as many inputs as it likes, and is drawn as
+		# a sagging cable with a plug and a socket (#2119).  Simon, 2026-09-10:
+		# *"anything which is tied is indicated by a solid routing line, anything
+		# flexible and independent by a patch cable."*
 		superconductor.subsequence_adapter.Page(
-			"notes", parts=["notes", "bass_recipe", "chord_recipe"], title="Notes"),
+			"notes",
+			parts=["notes", "bass", "bass_recipe", "chords", "chord_recipe"],
+			title="Notes"),
 
 		# The DRM1 with the things that write into it and the things that can be
 		# patched to it: generators, cables, and a grid with no instrument behind

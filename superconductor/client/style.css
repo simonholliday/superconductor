@@ -3258,7 +3258,11 @@ html, body {
    hand is looking for a destination; a plug is looking for a source, and those
    are different blocks. Lighting the destinations for both showed, for half the
    gesture, exactly the blocks that could not answer. */
-.grid-wrap.patching:not(.sourcing) .part[data-takes],
+/* **And which kind of cable is in the hand decides it too.** A note set feeds a
+   parameter and a grid feeds a stack; lighting both for either would offer, for
+   half of every gesture, blocks that cannot take what is being held. */
+.grid-wrap.patching:not(.sourcing):not(.pitching) .part[data-takes],
+.grid-wrap.patching.pitching:not(.sourcing) .part[data-pitch-in],
 .grid-wrap.patching.sourcing .part[data-offers] {
 	opacity: 1;
 	box-shadow: 0 0 0 max(2px, calc(var(--cell) * 0.05)) var(--ring),
@@ -3425,20 +3429,34 @@ html, body {
 	flex-direction: column;
 	gap: var(--gap);
 	position: relative;
-	width: 100%;
+
+	/* **The width of one white key, and every other measure here is taken from
+	   it.**  Two rows, which is what makes a black key at 0.6 of it a legal
+	   target as well — see the naturals below. */
+	--natural: calc(var(--row) * 2);
 }
 
+/* **A white key is two rows, and that is what makes the black one legal.**
+ *
+ * A keyboard's black keys are shorter than its white ones — that is what a
+ * keyboard is — and this panel's rule is that anything touchable is at least one
+ * row in both directions (#2107).  Those collide at one row: a black key at
+ * two thirds of it is 15px against a 22px floor.
+ *
+ * The way out is not an exemption, it is a bigger control.  At two rows for a
+ * white key the black one lands at 1.25 rows tall and 1.2 wide, and both clear
+ * the floor by construction — so nothing here has to escape the surface rule,
+ * which is the version that was shipped and the reason every accidental came out
+ * one row square with nothing failing (#2389). */
 .keyboard .naturals {
 	display: flex;
 	gap: 0;
-	height: var(--row);
-	width: 100%;
+	height: calc(var(--row) * 2);
 }
 
 .keyboard .accidentals {
 	height: 0;
 	position: relative;
-	width: 100%;
 }
 
 .keyboard .key {
@@ -3452,9 +3470,9 @@ html, body {
 .keyboard .key.natural {
 	background: var(--panel);
 	border-radius: 0 0 4px 4px;
-	flex: 1 1 0;
-	height: var(--row);
-	min-width: 0;
+	flex: 0 0 auto;
+	height: calc(var(--row) * 2);
+	width: var(--natural);
 }
 
 /* Over the join between two whites, and above them in the stack — which is what
@@ -3462,9 +3480,14 @@ html, body {
 .keyboard .key.accidental {
 	background: var(--sunk);
 	border-radius: 0 0 4px 4px;
-	height: calc(var(--row) * 0.62);
+	height: calc(var(--row) * 1.25);
 	position: absolute;
-	top: calc(var(--row) * -1);
+
+	/* **The naturals' height *and* the gap above this strip.**  `.keyboard` is a
+	   flex column, so the accidentals begin one gap below the whites; lifting by
+	   the key height alone left every black key sitting a gap too low, which is
+	   4px and looks like nothing until you notice the keyboard has no top edge. */
+	top: calc((var(--row) * 2 + var(--gap)) * -1);
 	width: calc(var(--natural) * 0.6);
 	z-index: 1;
 }
@@ -3491,26 +3514,28 @@ html, body {
 }
 
 .keyboard .chosen-notes {
-	font: var(--type-chrome-quiet);
+	font-size: var(--type-chrome-quiet);
 	font-family: var(--face-panel);
 	line-height: 1;
 	padding-top: calc(var(--gap) / 2);
 }
 
 /* A parameter fed from somewhere else, and the button that says so. */
-.patchable {
-	display: flex;
-	flex-direction: column;
-	gap: var(--gap);
-	width: 100%;
-}
+/* **What a patched parameter says, and it is a statement rather than a control**
+   (#2374).  The cable arriving at this row is the connection; these words name
+   the source for somebody reading the block.
 
-.patchable .patched-from {
-	font: var(--type-chrome-quiet);
+   It fills its row like everything else on the lattice.  It is not touchable and
+   so is not a target — but a row on this surface is a row whether or not a
+   finger is going to land on it, and a line of small type floating in a 60px
+   row at Large is the block coming apart rather than a saving. */
+.patched-from {
+	align-items: center;
+	display: flex;
+	font-size: var(--type-chrome-quiet);
 	font-family: var(--face-panel);
 	line-height: 1;
+	min-height: var(--row);
 }
 
-.patchable .picker.patched {
-	color: var(--on);
-}
+.patched-from b { color: var(--on); font-weight: 600; }

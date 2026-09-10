@@ -109,6 +109,19 @@ CONTROLS: dict[str, typing.Any] = {
 		{"name": "reverse", "summary": "Flip the pattern backwards.",
 		 "partial": False, "parameters": []},
 	 ]},
+	# **A set of notes, which is a source and sounds nothing** (#2374).  It is
+	# here because the page suite had never drawn one at all: the control was
+	# built, shipped and played with thirteen adapter tests and nothing that
+	# rendered it, so a keyboard whose black keys came out one row square and a
+	# block that could not draw its own outlet both reached the glass.
+	#
+	# Two octaves would be truer to the rig and is not what a fixture is for;
+	# these are enough to have a natural, an accidental, and one of each chosen.
+	"notes": {"type": "pitch_set", "title": "Notes",
+	          "pitches": [{"value": named, "label": named, "midi": note} for named, note in
+	                      (("C4", 60), ("C#4", 61), ("D4", 62), ("D#4", 63), ("E4", 64))],
+	          "about": [{"label": "feeds", "value": "any generator that takes pitches"}]},
+
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.
@@ -134,7 +147,10 @@ PAGES: list[dict[str, typing.Any]] = [
 	# configures goes, exactly as a stack does (#2211).
 	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
 	{"id": "moog", "title": "Moog", "parts": ["moog"]},
-	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack"]},
+	# **The note set goes here rather than on a page of its own**, because seven
+	# pages is one more than `PAGE_BUTTONS` (see above) — and because this is the
+	# page with a stack on it, which is the only thing a note set can feed.
+	{"id": "stack", "title": "Generators", "parts": ["grid", "second", "stack", "notes"]},
 	# The rack goes here rather than on a page of its own, because seven pages is
 	# one more than `PAGE_BUTTONS` (see above) — and beside the stack, which is
 	# the other control whose value is a list somebody builds up (#2226).
@@ -160,10 +176,16 @@ STATE: dict[str, typing.Any] = {
 	                "6": {"length": 2, "velocity": 100}}},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
 	"rack": {"grids": []},
+	"notes": {"chosen": ["C4", "D#4"], "enabled": True},
 	"stack": {"layers": [
 		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
 		 "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],
 		            "duration": 1, "probability": 1}},
+		# **Patched at the note set rather than holding a pool of its own**
+		# (#2374), so the suite draws a cable as well as the loom every
+		# generator already draws to the pattern it builds.
+		{"id": "two", "generator": "chord", "index": 2, "bypassed": False,
+		 "params": {"pitches": {"from": "control", "id": "notes"}, "shape": ["up"]}},
 	]},
 	"transport": {"paused": False, "bpm": 120.0},
 }

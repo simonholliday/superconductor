@@ -1554,7 +1554,11 @@ def test_a_generator_is_added_from_the_glass (panel: typing.Any, fake_app: typin
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
 	assert asked, "adding a generator asked for nothing"
-	assert [layer["generator"] for layer in asked[-1]["v"]] == ["euclidean", "euclidean"]
+	# The fixture opens with two layers — a euclidean and a chord patched at the
+	# note set (#2374) — and adding appends to what is there rather than
+	# replacing it, which is the whole of what an absolute set has to get right.
+	assert [layer["generator"] for layer in asked[-1]["v"]] \
+		== ["euclidean", "chord", "euclidean"]
 
 
 def _open_a_chord (panel: typing.Any, fake_app: typing.Any) -> typing.Any:
@@ -3711,6 +3715,199 @@ def test_a_cable_dragged_from_an_outlet_makes_the_route (
 
 	assert len(routes) == 1, f"the drag asked for {asked['v']}"
 	assert routes[0]["source"] == "second"
+
+
+def test_a_note_set_has_an_outlet_to_take_a_cable_from (panel: typing.Any) -> None:
+	"""Without it there is no way to start a patch at all, which is how #2374
+	shipped: the routing existed and had no gesture.
+
+	**Two separate faults put it here and only one of them is asserted.**  The
+	outlet was wired to `sends`, which a note set does not set — that is what
+	this covers.  The other is that `Footer` returns nothing when it can find no
+	*button*, so a block whose only footer content was a fitting got no footer at
+	all; that one is fixed and is **not** what makes this pass, because the set
+	also gained a mute (#2107: a switch lives with the thing it switches, and
+	silencing the set silences every cable out of it).  A block that is only ever
+	a source would still need the guard, and there is not one here to prove it.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	assert panel.locator('.part[data-part="notes"] .outlet').count() == 1, \
+		"a set of notes has nothing to take a cable from"
+
+
+def test_the_two_kinds_of_connection_are_drawn_as_two_things (
+	panel: typing.Any) -> None:
+	"""Simon, 2026-09-10: *"anything which is tied is indicated by a solid routing
+	line, anything flexible and independent by a patch cable."*
+
+	A generator is created from a pattern, belongs to it and dies with it, so it
+	is wired and terminated in lugs.  A note set exists on its own and feeds as
+	many inputs as it likes, so it is patched, and its ends are a plug and a
+	socket.  Both are on this page at once, which is the only arrangement in
+	which the difference is a difference rather than a description (#2119).
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	wired = panel.locator(".join.wired")
+	patched = panel.locator(".join.patched")
+
+	assert wired.count() >= 1, "no generator is drawn as wired to what it builds"
+	assert patched.count() >= 1, "the note set is not drawn as patched into anything"
+
+	# Told apart by what terminates them, not by colour alone: a lug is square
+	# and cannot be moved, a fitting is round and can.
+	assert wired.first.locator("rect.lug").count() == 2, "a wired line has no lugs"
+	assert patched.first.locator("circle.plug").count() == 1, "a cable has no plug"
+	assert patched.first.locator("circle.socket").count() == 1, "a cable has no socket"
+
+	# And the cable sags where the loom is taut, which is the half of it that
+	# reads at a glance rather than on inspection.
+	assert "C" in (patched.first.locator("path.cable").get_attribute("d") or ""), \
+		"a patch cable is drawn as a straight line"
+	assert "C" not in (wired.first.locator("path.cable").get_attribute("d") or ""), \
+		"a wired line is drawn with a sag"
+
+
+def test_a_note_cable_ends_level_with_the_input_it_feeds (panel: typing.Any) -> None:
+	"""**The first destination on this surface finer than a block** (#2374).
+
+	Every other cable lands on a stack and becomes a layer; this one lands on one
+	*parameter* of one layer, which is what makes several patchable inputs on a
+	generator expressible at all.  So it has to arrive beside the row it feeds
+	rather than at the middle of a block with ten of them — the rule #2109 drew
+	for a generator's own line, asked of a settings row.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	panel.locator('.part[data-part="stack/two"]').scroll_into_view_if_needed()
+	_settled(panel)
+
+	level = panel.evaluate("""() => {
+		const socket = document.querySelector('.join.patched circle.socket');
+		const row = document.querySelector(
+			'.part[data-part="stack/two"] [data-row="pitches"]');
+
+		if (!socket || !row) return null;
+
+		const at = row.getBoundingClientRect();
+
+		return {
+			cable: socket.getBoundingClientRect().top + socket.getBoundingClientRect().height / 2,
+			row: at.top + at.height / 2,
+		};
+	}""")
+
+	assert level, "no cable, or no row for it to land beside"
+	assert abs(level["cable"] - level["row"]) < 6, \
+		f"the cable lands {abs(level['cable'] - level['row']):.0f}px from its row"
+
+
+def test_a_patched_parameter_says_what_feeds_it_and_offers_no_pool (
+	panel: typing.Any) -> None:
+	"""**And it is a statement rather than a control.**
+
+	There was a button here that patched the parameter at the first note set it
+	could find, which invented a second gesture for patching and asked for the
+	*source* from the *destination* — both against #2119, and Simon's correction
+	on 2026-09-10.  What is left names the source; the way to unpatch is to pull
+	the cable out, which is where every other patch on this surface is undone.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="stack/two"]')
+	said = block.locator(".patched-from")
+
+	assert said.count() == 1, "a patched parameter does not say what feeds it"
+	assert "notes" in (said.text_content() or ""), "it does not name the set"
+
+	assert block.locator('[data-field="pitches"] .picker').count() == 0, \
+		"a patched parameter still offers a pool to choose from"
+
+
+def test_a_note_set_is_dragged_into_the_generator_that_reads_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The gesture is the one every other patch on this panel already has: take a
+	cable out of the thing that produces and drop it on the thing that reads.
+
+	The block is the target rather than a fitting on it, as it is for a grid — on
+	glass a big one beats a precise one — and which *input* it lands on is the
+	address the block carries.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	outlet = panel.locator('.part[data-part="notes"] .outlet')
+	outlet.scroll_into_view_if_needed()
+	take = outlet.bounding_box()
+	drop = panel.locator('.part[data-part="stack/two"] .part-title').bounding_box()
+
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + take["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(drop["x"] + drop["width"] / 2, drop["y"] + drop["height"] / 2, steps=12)
+
+	# What can read a set of notes says so while the lead is in the air, and what
+	# can only take a grid does not: two kinds of cable, two sets of destination.
+	assert panel.locator(".grid-wrap.patching.pitching").count() == 1, \
+		"the page does not say a note cable is out"
+
+	panel.mouse.up()
+
+	asked = fake_app.await_set("stack/two/pitches")
+
+	assert asked["v"] == {"from": "control", "id": "notes"}, \
+		f"the drag asked for {asked['v']}"
+
+
+def test_a_note_cable_pulled_out_and_let_go_empties_the_pool (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A lead pulled out of a rack and let go is unpatched, and an empty pool is
+	what this parameter held before anybody patched it.
+
+	Unpatching is the absence of a landing rather than an operation of its own,
+	which is the same shape the grid cable already had — and is why there is no
+	button anywhere that undoes a patch.
+	"""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	socket = panel.locator(".join.patched circle.socket").first
+	socket.scroll_into_view_if_needed()
+	at = socket.bounding_box()
+
+	# Somewhere on the page that is over no block at all, and inside the window:
+	# Playwright clamps a move to the viewport, so a drag aimed past the edge
+	# lands wherever the clamp puts it rather than where it was sent.
+	empty = panel.evaluate("""() => {
+		for (let y = window.innerHeight - 40; y > 120; y -= 20)
+			for (let x = window.innerWidth - 40; x > 120; x -= 20) {
+				const one = document.elementFromPoint(x, y);
+
+				if (one && !one.closest('[data-part]') && !one.closest('.bar')) return {x, y};
+			}
+
+		return null;
+	}""")
+
+	assert empty, "every point on this page is over a block"
+
+	panel.mouse.move(at["x"] + at["width"] / 2, at["y"] + at["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(empty["x"], empty["y"], steps=12)
+	panel.mouse.up()
+
+	assert fake_app.await_set("stack/two/pitches")["v"] == [], \
+		"pulling the cable out left the parameter patched"
 
 
 def test_a_cable_dropped_on_nothing_comes_away_in_the_hand (

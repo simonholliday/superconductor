@@ -1424,41 +1424,31 @@ const weightOf = (velocity, range) => {
  * case: most of a generator's numbers have no natural bound — a duration in
  * beats, a spacing — and a slider with invented ends would be a lie a finger
  * could act on. A stepper works with one finger and no keyboard either way. */
-function Setting ({ field, held, onSet, sources }) {
-	/* **A pitch pool may be fed from elsewhere instead of chosen here** (#2374).
-	   `{from: "control", id}` says take these notes from that set, every cycle,
-	   which is what lets one set feed an arpeggio on two instruments and keeps
-	   them from drifting apart.
+/* **What a patched parameter is worth, said in words** (#2374).
+ *
+ * A cable arriving at this row is what makes the connection; this names the
+ * source for somebody reading the block rather than reading the wiring, and is
+ * a statement rather than a control — there is nothing to press here, because
+ * the way to unpatch is to pull the cable out.
+ *
+ * **It replaced a button, and the button was wrong** (#2119, Simon 2026-09-10).
+ * That button sat on this row and patched the parameter at the first note set
+ * it could find. Two faults, and the second is the one that matters: it
+ * invented a second gesture for patching where this panel already has one, and
+ * it asked for the *source* from the *destination*. Every other patch on this
+ * surface starts at the thing that produces and ends at the thing that reads.
+ *
+ * **It is a component of its own rather than a branch inside `Setting`**, and
+ * that is not tidiness. `Setting` opens five hooks; returning early from inside
+ * it — which is what the button's branch did — changed how many ran the moment
+ * a parameter was patched, which is the one thing hooks may not do. Two
+ * components is two hook counts, each constant. */
+function PatchedFrom ({ from }) {
+	return html`<div class="patched-from ink-quiet">from <b>${from}</b></div>`;
+}
 
-	   Drawn before the pool rather than beside it, because it decides whether the
-	   pool is a control at all: what is patched is not editable here, and showing
-	   thirty-three dead buttons under a cable would be a lie about what a tap
-	   would do.
 
-	   Unpatched it renders itself again without `sources`, which fails the guard
-	   below and reaches the ordinary pool renderer — one copy of that, not two. */
-	const patched = held && typeof held === "object" && !Array.isArray(held) && held.from;
-
-	if (field.kind === "choices" && field.role === "pitch" && (sources || []).length) {
-		const named = patched ? held.id : "";
-
-		return html`
-			<div class="patchable">
-				<div class="menu">
-					<button
-						class=${`picker ${patched ? "patched" : ""}`}
-						onPointerDown=${(event) => {
-							event.preventDefault();
-							onSet(patched ? [] : { from: "control", id: sources[0] });
-						}}
-					>${patched ? `◀ ${named}` : "◀ patch"}</button>
-				</div>
-				${patched
-					? html`<div class="ink-quiet patched-from">from <b>${named}</b></div>`
-					: html`<${Setting} field=${field} held=${held} onSet=${onSet} />`}
-			</div>`;
-	}
-
+function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
 
 	/* Asked for whatever this parameter turns out to be, because a hook must
@@ -2027,7 +2017,14 @@ function Keyboard ({ pitches, chosen, onSet }) {
 	};
 
 	return html`
-		<div class="keyboard" style=${{ "--natural": `calc(100% / ${naturals.length})` }}>
+		${/* **A key is a fixed size, not a share of a width.** `--natural` was
+		     `100% / n`, and a block shrinks to fit its contents — so the keyboard
+		     asked the block how wide it was while the block was asking the
+		     keyboard, and both settled on the keys' minimum. The same circular
+		     width that drew the theme picker's two columns on top of one another
+		     (`0dc3993`). A white key is two rows and the keyboard is as wide as
+		     its keys; `--natural` is declared in the stylesheet beside them. */ ""}
+		<div class="keyboard">
 			<div class="naturals">${naturals.map(key)}</div>
 			<div class="accidentals">${pitches.filter((one) => accidental(one.midi)).map(key)}</div>
 			${/* What it is worth, in the order it will be played. Without it a
@@ -2040,7 +2037,7 @@ function Keyboard ({ pitches, chosen, onSet }) {
 }
 
 
-function Contribution ({ name, layer, layers, offered, onSet, sources }) {
+function Contribution ({ name, layer, layers, offered, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
 	};
@@ -2088,21 +2085,38 @@ function Contribution ({ name, layer, layers, offered, onSet, sources }) {
 				</div>
 
 				${offered
-					? offered.parameters.map((field) => [
-						html`
-							<div class="row-label" key=${`label-${field.name}`}>
-								${field.label || field.name}
-							</div>`,
-						html`
-							<div class="setting" key=${field.name} data-field=${field.name}
-								style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-								<${Setting}
-									field=${field}
-									held=${(layer.params || {})[field.name]}
-									sources=${sources}
-									onSet=${(value) => onSet(`${name}/${layer.id}/${field.name}`, value)} />
-							</div>`,
-					]).flat()
+					? offered.parameters.map((field) => {
+						const value = (layer.params || {})[field.name];
+						const patched = value && typeof value === "object"
+							&& !Array.isArray(value) && value.from;
+
+						return [
+							html`
+								${/* **A parameter row is addressable, so a cable can
+								     end on it.** The same `data-row` a grid's rows
+								     carry, for the same reason: a line arrives level
+								     with the thing it feeds rather than at the middle
+								     of a block with ten rows (#2109). It is what lets
+								     a note set be patched at *this* input, and what
+								     will let a generator have more than one. */ ""}
+								<div class="row-label" key=${`label-${field.name}`}
+									data-row=${field.name}>
+									${field.label || field.name}
+								</div>`,
+							html`
+								<div class="setting" key=${field.name} data-field=${field.name}
+									style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+									${patched
+										? html`<${PatchedFrom} from=${value.id} />`
+										: html`
+											<${Setting}
+												field=${field}
+												held=${value}
+												onSet=${(value) =>
+													onSet(`${name}/${layer.id}/${field.name}`, value)} />`}
+								</div>`,
+						];
+					}).flat()
 					: html`
 						<div class="unsupported" style=${full}>
 							The application no longer offers a generator called
@@ -2246,7 +2260,14 @@ function Sheet ({ title, onClose, children }) {
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
 function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSettings, settingsOpen }) {
-	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings) return null;
+	/* **An outlet counts, and it did not** (#2374). This guard is what keeps a
+	   block from growing an empty strip, and it was written when everything in
+	   the footer was a button — so the first block whose only footer content was
+	   the fitting got no footer at all, and a note set had nothing to pull a
+	   cable out of. A grid never showed it because a grid can also be cleared. */
+	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings && !outlet) {
+		return null;
+	}
 
 	return html`
 		<footer class="part-foot">
@@ -2342,7 +2363,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, rows, mostRows, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, pitchIn, rows, mostRows, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 	const stretching = useRef(null);
@@ -2471,7 +2492,7 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 	return html`
 		<section
 			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
-			data-offers=${offers || null}
+			data-offers=${offers || null} data-pitch-in=${pitchIn || null}
 			style=${place}
 			${/* Anywhere on the block, not only its handle: a person turning a knob
 			     on a generator is asking the same question a person dragging it is
@@ -4533,9 +4554,41 @@ function Panel () {
 				key: name, control: name, title: named(name),
 				about: controls[name].about || [],
 
-				/* A keyboard and the line under it saying what is in the set. */
-				rows: 3,
-				steps: PARAM_CELLS,
+				/* **It is a patch source, so it has an outlet** (#2374, #2119).
+				
+				   A note set is the second kind of connection this panel draws:
+				   it exists on its own, it carries the same notes wherever it
+				   goes, and — unlike a generator, which is tied to the one
+				   pattern it builds — it may feed as many inputs as you like.
+				   So a cable comes out of it, and the gesture is the one a
+				   person who has patched anything already has.
+				
+				   `sends` is deliberately not set beside this. That draws the
+				   "send to…" list as well, and that list only knows how to
+				   offer stacks a *grid* can feed. Until it learns this shape
+				   too, offering it here would be a button that opens an empty
+				   sheet. */
+				patches: true,
+
+				/* **The switch for every cable out of here** (#2107: a switch
+				   lives with the thing it switches). A silenced set reads as no
+				   notes at all, so every generator patched to it rests — which
+				   is one value in one place rather than a switch per cable
+				   claiming to say something the model cannot hold. */
+				live: ((state[appName] || {})[name] || {}).enabled !== false,
+
+				/* **A keyboard is as wide as its keys, not as wide as a settings
+				   panel.**  It was `PARAM_CELLS` — six — which held twenty-five
+				   keys at 17.7px each on the rig, narrower than a finger and
+				   against this project's own reachability rule.
+				
+				   Two lattice cells to a white key, which is what makes the black
+				   ones legal targets as well (see `style.css`), so the block is
+				   twice the number of naturals.  A two-octave set is a wide block
+				   and that is the honest cost of a playable one. */
+				rows: 4,
+				steps: Math.max(PARAM_CELLS, 2 * (controls[name].pitches || []).filter(
+					(one) => ![1, 3, 6, 8, 10].includes(((one.midi % 12) + 12) % 12)).length),
 			});
 			continue;
 		}
@@ -4635,10 +4688,42 @@ function Panel () {
 				const generator = (reshaping ? reshapes : offered)
 					.find((one) => one.name === runs);
 
+				/* **Which of this generator's inputs a note cable can land on.**
+				
+				   A pitch parameter that takes several pitches is a pool, and a
+				   pool is what a note set feeds. The declaration already says
+				   so — `offerable` turns a pitch parameter into a `choices`
+				   carrying `role: "pitch"` — so nothing here holds a list of
+				   which generators take notes, which is the thing this project
+				   keeps refusing to write down.
+				
+				   The *first* such parameter today, because every generator in
+				   the catalogue has at most one. When one has two this becomes
+				   the list it already looks like, and the drop resolves to the
+				   row nearest the finger — which is why the address is a field
+				   rather than a block. */
+				const takesPitch = (generator ? generator.parameters : [])
+					.filter((field) => field.kind === "choices" && field.role === "pitch")
+					.map((field) => field.name);
+
+				const patchedAt = takesPitch.find((field) => {
+					const value = (layer.params || {})[field];
+
+					return value && typeof value === "object"
+						&& !Array.isArray(value) && value.from;
+				});
+
 				contributions.push({
 					key: `${name}/${layer.id}`,
 					control: name, layer, layers: held, offered: generator, feeds,
 					voice: voiceOf(generator, layer),
+
+					/* Where a note cable may land, and where one already has. */
+					pitchIn: takesPitch[0] || null,
+					patchedAt: patchedAt || null,
+					patchedFrom: patchedAt
+						? ((layer.params || {})[patchedAt] || {}).id || null
+						: null,
 
 					/* "Euclidean 1", where the number belongs to that layer for
 					   the whole of its life — a neighbour being removed never
@@ -4757,6 +4842,32 @@ function Panel () {
 	 * how to tell an in from an out a question about something real (#2108). */
 	const joins = [
 		...routes,
+
+		/* **A note set feeding one input of one generator** (#2374), which is
+		 * the third kind of line on this page and the first whose destination
+		 * is finer than a block.
+		 *
+		 * Patched rather than wired, and the distinction is Simon's: a note set
+		 * exists on its own, carries the same notes wherever it goes, and may
+		 * feed as many inputs as you like — where a generator is tied to the one
+		 * pattern it builds and dies with it. One is a cable, the other a loom.
+		 *
+		 * **No switch on it.** A switch lives with the thing it switches
+		 * (#2107), and there is no per-cable state to switch: what a source is
+		 * worth is the set's own, so silencing it silences every cable at once
+		 * and that switch belongs on the set. Leaving `control` unset is what
+		 * keeps the disc off the line — a cable that offered one would be
+		 * promising a value the model does not hold. */
+		...contributions
+			.filter((one) => one.patchedFrom && pitchSets.includes(one.patchedFrom))
+			.map((one) => ({
+				from: one.patchedFrom,
+				to: one.key,
+				row: one.patchedAt,
+				wired: false,
+				pitch: { control: one.control, layer: one.layer.id, field: one.patchedAt },
+			})),
+
 		...contributions
 			.filter((one) => one.feeds)
 			.map((one) => ({
@@ -4986,9 +5097,23 @@ function Panel () {
 	   `data-takes` for that gesture showed precisely the blocks that cannot be
 	   what you are looking for. The drop always resolved correctly; only the
 	   affordance lied. */
-	const offering = patching && patching.end === "plug" && patching.into
-		? (controls[patching.into] || {}).sources || []
+	/* **What could feed this, while the plug end is in a hand.**
+	 *
+	 * Two kinds answer it, because there are two kinds of cable: a stack says
+	 * which grids it will take, and a parameter holding a note set is fed by
+	 * any set of notes there is. Both end up as a list of control names, which
+	 * is what lights a block as a source. */
+	const offering = patching && patching.end === "plug"
+		? (patching.pitch
+			? pitchSets
+			: patching.into ? (controls[patching.into] || {}).sources || [] : null)
 		: null;
+
+	/* Which kind is in the air, so the page lights the blocks that can answer
+	   it rather than every block that can receive anything. A note cable and a
+	   grid cable land on different things and only one of them is holding. */
+	const pitching = Boolean(patching
+		&& (patching.pitch || (patching.from && pitchSets.includes(patching.from))));
 
 	const wrapPoint = (event) => {
 		const wrap = size.wrap.current;
@@ -5032,18 +5157,28 @@ function Panel () {
 		event.currentTarget.setPointerCapture(event.pointerId);
 
 		const at = wrapPoint(event);
-		const held = { pointer: event.pointerId, was: { control: line.control, layer: line.layer } };
+
+		/* **A note cable remembers a parameter where a grid cable remembers a
+		   layer**, and only one of the two is ever set. Carrying a `was` for a
+		   pitch cable would name a stack entry that does not exist — its
+		   connection is a value in a parameter, not a layer in a stack. */
+		const held = {
+			pointer: event.pointerId,
+			was: line.control ? { control: line.control, layer: line.layer } : null,
+			pitch: line.pitch || null,
+		};
 
 		if (end === "socket") {
 			/* The source stays plugged in; the destination is in the hand. */
 			patch.current = { ...held, from: line.from, end };
-			setPatching({ from: line.from, a: line.a, at, end });
+			setPatching({ from: line.from, a: line.a, at, end, pitch: line.pitch || null });
 			return;
 		}
 
 		/* The destination stays; what feeds it is being chosen again. */
-		patch.current = { ...held, into: line.control, end };
-		setPatching({ from: null, a: line.b, at, end, into: line.control });
+		patch.current = { ...held, into: line.control || null, end };
+		setPatching({ from: null, a: line.b, at, end, into: line.control || null,
+		              pitch: line.pitch || null });
 	};
 
 	const movePatch = (event) => {
@@ -5063,6 +5198,67 @@ function Panel () {
 		setPatching(null);
 
 		const under = document.elementFromPoint(event.clientX, event.clientY);
+
+		/* **A note set's cable, which is answered here and nowhere else**
+		 * (#2374). It is a different question from the one below: a grid cable
+		 * asks which *stack* gains a layer, and this asks which *parameter*
+		 * holds a source. Same gesture, same fittings, same drop — the address
+		 * is finer, which is the whole of what phase 3 added.
+		 *
+		 * Unpatching is the absence of a landing rather than an operation of
+		 * its own: a lead pulled out of a rack and let go over nothing is
+		 * unpatched, and an empty pool is what this parameter held before
+		 * anybody patched it. */
+		const pitching = Boolean(
+			held.pitch || (held.from && pitchSets.includes(held.from)));
+
+		if (pitching) {
+			const rest = held.pitch
+				? () => request(
+					`${held.pitch.control}/${held.pitch.layer}/${held.pitch.field}`, [])
+				: () => {};
+
+			if (held.end === "plug") {
+				/* The destination stays; what feeds it is being chosen again, so
+				   what is under the finger has to be a set of notes. */
+				const block = under && under.closest("[data-part]");
+				const source = block && block.getAttribute("data-part");
+
+				if (!held.pitch) return;
+
+				if (source && pitchSets.includes(source)) {
+					request(
+						`${held.pitch.control}/${held.pitch.layer}/${held.pitch.field}`,
+						{ from: "control", id: source });
+				} else {
+					rest();
+				}
+
+				return;
+			}
+
+			const block = under && under.closest("[data-pitch-in]");
+			const into = block && block.getAttribute("data-part");
+			const field = block && block.getAttribute("data-pitch-in");
+			const target = into && contributions.find((one) => one.key === into);
+
+			/* **The old patch goes whatever happens**, for the same reason a
+			   grid route does: a cable moved is one connection rather than two,
+			   and the version that took the new one first left the old one
+			   behind whenever the two were different parameters. */
+			if (held.pitch && !(target && field === held.pitch.field
+				&& target.control === held.pitch.control
+				&& target.layer.id === held.pitch.layer)) {
+				rest();
+			}
+
+			if (target && field) {
+				request(`${target.control}/${target.layer.id}/${field}`,
+					{ from: "control", id: held.from });
+			}
+
+			return;
+		}
 
 		/* Where the finger let go. The fitting has the pointer captured, so
 		   every event arrives here and the only way to know what was landed on
@@ -5230,7 +5426,7 @@ function Panel () {
 		<div
 			class=${`grid-wrap ${up ? "" : "absent"} ${locked ? "" : "unlocked"} ${
 				size.cell < OVERVIEW_AT ? "overview" : ""} ${patching ? "patching" : ""} ${
-				offering ? "sourcing" : ""}`}
+				offering ? "sourcing" : ""} ${pitching ? "pitching" : ""}`}
 			ref=${size.wrap}
 			...${pinch}
 		>
@@ -5250,6 +5446,13 @@ function Panel () {
 					     dragging a lead is looking at where it is going. */ ""}
 					takes=${one.add && (controls[one.add].sources || []).length
 						? one.add : null}
+					${/* **And what a note cable lands on**, which is a different
+					     question with a different answer: `takes` names a stack
+					     that would gain a layer, this names a *parameter* that
+					     would hold a source. The whole block is the target for
+					     both — on glass a big one beats a precise one — and the
+					     field is what the address resolves to. */ ""}
+					pitchIn=${one.pitchIn || null}
 					${/* And the mirror of it: what this block could be taken
 					     *from*, while a plug is looking for a new source. */ ""}
 					offers=${offering && offering.includes(one.control) ? one.control : null}
@@ -5285,7 +5488,13 @@ function Panel () {
 						: null}
 					footer=${html`
 						<${Footer}
-							outlet=${one.sends ? {
+							${/* **Two kinds of source, one outlet.** A grid names the
+							     stacks it can feed and a note set feeds any pitch
+							     input there is, so what they have in common is that
+							     a cable comes out of them — which is the fitting,
+							     not the list. `sends` still gates "send to…" alone,
+							     because that list only knows how to offer stacks. */ ""}
+							outlet=${one.sends || one.patches ? {
 								onStart: (event) => beginPatch(one.control, event),
 								onMove: movePatch,
 								onEnd: endPatch,
@@ -5324,7 +5533,11 @@ function Panel () {
 							settingsOpen=${Boolean(settingsFor[one.control]
 								&& showing.has(settingsFor[one.control]))}
 							live=${one.live}
-							onLive=${one.clear
+							${/* **Asked of the state, not of the clear.** Every block
+							     with a mute happened also to be clearable, so the
+							     gate borrowed that — and the first block that could
+							     be silenced without being emptied got no switch. */ ""}
+							onLive=${one.live !== undefined
 								? (want) => request(`${one.control}/enabled`, want)
 								: undefined} />`}>
 					${one.rack
@@ -5336,7 +5549,7 @@ function Panel () {
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
 								layers=${one.layers} offered=${one.offered}
-								sources=${pitchSets} onSet=${request} />`
+								onSet=${request} />`
 						: controls[one.control].unsupported
 						? html`
 							<div class="unsupported">
