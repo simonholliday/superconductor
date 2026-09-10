@@ -3201,6 +3201,49 @@ def test_a_cable_runs_behind_the_blocks_and_its_fittings_stand_in_front (
 	assert depths["over"] > max(depths["blocks"]), "a fitting was drawn under a block"
 
 
+def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2417, Simon's amendment to #2415.
+
+	Cables run behind the blocks so a busy page stays readable — and the cost is
+	that the ones you are moving vanish behind whatever they cross, which is
+	exactly when you want to see them. So a line joined to the block under the
+	hand is drawn on the front sheet for as long as the hand is there.
+
+	**Nothing is remembered and nothing is restored.** `touched` is set on the
+	block's own pointerdown and cleared at the document on pointerup, so the line
+	goes back by itself — there is no state that could be left raised by a drag
+	that ended somewhere unexpected, which is the failure a save-and-restore
+	would have.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+	_joins_settled(panel)
+
+	def sheet_of (join: str) -> list[str]:
+		return panel.eval_on_selector_all(
+			f'[data-join="{join}"]',
+			"els => els.filter((one) => one.querySelector('path.cable'))"
+			"        .map((one) => one.closest('svg').classList.contains('under')"
+			"                     ? 'under' : 'over')")
+
+	assert sheet_of("stack/one>grid") == ["under"], "a line was forward with nothing held"
+
+	grip = panel.locator('.part[data-part="stack/one"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+
+	assert sheet_of("stack/one>grid") == ["over"], "the line stayed behind the blocks"
+	assert sheet_of("stack/two>grid") == ["under"], \
+		"a line to a block nobody is holding came forward too"
+
+	panel.mouse.up()
+
+	assert sheet_of("stack/one>grid") == ["under"], "the line did not go back"
+
+
 def test_a_fitting_is_the_topmost_thing_at_its_own_centre (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The half of #2415 that would break silently.

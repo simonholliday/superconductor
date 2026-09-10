@@ -3194,7 +3194,26 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 						     fitting on the front, which is what a reader of either
 						     wants. */ ""}
 						data-join=${`${line.from}>${line.to}`}>
-						${which === "under" ? html`<path class="cable" d=${cable} />` : null}
+						${/* **A line comes forward while a hand is on the block it
+						     joins, and goes back when the hand lifts** (#2417,
+						     Simon's amendment of 2026-09-10).
+						
+						     Cables run behind the blocks so a busy page stays
+						     readable (#2415), and the cost is that the ones you
+						     are moving disappear behind whatever they cross —
+						     which is exactly when you want to see them. So a live
+						     line is drawn on the front sheet instead of the back
+						     one, and nothing about it is remembered: `touched` is
+						     set on the block's own pointerdown and cleared at the
+						     document on pointerup, so the line goes back by
+						     itself.
+						
+						     It rides forward whole, path and fittings together,
+						     because the fittings are already on the front sheet —
+						     which is what makes this one condition rather than a
+						     third sheet. */ ""}
+						${(live ? which === "over" : which === "under")
+							? html`<path class="cable" d=${cable} />` : null}
 						${/* **A fixed route ends in nothing**, which is the whole of
 						     how it says it cannot be moved.  A patched cable is
 						     plugged in at both ends — a plug at the source and a
