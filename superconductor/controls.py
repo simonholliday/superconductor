@@ -82,8 +82,14 @@ is the same rule that keeps drum voices and control-change numbers out of it.
 GENERATOR = "generator"
 """A contribution that makes its notes from parameters."""
 
-PATTERN = "pattern"
+ROUTE = "route"
 """A contribution that takes its notes from another grid.
+
+**It was `pattern` until contract 1.24.0**, which was the wrong word twice over:
+everywhere else on this project a *pattern* is the thing that makes a sound, and
+this is a layer that merges somebody else's grid into one.  A word meaning
+"not a pattern" reads fine to whoever wrote it and misleads everybody after —
+renamed before a fourth layer kind could arrive and make it expensive (#2403).
 
 A grid belonging to no instrument, routed into several, so that two synths can
 share a bassline and each add notes of their own (#2108).  Simon settled that
@@ -110,7 +116,7 @@ too old to know the kind finds no ``generator`` on it and draws nothing, rather
 than drawing it as something it is not.
 """
 
-CONTRIBUTIONS = (GENERATOR, PATTERN, TRANSFORM)
+CONTRIBUTIONS = (GENERATOR, ROUTE, TRANSFORM)
 """What a layer of a stack may be.
 
 The second was named here before it existed, so that adding it would be an
@@ -727,6 +733,17 @@ def _readable_layers (
 
 		kind = entry.get("kind", GENERATOR)
 
+		# **`pattern` was this kind's name until 1.24.0 and is still read.**
+		# A capture written before the rename holds the old spelling, and
+		# `tools/restore_state.py` replays one as an ordinary set — so refusing
+		# it would lose somebody's routing to a word.  Read, never written: what
+		# goes back out is `route`, so a file replayed once is a file converted.
+		#
+		# It can go when no capture worth restoring predates the rename, which is
+		# a judgement rather than a date.
+		if kind == "pattern":
+			kind = ROUTE
+
 		if kind not in CONTRIBUTIONS:
 			raise ControlError(f"a layer is a {kind!r}, which this version does not know")
 
@@ -736,7 +753,7 @@ def _readable_layers (
 			"bypassed": bool(entry.get("bypassed", False)),
 		}
 
-		if kind == PATTERN:
+		if kind == ROUTE:
 			source = entry.get("source")
 
 			if source not in (declaration.get("sources") or []):

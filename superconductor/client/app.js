@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.23.0";
+const CONTRACT = "1.24.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -670,7 +670,7 @@ function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visi
 					   drawn square, because it is a note somebody wrote down on
 					   another grid and squares are what a written note looks
 					   like here; an invented one stays round. */
-					const routed = ghost && kinds && kinds[struck.from] === "pattern";
+					const routed = ghost && kinds && kinds[struck.from] === "route";
 
 					return html`
 						<div
@@ -1075,7 +1075,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 						.reduce((loudest, held) => !loudest
 							|| Number(held.v || 0) > Number(loudest.v || 0) ? held : loudest, null);
 
-					const routed = struck && kinds && kinds[struck.from] === "pattern";
+					const routed = struck && kinds && kinds[struck.from] === "route";
 
 					const asked = noteAt(notes[row], step * divisions);
 					const owner = asked ? `${name}/${row}/${asked.at}` : path;
@@ -4671,7 +4671,7 @@ function Panel () {
 				   not a thing that sits somewhere, it is the fact that two
 				   things are joined. Its one real control moved to the head of
 				   its own arrow, which is where a hand goes to find it. */
-				if (layer.kind === "pattern") {
+				if (layer.kind === "route") {
 					if (gridNames.includes(layer.source) && feeds) {
 						routes.push({
 							from: layer.source, to: feeds, row: null,
@@ -5031,7 +5031,7 @@ function Panel () {
 
 		return Object.fromEntries(
 			layers.map((layer) => [layer.id,
-				layer.kind === "pattern" ? "pattern"
+				layer.kind === "route" ? "route"
 				: layer.kind === "transform" ? "transform" : "generator"]));
 	};
 
@@ -5309,7 +5309,7 @@ function Panel () {
 
 			request(`${held.was.control}/layers`, [
 				...layers.filter((layer) => layer.id !== held.was.layer),
-				{ id: freshId(), kind: "pattern", source: landed.source },
+				{ id: freshId(), kind: "route", source: landed.source },
 			]);
 
 			return;
@@ -5324,7 +5324,7 @@ function Panel () {
 				layers.filter((layer) => layer.id !== held.was.layer));
 		}
 
-		if (landed) addLayer(landed.stack, { kind: "pattern", source: landed.source });
+		if (landed) addLayer(landed.stack, { kind: "route", source: landed.source });
 	};
 
 	/* **How many rows a block shows, which is three answers in order of
@@ -5735,7 +5735,7 @@ function Panel () {
 					.map((stack) => {
 						const into = controls[stack].builds;
 						const already = (((state[appName] || {})[stack] || {}).layers || [])
-							.some((layer) => layer.kind === "pattern" && layer.source === sending);
+							.some((layer) => layer.kind === "route" && layer.source === sending);
 
 						return html`
 							<button
@@ -5752,12 +5752,12 @@ function Panel () {
 									   of the arrow silences a route and this is what
 									   takes it away. */
 									request(`${stack}/layers`, already
-										? held.filter((layer) => !(layer.kind === "pattern"
+										? held.filter((layer) => !(layer.kind === "route"
 											&& layer.source === sending))
 										: [...held, {
 											id: `l${Date.now().toString(36)}`
 												+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-											kind: "pattern",
+											kind: "route",
 											source: sending,
 										}]);
 

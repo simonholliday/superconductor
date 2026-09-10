@@ -3676,7 +3676,7 @@ def _route (panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Route the second grid into the pattern the stack builds."""
 
 	fake_app.confirm("stack/layers", [
-		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": False, "params": {}},
 	], by="app")
 
@@ -3717,7 +3717,7 @@ def test_a_cable_dragged_from_an_outlet_makes_the_route (
 	panel.mouse.up()
 
 	asked = fake_app.await_set("stack/layers")
-	routes = [layer for layer in asked["v"] if layer.get("kind") == "pattern"]
+	routes = [layer for layer in asked["v"] if layer.get("kind") == "route"]
 
 	assert len(routes) == 1, f"the drag asked for {asked['v']}"
 	assert routes[0]["source"] == "second"
@@ -4057,7 +4057,7 @@ def test_a_silenced_link_is_dashed_and_hollow (
 	_open_the_stack(panel)
 
 	fake_app.confirm("stack/layers", [
-		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": True, "params": {}},
 	], by="app")
 	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
@@ -4117,7 +4117,7 @@ def test_only_a_control_on_the_overlay_takes_a_tap (
 	fake_app.confirm("stack/layers", [
 		{"id": "made", "generator": "euclidean", "index": 1, "bypassed": False,
 		 "params": {"pitch": "kick"}},
-		{"id": "sent", "kind": "pattern", "source": "second", "index": 2,
+		{"id": "sent", "kind": "route", "source": "second", "index": 2,
 		 "bypassed": False, "params": {}},
 	], by="app")
 
@@ -4260,7 +4260,7 @@ def test_a_cable_pulled_out_and_let_go_is_unpatched (
 
 	asked = fake_app.await_set("stack/layers")
 
-	assert [layer for layer in asked["v"] if layer.get("kind") == "pattern"] == [], \
+	assert [layer for layer in asked["v"] if layer.get("kind") == "route"] == [], \
 		f"the route survived being unplugged: {asked['v']}"
 
 
@@ -4278,7 +4278,7 @@ def test_a_cable_taken_by_its_source_end_can_also_be_unpatched (
 
 	asked = fake_app.await_set("stack/layers")
 
-	assert [layer for layer in asked["v"] if layer.get("kind") == "pattern"] == [], \
+	assert [layer for layer in asked["v"] if layer.get("kind") == "route"] == [], \
 		f"the route survived being unplugged: {asked['v']}"
 
 
@@ -4307,7 +4307,7 @@ def test_a_cable_put_back_where_it_was_is_still_one_cable (
 	panel.wait_for_timeout(400)
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
-	routes = [layer for layer in asked[-1]["v"] if layer.get("kind") == "pattern"]
+	routes = [layer for layer in asked[-1]["v"] if layer.get("kind") == "route"]
 
 	assert len(routes) == 1, f"putting a cable back left {len(routes)} routes: {asked[-1]['v']}"
 	assert routes[0]["source"] == "second"
@@ -4317,9 +4317,9 @@ def _two_routes (panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Route the second grid into the pattern twice, so two cables meet one edge."""
 
 	fake_app.confirm("stack/layers", [
-		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": False, "params": {}},
-		{"id": "two", "kind": "pattern", "source": "second", "index": 2,
+		{"id": "two", "kind": "route", "source": "second", "index": 2,
 		 "bypassed": False, "params": {}},
 	], by="app")
 
@@ -4588,7 +4588,7 @@ def test_a_routed_note_is_drawn_apart_from_an_invented_one (
 
 	fake_app.confirm("stack/layers", [
 		{"id": "made", "generator": "euclidean", "index": 1, "bypassed": False, "params": {}},
-		{"id": "sent", "kind": "pattern", "source": "second", "index": 2,
+		{"id": "sent", "kind": "route", "source": "second", "index": 2,
 		 "bypassed": False, "params": {}},
 	], by="app")
 
@@ -4656,7 +4656,7 @@ def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
 
 	added = asked[-1]["v"][-1]
 
-	assert added == {**added, "kind": "pattern", "source": "second"}
+	assert added == {**added, "kind": "route", "source": "second"}
 
 	# A grid nothing can take from does not offer to send itself anywhere.
 	assert panel.locator('.part[data-part="grid"] .part-foot .offer.send').count() == 0
@@ -5239,7 +5239,7 @@ def test_a_switch_lives_with_the_thing_it_switches (
 	assert panel.locator('.part[data-part="stack/one"] .switch').count() == 1
 
 	fake_app.confirm("stack/layers", [
-		{"id": "one", "kind": "pattern", "source": "second", "index": 1,
+		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": False, "params": {}},
 	], by="app")
 	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)

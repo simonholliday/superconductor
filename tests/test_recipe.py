@@ -733,12 +733,12 @@ def test_a_stack_may_take_its_notes_from_another_grid () -> None:
 		composition, catalogue=CATALOGUE, pitches=ROWS,
 		sources={"shared": lambda pattern: played.append("shared")})
 
-	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "shared"}])
 	recipe.build(Builder())
 
 	assert played == ["shared"]
 	assert recipe.layers() == [
-		{"id": "a", "kind": "pattern", "source": "shared", "index": 1,
+		{"id": "a", "kind": "route", "source": "shared", "index": 1,
 		 "bypassed": False, "params": {}}]
 
 
@@ -771,7 +771,7 @@ def test_a_route_to_a_grid_this_composition_does_not_offer_is_refused () -> None
 		sources={"shared": lambda pattern: None})
 
 	with pytest.raises(adapter.Refused):
-		recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "nowhere"}])
+		recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "nowhere"}])
 
 
 def test_a_bypassed_route_is_not_played () -> None:
@@ -783,7 +783,7 @@ def test_a_bypassed_route_is_not_played () -> None:
 		sources={"shared": lambda pattern: played.append("shared")})
 
 	recipe.apply(["layers"], [
-		{"id": "a", "kind": "pattern", "source": "shared", "bypassed": True}])
+		{"id": "a", "kind": "route", "source": "shared", "bypassed": True}])
 	recipe.build(Builder())
 
 	assert played == []
@@ -803,7 +803,7 @@ def test_a_route_and_a_generator_play_in_the_order_they_are_held () -> None:
 
 	recipe.apply(["layers"], [
 		{"id": "a", "generator": "euclidean", "params": {}},
-		{"id": "b", "kind": "pattern", "source": "shared"},
+		{"id": "b", "kind": "route", "source": "shared"},
 	])
 	recipe.build(builder)
 
@@ -830,7 +830,7 @@ def test_a_route_that_will_not_play_is_skipped_rather_than_silencing_the_part ()
 		Composition(), catalogue=CATALOGUE, pitches=ROWS, sources={"shared": broken})
 
 	recipe.apply(["layers"], [
-		{"id": "a", "kind": "pattern", "source": "shared"},
+		{"id": "a", "kind": "route", "source": "shared"},
 		{"id": "b", "generator": "euclidean", "params": {}},
 	])
 	recipe.build(builder)
@@ -1071,7 +1071,7 @@ def test_a_grid_switched_off_contributes_nothing_where_it_is_routed () -> None:
 		sources={"shared": lambda pattern: played.append("shared")})
 	recipe.attach(typing.cast(typing.Any, speaker))
 
-	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "shared"}])
 	recipe.build(Builder())
 
 	assert played == ["shared"]
@@ -1185,7 +1185,7 @@ def test_a_route_that_leads_back_to_its_own_stack_plays_once () -> None:
 	# recipe, which is exactly the knot the composition ties: `_play_shared`
 	# runs `shared_recipe.build(p)`, and the recipe declares `shared` a source.
 	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
-	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "shared"}])
 
 	recipe.build(Builder())
 
@@ -1212,7 +1212,7 @@ def test_a_stack_already_building_says_so_rather_than_failing_silently (
 	recipe.attach(typing.cast(typing.Any, speaker))
 
 	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
-	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "shared"}])
 
 	with caplog.at_level(logging.WARNING, logger="superconductor.subsequence_adapter"):
 		recipe.build(Builder())
@@ -1247,7 +1247,7 @@ def test_a_guard_that_has_been_tripped_does_not_stay_tripped () -> None:
 	recipe.attach(typing.cast(typing.Any, speaker))
 	recipe.sources = {"shared": lambda pattern: recipe.build(pattern)}
 
-	recipe.apply(["layers"], [{"id": "a", "kind": "pattern", "source": "shared"}])
+	recipe.apply(["layers"], [{"id": "a", "kind": "route", "source": "shared"}])
 	recipe.build(Builder())
 
 	# The cable is unplugged and an ordinary generator put in its place.

@@ -935,7 +935,7 @@ def _stack_for (pattern: str, name: str, title: str,
 # The names are what the panel addresses and what a saved arrangement is keyed
 # by, so `drum_recipe` keeps the name it was born with rather than taking a
 # tidier one: renaming a control silently empties whatever it was holding.
-drum_recipe = _stack_for("grid", "drum_recipe", "DRM1 — generators")
+drum_recipe = _stack_for("grid", "drum_recipe", "DRM1 — stack")
 """Generators the panel can stack onto pattern 1, over the notes tapped by hand.
 
 The catalogue is Subsequence's own description of itself, and the ten voices
@@ -952,7 +952,7 @@ told to skip a step that already sounds has to see the taps before it runs, and
 the order a stack plays in is the person's to arrange from the glass.
 """
 
-bass_recipe = _stack_for("bass", "bass_recipe", "Minitaur — generators", BASS_ROWS,
+bass_recipe = _stack_for("bass", "bass_recipe", "Minitaur — stack", BASS_ROWS,
                          pitch_notes=BASS_NOTE_MAP)
 """And the same for the bassline, which is #2147 and is a change to this file.
 
@@ -969,7 +969,7 @@ picks between ten voices; the same generator here picks between twenty-five
 notes a Minitaur can reach, because that is what this grid's rows *are*.
 """
 
-chord_recipe = _stack_for("chords", "chord_recipe", "Matriarch — generators", CHORD_ROWS,
+chord_recipe = _stack_for("chords", "chord_recipe", "Matriarch — stack", CHORD_ROWS,
                           pitch_notes=CHORD_NOTE_MAP)
 """And for the chords, where it is worth the most.
 
@@ -1009,7 +1009,7 @@ way for them to drift apart because there is only one of it.
 """
 
 
-shared_recipe = _stack_for("shared", "shared_recipe", "Shared — generators")
+shared_recipe = _stack_for("shared", "shared_recipe", "Shared — stack")
 """And on the grid with no instrument, which is the one that needed thought.
 
 Every other stack is built by its own pattern function.  **This grid has none** —
@@ -1026,7 +1026,7 @@ rows meant something else would be a different declaration in this file.
 """
 
 snare_recipe = _stack_for(
-	"snare_lane", "snare_recipe", "Snare lane — generators", pitches=["snare"])
+	"snare_lane", "snare_recipe", "Snare lane — stack", pitches=["snare"])
 """And on the lane that is one voice wide, where the pitches are the point.
 
 **A stack's pitches are what make it different**, and here there is only one of
@@ -1040,7 +1040,7 @@ because ``snare`` is the only row it has (#2228).
 """
 
 nine_recipe = _stack_for(
-	"nine", "nine_recipe", "Nine — generators", steps=NINE_STEPS)
+	"nine", "nine_recipe", "Nine — stack", steps=NINE_STEPS)
 """And on the nine, where the *bounds* are the point.
 
 Its pitches are the whole kit, exactly as pattern 1's are — the two patterns play

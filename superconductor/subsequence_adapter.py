@@ -1916,7 +1916,7 @@ class Recipe (Control):
 			# Each kind carries the one thing that says what it plays, and
 			# neither carries the other's — a routed grid has no generator and a
 			# generator has no source.
-			if one["kind"] == "pattern":
+			if one["kind"] == "route":
 				one["source"] = layer.get("source")
 
 			elif one["kind"] == "transform":
@@ -1994,10 +1994,18 @@ class Recipe (Control):
 
 			kind = str(entry.get("kind", "generator"))
 
-			if kind not in ("generator", "pattern", "transform"):
+			# The kind's old spelling, read for the same reason the service reads
+			# it: a capture written before 1.24.0 holds `pattern`, and losing
+			# somebody's routing to a rename would be this project doing to
+			# itself what it refuses to do to anybody else.  `wanted` is built
+			# from `kind` below, so converting it here is the whole of it.
+			if kind == "pattern":
+				kind = "route"
+
+			if kind not in ("generator", "route", "transform"):
 				raise Refused(f"a layer cannot be a {kind}")
 
-			if kind == "pattern":
+			if kind == "route":
 				source = entry.get("source")
 
 				if source not in self.sources:
@@ -2068,7 +2076,7 @@ class Recipe (Control):
 		counted = {str(one): int(mark) for one, mark in (held.get("counts") or {}).items()}
 
 		for layer in self.layers():
-			named = str(layer.get("source") if layer["kind"] == "pattern" else self._runs(layer))
+			named = str(layer.get("source") if layer["kind"] == "route" else self._runs(layer))
 			counted[named] = max(counted.get(named, 0), layer["index"])
 
 		return counted
@@ -2260,7 +2268,7 @@ class Recipe (Control):
 			if layer["bypassed"]:
 				continue
 
-			if layer["kind"] == "pattern":
+			if layer["kind"] == "route":
 				source = str(layer.get("source"))
 				play = self.sources.get(source)
 

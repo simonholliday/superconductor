@@ -354,10 +354,10 @@ def test_a_layer_may_take_from_a_pattern_instead_of_a_generator () -> None:
 	state: dict[str, typing.Any] = {}
 
 	superconductor.controls.apply_change(state, STACK, "recipe/layers", [
-		{"id": "a", "kind": "pattern", "source": "shared"}])
+		{"id": "a", "kind": "route", "source": "shared"}])
 
 	assert state["recipe"]["layers"] == [
-		{"id": "a", "kind": "pattern", "bypassed": False,
+		{"id": "a", "kind": "route", "bypassed": False,
 		 "source": "shared", "params": {}}]
 
 
@@ -370,7 +370,7 @@ def test_a_layer_may_not_take_from_a_pattern_the_app_does_not_offer () -> None:
 
 	with pytest.raises(superconductor.controls.ControlError):
 		superconductor.controls.apply_change(state, STACK, "recipe/layers", [
-			{"id": "a", "kind": "pattern", "source": "nowhere"}])
+			{"id": "a", "kind": "route", "source": "nowhere"}])
 
 
 def test_a_layers_number_survives_the_service () -> None:

@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.23.0"
+CONTRACT_VERSION = "1.24.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -245,6 +245,12 @@ rather than twice per cycle, which is one list copy each on a stack four deep.
 A stack is added to and reordered by setting a path like any other control,
 which was the point of choosing absolute sets: adding a generator from the
 glass needed no new frame, only a value that happens to be a list (#2085).
+1.24.0 renames a stack layer's ``pattern`` kind to ``route``.  It was the wrong
+word twice over — everywhere else here a *pattern* is the thing that makes a
+sound, and this is a layer merging somebody else's grid into one — and it was
+renamed before a fourth layer kind could arrive and make it expensive (#2403).
+**The old spelling is still read and never written**, so a capture taken before
+the rename restores, and restoring it converts it.
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
