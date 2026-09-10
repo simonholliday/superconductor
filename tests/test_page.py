@@ -6492,6 +6492,42 @@ def test_an_instruments_settings_are_put_away_until_the_pattern_asks (
 	playwright_api.expect(settings).to_have_count(0, timeout=5_000)
 
 
+def test_a_settings_block_is_joined_to_the_instrument_it_sets (
+	panel: typing.Any) -> None:
+	"""#2416, Simon's suggestion of 2026-09-10.
+
+	A settings block floats where it is put like any other, and two of them open
+	at once look alike — the same column of fields, and nothing saying which
+	instrument each one belongs to. The fact was already on the wire: a `params`
+	control declares `configures`, naming the pattern whose instrument it sets
+	(#2201), and the panel used it only to decide where the block may be hidden.
+
+	**Wired rather than patched**, for the reason a generator's line is: settings
+	belong to one pattern, are made with it and die with it, so there is no
+	gesture to offer and no fitting to draw.
+	"""
+
+	panel.locator(".pages button", has_text="Bass").click()
+	panel.wait_for_selector('.part[data-part="bass"]', timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator('.joins.under [data-join="moog>bass"]').count() == 0, \
+		"a line was drawn to a settings block nobody had opened"
+
+	panel.locator('.part[data-part="bass"] .part-foot button.settings').click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+	_joins_settled(panel)
+
+	line = panel.locator('.joins.under [data-join="moog>bass"]')
+
+	assert line.count() == 1, "the settings say nothing about which pattern they set"
+	assert "wired" in (line.get_attribute("class") or ""), \
+		"a settings line offered a gesture that does not exist"
+
+	assert panel.locator('.joins.over [data-join="moog>bass"]')\
+		.locator("circle, rect").count() == 0, "a settings line drew a fitting"
+
+
 def test_a_settings_panel_is_divided_by_the_sections_its_app_named (
 	panel: typing.Any) -> None:
 	"""Simon asked for all thirty-six of the Matriarch's controls, and said why:

@@ -5120,6 +5120,13 @@ function Panel () {
 	}
 
 	const drawn = [...windows, ...contributions];
+
+	/* Which blocks are actually on this page, so a line cannot be drawn to one
+	   that is not — a settings block may be shown while the pattern it
+	   configures is on another page, and a line to nowhere has no anchor to
+	   measure from. */
+	const shown = new Set(drawn.map((one) => one.key));
+
 	const blocks = drawn.map(
 		(one) => ({ name: one.key, rows: Math.max(1, one.rows), steps: one.steps }));
 
@@ -5161,6 +5168,27 @@ function Panel () {
 				wired: false,
 				pitch: { control: one.control, layer: one.layer.id, field: one.patchedAt },
 			})),
+
+		/* **A settings block says which instrument it sets, by a line** (#2416,
+		   Simon's suggestion of 2026-09-10).
+		
+		   A settings block is a block like any other and floats where it is put,
+		   so a page with two of them open says nothing about which pattern each
+		   one belongs to — and the two look alike, being the same column of
+		   fields. The fact was already on the wire: a `params` control declares
+		   `configures`, naming the pattern whose instrument it sets (#2201), and
+		   the panel used it only to decide where the block may be hidden.
+		
+		   **Wired rather than patched**, and for exactly the reason a generator's
+		   line is: settings belong to one pattern, are created with it and die
+		   with it. There is no gesture to offer and so no fitting to draw.
+		
+		   **No row.** A generator writes into a voice and its line arrives level
+		   with that row; settings configure the whole instrument, so the line
+		   points at the block and not into it. */
+		...windows
+			.filter((one) => one.configures && shown.has(one.configures))
+			.map((one) => ({ from: one.key, to: one.configures, row: null, wired: true })),
 
 		...contributions
 			.filter((one) => one.feeds)
