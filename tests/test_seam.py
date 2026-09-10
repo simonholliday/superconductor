@@ -572,3 +572,125 @@ def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
 
 	with pytest.raises(superconductor.controls.ControlError):
 		superconductor.controls.apply_change(held, declared, "rack/grids", twice)
+
+
+# --- A cable, which is the one value shape whose policy was written twice ------
+
+PATCHABLE: list[dict[str, typing.Any]] = [
+	{
+		"name": "arpeggio",
+		"summary": "Arpeggiate a pool of pitches.",
+		"partial": False,
+		"parameters": [
+			{"name": "notes", "label": "notes", "kind": "pitch",
+			 "multiple": True, "required": True},
+		],
+	},
+]
+
+
+def _patchable () -> tuple[typing.Any, dict[str, typing.Any]]:
+	"""A stack that takes a cable, and the declarations a service would hold.
+
+	The app half and the service half of the same two controls, so a value can
+	be pushed through both and the answers compared — which is the whole of what
+	this file is for.
+	"""
+
+	notes = adapter.PitchSet(
+		Composition(), name="notes", pitches={"C4": 60, "E4": 64, "G4": 67})
+	stack = adapter.Recipe(Composition(), catalogue=PATCHABLE, pitches=["C2", "E2", "G2"])
+	bell = adapter.Transport(Composition(), name="bell")
+
+	class Link:
+		controls = {"notes": notes, "stack": stack, "bell": bell}
+
+	stack.link = typing.cast(typing.Any, Link())
+
+	return stack, {name: one.declaration() for name, one in Link.controls.items()}
+
+
+def test_a_cable_the_app_accepts_is_a_cable_the_service_keeps () -> None:
+	"""**The seam, asked of a patch** (#2419).
+
+	`checked_value` used to check the envelope and the destination and take the
+	*source* on trust, while `controls._readable_patch` checked all three — so
+	the app stored cables the service refused, and `hub.change_reported` logs
+	that refusal and forwards the frame regardless.  A connected panel drew the
+	line and a panel that reloaded did not.
+	"""
+
+	stack, declared = _patchable()
+	held = {"stack": stack.snapshot(), "notes": declared["notes"]}
+
+	stack.apply(["layers"], [{"id": "a", "kind": "generator", "generator": "arpeggio"}])
+	superconductor.controls.apply_change(
+		held, declared, "stack/layers", stack.applied(["layers"], None))
+
+	cable = {"from": "control", "id": "notes"}
+
+	stack.apply(["a", "notes"], cable)
+	superconductor.controls.apply_change(held, declared, "stack/a/notes", cable)
+
+	assert held["stack"]["layers"][0]["params"]["notes"] == cable
+	assert held["stack"]["layers"][0]["params"] == stack.layers()[0]["params"], (
+		"the service and the app hold different things after one cable")
+
+
+@pytest.mark.parametrize(("source", "why"), [
+	("nowhere", "a source this app never declared"),
+	("bell", "a source that is not a set of pitches"),
+])
+def test_both_halves_refuse_the_same_cable_for_the_same_reason (
+	source: str, why: str) -> None:
+	"""One predicate, so neither half can be the lenient one.
+
+	Measured before this was shared: the app accepted a cable from a transport
+	and from a control that did not exist, and the service refused both.  The
+	reason is compared as well as the refusal, because two halves agreeing to
+	say different things is how a person ends up with two accounts of one fault.
+	"""
+
+	stack, declared = _patchable()
+	held = {"stack": stack.snapshot(), "notes": declared["notes"]}
+
+	stack.apply(["layers"], [{"id": "a", "kind": "generator", "generator": "arpeggio"}])
+	superconductor.controls.apply_change(
+		held, declared, "stack/layers", stack.applied(["layers"], None))
+
+	cable = {"from": "control", "id": source}
+
+	with pytest.raises(adapter.Refused) as app:
+		stack.apply(["a", "notes"], cable)
+
+	with pytest.raises(superconductor.controls.ControlError) as service:
+		superconductor.controls.apply_change(held, declared, "stack/a/notes", cable)
+
+	assert str(app.value) == str(service.value), (
+		f"{why} is refused differently by the two halves: "
+		f"{str(app.value)!r} against {str(service.value)!r}")
+
+
+def test_an_instrument_s_settings_take_no_cable_at_all () -> None:
+	"""Nothing resolves one there, so storing it would be storing a dead thing.
+
+	Only `Recipe._arguments` reads a patch envelope.  A reference kept in a
+	`Params` field would be handed to the composition's own `on_change` — which
+	is where a control change gets sent — and reported to every panel as though
+	it were a setting.
+	"""
+
+	settings = adapter.Params(
+		Composition(),
+		parameters=[adapter.Parameter("pool", "choices", options=[("C4", "C4")], role="pitch")],
+		data_key="inst", name="inst")
+
+	declared = {"inst": settings.declaration()}
+	held = {"inst": settings.snapshot()}
+	cable = {"from": "control", "id": "notes"}
+
+	with pytest.raises(adapter.Refused):
+		settings.apply(["pool"], cable)
+
+	with pytest.raises(superconductor.controls.ControlError):
+		superconductor.controls.apply_change(held, declared, "inst/pool", cable)

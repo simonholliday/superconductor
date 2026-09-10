@@ -235,7 +235,12 @@ def test_the_service_keeps_a_patch_as_a_reference_and_never_resolves_it () -> No
 
 	offered = adapter.Parameter("notes", "choices", options=[("C2", "C2")], role="pitch")
 
-	assert adapter.checked_value(offered, {"from": "control", "id": "notes"}) == kept, (
+	# The app half is handed what every real caller hands it: the kind of every
+	# control this app declared, which is what a patch is checked against (#2419).
+	# Left out it refuses, deliberately — a `Params` field has nothing that would
+	# ever resolve the envelope.
+	assert adapter.checked_value(
+		offered, {"from": "control", "id": "notes"}, {"notes": "pitch_set"}) == kept, (
 		"the app and the service keep the same thing, or a reload disagrees")
 
 

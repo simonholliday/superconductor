@@ -159,18 +159,11 @@ Matriarch that starts there cannot both play the literal same notes.
 """
 
 
-PATCHED = "from"
+PATCHED = superconductor.protocol.PATCHED
 """The key that makes a parameter's value a reference rather than a literal.
 
-``{"from": "control", "id": "notes"}`` on a parameter says *take this from that
-control every cycle*, where a bare value says *use this*.  The service keeps the
-reference and never resolves it: what a source is worth is the app's to work out,
-on the clock, at the moment it builds — the same division as everywhere else here.
-
-The envelope is deliberately wider than the one source it carries today, because
-#2232 wants the same shape for a number driven by a signal, a cycle count or a
-bar.  A parameter holding a source is one mechanism with two payloads, and
-building it twice is how the two would come to disagree.
+Declared in `protocol.py` and named here, because the half that offers a patch
+and the half that keeps one have to agree about the word as well as the rule.
 """
 
 
@@ -605,7 +598,7 @@ def _apply_pitch_set (
 def _patched (value: typing.Any) -> bool:
 	"""Whether a value is a reference to a source rather than a literal."""
 
-	return isinstance(value, dict) and PATCHED in value
+	return superconductor.protocol.is_patch(value)
 
 
 def _readable_patch (
@@ -626,28 +619,22 @@ def _readable_patch (
 	the clock, by the app, at the moment it builds.
 	"""
 
-	source = value.get(PATCHED)
-
-	if source != "control":
-		raise ControlError(
-			f"{name!r} is patched from {source!r}, which this version does not know")
-
+	# **The policy is `protocol.PATCH_INPUTS` and is not restated here** (#2419).
+	# It was written twice and the two copies disagreed: this half checked the
+	# source and the app's half did not, so the app stored a cable the service
+	# refused — and `hub.change_reported` logs that refusal and forwards the
+	# frame anyway, which put the cable on a connected panel and not on one that
+	# reloaded.  One predicate, one sentence, both halves.
 	named = value.get("id")
 	declaration = controls.get(named) if isinstance(named, str) else None
 
-	if declaration is None:
-		raise ControlError(f"{name!r} is patched from {named!r}, which this app did not declare")
+	why = superconductor.protocol.patch_refusal(
+		name, value,
+		declaration.get("type") if isinstance(declaration, dict) else None,
+		field.get("kind"), field.get("role"))
 
-	if declaration.get("type") != PITCH_SET:
-		raise ControlError(
-			f"{name!r} is patched from {named!r}, which is a "
-			f"{declaration.get('type')!r} rather than a set of pitches")
-
-	# A pitch pool is the only thing a set of pitches can feed. The check is on
-	# the *role* rather than on the kind, because a `choices` of waveform names
-	# is the same kind and would take the cable happily and then be handed notes.
-	if field.get("kind") != "choices" or field.get("role") != "pitch":
-		raise ControlError(f"{name!r} does not take pitches, so nothing can be patched into it")
+	if why is not None:
+		raise ControlError(why)
 
 	return {PATCHED: "control", "id": named}
 

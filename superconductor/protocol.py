@@ -352,6 +352,107 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 	        and field["default"] is None)
 
 
+PATCHED = "from"
+"""The key that makes a parameter's value a reference rather than a literal.
+
+``{"from": "control", "id": "notes"}`` on a parameter says *take this from that
+control every cycle*, where a bare value says *use this*.  The service keeps the
+reference and never resolves it: what a source is worth is the app's to work out,
+on the clock, at the moment it builds — the same division as everywhere else here.
+
+The envelope is deliberately wider than the one source it carries today, because
+#2232 wants the same shape for a number driven by a signal, a cycle count or a
+bar.  A parameter holding a source is one mechanism with two payloads, and
+building it twice is how the two would come to disagree.
+
+**It lives here rather than in `controls.py` for the reason `PARAMETER_KINDS`
+does.**  The adapter spelled the same four characters by hand five times while
+the service had a name for them, which is a second copy of a wire word.
+"""
+
+PATCH_INPUTS: dict[tuple[str, str], tuple[str, str]] = {
+	("choices", "pitch"): ("pitch_set", "a set of pitches"),
+}
+"""What may be plugged into what: a parameter's (kind, role) against its source.
+
+**One table, because this is a policy and not an arithmetic.**  It was written
+twice — once in `controls._readable_patch` and once in
+`subsequence_adapter.checked_value` — and the two disagreed: the service checked
+that the source had been declared and was a set of pitches, and the app checked
+only that the id was a string.  Measured on 2026-09-10, the app accepted a cable
+from a transport and from a control that did not exist, and the service refused
+both; `hub.change_reported` logs the refusal and forwards the frame anyway, so a
+connected panel drew the cable and a reloading one did not.
+
+The value is the source's control kind and **the words to refuse in**.  A refusal
+is read on the glass by somebody holding a lead, so it has to say what the socket
+wants rather than name a type: *"which is a transport rather than a set of
+pitches"* is the sentence, and the second half of it lives here.
+
+**A parameter not named here takes no patch at all**, which is what makes adding
+a source a matter of adding a row.  Modulators — a number driven by a source
+(#2232) — are one row and no new mechanism, because the envelope above already
+knows nothing about pitch.
+"""
+
+
+def is_patch (value: typing.Any) -> bool:
+	"""Whether a value is a reference to a source rather than a literal.
+
+	Asked before a kind is checked, everywhere, because a reference satisfies no
+	kind: left to fall through it is refused as *not a number*, which is true and
+	tells nobody anything (#2374).
+	"""
+
+	return isinstance(value, dict) and PATCHED in value
+
+
+def patch_refusal (
+	name: str,
+	value: dict[str, typing.Any],
+	source_kind: str | None,
+	kind: str | None,
+	role: str | None,
+) -> str | None:
+	"""Why this source may not feed this parameter, or ``None`` if it may.
+
+	A reason rather than an exception, so each half raises its own — the app
+	refuses with `Refused` and the service with `ControlError`, and both now say
+	the same sentence, which they did not before.
+
+	``source_kind`` is what the named control declared itself to be, or ``None``
+	where nothing of that name was declared.  **A caller that cannot answer that
+	question passes ``None`` and every patch is refused**, which is the safe way
+	round: an instrument's settings are resolved by nothing (only `Recipe` reads
+	an envelope), so a cable landing in one would be stored, reported, and worth
+	nothing for ever.
+	"""
+
+	source = value.get(PATCHED)
+
+	if source != "control":
+		return f"{name!r} is patched from {source!r}, which this version does not know"
+
+	named = value.get("id")
+
+	if not isinstance(named, str) or not named:
+		return f"{name!r} is patched from nothing this app declared"
+
+	if source_kind is None:
+		return f"{name!r} is patched from {named!r}, which this app did not declare"
+
+	wants = PATCH_INPUTS.get((str(kind), str(role)))
+
+	if wants is None:
+		return f"{name!r} takes no patch, so nothing can be plugged into it"
+
+	if source_kind != wants[0]:
+		return (f"{name!r} is patched from {named!r}, which is a "
+		        f"{source_kind} rather than {wants[1]}")
+
+	return None
+
+
 Frame = dict[str, typing.Any]
 
 

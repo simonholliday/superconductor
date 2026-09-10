@@ -88,6 +88,19 @@ class Control:
 
 	name: str
 
+	kind: str = ""
+	"""What sort of control this is, in the word the wire uses.
+
+	**A class attribute rather than a literal inside `declaration`**, because
+	something other than the declaration needs to ask (#2419): a cable landing on
+	a parameter is refused unless what it comes from is the right sort of thing,
+	and the check runs on the clock loop, where building a `Recipe`'s whole
+	declaration to read one word off it would be absurd.
+
+	Empty on the base and set by every subclass.  A control that leaves it empty
+	is one nothing can be patched from, which is the safe way round.
+	"""
+
 	title: str | None = None
 	"""What to call this on the glass, if not the name it is addressed by.
 
@@ -279,6 +292,8 @@ class StepGrid (Control):
 	sixteen steps of a sixteenth, and `int(16 * 0.25)` is 4 without complaint.
 	"""
 
+	kind = "step_grid"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -328,7 +343,7 @@ class StepGrid (Control):
 		"""Rows, width, how long one time round takes, and what to call it."""
 
 		declared: dict[str, typing.Any] = {
-			"type": "step_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
+			"type": self.kind, "rows": self.rows, "steps": self.steps, "beats": self.beats,
 
 			# **What a weight means, said by the app rather than assumed by the
 			# panel.** A step grid's own cells carry no velocity (#2046), but the
@@ -524,6 +539,8 @@ class NoteGrid (Control):
 	reads it (#1465).
 	"""
 
+	kind = "note_grid"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -637,7 +654,7 @@ class NoteGrid (Control):
 		"""Rows, width, and what a note may be."""
 
 		declared: dict[str, typing.Any] = {
-			"type": "note_grid", "rows": self.rows, "steps": self.steps, "beats": self.beats,
+			"type": self.kind, "rows": self.rows, "steps": self.steps, "beats": self.beats,
 			"voices": self.voices, "divisions": self.divisions,
 			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
@@ -1142,12 +1159,22 @@ class Parameter:
 		return [self.default, self.default]
 
 
-def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
+def checked_value (
+	parameter: Parameter,
+	value: typing.Any,
+	sources: dict[str, str] | None = None,
+) -> typing.Any:
 	"""Refuse anything a parameter could not hold, saying which and why.
 
 	Shared between an instrument's settings and a generator's, because they are
-	the same five shapes and two copies of this would drift.  A refusal here is
+	the same six shapes and two copies of this would drift.  A refusal here is
 	a message a person reads on the glass, so each one names the parameter.
+
+	``sources`` maps every control this app has declared to its kind, and is what
+	a patch is checked against.  **Left out, every patch is refused** — which is
+	the safe way round and is what an instrument's settings want: only `Recipe`
+	resolves an envelope, so a cable landing in a `Params` field would be stored,
+	reported to every panel, and worth nothing for ever.
 
 	**Every kind offered has to appear here as well as in the declaration.**  The
 	panel is answered by this and a panel that reloads is answered by the
@@ -1159,19 +1186,25 @@ def checked_value (parameter: Parameter, value: typing.Any) -> typing.Any:
 	# **A reference is checked before a kind is, because it is not one** (#2374).
 	# `{"from": ...}` says take this from somewhere every cycle, and it would fail
 	# every check below — reporting that a pitch pool is not a list, which is true
-	# and useless.  What it may be patched *to* is checked by the caller, which is
-	# the only thing holding the other controls.
-	if isinstance(value, dict) and "from" in value:
-		if value.get("from") != "control":
-			raise Refused(f"{parameter.name} cannot be patched from {value.get('from')}")
+	# and useless.
+	#
+	# **The policy is `protocol.PATCH_INPUTS`, and what the source *is* is checked
+	# here rather than by the caller** (#2419).  A comment here used to say the
+	# caller did it, and no caller ever had: measured on 2026-09-10, this half
+	# accepted a cable from a transport and from a control that did not exist,
+	# while the service refused both — and a refusal on that side is logged and
+	# the frame forwarded, so the cable appeared on a connected panel and not on
+	# one that reloaded.  That is the shape `tests/test_seam.py` exists for.
+	if superconductor.protocol.is_patch(value):
+		why = superconductor.protocol.patch_refusal(
+			parameter.name, value,
+			(sources or {}).get(str(value.get("id"))),
+			parameter.kind, parameter.role)
 
-		if not isinstance(value.get("id"), str):
-			raise Refused(f"{parameter.name} is patched from nothing this app declared")
+		if why is not None:
+			raise Refused(why)
 
-		if parameter.kind != "choices" or parameter.role != "pitch":
-			raise Refused(f"{parameter.name} does not take pitches")
-
-		return {"from": "control", "id": value["id"]}
+		return {superconductor.protocol.PATCHED: "control", "id": value["id"]}
 
 	# **`null` is not a value, it is the absence of one** (#2381), and it is
 	# checked here for the reason a reference is: it would fail every kind below
@@ -1277,6 +1310,8 @@ class Params (Control):
 	a control-change number, and nothing in it has to.
 	"""
 
+	kind = "params"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -1336,7 +1371,7 @@ class Params (Control):
 		"""Every setting, in the order the composition offered them."""
 
 		declared: dict[str, typing.Any] = {
-			"type": "params",
+			"type": self.kind,
 			"fields": [parameter.declaration() for parameter in self.parameters.values()]}
 
 		if self.configures is not None:
@@ -1458,7 +1493,14 @@ class Params (Control):
 		return True
 
 	def _checked (self, parameter: Parameter, value: typing.Any) -> typing.Any:
-		"""Refuse anything this setting could not hold, with a reason."""
+		"""Refuse anything this setting could not hold, with a reason.
+
+		**No sources are offered, so a cable is refused here** (#2419).  Only
+		`Recipe` resolves a patch envelope when it builds; a reference stored in
+		an instrument's settings would be handed to the composition's own
+		`on_change` — which is where a control change gets sent — and would be
+		worth nothing for ever, reported to every panel as though it were fine.
+		"""
 
 		return checked_value(parameter, value)
 
@@ -1678,6 +1720,8 @@ class PitchSet (Control):
 	composition's to say (#1465); this holds what it was told.
 	"""
 
+	kind = "pitch_set"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -1704,7 +1748,7 @@ class PitchSet (Control):
 		"""The pool, with the note behind each name."""
 
 		return {
-			"type": "pitch_set",
+			"type": self.kind,
 			"pitches": [{"value": named, "label": named, "midi": note}
 			            for named, note in self.pitches.items()],
 			**self.said(),
@@ -1775,6 +1819,8 @@ class Recipe (Control):
 	pitches are handed in beside it because only a composition knows what a
 	studio has.
 	"""
+
+	kind = "recipe"
 
 	def __init__ (
 		self,
@@ -1962,7 +2008,7 @@ class Recipe (Control):
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Every generator that can be offered, and what each of them takes."""
 
-		declared: dict[str, typing.Any] = {"type": "recipe", "generators": self.catalogue}
+		declared: dict[str, typing.Any] = {"type": self.kind, "generators": self.catalogue}
 
 		if self.transforms:
 			declared["transforms"] = self.transforms
@@ -2063,6 +2109,7 @@ class Recipe (Control):
 
 		wanted: list[dict[str, typing.Any]] = []
 		seen: set[str] = set()
+		kinds = self._declared_kinds()
 		standing = {one["id"]: one for one in self.layers()}
 		counting = self._counted()
 
@@ -2132,7 +2179,7 @@ class Recipe (Control):
 				if parameter not in offered:
 					raise Refused(f"{generator} has no parameter called {parameter}")
 
-				checked = checked_value(offered[parameter], setting)
+				checked = checked_value(offered[parameter], setting, kinds)
 
 				# A stack arriving with an explicit null carries the same meaning
 				# one parameter at a time does, and has to reach the same place:
@@ -2178,6 +2225,19 @@ class Recipe (Control):
 			counted[named] = max(counted.get(named, 0), layer["index"])
 
 		return counted
+
+	def _declared_kinds (self) -> dict[str, str]:
+		"""Every control this app declared, against the sort of thing it is.
+
+		What a patch is checked against (#2419).  Read from the link rather than
+		held, because a rack can make a control after this stack was built and a
+		copy taken here would be the same staleness #2421 is about.
+		"""
+
+		if self.link is None:
+			return {}
+
+		return {name: one.kind for name, one in self.link.controls.items()}
 
 	def _numbered (
 		self,
@@ -2234,7 +2294,7 @@ class Recipe (Control):
 		if parameter not in offered:
 			raise Refused(f"{running} has no parameter called {parameter}")
 
-		wanted = checked_value(offered[parameter], value)
+		wanted = checked_value(offered[parameter], value, self._declared_kinds())
 		params = dict(layer.get("params") or {})
 
 		# **Unset is an absent key, not a stored `None`** (#2381).  A generator
@@ -2990,6 +3050,8 @@ class GridRack (Control):
 	than nothing coming back at all.
 	"""
 
+	kind = "grids"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -3053,7 +3115,7 @@ class GridRack (Control):
 		"""What a panel needs in order to offer a new grid and draw the rack."""
 
 		return {
-			"type": "grids",
+			"type": self.kind,
 			"rows": self.rows,
 			"min_steps": self.steps[0],
 			"max_steps": self.steps[1],
@@ -3241,6 +3303,8 @@ class Transport (Control):
 	a panel draws what is declared, so nothing breaks.
 	"""
 
+	kind = "transport"
+
 	def __init__ (
 		self,
 		composition: typing.Any,
@@ -3282,7 +3346,7 @@ class Transport (Control):
 		if self._can_pause:
 			fields.insert(0, "paused")
 
-		return {"type": "transport", "fields": fields, "tempo_range": list(self.tempo_range)}
+		return {"type": self.kind, "fields": fields, "tempo_range": list(self.tempo_range)}
 
 	def snapshot (self) -> dict[str, typing.Any]:
 		"""Whether it is held, and the tempo the sequencer actually holds."""
