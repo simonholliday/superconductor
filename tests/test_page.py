@@ -4369,6 +4369,95 @@ def test_a_note_set_is_dragged_into_the_generator_that_reads_it (
 		f"the drag asked for {asked['v']}"
 
 
+def test_a_note_cable_lands_on_the_input_under_the_finger (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2425.  A generator with **two** pools is the only thing that can tell a
+	block apart from a row, and Subsequence's catalogue has none — 13 of its 46
+	entries offer a pool and every one of them offers exactly one — so the
+	fixture carries `duet` for this.
+
+	The drop resolved to `takesPitch[0]` while the comment beside it said it
+	resolved to the row under the finger.  With one pool those are the same
+	answer, which is why nothing noticed.
+	"""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "duo", "generator": "duet", "index": 1, "bypassed": False, "params": {}},
+	], by="app")
+
+	panel.wait_for_selector('.part[data-part="stack/duo"]', timeout=5_000)
+	_settled(panel)
+
+	# The **second** input. Landing on the first is what this exists to catch,
+	# and is what the code did.
+	row = panel.locator('.part[data-part="stack/duo"] .setting[data-field="answer"]')
+	row.scroll_into_view_if_needed()
+
+	outlet = panel.locator('.part[data-part="notes"] .outlet')
+	outlet.scroll_into_view_if_needed()
+
+	take = outlet.bounding_box()
+	drop = row.bounding_box()
+
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + take["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(drop["x"] + drop["width"] / 2, drop["y"] + drop["height"] / 2, steps=12)
+	panel.mouse.up()
+
+	asked = fake_app.await_set("stack/duo/answer")
+
+	assert asked["v"] == {"from": "control", "id": "notes"}, \
+		f"the drag asked for {asked['v']}"
+
+	assert not [one for one in fake_app.sets if one["path"] == "stack/duo/lead"], \
+		"the cable landed on the first pool rather than the row under the finger"
+
+
+def test_a_second_finger_lifting_does_not_drop_a_line_the_first_is_holding (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2425.  `touched` is one slot and the release is heard at the *document*,
+	so without a pointer check every release on the page cleared it.
+
+	The panel is built for ten concurrent contacts (#1997).  One finger dragging
+	a block had its lines dropped behind every other block the moment a second
+	finger tapped anything at all and lifted — for the rest of the drag, with no
+	way back but letting go and starting again.
+
+	A synthetic release is dispatched rather than a second real pointer, because
+	Playwright drives one mouse.  It is dispatched at the document, which is
+	where the listener is, and carries an id no real pointer here has.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+	_joins_settled(panel)
+
+	def forward () -> int:
+		return panel.evaluate(
+			"""() => document.querySelectorAll(
+				'.joins.over [data-join="stack/one>grid"] path.cable').length""")
+
+	grip = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+
+	assert forward() == 1, "the line did not come forward at all"
+
+	# A different finger, somewhere else, letting go.
+	panel.evaluate("""() => document.dispatchEvent(
+		new PointerEvent('pointerup', { pointerId: 4242, bubbles: true }))""")
+
+	held = forward()
+
+	panel.mouse.up()
+
+	assert held == 1, "another finger's release dropped the line being held"
+	assert forward() == 0, "the line stayed forward after the hand that held it left"
+
+
 def test_a_note_cable_pulled_out_and_let_go_empties_the_pool (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""A lead pulled out of a rack and let go is unpatched, and an empty pool is

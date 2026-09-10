@@ -2690,7 +2690,7 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 			     — what does this feed? — so the same line brightens (#2109). It is
 			     let go of at the document, which is the only listener a pointer
 			     captured by a slider cannot slip past. */ ""}
-			onPointerDown=${() => onTouch(name)}
+			onPointerDown=${(event) => onTouch(name, event.pointerId)}
 		>
 			<header
 				class="part-title"
@@ -4383,15 +4383,24 @@ function Panel () {
 	   'changed' case below was already written around. */
 	const kinds = useRef(new Map());
 
-	/* Which block a hand is on, so the lines it is joined to can say so.
+	/* Which block a hand is on, and **which hand**, so the lines it is joined to
+	 * can say so and a second finger cannot take it away.
 	 *
 	 * Let go of at the document rather than on the block. A slider captures the
 	 * pointer while it is being dragged, so the release lands on the slider and
 	 * not necessarily anywhere this could see; the document is the one place
 	 * every pointer ends up. Cleared to the same value it already holds is not
-	 * a change, so an ordinary tap on a grid costs no render. */
+	 * a change, so an ordinary tap on a grid costs no render.
+	 *
+	 * **The pointer id is what makes this safe on glass.** This listener is on
+	 * the document, so it hears every release on the page — and the panel is
+	 * built for ten concurrent contacts (#1997). Without the check, one finger
+	 * dragging a block had its lines dropped behind every other block the moment
+	 * a second finger tapped anything at all and lifted, for the rest of the
+	 * drag, with no way back but starting again. */
 	useEffect(() => {
-		const let_go = () => setTouched((was) => (was === null ? was : null));
+		const let_go = (event) => setTouched(
+			(was) => (was && was.pointer === event.pointerId ? null : was));
 
 		document.addEventListener("pointerup", let_go);
 		document.addEventListener("pointercancel", let_go);
@@ -5036,8 +5045,18 @@ function Panel () {
 					control: name, layer, layers: held, offered: generator, feeds,
 					voice: voiceOf(generator, layer),
 
-					/* Where a note cable may land, and where one already has. */
-					pitchIn: takesPitch[0] || null,
+					/* **Where a note cable may land, and where one already has.**
+					 *
+					 * Every input rather than the first, because the drop below
+					 * resolves to the row under the finger and needs to know what
+					 * the alternatives are.  This carried `takesPitch[0]` and said
+					 * in a comment that it resolved to the nearest row, which it
+					 * did not: a generator with two pools would have taken every
+					 * cable on the first one, silently.  Measured 2026-09-10: 13
+					 * of the sequencer's 46 entries offer a pool and none offers
+					 * two, so that was correct by a coincidence of the catalogue
+					 * — the same shape `partial` is already warned about (#2425). */
+					pitchIn: takesPitch.join(" ") || null,
 					patchedAt: patchedAt || null,
 					patchedFrom: patchedAt
 						? ((layer.params || {})[patchedAt] || {}).id || null
@@ -5585,7 +5604,33 @@ function Panel () {
 
 			const block = under && under.closest("[data-pitch-in]");
 			const into = block && block.getAttribute("data-part");
-			const field = block && block.getAttribute("data-pitch-in");
+
+			/* **The block is the target and the row decides which input**, which
+			   is the whole reason the address is a parameter rather than a block
+			   (#2374).  On glass a big target beats a precise one, so a drop
+			   anywhere on the block lands — and where the block offers more than
+			   one pool, the row the finger is over says which.
+
+			   **Measured rather than hit-tested**, and the reason is the rule
+			   above: `.grid-wrap.patching .part-body` is `pointer-events: none`
+			   so that a drop cannot be swallowed by a control inside the block,
+			   which means `elementFromPoint` returns the block itself and can
+			   never name a row.  Asking each row where it is costs nothing and
+			   works with the affordance rather than against it.
+
+			   Falling back to the first is what every generator in Subsequence's
+			   catalogue does today: 13 of its 46 entries offer a pool and none
+			   offers two, so this whole branch is unreachable there — which is
+			   why the fixture carries a generator that does. */
+			const inputs = (block && block.getAttribute("data-pitch-in") || "")
+				.split(" ").filter(Boolean);
+
+			const field = inputs.find((one) => {
+				const row = block.querySelector(`.setting[data-field="${one}"]`);
+				const box = row && row.getBoundingClientRect();
+
+				return box && event.clientY >= box.top && event.clientY <= box.bottom;
+			}) || inputs[0];
 			const target = into && contributions.find((one) => one.key === into);
 
 			/* **The old patch goes whatever happens**, for the same reason a
@@ -5816,7 +5861,7 @@ function Panel () {
 					mostRows=${controls[one.control] && Array.isArray(controls[one.control].rows)
 						? controls[one.control].rows.length : null}
 					onResize=${stretchy(one) ? (who, rows) => rearrange(who, { rows }) : null}
-					onTouch=${setTouched}
+					onTouch=${(name, pointer) => setTouched({ name, pointer })}
 					${/* A generator's close takes it out of the stack, which is a
 					     change to the music. A settings block's close only puts
 					     it away — the settings themselves are untouched, and the
@@ -5954,7 +5999,8 @@ function Panel () {
 
 			${/* Told what could have moved a line, because measuring is what this
 			     does and nothing else in the page will tell it. */ ""}
-			<${Connections} box=${size.wrap} joins=${joins} touched=${touched} cell=${size.cell}
+			<${Connections} box=${size.wrap} joins=${joins} touched=${touched && touched.name}
+				cell=${size.cell}
 				patching=${patching} onFlip=${flip}
 				patchable=${{ onTake: beginRepatch, onMove: movePatch, onEnd: endPatch }}
 				when=${`${size.cell}|${JSON.stringify(layout)}|${JSON.stringify(joins)}`} />

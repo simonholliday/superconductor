@@ -140,6 +140,24 @@ CONTROLS: dict[str, typing.Any] = {
 		      "options": [{"value": "up", "label": "up"},
 		                  {"value": "down", "label": "down"}]},
 		 ]},
+		# **Two pitch inputs, which nothing in Subsequence's catalogue has** and
+		# which is exactly why it is here (#2425).  A note cable's address is a
+		# *parameter* rather than a block, and until this nothing tested that:
+		# the drop took `takesPitch[0]` while a comment beside it said it
+		# resolved to the row under the finger.  A generator with one pool cannot
+		# tell those two apart, so every fixture entry agreed with the bug.
+		{"name": "duet", "summary": "Play two pools against one another.",
+		 "partial": False,
+		 "parameters": [
+		     {"name": "lead", "label": "lead", "kind": "choices", "role": "pitch",
+		      "required": True,
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare")]},
+		     {"name": "answer", "label": "answer", "kind": "choices", "role": "pitch",
+		      "required": True,
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare")]},
+		 ]},
 	 ],
 	 # What this stack may *reshape* with, as against what it may add (#2246).
 	 # Two catalogues rather than one, because the two are different things and
