@@ -368,8 +368,12 @@ async def test_the_copy_still_connected_becomes_the_app_when_the_other_goes () -
 
 	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
 
+	# **A different pattern from the first**, because two copies of one
+	# composition each keep their own `composition.data` — and it is what makes
+	# the snapshot assertion below able to fail (#2423).
 	second = superconductor.hub.AppLink(
-		name="subsequence", send=Recorder().send, controls=CONTROLS, state={})
+		name="subsequence", send=Recorder().send, controls=CONTROLS,
+		state={"grid": {"kick": [2, 6, 10]}})
 
 	await hub.app_declared(second)
 
@@ -382,6 +386,13 @@ async def test_the_copy_still_connected_becomes_the_app_when_the_other_goes () -
 	assert glass.of_kind("manifest")[-1]["apps"] != {}, "the glass was blanked"
 	assert not [one for one in glass.of_kind("app") if one["up"] is False], \
 		"the glass was told the app had gone while a copy was still connected"
+
+	# **And what it holds, not only what it offers.**  A manifest says what an
+	# app can be controlled by; a snapshot says what it is set to.  Told only the
+	# first, a panel goes on drawing the pattern of the process that just died
+	# while the one still playing has another, with nothing saying so.
+	assert glass.of_kind("snapshot")[-1]["state"] == first.state, (
+		"the panel was left holding the values of the copy that went")
 
 
 @_on_a_loop_of_its_own

@@ -287,6 +287,20 @@ class Hub:
 			await self.to_panels(superconductor.protocol.manifest(
 				self._declarations(), self.page, self._pages(), self.duplicated()))
 
+			# **And what the survivor *holds*, which the manifest does not carry**
+			# (#2423).  A manifest says what an app can be controlled by; a
+			# snapshot says what it is set to, and the two copies of one
+			# composition each keep their own `composition.data`.  Without this a
+			# panel is left drawing the pattern of the process that just died
+			# while the one still playing has another — which is the shape this
+			# whole area exists to prevent, arrived at from a third direction.
+			#
+			# Sent after the manifest for the reason `app_declared` sends it
+			# after one: a panel has to know the control exists before it is told
+			# what it holds.
+			await self.to_panels(superconductor.protocol.snapshot(
+				app.name, survivor.state, survivor.version))
+
 			return
 
 		await self.to_panels(superconductor.protocol.manifest(
