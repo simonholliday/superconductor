@@ -31,6 +31,71 @@ def _read_until (socket: typing.Any, kind: str, limit: int = 12) -> superconduct
 	raise AssertionError(f"no {kind!r} frame arrived")
 
 
+def _manifest (
+	panel: typing.Any,
+	app: str = "subsequence",
+	limit: int = 12,
+) -> superconductor.protocol.Frame:
+	"""Read until a manifest that **names** *app*, so the app is certainly registered.
+
+	**A panel is sent a manifest whether or not any app has declared yet**, so
+	waiting for the frame rather than for what is in it is a race — and this
+	suite lost it in CI on 2026-09-10, on Python 3.12 alone, in a serial run.
+
+	The shape: an app sends `declare` and a panel connects before the service has
+	read that frame.  `panel_joined` sends a manifest from what it knows, which
+	is nothing; `_read_until` takes it and returns, because an empty manifest is
+	a manifest.  The `set` that follows is then nacked as *"subsequence is not
+	connected"* — so the **app** socket waits for a frame that is never coming,
+	and the run dies on the 120s `faulthandler_timeout` with no failure to read.
+
+	**It cannot fail loudly**, which is why it is worth a helper rather than a
+	comment: what breaks is not this line but whatever the test does next, and
+	the frame it waited for did arrive.
+	"""
+
+	for _ in range(limit):
+		frame = panel.receive_json()
+
+		if frame["t"] == "manifest" and app in frame.get("apps", {}):
+			return typing.cast(superconductor.protocol.Frame, frame)
+
+	raise AssertionError(f"no manifest naming {app!r} arrived")
+
+
+def test_a_panel_that_joins_before_an_app_declares_is_sent_a_second_manifest () -> None:
+	"""Why `_manifest` waits for what is *in* the frame rather than for the frame.
+
+	A manifest carries what the service knows when it is sent, and a panel is
+	greeted with one whether that is anything or not.  A second arrives when an
+	app registers, because a declaration is how an app says what it can be
+	controlled by and every panel has to hear it.
+
+	**Ordered deliberately here and a race everywhere else.**  With the app
+	connecting first, whether its `declare` has been read by the time the panel
+	joins is a matter of scheduling — so a test that waits for `t == "manifest"`
+	sometimes gets the empty one, sends a `set` that is nacked as *"not
+	connected"*, and then waits on the app socket for ever.  That is a 120s
+	`faulthandler` dump with nothing failing, and it cost a CI run on 2026-09-10.
+	"""
+
+	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+
+	with client.websocket_connect("/ws/panel") as panel:
+		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
+
+		assert _read_until(panel, "manifest")["apps"] == {}, \
+			"a panel joining an empty service was told about an app"
+
+		with client.websocket_connect("/ws/app") as app:
+			app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
+
+			named = _manifest(panel)
+
+	assert named["apps"]["subsequence"]["grid"]["steps"] == 16, \
+		"the second manifest did not carry the app that had just declared"
+
+
 def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 	"""The full round trip, with the service holding both ends."""
 
@@ -43,7 +108,7 @@ def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
 
-			manifest = _read_until(panel, "manifest")
+			manifest = _manifest(panel)
 			snapshot = _read_until(panel, "snapshot")
 
 			assert manifest["apps"]["subsequence"]["grid"]["steps"] == 16
@@ -89,7 +154,7 @@ def test_a_beat_reaches_the_glass_so_the_playhead_has_something_to_follow () -> 
 
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
-			_read_until(panel, "manifest")
+			_manifest(panel)
 
 			app.send_json(superconductor.protocol.event("subsequence", "beat", beat=2, interval=0.5))
 
@@ -203,7 +268,7 @@ def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
 
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
-			_read_until(panel, "manifest")
+			_manifest(panel)
 
 			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/cowbell/0", "v": True, "seq": 9})
 			asked = _read_until(app, "set")
@@ -245,7 +310,7 @@ def test_a_page_set_reaches_the_panel_with_the_app_that_owns_it () -> None:
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "both"))
 
-			manifest = _read_until(panel, "manifest")
+			manifest = _manifest(panel)
 
 	assert manifest["pages"] == [{"id": "both", "title": "Both", "parts": ["grid"], "app": "subsequence"}]
 
@@ -262,7 +327,7 @@ def test_an_app_that_declares_no_pages_says_so_rather_than_nothing () -> None:
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", None))
 
-			manifest = _read_until(panel, "manifest")
+			manifest = _manifest(panel)
 
 	assert manifest["pages"] == []
 
@@ -279,7 +344,7 @@ def test_an_arrangement_is_carried_to_the_app_that_owns_the_page () -> None:
 
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "both"))
-			_read_until(panel, "manifest")
+			_manifest(panel)
 
 			panel.send_json(superconductor.protocol.layout(
 				"subsequence", "both", [{"name": "grid", "x": 3, "y": 1}], "panel-1", 7))
@@ -327,7 +392,7 @@ def test_a_control_this_service_is_too_old_for_is_declared_as_such () -> None:
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", None))
 
-			manifest = _read_until(panel, "manifest")
+			manifest = _manifest(panel)
 
 	offered = manifest["apps"]["subsequence"]
 
@@ -358,7 +423,7 @@ def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
 		with client.websocket_connect("/ws/panel") as panel:
 			for _ in range(3):
 				panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
-				_read_until(panel, "manifest")
+				_manifest(panel)
 
 			app.send_json(superconductor.protocol.event("subsequence", "beat", beat=7, interval=0.5))
 
@@ -402,7 +467,7 @@ def test_a_malformed_frame_does_not_take_the_socket_down_with_a_traceback () -> 
 
 		with client.websocket_connect("/ws/panel") as panel:
 			panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
-			_read_until(panel, "manifest")
+			_manifest(panel)
 
 			panel.send_json({"t": "set", "app": "subsequence", "path": "grid/kick/0",
 			                 "v": True, "seq": "oops"})
@@ -467,7 +532,7 @@ def test_an_app_speaking_a_different_contract_is_said_out_loud (caplog: typing.A
 
 			with client.websocket_connect("/ws/panel") as panel:
 				panel.send_json(superconductor.protocol.hello("panel", None))
-				_read_until(panel, "manifest")
+				_manifest(panel)
 
 	complaints = [one.getMessage() for one in caplog.records
 	              if "subsequence" in one.getMessage() and "older" in one.getMessage()]
@@ -526,7 +591,7 @@ def test_one_app_replacing_another_of_the_same_name_is_said_out_loud (
 				# been handled before the log is inspected.
 				with client.websocket_connect("/ws/panel") as panel:
 					panel.send_json(superconductor.protocol.hello("panel", None))
-					_read_until(panel, "manifest")
+					_manifest(panel, "substation")
 
 	said = [one.getMessage() for one in caplog.records
 	        if one.levelname == "WARNING" and "replacing" in one.getMessage()]
@@ -557,6 +622,6 @@ def test_an_app_declaring_twice_on_one_socket_is_not_a_replacement (
 
 			with client.websocket_connect("/ws/panel") as panel:
 				panel.send_json(superconductor.protocol.hello("panel", None))
-				assert _read_until(panel, "manifest")
+				assert _manifest(panel)
 
 	assert [one.getMessage() for one in caplog.records if "replacing" in one.getMessage()] == []
