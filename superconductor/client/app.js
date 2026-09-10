@@ -2633,7 +2633,15 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 		if (locked || !onResize) return;
 
 		event.preventDefault();
+
+		/* **Stopping here is what keeps the resize from also moving the block**,
+		   so it cannot go — which is why the raise below is explicit. A gesture
+		   that continuously moves a block's anchor points, and grows it over
+		   whatever runs beneath, is the last one that should leave its lines
+		   behind the blocks (#2426). */
 		event.stopPropagation();
+		onTouch(name, event.pointerId);
+
 		event.currentTarget.setPointerCapture(event.pointerId);
 
 		const body = event.currentTarget.parentElement.querySelector(".part-body");
@@ -2685,12 +2693,39 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
 			data-offers=${offers || null} data-pitch-in=${pitchIn || null}
 			style=${place}
-			${/* Anywhere on the block, not only its handle: a person turning a knob
-			     on a generator is asking the same question a person dragging it is
-			     — what does this feed? — so the same line brightens (#2109). It is
-			     let go of at the document, which is the only listener a pointer
-			     captured by a slider cannot slip past. */ ""}
-			onPointerDown=${(event) => onTouch(name, event.pointerId)}
+			${/* **Anywhere on the block raises the lines it joins, except the
+			     surface you play on** (#2109, qualified by Simon on #2426).
+			
+			     A person turning a knob is asking the same question a person
+			     dragging the block is — *what does this feed?* — so the same
+			     lines come forward. Tapping a step is not asking it: this panel
+			     already separates playing from working, a control you play acting
+			     on press and a control you choose from a list acting on release
+			     (#2213, #2215), and playing a note is the one gesture that has
+			     nothing to do with routing.
+			
+			     **It is a real cost measured against a real one.** On the Drums
+			     page every generator line and every route terminates at `grid`,
+			     so each of its 160 cells used to fling every joined cable forward
+			     and back, twice per hit entered, on the most-tapped surface here.
+			     #2109 was written when a line only *brightened*; coming to the
+			     front is a much louder act and the rule had never been weighed
+			     against it.
+			
+			     **Decided here rather than by a `stopPropagation` somewhere**,
+			     which is how the three gestures that used to fall outside this
+			     rule fell outside it. `.scroller` rather than `.grid` because
+			     below `OVERVIEW_AT` the grid's own pointer events are off and the
+			     press lands on the scroller instead; `.track` beside it is a
+			     scrollbar rather than a pattern, and still raises.
+			
+			     It is let go of at the document, which is the only listener a
+			     pointer captured by a slider cannot slip past. */ ""}
+			onPointerDown=${(event) => {
+				if (event.target.closest(".scroller, .lane")) return;
+
+				onTouch(name, event.pointerId);
+			}}
 		>
 			<header
 				class="part-title"
@@ -2961,6 +2996,33 @@ function fanTerminals (laid, inset, row) {
  *
  * It takes no pointer events at all, so a line drawn across a grid cannot cost
  * a tap. */
+/* **A line's address, and there is exactly one of it** (#2426).
+ *
+ * `from>to` names the two *ends*, and that is not a line: two real states prove
+ * it.  One grid may be routed into one stack more than once — a route is a bag
+ * by Simon's decision, because `route A -> transform -> route A` is a shape
+ * somebody can want — and one note set may feed two pitch inputs on the same
+ * generator, which is why `tests/conftest.py` carries `duet`: no catalogue entry
+ * has two pools, so nothing real would have shown it.
+ *
+ * So something has to name the *connection*, and what that is differs by kind
+ * while meaning the same thing both times — a route is one layer in a stack, a
+ * note cable is one input on a block.  A wired line needs nothing: a generator's
+ * own block is its `from`, and a settings block configures one pattern.
+ *
+ * **The suffix is always written, empty or not**, so there is one form rather
+ * than two and a selector never has to ask which it is looking at.
+ *
+ * **The Preact key is built from this too.**  The review found this because the
+ * key disambiguated and the attribute did not — two spellings of one idea, which
+ * is the fault this project has met often enough to have a rule about it. One
+ * expression, so they cannot drift apart again. */
+function addressOf (line) {
+	const which = line.wired ? "" : line.layer || line.row || "";
+
+	return `${line.from}>${line.to}#${which}`;
+}
+
 function Connections ({ box, joins, touched, cell, when, patching, onFlip, patchable }) {
 	const [drawn, setDrawn] = useState([]);
 
@@ -3136,8 +3198,20 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 			     Only on the front sheet, and only for the one or two lines a
 			     hand is on, so this sorts almost nothing.  #2107 from the other
 			     side: what can be touched stays in front. */ ""}
-			${[...drawn].sort((one, other) => Number(touched === one.from || touched === one.to)
-			                                - Number(touched === other.from || touched === other.to))
+			${/* **Not while a cable is in flight, and that is measured rather than
+			     cautious** (#2426).  Sorting moves a `<g>` in the DOM, and a
+			     fitting inside it has the pointer captured for the whole drag —
+			     a move is a remove and an insert, so the capture goes and the
+			     drag dies at the press.  It took a note cable pulled out and let
+			     go over nothing with the panel never asking for anything.
+			
+			     Nothing is lost.  A held line is on this sheet already, which is
+			     the raise that matters; what the sort settles is only its order
+			     against another line's fittings, for as long as a finger is
+			     down. */ ""}
+			${(patching ? drawn : [...drawn].sort(
+				(one, other) => Number(touched === one.from || touched === one.to)
+				              - Number(touched === other.from || touched === other.to)))
 				.map((line) => {
 				/* **A cable, because that is what this is.** A person who
 				   patches a modular, a mixer or a stage box already knows that
@@ -3201,8 +3275,10 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 					? (event) => { event.preventDefault(); onFlip(line); }
 					: null;
 
+				const address = addressOf(line);
+
 				return html`
-					<g key=${`${line.from}>${line.to}/${line.layer || ""}`}
+					<g key=${address}
 						class=${`join ${line.wired ? "wired" : "patched"} `
 							+ `${holdable ? "holdable " : ""}`
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
@@ -3219,7 +3295,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 						     path.  A test that scoped to `.joins.under` for a held
 						     line counted an empty `<g>` and passed against any
 						     build (#2424). */ ""}
-						data-join=${`${line.from}>${line.to}`}>
+						data-join=${address}>
 						${/* **A line comes forward while a hand is on the block it
 						     joins, and goes back when the hand lifts** (#2417,
 						     Simon's amendment of 2026-09-10).
@@ -5548,6 +5624,17 @@ function Panel () {
 		event.preventDefault();
 		event.currentTarget.setPointerCapture(event.pointerId);
 
+		/* **The one line a person can literally take hold of, and it was the one
+		   that stayed behind the blocks** (#2426). `touched` is written by a
+		   block's own pointerdown, and a fitting is a `<circle>` in the overlay
+		   that reaches no block — so a re-patch was drawn behind every window for
+		   the whole drag, while `.grid-wrap.patching .part { opacity: 0.45 }`
+		   made the blocks hiding it the brightest things on the glass.
+		
+		   Named by the source end whichever end is moving, because either raises
+		   the same line and the source is the one that stays put. */
+		setTouched({ name: line.from, pointer: event.pointerId });
+
 		const at = wrapPoint(event);
 
 		/* **A note cable remembers a parameter where a grid cable remembers a
@@ -6144,39 +6231,60 @@ function Panel () {
 						&& (controls[one].sources || []).includes(sending))
 					.map((stack) => {
 						const into = controls[stack].builds;
-						const already = (((state[appName] || {})[stack] || {}).layers || [])
+						const goes = (((state[appName] || {})[stack] || {}).layers || [])
 							.some((layer) => layer.kind === "route" && layer.source === sending);
 
 						return html`
 							<button
 								key=${stack}
-								class=${`offer option ${already ? "here" : ""}`}
+								class=${`offer option ${goes ? "here" : ""}`}
 								onClick=${(event) => {
 									event.preventDefault();
 
 									const held = ((state[appName] || {})[stack] || {}).layers || [];
 
-									/* The same list, with this route in it or out of
-									   it. One place to make a connection and unmake
-									   it, on the thing a person is holding — the head
-									   of the arrow silences a route and this is what
-									   takes it away. */
-									request(`${stack}/layers`, already
-										? held.filter((layer) => !(layer.kind === "route"
-											&& layer.source === sending))
-										: [...held, {
-											id: `l${Date.now().toString(36)}`
-												+ `${Math.floor(Math.random() * 46656).toString(36)}`,
-											kind: "route",
-											source: sending,
-										}]);
+									/* **A route is a bag, so this appends** (#2426,
+									   Simon's decision of 2026-09-10).
+									
+									   It used to toggle, which made a second route
+									   from one grid unmakeable here and made pressing
+									   again *remove* the first — while the cable drop
+									   beside it appended, and the model accepted both.
+									   Two gestures, two different answers, and no way
+									   for a person to know which they would get.
+									
+									   Routing one grid in twice is a real shape: a
+									   layer's place in the stack is its place in the
+									   run, so `route A -> transform -> route A` is the
+									   grid reshaped and then contributed again
+									   unreshaped. The set reading forbids that, and
+									   forbids stack *order* from meaning anything for
+									   routes.
+									
+									   **The cost is that this no longer unmakes one.**
+									   A route is unmade at its cable and silenced at
+									   its switch, which is where every other
+									   connection on this panel is unmade — so the
+									   consistency is a gain as well as a loss. */
+									request(`${stack}/layers`, [...held, {
+										id: `l${Date.now().toString(36)}`
+											+ `${Math.floor(Math.random() * 46656).toString(36)}`,
+										kind: "route",
+										source: sending,
+									}]);
 
 									setSending(null);
 								}}
 							>
 								<b>${into ? named(into) : named(stack)}</b>
-								<i>${already
-									? "goes here — tap to stop"
+								${/* **"again" rather than "tap to stop"**, because the
+								     press does something different now and a caption
+								     promising the old thing is worse than none. The
+								     mark stays: which stacks already take this grid is
+								     worth seeing whether or not it changes what a
+								     press does. */ ""}
+								<i>${goes
+									? "goes here already — send it again"
 									: "every note drawn here, played there as well"}</i>
 							</button>`;
 					})}

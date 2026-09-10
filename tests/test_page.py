@@ -3026,6 +3026,27 @@ def _joins_settled (panel: typing.Any) -> None:
 		timeout=5_000, polling=100)
 
 
+def _sheet_of (panel: typing.Any, join: str) -> list[str]:
+	"""Which sheet each line between two ends has its *path* on, in document order.
+
+	**Asked of the line and never of a sheet** (#2424).  A path is on the back
+	sheet usually and on the front one while a hand is on it, so a selector that
+	names a sheet finds an empty `<g>` half the time and passes against a build
+	that drew nothing at all.
+
+	``join`` is `from>to`; the address carries a third part naming *which*
+	connection between them (#2426), and this matches every one — so two routes
+	from one grid come back as two entries rather than as whichever the document
+	held first, which is what the old address could not express.
+	"""
+
+	return panel.eval_on_selector_all(
+		f'[data-join^="{join}#"]',
+		"els => els.filter((one) => one.querySelector('path.cable'))"
+		"        .map((one) => one.closest('svg').classList.contains('under')"
+		"                     ? 'under' : 'over')")
+
+
 def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 	"""Where one line starts and ends, and where the two blocks it joins are.
 
@@ -3056,7 +3077,7 @@ def _edges (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 			   is: a patch cable is a cubic with eight numbers in it and a wired
 			   line is taut with four, and both start where they start and end
 			   where they end. */
-			const numbers = document.querySelector(`[data-join="${join}"] .cable`)
+			const numbers = document.querySelector(`[data-join^="${join}#"] .cable`)
 				.getAttribute("d").match(/-?[\d.]+/g).map(Number);
 
 			return {
@@ -3182,7 +3203,14 @@ def test_a_line_joins_each_contribution_to_the_pattern_it_feeds (
 	drawn = panel.eval_on_selector_all(
 		".joins.under .join", "els => els.map((one) => one.dataset.join)")
 
-	assert sorted(drawn) == ["stack/one>grid", "stack/two>grid"]
+	# **The one place the address itself is asserted** (#2426).  It is
+	# `from>to#which`, and the third part is what tells two lines between the
+	# same pair apart — a route's layer, or the input a note cable lands on.  A
+	# wired line has no such sibling and its suffix is empty, **and the separator
+	# is written anyway**: one form rather than two, so a selector prefixed
+	# `from>to#` finds every line between a pair whatever kind they are, and
+	# cannot be fooled by a longer block name starting the same way.
+	assert sorted(drawn) == ["stack/one>grid#", "stack/two>grid#"]
 
 
 def test_a_cable_runs_behind_the_blocks_and_its_fittings_stand_in_front (
@@ -3250,11 +3278,7 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 	_joins_settled(panel)
 
 	def sheet_of (join: str) -> list[str]:
-		return panel.eval_on_selector_all(
-			f'[data-join="{join}"]',
-			"els => els.filter((one) => one.querySelector('path.cable'))"
-			"        .map((one) => one.closest('svg').classList.contains('under')"
-			"                     ? 'under' : 'over')")
+		return _sheet_of(panel, join)
 
 	assert sheet_of("stack/one>grid") == ["under"], "a line was forward with nothing held"
 
@@ -3271,6 +3295,160 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 	panel.mouse.up()
 
 	assert sheet_of("stack/one>grid") == ["under"], "the line did not go back"
+
+
+def test_the_resize_grip_brings_a_blocks_lines_forward_too (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2426.  Of the gestures that fell outside #2417's rule this is the one that
+	could not have been inside it by default.
+
+	`touched` is written by the block's own pointerdown, and `takeGrip` calls
+	`stopPropagation` — which it must, or the same finger starts the block moving
+	as well.  So the rule was decided by where that call sat rather than by
+	anybody choosing, and a resize left its lines behind the blocks.
+
+	**It is the gesture where it matters most.**  A resize continuously moves the
+	anchor points — the `ResizeObserver` exists for this one gesture — and grows
+	the block over whatever runs beneath it, so the lines are moving *and* being
+	covered at the same time.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_joins_settled(panel)
+
+	assert _sheet_of(panel, "second>grid") == ["under"], "a line was forward with nothing held"
+
+	grip = panel.locator('.part[data-part="grid"] .part-grip').bounding_box()
+
+	panel.mouse.move(grip["x"] + grip["width"] / 2, grip["y"] + grip["height"] / 2)
+	panel.mouse.down()
+
+	held = _sheet_of(panel, "second>grid")
+
+	panel.mouse.up()
+
+	assert held == ["over"], f"the grip left the line behind the blocks: {held}"
+	assert _sheet_of(panel, "second>grid") == ["under"], "the line did not go back"
+
+
+def test_taking_hold_of_a_cable_brings_it_forward (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2426.  The only line a person can literally take hold of was the one line
+	that stayed behind the blocks.
+
+	A fitting is a `<circle>` in the overlay and reaches no block, so nothing
+	wrote `touched` — and a re-patch was drawn behind every window for the whole
+	drag while `.grid-wrap.patching .part { opacity: 0.45 }` made the blocks
+	hiding it the brightest things on the glass.
+
+	**Held rather than dragged**, because the press is where it has to happen: a
+	person needs to see the lead the instant they have it, not once they have
+	moved it far enough to be sure.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+
+	# Far enough apart that the cable is long enough to carry a fitting a finger
+	# can take, which is what `holdable` decides (#2107).
+	_apart(panel, "grid", dx=0, dy=420)
+	_joins_settled(panel)
+
+	assert _sheet_of(panel, "second>grid") == ["under"], "a line was forward with nothing held"
+
+	fitting = panel.locator('[data-join^="second>grid#"] .socket').bounding_box()
+
+	assert fitting, "no socket to take hold of, so this proves nothing"
+
+	panel.mouse.move(fitting["x"] + fitting["width"] / 2, fitting["y"] + fitting["height"] / 2)
+	panel.mouse.down()
+
+	held = _sheet_of(panel, "second>grid")
+
+	panel.mouse.up()
+
+	assert held == ["over"], f"the cable in the hand stayed behind the blocks: {held}"
+
+
+def test_playing_a_step_does_not_fling_the_patterns_cables_forward (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2109 qualified, by Simon's decision of 2026-09-10 on #2426.
+
+	Anything on a block asks *what does this feed?* and brings its lines forward
+	— **except the surface you play on**.  This panel already separates playing
+	from working: a control you play acts on press and one you choose from a list
+	acts on release (#2213, #2215), and playing a note is the one gesture with
+	nothing to do with routing.
+
+	**The cost it saves is measured.**  On the Drums page every generator line and
+	every route ends at `grid`, so each of its 160 cells flung every joined cable
+	forward and back, twice per hit entered, on the most-tapped surface here.
+
+	The title is pressed as well, in the same test, because an exception is only
+	worth asserting beside the rule it is an exception to — this passes trivially
+	against a build where nothing raises anything.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_joins_settled(panel)
+
+	cell = panel.locator('.part[data-part="grid"] .cell').first.bounding_box()
+
+	panel.mouse.move(cell["x"] + cell["width"] / 2, cell["y"] + cell["height"] / 2)
+	panel.mouse.down()
+
+	played = _sheet_of(panel, "second>grid")
+
+	panel.mouse.up()
+
+	assert played == ["under"], f"playing a step flung the pattern's cables forward: {played}"
+
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+
+	worked = _sheet_of(panel, "second>grid")
+
+	panel.mouse.up()
+
+	assert worked == ["over"], (
+		f"nothing raises this line at all, so the exception above proves nothing: {worked}")
+
+
+def test_two_routes_from_one_grid_have_an_address_each (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2426.  `data-join` was `from>to`, which names the two *ends* and not a
+	line — while the Preact key beside it carried the layer as well.
+
+	Two spellings of one idea, and in the state `_two_routes` deliberately builds
+	they disagree: two `<g>` per sheet answered to one address, `_edges` took
+	whichever the document held first, and the dozen selectors written that way
+	would meet Playwright's strict mode. Latent only because nothing pressed in
+	that state.
+	"""
+
+	_open_the_stack(panel)
+	_two_routes(panel, fake_app)
+	_joins_settled(panel)
+
+	drawn = panel.eval_on_selector_all(
+		".joins.under .join", "els => els.map((one) => one.dataset.join)")
+
+	assert sorted(drawn) == ["second>grid#one", "second>grid#two"], (
+		f"two routes did not get an address each: {drawn}")
+
+	# **One group per sheet, so an address names two elements and not one** — the
+	# back sheet carries the path and the front one the fittings (#2415), and
+	# which half is on which depends on whether a hand is on the line (#2417).
+	# What #2426 fixed is that the two *routes* no longer share an address, not
+	# that an address names a single element.
+	assert panel.locator('.joins.under [data-join="second>grid#one"]').count() == 1, \
+		"an address named more than one line on a sheet, or none"
+	assert panel.locator('[data-join="second>grid#one"]').count() == 2, \
+		"a line is a group on each sheet"
 
 
 def test_a_held_cable_brings_its_path_forward_and_keeps_its_fittings (
@@ -3294,7 +3472,7 @@ def test_a_held_cable_brings_its_path_forward_and_keeps_its_fittings (
 	def drawn () -> dict[str, int]:
 		return panel.evaluate("""() => {
 			const at = (sheet, what) => document.querySelectorAll(
-				`.joins.${sheet} [data-join="second>grid"] ${what}`).length;
+				`.joins.${sheet} [data-join^="second>grid#"] ${what}`).length;
 
 			return {
 				under: at("under", "path.cable"),
@@ -3400,7 +3578,7 @@ def test_a_cable_carries_a_direction_by_its_two_fittings (
 	line = _edges(panel, "second>grid")
 	ends = panel.evaluate("""(join) => {
 		const at = (selector) => {
-			const one = document.querySelector(`[data-join="${join}"] ${selector}`);
+			const one = document.querySelector(`[data-join^="${join}#"] ${selector}`);
 
 			return { x: +one.getAttribute("cx"), y: +one.getAttribute("cy") };
 		};
@@ -3434,7 +3612,7 @@ def test_a_line_brightens_while_a_hand_is_on_either_end (
 	# `.join.live .cable` actually changes, so that is what is asked.
 	def width () -> float:
 		return panel.evaluate("""() => {
-			const on = document.querySelectorAll('[data-join="stack/one>grid"] path.cable');
+			const on = document.querySelectorAll('[data-join^="stack/one>grid#"] path.cable');
 
 			if (on.length !== 1) throw new Error(`${on.length} cables, not one`);
 
@@ -3826,7 +4004,7 @@ def _fitting (panel: typing.Any, join: str) -> float:
 	_joins_settled(panel)
 
 	return float(panel.eval_on_selector(
-		f'[data-join="{join}"] .socket',
+		f'[data-join^="{join}#"] .socket',
 		"""one => +(one.getAttribute("r") || one.getAttribute("width"))"""))
 
 
@@ -3902,7 +4080,7 @@ def test_a_line_shows_where_it_joins_at_both_ends (
 	# by the test below rather than here, because they are two answers and not
 	# one rule with an exception.
 	dots = panel.eval_on_selector_all(
-		'[data-join="notes>stack/two"] circle.plug, [data-join="notes>stack/two"] circle.hole',
+		'[data-join^="notes>stack/two#"] circle.plug, [data-join^="notes>stack/two#"] circle.hole',
 		"""els => els.map((one) => {
 			const box = one.getBBox();
 
@@ -4183,7 +4361,7 @@ def _route (panel: typing.Any, fake_app: typing.Any) -> None:
 		 "bypassed": False, "params": {}},
 	], by="app")
 
-	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
+	panel.wait_for_selector('[data-join^="second>grid#"]', timeout=5_000)
 	_settled(panel)
 
 
@@ -4458,7 +4636,7 @@ def test_a_second_finger_lifting_does_not_drop_a_line_the_first_is_holding (
 	def forward () -> int:
 		return panel.evaluate(
 			"""() => document.querySelectorAll(
-				'.joins.over [data-join="stack/one>grid"] path.cable').length""")
+				'.joins.over [data-join^="stack/one>grid#"] path.cable').length""")
 
 	grip = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
 
@@ -4611,7 +4789,7 @@ def test_a_route_is_a_line_and_nothing_else (
 	drawn = panel.eval_on_selector_all(
 		".joins.under .join", "els => els.map((one) => one.dataset.join)")
 
-	assert drawn == ["second>grid"], f"a route drew {drawn}"
+	assert drawn == ["second>grid#one"], f"a route drew {drawn}"
 
 	# No block of its own, anywhere.
 	assert panel.locator('.part[data-part^="stack/"]').count() == 0
@@ -4625,7 +4803,7 @@ def test_the_head_of_an_arrow_silences_the_link (
 	_open_the_stack(panel)
 	_route(panel, fake_app)
 
-	panel.locator('[data-join="second>grid"] circle.node').click()
+	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -4633,9 +4811,9 @@ def test_the_head_of_an_arrow_silences_the_link (
 	assert asked[-1]["v"][0]["bypassed"] is True
 
 	fake_app.confirm("stack/layers", asked[-1]["v"], by="panel")
-	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
+	panel.wait_for_selector('[data-join^="second>grid#"].off', timeout=5_000)
 
-	panel.locator('[data-join="second>grid"] circle.node').click()
+	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
 
@@ -4659,12 +4837,12 @@ def test_a_silenced_link_is_dashed_and_hollow (
 		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": True, "params": {}},
 	], by="app")
-	panel.wait_for_selector('[data-join="second>grid"].off', timeout=5_000)
+	panel.wait_for_selector('[data-join^="second>grid#"].off', timeout=5_000)
 	_settled(panel)
 
 	drawn = panel.evaluate("""() => {
 		const at = (selector) => getComputedStyle(
-			document.querySelector('[data-join="second>grid"] ' + selector));
+			document.querySelector('[data-join^="second>grid#"] ' + selector));
 
 		return {
 			dashes: at(".cable").strokeDasharray,
@@ -4720,7 +4898,7 @@ def test_only_a_control_on_the_overlay_takes_a_tap (
 		 "bypassed": False, "params": {}},
 	], by="app")
 
-	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
+	panel.wait_for_selector('[data-join^="second>grid#"]', timeout=5_000)
 	_joins_settled(panel)
 
 	inert = panel.evaluate("""() => {
@@ -4855,7 +5033,7 @@ def test_a_cable_pulled_out_and_let_go_is_unpatched (
 	# Onto the header, which is not a block and never takes a cable. Dropped
 	# far below instead, the move is clamped to the viewport and can land back
 	# on something — the trap that has cost a diagnosis twice already.
-	_pull_onto(panel, '[data-join="second>grid"] .socket', ".bar")
+	_pull_onto(panel, '[data-join^="second>grid#"] .socket', ".bar")
 
 	asked = fake_app.await_set("stack/layers")
 
@@ -4873,7 +5051,7 @@ def test_a_cable_taken_by_its_source_end_can_also_be_unpatched (
 	_route(panel, fake_app)
 	_apart(panel, "grid", dx=0, dy=420)
 
-	_pull_onto(panel, '[data-join="second>grid"] .collar', ".bar")
+	_pull_onto(panel, '[data-join^="second>grid#"] .collar', ".bar")
 
 	asked = fake_app.await_set("stack/layers")
 
@@ -4895,7 +5073,7 @@ def test_a_cable_put_back_where_it_was_is_still_one_cable (
 	_apart(panel, "grid", dx=0, dy=420)
 
 	box = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
-	fitting = panel.locator('[data-join="second>grid"] .socket').bounding_box()
+	fitting = panel.locator('[data-join^="second>grid#"] .socket').bounding_box()
 
 	panel.mouse.move(fitting["x"] + fitting["width"] / 2, fitting["y"] + fitting["height"] / 2)
 	panel.mouse.down()
@@ -4998,10 +5176,22 @@ def test_two_cables_on_one_edge_get_a_terminal_each (
 		f"a second cable moved the pair off the centre of the edge: {middle} was {alone[0]}"
 
 
-def test_a_route_is_unmade_where_it_was_made (
+def test_the_sheet_sends_a_grid_again_rather_than_taking_the_first_route_away (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""The head of the arrow silences a route; this is what takes it away.  One
-	place to make a connection and unmake it, on the thing a person is holding.
+	"""**A route is a bag** (#2426, Simon's decision of 2026-09-10), so the two
+	gestures that make one now agree: the cable drop appends and so does this.
+
+	It used to toggle.  A second route from one grid could not be made here at
+	all, and pressing again *removed* the first — while the drop beside it
+	appended and the model accepted both, so which one a person got depended on
+	how they had asked.  Routing one grid in twice is a real shape: a layer's
+	place in the stack is its place in the run, so `route -> transform -> route`
+	is the grid reshaped and then contributed again unreshaped.
+
+	**The accepted cost is that this no longer unmakes one** — that happens at the
+	cable, which is where every other connection on this panel is unmade.  The
+	mark saying a stack already takes this grid stays, because it is worth seeing
+	whether or not it changes what a press does.
 	"""
 
 	_open_the_stack(panel)
@@ -5012,13 +5202,18 @@ def test_a_route_is_unmade_where_it_was_made (
 
 	offered = panel.locator(".sheet .offer").first
 
-	assert "tap to stop" in offered.inner_text().lower(), offered.inner_text()
+	assert "here" in (offered.get_attribute("class") or ""), \
+		"the stack already taking this grid was not marked"
+	assert "tap to stop" not in offered.inner_text().lower(), offered.inner_text()
 
 	offered.click()
 
 	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	sent = asked[-1]["v"]
 
-	assert asked[-1]["v"] == [], "unrouting left the layer in place"
+	assert len(sent) == 2, f"the sheet did not append a second route: {sent}"
+	assert [one["source"] for one in sent] == ["second", "second"]
+	assert sent[0]["id"] != sent[1]["id"], "two routes shared one id"
 
 
 def test_a_stack_offering_no_patterns_still_says_generator (
@@ -5747,7 +5942,7 @@ def test_the_switch_on_a_line_is_big_enough_to_find (
 		"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--row'))"))
 
 	across = float(panel.eval_on_selector(
-		'[data-join="second>grid"] circle.node',
+		'[data-join^="second>grid#"] circle.node',
 		"one => one.getBoundingClientRect().width"))
 
 	assert across >= row, f"the switch on a line is {across}px against a {row}px row"
@@ -5833,20 +6028,20 @@ def test_a_switch_lives_with_the_thing_it_switches (
 	_two_generators(panel, fake_app)
 
 	# A generator's line is a mark. Its switch is in its own window.
-	assert panel.locator('[data-join="stack/one>grid"].switchable').count() == 0
-	assert panel.locator('[data-join="stack/one>grid"] circle.node').count() == 0
+	assert panel.locator('[data-join^="stack/one>grid#"].switchable').count() == 0
+	assert panel.locator('[data-join^="stack/one>grid#"] circle.node').count() == 0
 	assert panel.locator('.part[data-part="stack/one"] .switch').count() == 1
 
 	fake_app.confirm("stack/layers", [
 		{"id": "one", "kind": "route", "source": "second", "index": 1,
 		 "bypassed": False, "params": {}},
 	], by="app")
-	panel.wait_for_selector('[data-join="second>grid"]', timeout=5_000)
+	panel.wait_for_selector('[data-join^="second>grid#"]', timeout=5_000)
 	_settled(panel)
 
 	# A route has no window, so its switch is the one on its line.
-	assert panel.locator('.joins.over [data-join="second>grid"].switchable').count() == 1
-	assert panel.locator('[data-join="second>grid"] circle.node').count() == 1
+	assert panel.locator('.joins.over [data-join^="second>grid#"].switchable').count() == 1
+	assert panel.locator('[data-join^="second>grid#"] circle.node').count() == 1
 
 
 def test_silencing_a_route_leaves_its_source_alone (
@@ -5860,7 +6055,7 @@ def test_silencing_a_route_leaves_its_source_alone (
 
 	before = panel.locator('.part[data-part="second"] .part-foot .switch').inner_text().strip()
 
-	panel.locator('[data-join="second>grid"] circle.node').click()
+	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
 	asked = [one["path"] for one in fake_app.sets]
 
@@ -6466,14 +6661,14 @@ def test_a_cable_lights_what_the_end_in_your_hand_can_land_on (
 
 	# The socket is looking for a pattern to feed. `grid` is the one whose stack
 	# takes from `second`.
-	holding_socket = lit_while_holding('[data-join="second>grid"] .socket')
+	holding_socket = lit_while_holding('[data-join^="second>grid#"] .socket')
 
 	assert holding_socket == ["grid"], (
 		f"a socket in the hand should light the destinations: {holding_socket}")
 
 	# The plug is looking for something to feed *from*. `second` is what the
 	# stack declares as a source; `grid` is the one block that cannot be one.
-	holding_plug = lit_while_holding('[data-join="second>grid"] .collar')
+	holding_plug = lit_while_holding('[data-join^="second>grid#"] .collar')
 
 	assert holding_plug == ["second"], (
 		f"a plug in the hand should light the sources: {holding_plug}")
@@ -6737,20 +6932,20 @@ def test_a_settings_block_is_joined_to_the_instrument_it_sets (
 	panel.wait_for_selector('.part[data-part="bass"]', timeout=5_000)
 	_settled(panel)
 
-	assert panel.locator('.joins.under [data-join="moog>bass"]').count() == 0, \
+	assert panel.locator('.joins.under [data-join^="moog>bass#"]').count() == 0, \
 		"a line was drawn to a settings block nobody had opened"
 
 	panel.locator('.part[data-part="bass"] .part-foot button.settings').click()
 	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
 	_joins_settled(panel)
 
-	line = panel.locator('.joins.under [data-join="moog>bass"]')
+	line = panel.locator('.joins.under [data-join^="moog>bass#"]')
 
 	assert line.count() == 1, "the settings say nothing about which pattern they set"
 	assert "wired" in (line.get_attribute("class") or ""), \
 		"a settings line offered a gesture that does not exist"
 
-	assert panel.locator('.joins.over [data-join="moog>bass"]')\
+	assert panel.locator('.joins.over [data-join^="moog>bass#"]')\
 		.locator("circle, rect").count() == 0, "a settings line drew a fitting"
 
 
