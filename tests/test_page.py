@@ -3215,6 +3215,13 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 	goes back by itself — there is no state that could be left raised by a drag
 	that ended somewhere unexpected, which is the failure a save-and-restore
 	would have.
+
+	**The pointer is moved between the press and the release** (#2424), because
+	this said it covered a drag and did not: it pressed and released on one
+	point, so the gesture the paragraph above is about never happened.  It still
+	does not distinguish clearing at the document from clearing on the block —
+	the header takes pointer capture, so the release bubbles through the section
+	either way — and that is now said rather than implied.
 	"""
 
 	_open_the_stack(panel)
@@ -3234,6 +3241,7 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 
 	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
 	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 60, grip["y"] + 45)
 
 	assert sheet_of("stack/one>grid") == ["over"], "the line stayed behind the blocks"
 	assert sheet_of("stack/two>grid") == ["under"], \
@@ -3242,6 +3250,57 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 	panel.mouse.up()
 
 	assert sheet_of("stack/one>grid") == ["under"], "the line did not go back"
+
+
+def test_a_held_cable_brings_its_path_forward_and_keeps_its_fittings (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2424 — the half #2417's own test cannot see.
+
+	That test uses `_two_generators`, which replaces the stack and takes the only
+	*patched* line with it.  A wired line has no fittings at all, so its claim
+	that a line rides forward "path and fittings together" was asserted by
+	nothing: invert the fittings' condition and a live cable loses the plug and
+	socket a finger is reaching for, mid-gesture, with the suite still green.
+
+	A route is patched, so it has both — and the fittings are already on the
+	front sheet, which is exactly why nothing about them should move.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_joins_settled(panel)
+
+	def drawn () -> dict[str, int]:
+		return panel.evaluate("""() => {
+			const at = (sheet, what) => document.querySelectorAll(
+				`.joins.${sheet} [data-join="second>grid"] ${what}`).length;
+
+			return {
+				under: at("under", "path.cable"),
+				over: at("over", "path.cable"),
+				fittings: at("over", "circle.collar, circle.socket"),
+			};
+		}""")
+
+	rest = drawn()
+
+	assert rest["under"] == 1 and rest["over"] == 0, f"a cable was forward at rest: {rest}"
+	assert rest["fittings"] > 0, "a patched cable drew no fittings, so this proves nothing"
+
+	grip = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+
+	held = drawn()
+
+	panel.mouse.up()
+
+	assert held["over"] == 1 and held["under"] == 0, f"the path did not come forward: {held}"
+	assert held["fittings"] == rest["fittings"], (
+		f"the fittings changed while the cable was held: {held} against {rest}")
+
+	assert drawn() == rest, "the line did not go back"
 
 
 def test_a_fitting_is_the_topmost_thing_at_its_own_centre (
@@ -3344,23 +3403,37 @@ def test_a_line_brightens_while_a_hand_is_on_either_end (
 
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
+	_joins_settled(panel)
 
-	# The back sheet alone: the same line is on both, and what is being counted
-	# here is lines rather than elements.
-	live = panel.locator('.joins.under [data-join="stack/one>grid"].live')
+	# **Measured off the cable rather than counted off a sheet** (#2424).  This
+	# asked `.joins.under [data-join=X].live` for a count of 1, and since #2417 a
+	# held line's path is on the *front* sheet while the `<g>` wrapper stays on
+	# both — so it was counting an element with no children at all, and would
+	# have reported 1 against a build that drew the cable nowhere.  Width is what
+	# `.join.live .cable` actually changes, so that is what is asked.
+	def width () -> float:
+		return panel.evaluate("""() => {
+			const on = document.querySelectorAll('[data-join="stack/one>grid"] path.cable');
 
-	assert live.count() == 0, "a line was bright with nothing touched"
+			if (on.length !== 1) throw new Error(`${on.length} cables, not one`);
+
+			return parseFloat(getComputedStyle(on[0]).strokeWidth);
+		}""")
+
+	rest = width()
 
 	grip = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
 
 	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
 	panel.mouse.down()
 
-	assert live.count() == 1, "the pattern was held and its line stayed faint"
+	held = width()
 
 	panel.mouse.up()
 
-	assert live.count() == 0, "the line stayed bright after the hand left"
+	assert held > rest, (
+		f"the pattern was held and its line stayed faint: {held} against {rest}")
+	assert width() == rest, "the line stayed bright after the hand left"
 
 
 def test_a_contribution_appears_wherever_the_pattern_it_builds_does (
