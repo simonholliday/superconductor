@@ -3155,10 +3155,86 @@ def test_a_line_joins_each_contribution_to_the_pattern_it_feeds (
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
+	# **One sheet, because a line is two elements now** (#2415): the cable's path
+	# is drawn behind every block and its fittings in front, from one
+	# measurement, so counting both sheets counts every line twice.
 	drawn = panel.eval_on_selector_all(
-		".joins .join", "els => els.map((one) => one.dataset.join)")
+		".joins.under .join", "els => els.map((one) => one.dataset.join)")
 
 	assert sorted(drawn) == ["stack/one>grid", "stack/two>grid"]
+
+
+def test_a_cable_runs_behind_the_blocks_and_its_fittings_stand_in_front (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2415, reported by Simon: a window raised by a drag still had cables over it.
+
+	It was simpler than the z-index he suspected — the overlay sat above *every*
+	block all the time, and a block's own depth is its position in the stacking
+	order, a single digit, so no raise could ever climb over it.
+
+	**A lead runs behind a panel**, which is both what he asked for and what
+	makes a busy page readable. But the whole overlay cannot sink: **every plug,
+	collar, socket and hole sits over the block it attaches to** — measured, all
+	eight on the rig's Notes page — so sinking them takes away the fitting a
+	finger grabs and the only mark saying where a cable lands. Re-patching and
+	unplugging both go through those.
+
+	So it is #2107's own line drawn once more: what can be touched is in front,
+	what is only drawn is behind.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+	_joins_settled(panel)
+
+	depths = panel.evaluate("""() => {
+		const depth = (el) => Number(getComputedStyle(el).zIndex) || 0;
+
+		return {
+			blocks: [...document.querySelectorAll('.part')].map(depth),
+			under: depth(document.querySelector('.joins.under')),
+			over: depth(document.querySelector('.joins.over')),
+		};
+	}""")
+
+	assert depths["under"] < min(depths["blocks"]), "a cable was drawn over a block"
+	assert depths["over"] > max(depths["blocks"]), "a fitting was drawn under a block"
+
+
+def test_a_fitting_is_the_topmost_thing_at_its_own_centre (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The half of #2415 that would break silently.
+
+	Sinking the cable is the visible change; taking its fittings down with it is
+	the one nobody would notice until they tried to pull a lead out, because a
+	*new* patch starts at the block's own outlet button and would go on working.
+	Asked of the page rather than of the stylesheet, so a rule added anywhere
+	that covered them would fail here.
+	"""
+
+	# **The fixture's own stack, not `_two_generators`.** That helper replaces the
+	# stack with two euclideans and takes the patched layer away with it — a
+	# wired route has no fittings at all, so this would find nothing and pass by
+	# asserting about an empty list. It has caught three tests out before.
+	_open_the_stack(panel)
+	_joins_settled(panel)
+
+	reachable = panel.evaluate("""() => {
+		const out = [];
+
+		for (const c of document.querySelectorAll('.joins.over circle')) {
+			const box = c.getBoundingClientRect();
+			const top = document.elementFromPoint(
+				box.left + box.width / 2, box.top + box.height / 2);
+
+			out.push(top ? top.tagName.toLowerCase() : "nothing");
+		}
+
+		return out;
+	}""")
+
+	assert reachable, "no fittings were drawn at all"
+	assert set(reachable) == {"circle"}, f"a block covered a fitting: {reachable}"
 
 
 def test_a_line_runs_between_the_two_nearest_sides (
@@ -3226,7 +3302,9 @@ def test_a_line_brightens_while_a_hand_is_on_either_end (
 	_open_the_stack(panel)
 	_two_generators(panel, fake_app)
 
-	live = panel.locator('[data-join="stack/one>grid"].live')
+	# The back sheet alone: the same line is on both, and what is being counted
+	# here is lines rather than elements.
+	live = panel.locator('.joins.under [data-join="stack/one>grid"].live')
 
 	assert live.count() == 0, "a line was bright with nothing touched"
 
@@ -4047,8 +4125,11 @@ def test_the_two_kinds_of_connection_are_drawn_as_two_things (
 	_open_the_stack(panel)
 	_settled(panel)
 
-	wired = panel.locator(".join.wired")
-	patched = panel.locator(".join.patched")
+	# **A line is two elements now** (#2415): its path is drawn behind every
+	# block and its fittings in front, so each of these looks at the sheet its
+	# own subject is on.
+	wired = panel.locator(".joins.under .join.wired")
+	patched = panel.locator(".joins.over .join.patched")
 
 	assert wired.count() >= 1, "no generator is drawn as wired to what it builds"
 	assert patched.count() >= 1, "the note set is not drawn as patched into anything"
@@ -4062,14 +4143,18 @@ def test_the_two_kinds_of_connection_are_drawn_as_two_things (
 	# says which is which.
 	assert patched.first.locator("circle.plug").count() == 1, "a cable has no plug"
 	assert patched.first.locator("circle.socket").count() == 1, "a cable has no socket"
-	assert wired.first.locator("circle, rect").count() == 0, \
+	# **Asked of the front sheet, where a fitting would be if there were one.**
+	# `wired` above is the back sheet, which carries paths and nothing else — so
+	# asking it would pass against any build and assert nothing at all.
+	assert panel.locator(".joins.over .join.wired").locator("circle, rect").count() == 0, \
 		"a fixed route drew a fitting, and there is nothing to unplug"
 
 	# Both hang.  **Colour cannot carry this on its own** and that is measured:
 	# `--on` and `--ink-quiet` sit 1.09 apart in Phaedra, so a rule resting on
 	# luminance would be no rule at all in one of the eleven themes.
 	for kind, one in (("patched", patched), ("wired", wired)):
-		assert "C" in (one.first.locator("path.cable").get_attribute("d") or ""), \
+		assert "C" in (panel.locator(f".joins.under .join.{kind}").first
+		               .locator("path.cable").get_attribute("d") or ""), \
 			f"a {kind} line is drawn straight rather than hanging"
 
 
@@ -4090,7 +4175,7 @@ def test_a_note_cable_ends_level_with_the_input_it_feeds (panel: typing.Any) -> 
 	_settled(panel)
 
 	level = panel.evaluate("""() => {
-		const socket = document.querySelector('.join.patched circle.socket');
+		const socket = document.querySelector('.joins.over .join.patched circle.socket');
 		const row = document.querySelector(
 			'.part[data-part="stack/two"] [data-row="pitches"]');
 
@@ -4181,7 +4266,7 @@ def test_a_note_cable_pulled_out_and_let_go_empties_the_pool (
 	_open_the_stack(panel)
 	_settled(panel)
 
-	socket = panel.locator(".join.patched circle.socket").first
+	socket = panel.locator(".joins.over .join.patched circle.socket").first
 	socket.scroll_into_view_if_needed()
 	at = socket.bounding_box()
 
@@ -4298,7 +4383,7 @@ def test_a_route_is_a_line_and_nothing_else (
 	_route(panel, fake_app)
 
 	drawn = panel.eval_on_selector_all(
-		".joins .join", "els => els.map((one) => one.dataset.join)")
+		".joins.under .join", "els => els.map((one) => one.dataset.join)")
 
 	assert drawn == ["second>grid"], f"a route drew {drawn}"
 
@@ -4418,11 +4503,11 @@ def test_only_a_control_on_the_overlay_takes_a_tap (
 
 		return {
 			overlay: getComputedStyle(document.querySelector(".joins")).pointerEvents,
-			cables: parts(".join .cable"),
+			cables: parts(".joins.under .join .cable"),
 			lugs: parts(".join .lug"),
-			fittings: parts(".join.patched .collar, .join.patched .socket"),
-			inners: parts(".join .plug, .join .hole"),
-			switches: parts(".join.switchable .node"),
+			fittings: parts(".joins.over .join.patched .collar, .joins.over .join.patched .socket"),
+			inners: parts(".joins.over .join .plug, .joins.over .join .hole"),
+			switches: parts(".joins.over .join.switchable .node"),
 		};
 	}""")
 
@@ -4446,7 +4531,7 @@ def test_only_a_control_on_the_overlay_takes_a_tap (
 		const row = parseFloat(
 			getComputedStyle(document.documentElement).getPropertyValue("--row"));
 
-		return [...document.querySelectorAll(".join.patched")].map((one) => {
+		return [...document.querySelectorAll(".joins.over .join.patched")].map((one) => {
 			const fitting = one.querySelector(".socket");
 			const box = fitting.getBoundingClientRect();
 
@@ -5534,7 +5619,7 @@ def test_a_switch_lives_with_the_thing_it_switches (
 	_settled(panel)
 
 	# A route has no window, so its switch is the one on its line.
-	assert panel.locator('[data-join="second>grid"].switchable').count() == 1
+	assert panel.locator('.joins.over [data-join="second>grid"].switchable').count() == 1
 	assert panel.locator('[data-join="second>grid"] circle.node').count() == 1
 
 

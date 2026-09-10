@@ -2554,7 +2554,10 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 	const place = {
 		left: `${(at ? at.x : 0) * pitch}px`,
 		top: `${(at ? at.y : 0) * pitch}px`,
-		zIndex: depth,
+		/* **From one, so the sheet of cables behind them can sit at zero** — the
+		   overlay is later in the document, so a block sharing its number would
+		   lose the tie. The order between blocks is unchanged. */
+		zIndex: depth + 1,
 	};
 
 
@@ -3065,11 +3068,33 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 		}),
 		{ x: 0, y: 0 });
 
-	return html`
+	/* **A lead runs behind the panels, and its fittings stand proud of them.**
+	 *
+	 * The overlay used to be one sheet above every block, so a cable crossed the
+	 * face of anything in its way — and a block raised by a drag could not get
+	 * out from under it, because a block's `z-index` is its position in the
+	 * stacking order, a single digit, and this was 500. Simon read it as the
+	 * dragged window failing to bring its cables with it; it was simpler than
+	 * that, and true of every block all the time.
+	 *
+	 * **Drawn twice from one measurement.** The paths go behind every block,
+	 * which is what a lead does on a real panel and what makes a busy page
+	 * readable. The fittings do not: **every plug, collar, socket and hole sits
+	 * over the block it attaches to** — measured, all eight of them on the Notes
+	 * page — so sinking them would hide the very things a finger takes hold of,
+	 * and hide where a cable lands.
+	 *
+	 * That is #2107's own line drawn in a third place: **what can be touched is
+	 * in front, what is only drawn is behind.** The cable in flight is in front
+	 * too, because a hand is on it.
+	 *
+	 * One geometry pass, two sheets, and CSS says which parts each one shows —
+	 * rather than two components that could disagree about where a line goes. */
+	const sheet = (which) => html`
 		${/* Room for whatever reaches past the two points measured above: a
 		     cable's sag hangs below the lower of its two ends, and a jack is
 		     centred on an endpoint and so spills by its own radius. */ ""}
-		<svg class="joins"
+		<svg class=${`joins ${which}`}
 			width=${Math.ceil(Math.max(extent.x, patching ? patching.at.x : 0) + jack) + 1}
 			height=${Math.ceil(
 				Math.max(extent.y, patching ? patching.at.y : 0) + jack + SAG_CEILING) + 1}>
@@ -3077,7 +3102,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 			     wherever the finger is. Not a join yet — nothing has been asked
 			     of the app — so it carries the ring's colour, which is what this
 			     surface uses for a request that has not landed (#2046). */ ""}
-			${patching && (() => {
+			${which === "over" && patching && (() => {
 				const span = Math.hypot(patching.at.x - patching.a.x, patching.at.y - patching.a.y);
 				const dip = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
 				const reach = (patching.at.x - patching.a.x) * 0.25;
@@ -3163,8 +3188,13 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 							+ `${holdable ? "holdable " : ""}`
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
+						${/* On both sheets, because it addresses the *line* and each
+						     sheet holds half of one: `[data-join=X] .cable` finds the
+						     path on the back sheet and `[data-join=X] .socket` the
+						     fitting on the front, which is what a reader of either
+						     wants. */ ""}
 						data-join=${`${line.from}>${line.to}`}>
-						<path class="cable" d=${cable} />
+						${which === "under" ? html`<path class="cable" d=${cable} />` : null}
 						${/* **A fixed route ends in nothing**, which is the whole of
 						     how it says it cannot be moved.  A patched cable is
 						     plugged in at both ends — a plug at the source and a
@@ -3179,7 +3209,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 						     lugs also said nothing about direction, being identical
 						     at both ends — the block titles carry that
 						     (`arpeggio 6 · Minitaur — bass`), so nothing is lost. */ ""}
-						${line.wired ? null : html`
+						${which === "under" || line.wired ? null : html`
 							${/* **A fitting you can take hold of is a target, so it
 							     is a row across** — #2107, and size following
 							     touchability is the same rule from the other side. */ ""}
@@ -3210,7 +3240,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 						     disc means "this is a control" and its absence means
 						     "this is a mark". A generator's line is a mark: its
 						     switch lives in its own block (#2107). */ ""}
-						${flip && html`
+						${which === "over" && flip && html`
 							<circle
 								class="node" cx=${middle.x} cy=${middle.y}
 								r=${controlRow(cell) / 2}
@@ -3218,6 +3248,8 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 					</g>`;
 			})}
 		</svg>`;
+
+	return html`${sheet("under")}${sheet("over")}`;
 }
 
 

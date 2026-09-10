@@ -3178,11 +3178,34 @@ html, body {
 	pointer-events: none;
 	overflow: visible;
 
-	/* Above every block, below everything that opens over them. Both are inside
-	   the lattice's own stacking context, so this is a comparison with the
-	   blocks alone rather than with the whole page. */
+	/* Both are inside the lattice's own stacking context, so these numbers are a
+	   comparison with the blocks alone rather than with the whole page. */
+}
+
+/* **The cables, behind every block.** A lead runs behind a panel, and a page
+   with three generators converging on one grid is unreadable if every one of
+   them is painted across whatever it crosses. A block starts at 1 so this can
+   sit at 0 and still lose to it — the overlay is later in the document, and a
+   tie goes to the later element. */
+.joins.under {
+	z-index: 0;
+}
+
+/* **The fittings, in front of every block**, because every one of them sits over
+   the block it attaches to — measured, all eight on the Notes page. Sunk with
+   the cable they would take the plug a finger grabs and the socket it drops on
+   down with them, and with it the only mark saying where a cable lands.
+
+   #2107's line in a third place: what can be touched is in front, what is only
+   drawn is behind. */
+.joins.over {
 	z-index: 500;
 }
+
+/* Nothing is hidden by either sheet: each draws only what belongs on it, so a
+   cable path exists once and a fitting exists once. The cable in flight is the
+   hand's own gesture and is drawn whole on the front sheet, because a hand is
+   on it. */
 
 /* --- A cable, because that is what this is --------------------------------
  *
