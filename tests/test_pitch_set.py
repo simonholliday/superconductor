@@ -119,6 +119,52 @@ def test_folding_moves_the_whole_set_rather_than_each_note () -> None:
 	assert [note - notes[0] for note in notes] == [0, 4, 7], "a major triad, still"
 
 
+def test_a_set_moves_to_the_nearest_register_that_holds_it () -> None:
+	"""**Not to the middle of the instrument**, which is what it did first.
+
+	Simon, 2026-09-10, patching C3 E3 G3 C4 into a Minitaur and reading its grid:
+	*"my piano notes item lists C3, E3, G3, C4 — but the instrument pattern shows
+	C1, E1, G1, C2."*  Two octaves down, when one octave down fits perfectly.
+
+	Centring the set on the instrument's range moves it further than it needs to
+	go, and the cost is not abstract: the Matriarch plays the same set unmoved,
+	so the two instruments came out two octaves apart when a person patching one
+	set to both is saying *these both play this*.
+
+	**And the tie was broken by arithmetic rather than by taste.**  At this set
+	the shift works out to `round(-1.5)`, and Python rounds a half to *even* — so
+	it went to two octaves rather than one because -2 is even, which is not a
+	musical reason for anything.
+	"""
+
+	folded = _stack(BASS, _set())._folded([48, 52, 55, 60])
+
+	assert folded == ["C2", "E2", "G2", "C3"]
+
+
+def test_a_set_already_within_reach_is_not_moved_at_all () -> None:
+	"""The nearest register that holds it is the one it is already in."""
+
+	assert _stack(BASS, _set())._folded([36, 40, 43]) == ["C2", "E2", "G2"]
+
+
+def test_the_same_set_reaches_two_instruments_an_octave_apart_not_three () -> None:
+	"""What the whole feature is for, read as one sentence.
+
+	One set of notes, patched to a bass that stops where a lead starts.  Neither
+	is silent, both keep the chord's shape, and they sit as close together as the
+	two instruments allow — which is the answer to *these both play this*.
+	"""
+
+	chosen = [48, 52, 55, 60]
+
+	bass = [BASS[one] for one in _stack(BASS, _set())._folded(chosen)]
+	lead = [LEAD[one] for one in _stack(LEAD, _set())._folded(chosen)]
+
+	assert lead == chosen, "the lead reaches these already and should not move"
+	assert [note + 12 for note in bass] == lead, "one octave apart, not two"
+
+
 def test_a_note_the_shift_leaves_out_of_range_is_folded_in_rather_than_dropped () -> None:
 	"""A set wider than the instrument cannot keep its shape, and sounding beats silence."""
 

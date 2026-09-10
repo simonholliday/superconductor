@@ -2684,11 +2684,40 @@ class Recipe (Control):
 		reach = sorted(self.pitch_notes.values())
 		lowest, highest = reach[0], reach[-1]
 
-		# One shift for the set, chosen so its middle sits nearest the middle of
-		# what this instrument reaches.  Octaves only: anything else would change
-		# the notes rather than move them.
+		# **The nearest register that holds the whole set, not the middle of the
+		# instrument** (Simon, 2026-09-10).  Octaves only: anything else would
+		# change the notes rather than move them.
+		#
+		# Centring on the instrument's range was the first rule and moves a set
+		# further than it needs to go.  C3 E3 G3 C4 patched to a Minitaur came
+		# out as **C1 E1 G1 C2** when C2 E2 G2 C3 fits perfectly — two octaves
+		# where one would do, and two octaves away from the Matriarch playing the
+		# same set unmoved, when a person patching one set to two instruments is
+		# saying *both of these play this*.
+		#
+		# It was worse than a bad rule: at that exact set the arithmetic is
+		# `round(-1.5)`, and Python rounds a half to **even**, so the tie broke
+		# away from the octave a musician would have picked rather than towards
+		# it.  A tie decided by the parity of the answer is not a decision.
+		#
+		# So: every whole-octave shift that fits, nearest to where the notes were
+		# actually chosen.  A tie — a narrow set in a wide instrument, which can
+		# sit an octave either way — goes to whichever leaves the set nearer the
+		# middle of what the instrument reaches, because at that point there is
+		# nothing else to prefer.
 		middle = (min(notes) + max(notes)) / 2
-		shift = round(((lowest + highest) / 2 - middle) / 12) * 12
+		centre = (lowest + highest) / 2
+
+		fits = [shift for shift in range(-120, 121, 12)
+		        if all(lowest <= note + shift <= highest for note in notes)]
+
+		if fits:
+			shift = min(fits, key=lambda by: (abs(by), abs(middle + by - centre)))
+		else:
+			# **A set wider than the instrument cannot keep its shape**, so there
+			# is no register that holds it and the old rule is the right one:
+			# centre it, and fold the stragglers below.  Sounding beats silence.
+			shift = round((centre - middle) / 12) * 12
 
 		by_note = {note: named for named, note in self.pitch_notes.items()}
 		folded: list[str] = []
