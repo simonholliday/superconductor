@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.26.0"
+CONTRACT_VERSION = "1.27.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -266,6 +266,15 @@ know — which is why this is a minor number, on 1.1.0's precedent.  **It is
 `stalled` and not `failed` because the glass already has a `failed`**, meaning a
 set the app refused: two concepts must not share a word at a layer where both
 readings are plausible (#2403).
+
+1.27.0 adds ``duplicated`` to ``manifest``: the app names that more than one
+connection is currently using, and how many (#2133).  A panel too old for it
+ignores a key it does not know.  **An app name is unique by design** — Simon,
+2026-09-10: more than one Substation or Subsample is wanted, more than one
+Subsequence is not, and an app that wants two of itself declares two names.  So
+this is not a refusal and never becomes one; it says on the glass that a name is
+being shared, because the harm of an accidental second copy is outside the
+service entirely and only a person can end it.
 """
 
 PARAMETER_KINDS = ("switch", "number", "choice", "range", "choices", "action")
@@ -512,7 +521,8 @@ def declare (app: str, controls: Frame, state: Frame, version: int,
 	}
 
 
-def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = None) -> Frame:
+def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = None,
+              duplicated: dict[str, int] | None = None) -> Frame:
 	"""What the panel should draw: every dialled-in app and the controls it offers.
 
 	Sent again whenever an app arrives or goes, so a panel that was already
@@ -523,10 +533,19 @@ def manifest (apps: dict[str, Frame], page: Frame, pages: list[Frame] | None = N
 	that declared it.  The service assembles the list and owns none of it: a
 	page set belongs to the composition that sent it, and is never read from
 	disk here (#2075).
+
+	``duplicated`` names each app that more than one connection is using right
+	now, and how many there are (#2133).  **It is a live fact rather than a
+	record of one**: it appears when a second connection declares a name that is
+	already taken and goes when that connection closes, so killing the stray copy
+	clears it and nobody has to dismiss anything.  Carried on the manifest
+	because this is the frame a panel is handed when it joins, and somebody who
+	was not watching at the moment it happened is exactly who needs telling.
 	"""
 
 	return {"t": "manifest", "contract": CONTRACT_VERSION, "apps": apps,
-	        "page": page, "pages": pages or []}
+	        "page": page, "pages": pages or [],
+	        **({"duplicated": duplicated} if duplicated else {})}
 
 
 def layout (app: str, page: str, parts: list[Frame], client: str, seq: int) -> Frame:

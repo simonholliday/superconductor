@@ -287,6 +287,104 @@ async def test_a_reconnecting_app_is_not_erased_by_its_own_old_socket () -> None
 
 
 @_on_a_loop_of_its_own
+async def test_two_connections_under_one_name_are_said_on_the_glass () -> None:
+	"""#2133, and the harm is outside this service entirely.
+
+	The displaced copy goes on running and goes on playing MIDI — the service is
+	not in the audio path and cannot stop it — so the only remedy is a person
+	noticing and killing the stray. On 2026-09-10 two compositions ran for
+	seventeen minutes, the replacement was logged four times, correctly, and
+	nobody read the log.
+
+	**Not a refusal, and never becomes one.** An app that has crashed and
+	reconnected is the authority on its own state, and telling that apart from a
+	second copy needs a round trip nobody has asked for. An app name is unique by
+	design — Simon, 2026-09-10 — and an app that wants two of itself declares two
+	names, which `AppLink` already allows.
+	"""
+
+	hub, first, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
+
+	assert "duplicated" not in glass.of_kind("manifest")[-1], "one app is not a duplicate"
+
+	second = superconductor.hub.AppLink(
+		name="subsequence", send=Recorder().send, controls=CONTROLS, state={})
+
+	await hub.app_declared(second)
+
+	assert glass.of_kind("manifest")[-1]["duplicated"] == {"subsequence": 2}
+
+	# And it goes when the extra copy does, so nobody has to dismiss anything.
+	await hub.app_left(first)
+
+	assert "duplicated" not in glass.of_kind("manifest")[-1]
+
+
+@_on_a_loop_of_its_own
+async def test_an_app_saying_its_controls_changed_is_not_a_second_copy () -> None:
+	"""A link is rebuilt on every declaration, including a second one down the
+	socket already held — which is how an app says its controls have changed.
+
+	Counting links rather than sockets would call that a duplicate and put a
+	warning on the bar every time a composition declared a new control. A warning
+	that fires when nothing is wrong stops being read, and this one has exactly
+	one job.
+	"""
+
+	hub = superconductor.hub.Hub(page={"name": "grid"})
+	socket = object()
+	glass = Recorder()
+
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
+
+	for _ in range(3):
+		await hub.app_declared(superconductor.hub.AppLink(
+			name="subsequence", send=Recorder().send, controls=CONTROLS,
+			state={}, connection=socket))
+
+	assert "duplicated" not in glass.of_kind("manifest")[-1]
+
+
+@_on_a_loop_of_its_own
+async def test_the_copy_still_connected_becomes_the_app_when_the_other_goes () -> None:
+	"""Otherwise the remedy for a duplicate blanks the glass half the time.
+
+	Registering by name and deleting by name means the *other* live copy is
+	stranded the moment the registered one closes: it believes it is connected
+	and will never declare again, so every control greys out and nothing
+	recovers. That is the failure `app_left` was already written to avoid,
+	reached from the other side.
+
+	It matters because of what the bar now says. Told that two copies are
+	connected, a person goes and kills one — and half the time that is the
+	registered one.
+	"""
+
+	hub, first, _ = await _hub_with_app()
+	glass = Recorder()
+
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=glass.send))
+
+	second = superconductor.hub.AppLink(
+		name="subsequence", send=Recorder().send, controls=CONTROLS, state={})
+
+	await hub.app_declared(second)
+
+	assert hub.apps["subsequence"] is second, "the newcomer is registered"
+
+	# The person kills the copy that happened to be the registered one.
+	await hub.app_left(second)
+
+	assert hub.apps.get("subsequence") is first, "the one still connected is the app now"
+	assert glass.of_kind("manifest")[-1]["apps"] != {}, "the glass was blanked"
+	assert not [one for one in glass.of_kind("app") if one["up"] is False], \
+		"the glass was told the app had gone while a copy was still connected"
+
+
+@_on_a_loop_of_its_own
 async def test_an_app_that_really_goes_away_still_goes_away () -> None:
 	"""The other half, so the guard above cannot be satisfied by never removing."""
 

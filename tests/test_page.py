@@ -2948,6 +2948,40 @@ def test_a_report_lands_on_the_layer_it_names_and_not_its_neighbour (
 	assert panel.locator('.part[data-part="stack/two"] .stalled').count() == 1
 
 
+def test_the_bar_says_when_two_copies_of_one_app_are_connected (
+	panel: typing.Any, fake_app: typing.Any, service_url: str) -> None:
+	"""#2133 on the glass, which is the only place the remedy can reach.
+
+	The displaced copy goes on running and goes on playing MIDI — the service is
+	not in the audio path and cannot stop it — so what ends a duplicate is a
+	person noticing and killing the stray. On 2026-09-10 two compositions ran for
+	seventeen minutes, the service logged the replacement four times, correctly,
+	and nobody read the log.
+
+	**It clears itself**, so there is nothing to dismiss: killing the extra copy
+	is what makes it false, and a gesture for acknowledging it would be a second
+	way to make the panel disagree with the world.
+	"""
+
+	assert panel.locator(".bar .doubled").count() == 0, "one app is not a duplicate"
+
+	second = conftest.FakeApp(service_url.replace("http://", "ws://") + "/ws/app")
+
+	try:
+		panel.wait_for_function(
+			"() => document.querySelectorAll('.bar .doubled').length === 1", timeout=5_000)
+
+		said = panel.locator(".bar .doubled").inner_text()
+
+		assert "2" in said and "subsequence" in said
+
+	finally:
+		second.stop()
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.bar .doubled').length === 0", timeout=5_000)
+
+
 def _joins_settled (panel: typing.Any) -> None:
 	"""Wait until the overlay has stopped re-measuring.
 

@@ -1791,6 +1791,21 @@ html, body {
 
 .bar .warn { color: var(--warn); }
 
+/* **Two copies of one app are connected** (#2133), which is the one thing on
+   this bar a person has to act on rather than merely read: the stray copy is
+   still playing MIDI and the service cannot stop it.
+   
+   So it is the only item here that is boxed. `--warn` alone is what a refusal
+   uses, and a refusal clears itself after four seconds — this stays until the
+   duplicate does, and something permanent in the same colour as something
+   transient reads as the transient one having got stuck. */
+.bar .doubled {
+	padding: 0.15rem 0.5rem;
+	border: 1px solid var(--warn);
+	border-radius: 6px;
+	white-space: nowrap;
+}
+
 /* The transport. Sized for a finger with no keyboard: nothing here is smaller
    than the grid's own cells, and the silence button is deliberately the
    largest thing on the page, because it is the one control wanted in a hurry. */

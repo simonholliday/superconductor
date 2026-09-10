@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.26.0";
+const CONTRACT = "1.27.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -3593,6 +3593,43 @@ function Build ({ service, stale }) {
 	return html`<span class="build">${name}${service.build && html` · ${service.build}`}</span>`;
 }
 
+/* **Two copies of one app are connected, and only a person can end it** (#2133).
+ *
+ * The service files an app under the name it declares, and a second connection
+ * using that name replaces the first. That replacement is deliberate and stays:
+ * an app that has crashed and reconnected is the authority on its own state, and
+ * refusing it would need the service to tell a restart from a duplicate, which
+ * it cannot do without asking a question nobody has asked for.
+ *
+ * **An app name is unique by design** — Simon, 2026-09-10: more than one
+ * Substation or Subsample is wanted, more than one Subsequence is not, and an
+ * app that wants two of itself declares two names. `AppLink` already takes the
+ * name as an ordinary argument, so that costs nothing and needs no field.
+ *
+ * So the remedy is telling somebody. The displaced copy goes on running and goes
+ * on playing MIDI — **the service is not in the audio path and cannot stop it**
+ * — so what is left is a person noticing and killing the stray. This is the
+ * noticing. On 2026-09-10 two compositions ran for seventeen minutes, the
+ * service logged the replacement four times, correctly, and nobody read the log;
+ * that hour is what this line is for.
+ *
+ * It says the count rather than a verdict, because the service does not have
+ * one: a composition that crashed leaves a socket that can take minutes of TCP
+ * keepalive to close, so a restart reads as two for a while. Saying *two are
+ * connected* is true in both cases. */
+function Doubled ({ duplicated }) {
+	const names = Object.keys(duplicated || {});
+
+	if (!names.length) return null;
+
+	return html`
+		${names.map((name) => html`
+			<span class="warn doubled" key=${name}>
+				${duplicated[name]} copies of ${name} are connected
+			</span>`)}`;
+}
+
+
 /* ------------------------------------------------------------------ */
 /* How big a cell is                                                   */
 /* ------------------------------------------------------------------ */
@@ -4236,6 +4273,11 @@ function Panel () {
 	const [notice, setNotice] = useState(null);
 	const [service, setService] = useState(null);
 	const [pages, setPages] = useState([]);
+
+	/* Which app names more than one connection is using (#2133). A live fact
+	   the service works out and re-sends whenever it changes, so nothing here
+	   has to be dismissed: killing the stray copy clears it. */
+	const [duplicated, setDuplicated] = useState({});
 	const [chosen, setChosen] = useState(rememberedPage);
 	const [locked, setLocked] = useState(rememberedLock);
 	const [dragging, setDragging] = useState(false);
@@ -4348,6 +4390,7 @@ function Panel () {
 
 					setApps((was) => ({ ...was, ...listed }));
 					setPages(frame.pages || []);
+					setDuplicated(frame.duplicated || {});
 					setPresent((was) => {
 						const now = {};
 						for (const name of new Set([...Object.keys(was), ...Object.keys(listed)])) {
@@ -5601,6 +5644,7 @@ function Panel () {
 			<div class="bar">
 				<span class="spacer"></span>
 				<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
+				<${Doubled} duplicated=${duplicated} />
 				<span class=${`lamp ${status === "up" ? "up" : ""}`}>${status === "up" ? "connected" : "offline"}</span>
 				<${Build} service=${service} stale=${stale} />
 			<${Trip} trips=${trips} />
@@ -5632,6 +5676,7 @@ function Panel () {
 					drawn.map((one) => [one.key, one.title]))}
 					onRaise=${(who) => rearrange(who, null)} />`}
 			<span class="spacer"></span>
+			<${Doubled} duplicated=${duplicated} />
 			${notice && html`<span class="warn">${notice}</span>`}
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
 			<${Sizes} cell=${size.cell} choice=${size.choice} onChoose=${size.choose} />

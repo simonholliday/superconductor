@@ -24,9 +24,17 @@ Sender = typing.Callable[[superconductor.protocol.Frame], typing.Awaitable[None]
 """How the hub writes one frame to one socket, whatever is on the other end."""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class AppLink:
-	"""One music app, and the state it last told us it holds."""
+	"""One music app, and the state it last told us it holds.
+
+	**Compared by identity, deliberately, exactly as `PanelLink` is** — and for
+	the same reason, which `app_left` has relied on since it was written: two
+	links may carry the same name and what has to be removed is *this socket's*
+	registration rather than one that merely looks like it.  A generated
+	`__eq__` would also make a link unhashable, and #2133 counts open sockets in
+	a set.
+	"""
 
 	name: str
 	send: Sender
@@ -68,6 +76,25 @@ class AppLink:
 	"""
 
 
+def _socket_of (app: AppLink) -> typing.Any:
+	"""Something that stands for one socket and can go in a set.
+
+	The token where there is one, and the link itself where there is not — which
+	is the same fallback `app_declared` makes when it decides whether a
+	declaration replaced anything.  The two have to agree, or the count of open
+	sockets and the decision that one replaced another would disagree about what
+	a second connection is.
+
+	**Only a caller that gives no token reaches the fallback**, and the service
+	always gives one; it is the tests and any future caller that rely on it.
+	Without a token every declaration looks like its own socket, so a
+	re-declaration would read as a second connection — which is the cry-wolf
+	case `connection` was added to stop.
+	"""
+
+	return app.connection if app.connection is not None else app
+
+
 @dataclasses.dataclass(eq=False)
 class PanelLink:
 	"""One browser on the glass.
@@ -94,6 +121,24 @@ class Hub:
 		self.apps: dict[str, AppLink] = {}
 		self.panels: list[PanelLink] = []
 
+		self._sockets: dict[str, dict[typing.Any, AppLink]] = {}
+		"""Every open app socket, by the name it declared itself under (#2133).
+
+		**`self.apps` cannot answer this**, because it holds one link per name by
+		design — the replacement below is deliberate and stays.  This is the
+		other question: *how many connections are using that name right now*, and
+		it is what says a second copy is running rather than that one restarted.
+
+		Keyed by the per-socket token rather than by the link, because a link is
+		rebuilt on every declaration including a second one down the socket
+		already held.  Counting links would call an ordinary re-declaration a
+		duplicate.
+
+		The link is kept as the value rather than thrown away, because when the
+		registered copy leaves and another is still connected, that one is the
+		app now and has to be put back — see `app_left`.
+		"""
+
 	async def panel_joined (self, panel: PanelLink) -> None:
 		"""Take a panel's greeting and send it everything it needs to draw.
 
@@ -104,7 +149,8 @@ class Hub:
 
 		self.panels.append(panel)
 
-		await panel.send(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
+		await panel.send(superconductor.protocol.manifest(
+			self._declarations(), self.page, self._pages(), self.duplicated()))
 
 		for app in self.apps.values():
 			await panel.send(superconductor.protocol.snapshot(app.name, app.state, app.version))
@@ -145,6 +191,8 @@ class Hub:
 		one, and nothing anywhere saying why — is at least answerable.
 		"""
 
+		self._sockets.setdefault(app.name, {})[_socket_of(app)] = app
+
 		standing = self.apps.get(app.name)
 		elsewhere = standing is not None and (
 			standing.connection is not app.connection if app.connection is not None
@@ -159,7 +207,8 @@ class Hub:
 
 		self.apps[app.name] = app
 
-		await self.to_panels(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
+		await self.to_panels(superconductor.protocol.manifest(
+			self._declarations(), self.page, self._pages(), self.duplicated()))
 		await self.to_panels(superconductor.protocol.app_presence(app.name, True))
 		await self.to_panels(superconductor.protocol.snapshot(app.name, app.state, app.version))
 
@@ -181,16 +230,96 @@ class Hub:
 		the other kind of link.
 		"""
 
+		# **Forgotten here, above the check, because a socket closing is a socket
+		# closing whether or not this link is the one registered** (#2133).  The
+		# displaced copy is exactly the one that returns early below, and it is
+		# also the one whose closing is the good news: killing a stray second
+		# composition is what ends the duplicate, so a panel told about it has to
+		# be told when it stops.
+		was = self.duplicated()
+		open_now = self._sockets.get(app.name)
+
+		if open_now is not None:
+			open_now.pop(_socket_of(app), None)
+
+			if not open_now:
+				del self._sockets[app.name]
+
 		if self.apps.get(app.name) is not app:
 			LOG.debug("app %r closed a socket that had already been replaced", app.name)
+
+			# Nothing about what a panel draws has changed except this, and it
+			# has: two copies were connected and now one is.
+			if self.duplicated() != was:
+				await self.to_panels(superconductor.protocol.manifest(
+					self._declarations(), self.page, self._pages(), self.duplicated()))
+
 			return
 
 		del self.apps[app.name]
 
-		await self.to_panels(superconductor.protocol.manifest(self._declarations(), self.page, self._pages()))
+		# **A copy that is still connected is the app now, and has to be put
+		# back** (#2133).  Registering by name and deleting by name means the
+		# *other* live copy is stranded the moment the registered one goes: it
+		# believes it is connected and will never declare again, so every control
+		# greys out and nothing recovers — which is the failure this method's
+		# docstring already describes, reached from the other side.
+		#
+		# It matters because of what the bar now says.  Told that two copies are
+		# connected, a person goes and kills one, and half the time that is this
+		# one — so without this, the remedy for a duplicate would blank the glass
+		# and the composition would play on unreachable.
+		#
+		# **Promoting a corpse is possible and self-correcting.**  If the
+		# survivor is a socket that has died without being noticed, its close
+		# brings us back here and the app is removed properly then.  A wrong
+		# answer that heals beats a blank panel that does not.
+		survivor = self._survivor(app.name)
+
+		if survivor is not None:
+			self.apps[app.name] = survivor
+
+			LOG.warning(
+				"app %r closed, and another copy from %s is still connected —"
+				" it is the app now (#2133)",
+				app.name, survivor.origin)
+
+			await self.to_panels(superconductor.protocol.manifest(
+				self._declarations(), self.page, self._pages(), self.duplicated()))
+
+			return
+
+		await self.to_panels(superconductor.protocol.manifest(
+			self._declarations(), self.page, self._pages(), self.duplicated()))
 		await self.to_panels(superconductor.protocol.app_presence(app.name, False))
 
 		LOG.info("app %r disconnected", app.name)
+
+	def duplicated (self) -> dict[str, int]:
+		"""Which app names more than one connection is using, and how many.
+
+		**A live fact and not a record of one.**  It becomes true when a second
+		connection declares a name that is already taken and false again when
+		that connection closes, so killing the stray copy clears it without
+		anybody dismissing anything.
+
+		**It does not claim the older connection is healthy.**  A composition
+		that crashed leaves a socket the service can take minutes of TCP
+		keepalive to notice, so a restart can read as two for a while.  That is
+		the honest answer available here — telling the two apart needs a round
+		trip nobody has asked for — and it errs towards saying something, which
+		is the right way round for a fault whose only remedy is a person.
+		"""
+
+		return {name: len(open_now) for name, open_now in sorted(self._sockets.items())
+		        if len(open_now) > 1}
+
+	def _survivor (self, name: str) -> AppLink | None:
+		"""The most recently declared connection still open under this name."""
+
+		open_now = self._sockets.get(name) or {}
+
+		return max(open_now.values(), key=lambda one: one.since, default=None)
 
 	def _declarations (self) -> dict[str, dict[str, typing.Any]]:
 		"""What every connected app says it can be controlled by.
