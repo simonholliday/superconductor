@@ -295,15 +295,20 @@ function controlRow (cell) {
 	return cell;
 }
 
-const GRID_KINDS = ["step_grid", "note_grid"];
-/* The kinds whose state is rows, and which therefore address all of it at once
-   as `control/rows`. Shape alone cannot tell that path from a params field or a
-   transport field called `rows`, so the kind is asked for — the same reason the
-   recipe branch beside it asks. */
-
 const GRIDS = ["step_grid", "note_grid"];
-/* The kinds that draw a pattern of rows against steps. A rack is not one: it
-   makes them, and declares a `rows` of its own meaning something else. */
+/* The two kinds that draw a pattern of rows against steps, which is the same set
+   for both questions asked of it and used to be written out twice.
+
+   They are what a page draws as a grid — a rack is not one: it *makes* them, and
+   declares a `rows` of its own meaning something else. And they are the kinds
+   whose state is rows, and which therefore address all of it at once as
+   `control/rows`; shape alone cannot tell that path from a params field or a
+   transport field called `rows`, so the kind is asked for, the same reason the
+   recipe branch beside it asks.
+
+   Checked against `protocol.CONTROL_KINDS` by `tests/test_client.py`, because a
+   kind added in Python and not here is a control the panel quietly stops
+   drawing (#2420). */
 
 const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids", "pitch_set"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
@@ -4506,7 +4511,7 @@ function Panel () {
 								app[control] = grid;
 							}
 						} else if (rest.length === 1 && rest[0] === "rows"
-							&& declared && GRID_KINDS.includes(declared.type)) {
+							&& declared && GRIDS.includes(declared.type)) {
 							/* **The whole grid at once**, which is how a clear
 							   travels and how a pattern could later be pasted
 							   in. `rows` is a pseudo-key: it does not name

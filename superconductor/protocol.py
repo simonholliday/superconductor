@@ -352,6 +352,34 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 	        and field["default"] is None)
 
 
+CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
+                 "transport", "grids", "pitch_set")
+"""Every kind of control there is, in the words the wire uses.
+
+**It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to
+get here than that did.  `subsequence_adapter` never imports `controls`, so the
+half that *declares* a kind and the half that *keeps* one had no word in common:
+the adapter carried each name as a bare literal and the service carried a tuple,
+and nothing tied the two.  An eighth kind added on one side went red nowhere.
+
+What each kind *means to the service* is documented in `controls.py`, beside the
+branch that keeps it.  This is only the vocabulary — the list both halves and the
+client have to agree on, and which `tests/test_client.py` now checks across all
+three.
+"""
+
+LAYER_KINDS = ("generator", "route", "transform")
+"""What a layer of a stack may be.
+
+``route`` was named before it existed, so that adding it would be an addition
+rather than a rewrite.  It was.  ``transform`` followed the same way (#2246).
+
+**A layer names its function in a different field for each kind** — `generator`,
+`source`, `transform` — which is what tells them apart on the wire and what lets
+a panel too old for a kind draw nothing rather than drawing it wrongly.
+"""
+
+
 PATCHED = "from"
 """The key that makes a parameter's value a reference rather than a literal.
 

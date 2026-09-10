@@ -116,11 +116,12 @@ too old to know the kind finds no ``generator`` on it and draws nothing, rather
 than drawing it as something it is not.
 """
 
-CONTRIBUTIONS = (GENERATOR, ROUTE, TRANSFORM)
+CONTRIBUTIONS = superconductor.protocol.LAYER_KINDS
 """What a layer of a stack may be.
 
-The second was named here before it existed, so that adding it would be an
-addition rather than a rewrite.  It was.
+Declared in `protocol.py`, because the half that offers a layer and the half
+that keeps one have to agree — and the adapter had been spelling the same three
+words into a tuple of its own.
 """
 
 
@@ -167,8 +168,12 @@ and the half that keeps one have to agree about the word as well as the rule.
 """
 
 
-KINDS = (STEP_GRID, NOTE_GRID, PARAMS, RECIPE, TRANSPORT, GRIDS, PITCH_SET)
+KINDS = superconductor.protocol.CONTROL_KINDS
 """Every kind of control this version of the service understands.
+
+Declared in `protocol.py` for the reason `PARAMETER_KINDS` is: the names above
+say what each kind *means here*, and the list itself is a thing three separate
+places have to agree about.
 
 An app may declare one this service has never heard of — it is older than the
 app, or the app is newer than it.  That has to be visible rather than logged:

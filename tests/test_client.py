@@ -10,11 +10,13 @@ import pathlib
 import re
 import shutil
 import subprocess
+import typing
 
 import pytest
 
 import superconductor.protocol
 import superconductor.service
+import superconductor.subsequence_adapter
 
 # One parser for the stylesheet's theme blocks, rather than a second regex here
 # answering a slightly different question and drifting from the first.
@@ -287,3 +289,140 @@ def test_both_languages_agree_about_what_a_contract_gap_is () -> None:
 		f"the two languages disagree: JavaScript said {said}")
 
 	assert odd == [superconductor.protocol.contract_gap(one) for one in (None, None, 5)]
+
+
+def test_both_languages_name_the_same_kinds_of_control () -> None:
+	"""One vocabulary, three places that have to agree about it (#2420).
+
+	`subsequence_adapter` never imports `controls`, so the half that declares a
+	kind and the half that keeps one had no word in common until the tuple moved
+	into `protocol.py` — and the client holds a third copy, which no test read at
+	all.  A kind added in Python and not in the client is a control the panel
+	quietly stops drawing, with nothing failing anywhere.
+	"""
+
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+	known = set(superconductor.protocol.CONTROL_KINDS)
+
+	named = {}
+
+	for held in ("GRIDS", "DRAWN"):
+		line = next((one for one in source.splitlines()
+		             if one.startswith(f"const {held} = [")), None)
+
+		assert line is not None, f"the client no longer names {held} in one place"
+
+		named[held] = set(re.findall(r'"([a-z_]+)"', line))
+
+		assert named[held], f"{held} lists nothing, so this would compare two empty sets"
+
+	for held, names in named.items():
+		assert names <= known, (
+			f"the client's {held} names {sorted(names - known)}, which Python does not")
+
+	# **Everything a page can draw, against everything there is.**  A transport is
+	# the one kind deliberately left out — it lives in the header, with what is
+	# constant across pages (#2075) — so this is an equality once it is added
+	# back, rather than a subset that would pass while a kind went undrawn.
+	assert named["DRAWN"] | {"transport"} == known, (
+		f"the client draws {sorted(named['DRAWN'])} and Python has {sorted(known)}")
+
+
+def test_the_app_side_declares_exactly_the_kinds_the_service_knows () -> None:
+	"""The other end of the same join, and the one that had no word at all.
+
+	Every `Control` subclass carries the kind it declares itself as, and the
+	service keeps a tuple of the kinds it will place.  A kind on one side and not
+	the other is a control the service marks unsupported and a panel greys out —
+	visible, but only once somebody builds a composition that uses it.
+	"""
+
+	subclasses = [one for one in vars(superconductor.subsequence_adapter).values()
+	              if isinstance(one, type)
+	              and issubclass(one, superconductor.subsequence_adapter.Control)
+	              and one is not superconductor.subsequence_adapter.Control]
+
+	assert subclasses, "no controls were found, so this compares two empty sets"
+
+	declared = {one.kind for one in subclasses}
+
+	assert "" not in declared, (
+		"a control left `kind` at its default, so nothing can be patched from it "
+		"and its declaration says it is nothing")
+
+	assert declared == set(superconductor.protocol.CONTROL_KINDS), (
+		f"the adapter declares {sorted(declared)} and the service knows "
+		f"{sorted(superconductor.protocol.CONTROL_KINDS)}")
+
+
+def test_both_languages_agree_about_a_parameter_that_opens_unset () -> None:
+	"""The second cross-language twin, driven the way `contract_gap` is (#2420).
+
+	`opensUnset` is `protocol.may_be_unset` restated in JavaScript, and until
+	this nothing read it.  If the two drift, the panel offers an `auto` the
+	service refuses, or withholds one it would accept — and the sharp edge is
+	the one CLAUDE.md calls easy to get wrong from either end: the ``default``
+	key has to be **present** rather than merely null when read, because an
+	instrument's settings declare no default at all.
+
+	**The two languages do not share that trap, and the difference decides what
+	this test can catch.**  Dropping ``"default" in field`` from the JavaScript
+	changes nothing, because ``undefined === null`` is already false there — so
+	the absent-``default`` guard is a *Python*-side hazard only, where
+	``field.get("default") is None`` is true of a key that is not there.  The
+	JavaScript-side equivalent is **loose** equality: ``field.default == null``
+	*is* true for ``undefined``, and that is the break to reach for when
+	checking whether this test has teeth.  Measured 2026-09-10, after the
+	strict-equality version was mistaken for one.
+	"""
+
+	node = _node()
+
+	if node is None:
+		pytest.skip("no JavaScript engine on this machine")
+
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+
+	# Sliced rather than imported, for the reason the contract-gap slice is: the
+	# module reaches for the DOM as it loads. Asserted to have caught the body,
+	# because a slice that silently caught nothing would compare nothing.
+	start = source.index("function opensUnset (field) {")
+	end = source.index("\n}\n", start)
+	sliced = source[start:end + 3]
+
+	assert "return" in sliced, f"the slice did not catch the function: {sliced!r}"
+
+	cases: list[dict[str, typing.Any]] = [
+		# The rule itself: not required, and an explicit null default.
+		{"required": False, "default": None},
+		{"required": True, "default": None},
+		{"required": False, "default": 0},
+		{"required": False, "default": ""},
+		{"required": False, "default": False},
+
+		# **An absent `default` is the case that matters**, and is what every
+		# switch and dial on an instrument looks like.
+		{"required": False},
+		{},
+		{"required": True},
+
+		# Shapes a catalogue really produces, so this is not only about the flag.
+		{"name": "root", "kind": "number", "required": False, "default": None},
+		{"name": "steps", "kind": "number", "required": True, "min": 0},
+		{"name": "pool", "kind": "choices", "role": "pitch", "required": False,
+		 "default": None},
+	]
+
+	driver = (f"{sliced}\n"
+	          f"const cases = {json.dumps(cases)};\n"
+	          "console.log(JSON.stringify(cases.map(opensUnset)));\n")
+
+	run = subprocess.run([str(node), "--input-type=module", "-"], input=driver,
+	                     capture_output=True, text=True, timeout=30)
+
+	assert run.returncode == 0, f"the client's own function would not run: {run.stderr}"
+
+	said = json.loads(run.stdout.strip())
+
+	assert said == [superconductor.protocol.may_be_unset(one) for one in cases], (
+		f"the two languages disagree: JavaScript said {said}")

@@ -2137,7 +2137,7 @@ class Recipe (Control):
 			if kind == "pattern":
 				kind = "route"
 
-			if kind not in ("generator", "route", "transform"):
+			if kind not in superconductor.protocol.LAYER_KINDS:
 				raise Refused(f"a layer cannot be a {kind}")
 
 			if kind == "route":
