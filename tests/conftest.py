@@ -24,6 +24,33 @@ import superconductor.service
 import superconductor.subsequence_adapter
 
 
+def pytest_configure (config: pytest.Config) -> None:
+	"""Firefox unless a command line says otherwise, because plain `pytest` is
+	what anybody types (#2453).
+
+	**A fixture cannot decide this**, which is what sat here before: pytest-playwright
+	parametrises `browser_name` from its own `--browser` option, falling back to
+	Chromium, and a direct parametrisation shadows a fixture of the same name.  So
+	the session fixture was dead code under a docstring claiming the opposite, and
+	`pytest --collect-only tests/test_page.py` collected every page test as
+	`[chromium]` — measured 2026-09-11.  Filling the option is where the choice
+	can actually be made.
+
+	The panel is a Firefox panel, on Simon's preference and on the measurement:
+	Firefox's touch path delivered `pointerdown` and input-to-commit faster than
+	Chromium's on this class of hardware (#1941).  Testing against the browser
+	this project does not ship for would be testing the wrong thing.
+
+	**Only when nothing was given, and never through `addopts`.**  `--browser`
+	appends, so CI's explicit `--browser firefox` beside an `addopts` entry would
+	parametrise every page test twice.  Guarded on the attribute as well, so the
+	suite still runs if pytest-playwright is not installed at all.
+	"""
+
+	if hasattr(config.option, "browser") and not config.option.browser:
+		config.option.browser = ["firefox"]
+
+
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums",
 	         "velocity_range": [1, 127],
@@ -643,23 +670,6 @@ class FakeApp:
 			time.sleep(0.02)
 
 		return frames
-
-
-@pytest.fixture(scope="session")
-def browser_name () -> str:
-	"""Firefox, which is the browser this is for.
-
-	pytest-playwright offers Chromium by default, and the panel is a Firefox
-	panel — chosen on Simon's preference and supported by the measurement, which
-	found Firefox's touch path delivering `pointerdown` and input-to-commit
-	faster than Chromium's on this class of hardware (#1941).  Testing the one
-	we do not ship against would be testing the wrong thing.
-
-	Overridden here rather than left to `--browser` so that plain `pytest` does
-	the right thing, which is what anybody will type.
-	"""
-
-	return "firefox"
 
 
 @pytest.fixture(scope="session")

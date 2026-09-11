@@ -7,6 +7,7 @@ covered and correct. Each test below is one of those bugs, or the shape of one.
 
 import re
 import time
+import types
 import typing
 
 import pytest
@@ -17,6 +18,33 @@ import superconductor.service
 
 
 playwright_api = pytest.importorskip("playwright.sync_api")
+
+
+def test_plain_pytest_collects_these_for_firefox () -> None:
+	"""Which browser these run in is decided in `conftest.pytest_configure`,
+	because the fixture that used to claim it could not (#2453).
+
+	pytest-playwright parametrises `browser_name` from `--browser`, and a
+	parametrisation shadows a fixture of the same name — so the session fixture
+	that sat in `conftest.py` was dead code, and plain `pytest` collected every
+	test in this file as `[chromium]`, against the browser this project does not
+	ship for.
+
+	**The second half is the one that would bite silently.**  The option is
+	filled only when nothing was given, so CI's own `--browser firefox` is left
+	exactly as it is: appending to it instead would parametrise every test in
+	this file twice and double the longest job in the suite.
+	"""
+
+	empty = types.SimpleNamespace(option=types.SimpleNamespace(browser=[]))
+	conftest.pytest_configure(typing.cast(typing.Any, empty))
+
+	assert empty.option.browser == ["firefox"], "plain pytest would collect these for Chromium"
+
+	given = types.SimpleNamespace(option=types.SimpleNamespace(browser=["chromium"]))
+	conftest.pytest_configure(typing.cast(typing.Any, given))
+
+	assert given.option.browser == ["chromium"], "a browser named on the command line was overruled"
 
 
 def _browser_runs () -> bool:
