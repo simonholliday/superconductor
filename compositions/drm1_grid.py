@@ -851,6 +851,43 @@ what this rig can show today.
 """
 
 
+def _places (steps: int) -> superconductor.subsequence_adapter.Positions:
+	"""Every place a note may start in a pattern this long, in each unit an app
+	counts in (#2412).
+
+	**The same places twice.**  A sixteen-step bar has sixteen of them; asked for
+	in `steps` they are 0 to 15 and asked for in `beats` they are 0 to 3.75, and
+	which a generator wants is on its own declaration — `hit_steps` counts steps
+	and `hit` counts beats.  Offering whole beats alone would throw away three
+	quarters of the pattern this rig actually has.
+
+	**The labels are here because a panel may not invent one** (#2144), and
+	because counting is a musical convention rather than arithmetic: a musician
+	counts from **one**, so step 0 is *1* and the second beat is *2*, and the
+	places inside a beat are numbered after it.  Superconductor is handed the
+	words and never works one out.
+
+	`STEP_DURATION` is a quarter of a beat here, so every beat position lands on
+	an exact binary fraction and survives the round trip through JSON that the
+	service's own copy has to match.  A resolution that did not would want
+	rounding rather than luck.
+	"""
+
+	subdivisions = max(1, round(1 / STEP_DURATION))
+
+	def counted (at: int) -> str:
+		"""Which beat, and where inside it."""
+
+		beat, inside = divmod(at, subdivisions)
+
+		return f"{beat + 1}" if inside == 0 else f"{beat + 1}.{inside + 1}"
+
+	return {
+		"steps": [(at, str(at + 1)) for at in range(steps)],
+		"beats": [(at * STEP_DURATION, counted(at)) for at in range(steps)],
+	}
+
+
 def _stack_for (pattern: str, name: str, title: str,
                 pitches: collections.abc.Sequence[str] = ROWS,
                 steps: int = STEPS,
@@ -891,6 +928,12 @@ def _stack_for (pattern: str, name: str, title: str,
 		# this file knows it — the same reason it is the only thing that knows the
 		# rows are notes at all rather than drum voices.
 		pitch_notes=dict(pitch_notes or {}),
+		# **Where a note may go, which is this pattern's to say** (#2412).  The
+		# app says a parameter is a *position* and can say no more — how many
+		# there are is a fact about the piece, exactly as which pitches exist is
+		# a fact about the instrument.  Three generators that could be added and
+		# could never run are drivable with this: `hit`, `hit_steps`, `sequence`.
+		positions=_places(steps),
 		bounds={
 			"pulses": (0, steps),
 

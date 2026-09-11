@@ -6552,6 +6552,104 @@ def test_every_block_lands_inside_the_glass_at_the_fitted_size (
 # --- What the app did not declare, the panel does not invent (#2049) ---------
 
 
+def _one_hit_steps (panel: typing.Any, fake_app: typing.Any,
+                    params: dict[str, typing.Any]) -> typing.Any:
+	"""One generator that wants places in the pattern, drawn and settled."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "hit_steps", "index": 1, "bypassed": False,
+		 "params": {"pitch": "kick", **params}},
+	], by="app")
+
+	panel.wait_for_function(
+		"() => document.querySelectorAll('.recipe .layer').length === 1", timeout=5_000)
+	_settled(panel)
+
+	return panel.locator('.part[data-part="stack/one"]')
+
+
+def test_a_place_in_the_pattern_is_offered_as_the_places_the_pattern_has (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2411 upstream and #2412 here, and it is `pitch`'s join a second time.
+
+	The app says *this parameter is a position* and can say no more, because how
+	long a pattern is is a fact about the piece; the composition says there are
+	these eight places and this is what each is called.  By the time it reaches
+	the glass it is an ordinary `choices` — a panel never sees a position any
+	more than it sees a pitch.
+
+	**Counted from one**, because a musician counts from one and the grid beside
+	it already does — and the words are the composition's, since a panel may not
+	invent an option's label (#2144).
+
+	Three of the ten generators that could be added and could never play were
+	waiting on exactly this.
+	"""
+
+	_open_the_stack(panel)
+	part = _one_hit_steps(panel, fake_app, {"steps": [0, 4]})
+	row = part.locator('.setting[data-field="steps"]')
+
+	assert row.locator(".picker").inner_text().startswith("1, 5"), \
+		f"the places held are not named: {row.locator('.picker').inner_text()}"
+
+	row.locator(".picker").click()
+	_settled(panel)
+
+	offered = row.locator(".options button")
+
+	assert offered.count() == 8, f"{offered.count()} places offered"
+	assert [offered.nth(at).inner_text() for at in range(8)] == \
+		["1", "2", "3", "4", "5", "6", "7", "8"], "the places are not counted from one"
+
+	# The two held are marked, and the rest are not.
+	marked = [at for at in range(8)
+	          if "here" in (offered.nth(at).get_attribute("class") or "")]
+
+	assert marked == [0, 4], f"the wrong places are marked: {marked}"
+
+	offered.nth(2).click()
+
+	asked = fake_app.await_set("stack/one/steps")
+
+	assert asked["v"] == [0, 4, 2], \
+		f"a place was sent as something other than the app's own value: {asked['v']}"
+
+
+def test_a_list_that_may_hold_nothing_says_auto_rather_than_choose (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**"choose" is an instruction and "auto" is a state** (#2381).
+
+	A parameter that opens unset is not waiting for anybody — the app is deciding
+	for itself — so a control telling a person to choose reads as unfinished, and
+	on a stack it reads as the layer being half-built.
+
+	A `choice` has said this since #2381 and its plural had not, which is the
+	one-kind-fixed-and-its-neighbour-left shape this file has met three times.
+	It could not be seen until #2412: **`ratchet.steps` is the only `choices` in
+	Subsequence's entire catalogue that may hold nothing**, and it did not exist
+	as a drawable control until positions did.
+
+	Both are asserted, because a test that only looks at the optional one passes
+	against a build that says `auto` on everything.
+	"""
+
+	_open_the_stack(panel)
+	part = _one_hit_steps(panel, fake_app, {})
+
+	# Lower-cased because the panel letters in capitals: the word is the code's
+	# and the case is the stylesheet's, and asserting the second would make this
+	# a test about `text-transform`.
+	def says (field: str) -> str:
+		return part.locator(f'.setting[data-field="{field}"] .picker').inner_text().lower()
+
+	assert says("accents").startswith("auto"), \
+		"a list the app may fill itself asked to be chosen from"
+
+	assert says("steps").startswith("choose"), \
+		"a list that must hold something offered an auto it has not got"
+
+
 def test_a_number_says_what_it_is_measured_in_and_only_where_an_app_said_so (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""#2436, from Simon's decision #2435: *we cannot assume units in any interface.*

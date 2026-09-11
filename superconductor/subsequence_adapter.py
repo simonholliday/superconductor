@@ -1561,13 +1561,20 @@ panel — a grid's weights are a lane of bars.  The field can be added the day
 something reads it.
 """
 
-DRAWABLE = superconductor.protocol.PARAMETER_KINDS + ("pitch",)
+DRAWABLE = superconductor.protocol.PARAMETER_KINDS + ("pitch", "position")
 """Every parameter kind `offerable` will pass to a panel, and nothing else.
 
-``pitch`` is here and is not a kind a panel ever sees: this function turns one
-into a ``choice`` or a ``choices`` of the pitches a composition actually has,
-which is the join the whole arrangement rests on (#1465).  It has to be let
-through to be converted.
+``pitch`` and ``position`` are here and neither is a kind a panel ever sees:
+this function turns each into a ``choice`` or a ``choices`` of what a
+composition actually has — the pitches on this instrument, the places in this
+pattern — which is the join the whole arrangement rests on (#1465).  They have
+to be let through to be converted.
+
+**They are the same join twice.**  The app says *this is a pitch* or *this is a
+position* and can say no more, because which pitches exist and how long a
+pattern is are both facts about a studio; the composition says they are these
+ten drum voices, or these sixteen places.  Neither knows the other's half and
+this package knows neither.
 
 The rest is the shared vocabulary rather than a list of its own, because the
 service checks incoming values against the same six and a copy here would be the
@@ -1619,6 +1626,23 @@ def _outside (default: typing.Any, low: float, high: float) -> bool:
 	return not low <= default <= high
 
 
+Positions = collections.abc.Mapping[
+	str, collections.abc.Sequence[tuple[typing.Any, str]]]
+"""Where a note may be placed in this pattern, by the unit the app counts in.
+
+A value and the word for it, exactly as an ``options`` list is everywhere else,
+because **a panel may not invent a label** (#2144) and what "step 3" is called
+is the composition's to say — it is the one that knows a step is a sixteenth
+here and that a musician counts from one.
+
+**Keyed by unit because the app counts in more than one** (#2411): `hit_steps`
+asks for positions in `steps` and `hit` asks for the same places in `beats`.
+Which of them a parameter wants is on its own declaration; how many there are,
+and what each is called, is the composition's.  A unit nobody supplied leaves
+the parameter `undrawn` rather than guessed at, the same as a pitch with no
+pitches to offer.
+"""
+
 Bounds = collections.abc.Mapping[
 	"str | tuple[str, str]", tuple[float, float]]
 """What a composition says a parameter's range is, keyed by name or by name and unit.
@@ -1666,6 +1690,7 @@ def offerable (
 	catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 	pitches: collections.abc.Sequence[str],
 	bounds: Bounds | None = None,
+	positions: Positions | None = None,
 ) -> list[dict[str, typing.Any]]:
 	"""An app's catalogue, with the pitches this composition actually has.
 
@@ -1698,6 +1723,7 @@ def offerable (
 	"""
 
 	narrowed: Bounds = bounds or {}
+	places: Positions = positions or {}
 	offered: list[dict[str, typing.Any]] = []
 
 	for generator in catalogue:
@@ -1758,6 +1784,36 @@ def offerable (
 					continue
 
 				fields.append({**field, "min": low, "max": high})
+				continue
+
+			if field.get("kind") == "position":
+				# **A place in the pattern, offered as the places this pattern
+				# has** (#2411 upstream, #2412 here).  Three of the ten
+				# generators that could be added and could never run were
+				# waiting on exactly this: the parameter they cannot do without
+				# was not *described* in the catalogue at all, so there was
+				# nothing to draw and nothing saying why.
+				#
+				# **The unit chooses the list**, which is the one place a unit is
+				# read rather than drawn (#2435).  `hit_steps` asks in `steps`
+				# and `hit` asks for the same places in `beats`, and no other
+				# field separates them.
+				held = places.get(str(field.get(superconductor.protocol.UNIT)))
+
+				if not held:
+					undrawn.append(str(field.get("name")))
+					continue
+
+				fields.append({
+					**{key: kept for key, kept in field.items() if key != "multiple"},
+					"kind": "choices" if field.get("multiple") else "choice",
+
+					# What it was stays with it, for the reason a pitch's does:
+					# a choices of places and a choices of waveforms are the same
+					# kind and are not the same thing.
+					"role": "position",
+					"options": [{"value": at, "label": said} for at, said in held],
+				})
 				continue
 
 			if field.get("kind") != "pitch":
@@ -1934,6 +1990,7 @@ class Recipe (Control):
 		pitches: collections.abc.Sequence[str] = (),
 		pitch_notes: collections.abc.Mapping[str, int] | None = None,
 		bounds: Bounds | None = None,
+		positions: Positions | None = None,
 		transforms: collections.abc.Sequence[dict[str, typing.Any]] = (),
 		builds: str | None = None,
 		sources: dict[str, collections.abc.Callable[[typing.Any], None]] | None = None,
@@ -2011,9 +2068,9 @@ class Recipe (Control):
 
 		self.composition = composition
 		self.pitches = list(pitches)
-		self.catalogue = offerable(catalogue, self.pitches, bounds)
+		self.catalogue = offerable(catalogue, self.pitches, bounds, positions)
 
-		self.transforms = offerable(transforms or [], self.pitches, bounds)
+		self.transforms = offerable(transforms or [], self.pitches, bounds, positions)
 		"""What this stack may *reshape* with, as against what it may add.
 
 		A second catalogue rather than a longer one, because the two are

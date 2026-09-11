@@ -315,12 +315,15 @@ def test_the_drawable_kinds_are_the_ones_the_service_keeps () -> None:
 
 	A tuple naming the same six kinds in two files is two rules holding one fact,
 	which is how the two ends of this package have come to disagree three times.
-	``pitch`` is the one addition and never reaches a panel: it is turned into a
-	choice of the pitches a composition actually has, so it has to be let through
-	to be converted.
+
+	``pitch`` and ``position`` are the two additions and neither reaches a panel:
+	each is turned into a choice of what a composition actually has — the pitches
+	on this instrument, the places in this pattern — so both have to be let
+	through to be converted.  **They are the same join twice** (#1465), which is
+	why they are the only two and why a third would be suspicious.
 	"""
 
-	assert set(adapter.DRAWABLE) == set(controls.PARAMETER_KINDS) | {"pitch"}
+	assert set(adapter.DRAWABLE) == set(controls.PARAMETER_KINDS) | {"pitch", "position"}
 
 
 def test_a_generator_with_nothing_dropped_carries_no_undrawn_at_all () -> None:
@@ -811,6 +814,90 @@ def test_a_bound_that_would_forbid_the_apps_own_default_is_not_applied () -> Non
 
 	assert "min" not in by_name["feel"] and "max" not in by_name["feel"], \
 		"and is dropped where it would forbid the app's own opening value"
+
+
+PLACES: dict[str, list[tuple[typing.Any, str]]] = {
+	"steps": [(0, "1"), (1, "2"), (2, "3"), (3, "4")],
+	"beats": [(0.0, "1"), (0.5, "1.3")],
+}
+
+POSITIONED: list[dict[str, typing.Any]] = [
+	{
+		"name": "hit_steps", "summary": "Hits on the steps you name.", "partial": True,
+		"parameters": [{"name": "steps", "label": "steps", "kind": "position",
+		                "unit": "steps", "multiple": True, "required": True}],
+	},
+	{
+		"name": "hit", "summary": "Hits on the beats you name.", "partial": True,
+		"parameters": [{"name": "beats", "label": "beats", "kind": "position",
+		                "unit": "beats", "multiple": True, "required": True}],
+	},
+	{
+		"name": "once", "summary": "One place.", "partial": True,
+		"parameters": [{"name": "at", "label": "at", "kind": "position",
+		                "unit": "steps", "required": True}],
+	},
+]
+
+
+def test_a_position_becomes_the_places_this_pattern_actually_has () -> None:
+	"""`pitch`'s join a second time (#2411 upstream, #2412 here).
+
+	The app says *this parameter is a position* and can say no more, because how
+	long a pattern is is a fact about the piece; the composition says there are
+	these four places and this is what each is called.  Neither knows the other's
+	half and this package knows neither — it is handed both (#1465).
+
+	**The unit chooses the list**, which is the one place a unit is read rather
+	than drawn (#2435): `hit_steps` counts steps and `hit` counts the same places
+	in beats, and nothing else on the declaration separates them.
+
+	`multiple` decides the shape exactly as it does for a pitch — several places
+	is a `choices` and one is a `choice` — and the labels come from the
+	composition, because a panel may not invent one (#2144).
+	"""
+
+	drawn = {one["name"]: one["parameters"]
+	         for one in adapter.offerable(POSITIONED, ROWS, positions=PLACES)}
+
+	assert all(len(held) == 1 for held in drawn.values()), \
+		f"a position was dropped rather than turned into the places it names: {drawn}"
+
+	offered = {name: held[0] for name, held in drawn.items()}
+
+	assert offered["hit_steps"]["kind"] == "choices"
+	assert offered["once"]["kind"] == "choice", "one place is not a list of them"
+
+	assert [(o["value"], o["label"]) for o in offered["hit_steps"]["options"]] == PLACES["steps"]
+	assert [(o["value"], o["label"]) for o in offered["hit"]["options"]] == PLACES["beats"], \
+		"the unit did not choose the list"
+
+	assert offered["hit_steps"]["role"] == "position", "what it was did not stay with it"
+	assert "multiple" not in offered["hit_steps"], "the shape is the kind now"
+
+
+def test_a_position_nobody_offered_places_for_is_undrawn_rather_than_guessed () -> None:
+	"""The same courtesy a pitch with no pitches gets (#2379).
+
+	A composition that says nothing about beats is not offering a beat position
+	badly — it is not offering one, and a panel told so can say which parameter
+	it could not draw.  Inventing a range and drawing a stepper would hand the
+	generator a number nobody chose, on a parameter that wanted a place.
+	"""
+
+	offered = {one["name"]: one
+	           for one in adapter.offerable(
+		           POSITIONED, ROWS, positions={"steps": PLACES["steps"]})}
+
+	assert "undrawn" not in offered["hit_steps"], "a unit that was offered came back undrawn"
+	assert offered["hit"]["undrawn"] == ["beats"]
+	assert offered["hit"]["partial"] is True
+
+	# And with nothing offered at all, every one of them says so.
+	bare = {one["name"]: one for one in adapter.offerable(POSITIONED, ROWS)}
+
+	assert [bare[name].get("undrawn") for name in ("hit_steps", "hit", "once")] == [
+		["steps"], ["beats"], ["at"]]
 
 
 def test_a_bound_named_with_its_unit_reaches_only_that_meaning () -> None:

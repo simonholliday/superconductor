@@ -52,7 +52,20 @@ def _recipe () -> adapter.Recipe:
 		catalogue=subsequence.generators(),
 		transforms=subsequence.transforms(),
 		pitches=ROWS,
-		bounds={"pulses": (0, 16), "grid": (1, 16)},
+
+		# **The places a sixteen-step bar has, in both units an app counts in**
+		# (#2412).  Without them the three generators that take a position are
+		# `undrawn` and land in the list below for a reason that is this
+		# harness's rather than Subsequence's.
+		positions={
+			"steps": [(at, str(at + 1)) for at in range(16)],
+			"beats": [(at * 0.25, str(at)) for at in range(16)],
+		},
+
+		# Keyed by unit, as the rig's own composition is: `grid` means slots on
+		# seven entries and beats on `swing`, and a bare key mis-bounds the odd
+		# one out (#2413).
+		bounds={"pulses": (0, 16), ("grid", "steps"): (1, 16)},
 		name="stack")
 
 
@@ -178,14 +191,29 @@ WILL_NOT_RUN = {
 	# there is nothing left to infer and `_required` is deleted rather than
 	# patched.  Seventeen became ten, with nothing newly dead.
 
+	# **And three more left on 2026-09-11, which is the other direction again.**
+	# `hit`, `hit_steps` and `sequence` each needed *a place in the pattern* —
+	# the largest group of #2154 and the only one that was ever fixable here.
+	# Subsequence describes a `position` now (#2411) and the composition says
+	# how many there are and what each is called (#2412), which is `pitch`'s join
+	# a second time: the app says what a thing *is*, the composition says what
+	# the values are, and this package knows neither and is handed both.  Ten
+	# became seven, with nothing newly dead.
+
 	# **Partial, and not merely partial** (#2154).  The catalogue drops a
 	# parameter this panel cannot draw, and the parameter is required — so the
 	# layer can be added and can never run.  `partial` says *you cannot drive all
 	# of this*; it does not say *adding this is pointless*, and these need the
 	# second thing said.
-	"bresenham_poly": "parts", "broken_chord": "chord_obj", "hit": "beats",
-	"hit_steps": "steps", "lsystem": "pitch_map", "markov": "transitions",
-	"melody": "state", "motif": "m", "phrase": "value", "sequence": "steps",
+	#
+	# **What is left needs a thing rather than a number**: a weight per voice, a
+	# chord and a permutation, a rewrite system, a transition matrix, a `Motif`.
+	# None of them is a control shape anybody has asked for, and a surface cannot
+	# invent a transition matrix — so these are ours only in the sense that
+	# nobody else can fix them either.
+	"bresenham_poly": "parts", "broken_chord": "chord_obj",
+	"lsystem": "pitch_map", "markov": "transitions",
+	"melody": "state", "motif": "m", "phrase": "value",
 }
 """Every layer that is offered on the glass and cannot run, and why.
 
@@ -240,7 +268,7 @@ def _sweep (caplog: typing.Any) -> dict[str, str]:
 @pytest.mark.filterwarnings("ignore:cellular_2d:UserWarning")
 def test_the_layers_that_cannot_run_are_the_ones_already_written_down (
 	caplog: typing.Any) -> None:
-	"""Seventeen of the forty-six offered here are added and then skipped every cycle.
+	"""Seven of the forty-six offered here are added and then skipped every cycle.
 
 	The sweep #2214 asks for, run as a test rather than by hand.  It fails in both
 	directions and both are worth knowing:

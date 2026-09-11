@@ -165,6 +165,34 @@ CONTROLS: dict[str, typing.Any] = {
 		      "options": [{"value": voice, "label": voice}
 		                  for voice in ("kick", "snare")]},
 		 ]},
+		# **A generator that wants a place in the pattern** (#2411, #2412), which
+		# is `pitch`'s join a second time: the app says *this is a position* and
+		# the composition says there are these eight and this is what each is
+		# called.  Already converted here, as a real catalogue's is by
+		# `offerable` — a panel never sees `kind: "position"` any more than it
+		# sees `kind: "pitch"`.
+		#
+		# Eight rather than sixteen so the whole list fits a screenshot, and the
+		# labels count from one because a musician does.
+		{"name": "hit_steps", "summary": "Hit exactly these steps.", "partial": False,
+		 "parameters": [
+		     {"name": "pitch", "label": "pitch", "kind": "choice", "role": "pitch",
+		      "required": True,
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare")]},
+		     {"name": "steps", "label": "steps", "kind": "choices", "role": "position",
+		      "unit": "steps", "required": True,
+		      "options": [{"value": at, "label": str(at + 1)} for at in range(8)]},
+
+		     # **A second one that may hold nothing**, which `ratchet.steps` is in
+		     # the real catalogue and which nothing else here is: it is the only
+		     # `choices` in Subsequence's whole vocabulary that opens unset, so a
+		     # fixture without one cannot show that such a control says *auto*
+		     # rather than *choose* (#2381).
+		     {"name": "accents", "label": "accents", "kind": "choices", "role": "position",
+		      "unit": "steps", "required": False, "default": None,
+		      "options": [{"value": at, "label": str(at + 1)} for at in range(8)]},
+		 ]},
 	 ],
 	 # What this stack may *reshape* with, as against what it may add (#2246).
 	 # Two catalogues rather than one, because the two are different things and

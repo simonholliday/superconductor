@@ -1834,8 +1834,25 @@ function Setting ({ field, held, onSet }) {
 						event.preventDefault();
 						open ? setOpen(false) : show();
 					}}
+				${/* **"choose" is an instruction and "auto" is a state** (#2381), and
+				     this said the first where it meant the second.  A parameter
+				     that opens unset is not waiting for you — the app is deciding
+				     for itself, and a control telling a person to choose is a
+				     control that looks unfinished.
+				
+				     The `choice` beside this has said so since #2381; a `choices`
+				     did not, and until #2412 there was no parameter where it
+				     showed: `ratchet.steps` is the first `choices` in the whole
+				     catalogue that may hold nothing.  One kind fixed and its
+				     plural left behind is the shape this file has met three times.
+				
+				     **Empty and unset are not the same here** and this draws them
+				     alike, deliberately: a list somebody has emptied says the
+				     same as one never set, because the way back to unset is the
+				     target beside it and that is what makes the difference
+				     sayable. */ ""}
 				>${chosen.length === 0
-					? "choose"
+					? (opensUnset(field) ? "auto" : "choose")
 					: chosen.length <= 2
 						? chosen.map(labelOf).join(", ")
 						: `${labelOf(chosen[0])} +${chosen.length - 1}`}<i>▾</i></button>
