@@ -323,6 +323,47 @@ longer accepts — an option renamed, a row taken away — is refused on its own
 and listed, the rest comes back, and a copy of the store as it was is kept
 beside it.
 
+## Variants
+
+A pattern can hold several versions of its notes, and switch between them while
+it plays. A grid that has them shows a row of tabs above it — **A B C D**, each
+with a **▶** — and the two do different things:
+
+- **Tap a letter** to show that variant and edit it. The music does not change:
+  you can write B while A carries the room.
+- **Tap its ▶** to play it next. It blinks until the switch happens, which is at
+  the end of the pattern's current cycle, and is lit once it has. Tap the
+  blinking ▶ again to change your mind.
+
+The lit letter is the one playing and the ringed one is the one you are looking
+at. When they differ the row says so — *B — A is playing* — and the grid shows
+B's notes without the dots A's generators are placing. An empty variant offers to
+**start from** the one playing, and **clear** works on the variant you are
+looking at. Which variant you are looking at belongs to your panel; which one
+plays belongs to the piece, and every panel sees it.
+
+Only the notes are a variant's. The mute, a pitched pattern's transposition and
+the generators that build the pattern stay the pattern's, so switching variant
+never changes the key you are in.
+
+A composition says which grids have variants and what they are called, and its
+play function asks the grid what to play when the pattern is built — which is
+the moment a cued variant lands:
+
+```python
+drum_grid = superconductor.subsequence_adapter.StepGrid(
+    composition, rows=ROWS, steps=16, pattern="drums",
+    variants=("A", "B", "C", "D"))
+
+@composition.pattern(channel=10, steps=16, ...)
+def drums (p):
+    for row, steps in drum_grid.now(p).items():
+        ...
+```
+
+`lands_every=2` holds each switch for the end of a two-bar phrase over a one-bar
+pattern. A grid given no variants is exactly the grid it always was.
+
 ## Connecting an application
 
 `superconductor/subsequence_adapter.py` is the worked example. A composition

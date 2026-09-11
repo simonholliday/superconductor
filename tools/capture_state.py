@@ -1,10 +1,10 @@
 """Take everything the panel can see and write it somewhere that survives.
 
-Every restart of a composition throws away every pattern edited on the glass,
-because a pattern lives in ``composition.data`` and nothing writes it down
-(Subroutine #2067).  That has cost real work three times in one session, and it
-will keep costing it until #2067 is settled — so until then, run this before
-restarting anything.
+A composition given a pattern store keeps what is made on the glass by itself
+(#2487), so this is the safety net rather than the routine — the one copy that
+is not kept beside the thing being restarted.  Run it before restarting
+anything worth keeping.  Every variant of every grid is in what it writes,
+because a snapshot carries them all (#2485).
 
     python tools/capture_state.py [where-to-write.json]
 
@@ -65,7 +65,15 @@ async def main () -> None:
 
 	for app, state in held.items():
 		for control, value in state.items():
-			if isinstance(value, dict):
+			if isinstance(value, dict) and isinstance(value.get("variants"), dict):
+				# A grid with variants: what each holds, and which one plays.
+				each = ", ".join(
+					f"{name} {sum(1 for row in (one.get('rows') or {}).values() if row)}"
+					for name, one in value["variants"].items() if isinstance(one, dict))
+				print(f"  {app}/{control}: rows with something in them by variant — {each}; "
+				      f"{value.get('playing')} playing")
+
+			elif isinstance(value, dict):
 				filled = sum(1 for held_row in value.values() if held_row)
 				print(f"  {app}/{control}: {filled} rows or fields with something in them")
 

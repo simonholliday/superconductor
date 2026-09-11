@@ -85,14 +85,52 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 		if not isinstance(held, dict):
 			continue
 
-		if (declared.get(control) or {}).get("type") in GRIDS:
+		said = declared.get(control) or {}
+
+		if said.get("type") in GRIDS and said.get("variants"):
+			asks.extend(_variant_sets(app, control, held, said))
+
+		elif said.get("type") in GRIDS:
 			asks.append((app, f"{control}/rows",
 			             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))
 			asks.extend((app, f"{control}/{field}", held[field])
 			            for field in ("enabled", "transpose") if field in held)
-			continue
 
-		asks.extend(_walked(app, control, held))
+		else:
+			asks.extend(_walked(app, control, held))
+
+	return asks
+
+
+def _variant_sets (app: str, control: str, held: dict, declared: dict) -> list[tuple[str, str, object]]:
+	"""A grid with variants put back: each variant whole, and which plays as a cue (#2485).
+
+	**`playing` goes back as a cue**, because only the app writes which variant
+	plays, and only at a build — asked for, it lands at the pattern's next cycle.
+	**A capture taken before the grid had variants holds bare rows**, and they
+	become its first, which is the conversion #2485 asks for.  A variant this
+	composition no longer declares is sent all the same, so the app refuses it by
+	name and the summary says so, rather than this dropping it in silence.
+	"""
+
+	asks: list[tuple[str, str, object]] = []
+	variants = held.get("variants")
+
+	if isinstance(variants, dict):
+		for one, kept in variants.items():
+			rows = kept.get("rows") if isinstance(kept, dict) else None
+			asks.append((app, f"{control}/variants/{one}/rows", rows if isinstance(rows, dict) else {}))
+
+		if held.get("playing") is not None:
+			asks.append((app, f"{control}/cue", held["playing"]))
+
+	else:
+		first = str((declared.get("variants") or ["A"])[0])
+		asks.append((app, f"{control}/variants/{first}/rows",
+		             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))
+
+	asks.extend((app, f"{control}/{field}", held[field])
+	            for field in ("enabled", "transpose") if field in held)
 
 	return asks
 
@@ -146,15 +184,44 @@ def _taken_out (captured: dict, live: dict, declared: dict) -> list[str]:
 	gone: list[str] = []
 
 	for control, held in captured.items():
-		if (declared.get(control) or {}).get("type") not in GRIDS or not isinstance(held, dict):
+		said = declared.get(control) or {}
+
+		if said.get("type") not in GRIDS or not isinstance(held, dict):
 			continue
 
-		for row, now in (live.get(control) or {}).items():
-			if row in BESIDE_THE_ROWS or not now:
-				continue
+		now = live.get(control) or {}
 
-			kept = held.get(row) or []
-			gone.extend(f"{control}/{row}/{step}" for step in now if step not in kept)
+		if not said.get("variants"):
+			gone.extend(_gone(control, now, held))
+			continue
+
+		# Each variant the capture holds, against what that variant holds now — or,
+		# for a capture from before the grid had variants, its rows against the
+		# first, which is where they are going.
+		if isinstance(held.get("variants"), dict):
+			pairs = [(one, (kept or {}).get("rows") or {})
+			         for one, kept in held["variants"].items() if isinstance(kept, dict)]
+		else:
+			pairs = [(str((said.get("variants") or ["A"])[0]), held)]
+
+		for one, kept in pairs:
+			rows = ((now.get("variants") or {}).get(one) or {}).get("rows") or {}
+			gone.extend(_gone(f"{control}/variants/{one}/rows", rows, kept))
+
+	return gone
+
+
+def _gone (prefix: str, now: dict, kept: dict) -> list[str]:
+	"""The cells *now* holds that *kept* does not, each at its own address under *prefix*."""
+
+	gone: list[str] = []
+
+	for row, held in now.items():
+		if row in BESIDE_THE_ROWS or not held:
+			continue
+
+		wanted = kept.get(row) or []
+		gone.extend(f"{prefix}/{row}/{step}" for step in held if step not in wanted)
 
 	return gone
 

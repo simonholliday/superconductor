@@ -112,6 +112,77 @@ def test_what_a_restore_takes_out_is_said_and_only_for_grids_the_capture_holds (
 	assert gone == ["grid/kick/8", "grid/clap/12"]
 
 
+VARIANTS_DECLARED: dict[str, typing.Any] = {
+	"grid": {"type": "step_grid", "variants": ["A", "B", "C"]},
+}
+"""A grid with variants, as the manifest describes one (#2485)."""
+
+
+def test_a_grid_with_variants_goes_back_a_variant_at_a_time_and_what_played_as_a_cue () -> None:
+	"""Each variant whole; **what played goes back as a cue**, because only the app
+	writes which variant plays, and at a build (#2488)."""
+
+	held = {"variants": {"A": {"rows": {"kick": [0]}}, "B": {"rows": {"snare": [4]}},
+	                     "C": {"rows": {}}},
+	        "playing": "B", "cue": "C", "enabled": True}
+
+	asks = _tool()._sets("app", {"grid": held}, VARIANTS_DECLARED)
+
+	assert asks == [("app", "grid/variants/A/rows", {"kick": [0]}),
+	                ("app", "grid/variants/B/rows", {"snare": [4]}),
+	                ("app", "grid/variants/C/rows", {}),
+	                ("app", "grid/cue", "B"),
+	                ("app", "grid/enabled", True)]
+
+
+def test_a_capture_from_before_a_grid_had_variants_goes_into_its_first () -> None:
+	"""The conversion #2485 asks for: bare rows are what the first variant was."""
+
+	asks = _tool()._sets("app", {"grid": {"kick": [0, 8], "snare": [], "enabled": False}},
+	                     VARIANTS_DECLARED)
+
+	assert asks == [("app", "grid/variants/A/rows", {"kick": [0, 8], "snare": []}),
+	                ("app", "grid/enabled", False)]
+
+
+def test_a_restore_puts_every_variant_back_exactly_and_cues_what_played () -> None:
+	"""**End to end through a real grid with variants**, seeded as the rig's is:
+	each variant exactly — the seed in A taken out — and the one that played
+	cued, so it lands at the next build rather than mid-bar."""
+
+	composition = types.SimpleNamespace(data={"grid": {"A": {"rows": {"kick": [0, 8], "clap": [12]}}}})
+	grid = adapter.StepGrid(composition, rows=["kick", "clap", "snare"], steps=16,
+	                        data_key="grid", name="grid", variants=("A", "B", "C"))
+
+	captured = {"grid": {"variants": {"A": {"rows": {"kick": [0, 4]}}, "B": {"rows": {"snare": [2]}},
+	                                  "C": {"rows": {}}},
+	                     "playing": "B", "enabled": True}}
+
+	for _, path, value in _tool()._sets("app", captured, {"grid": grid.declaration()}):
+		grid.apply(path.split("/")[1:], value)
+
+	assert grid.rows_now("A") == {"kick": [0, 4], "clap": [], "snare": []}
+	assert grid.rows_now("B")["snare"] == [2]
+	assert (grid.playing, grid.cue) == ("A", "B"), "what played went back as a cue"
+
+	grid.now()
+
+	assert grid.playing == "B"
+
+
+def test_what_a_restore_takes_out_is_said_by_the_variant_it_comes_from () -> None:
+	"""At each cell's own address; and a variant the capture holds nothing about is
+	left alone, as a grid made since the capture is (#2465)."""
+
+	gone = _tool()._taken_out(
+		{"grid": {"variants": {"A": {"rows": {"kick": [0]}}, "B": {"rows": {}}}, "playing": "A"}},
+		{"grid": {"variants": {"A": {"rows": {"kick": [0, 8]}}, "B": {"rows": {"snare": [3]}},
+		                       "C": {"rows": {"kick": [1]}}}}},
+		VARIANTS_DECLARED)
+
+	assert gone == ["grid/variants/A/rows/kick/8", "grid/variants/B/rows/snare/3"]
+
+
 def test_what_a_note_grid_loses_is_said_by_the_note () -> None:
 	"""A note grid's rows are notes keyed by position, not lists of steps."""
 
