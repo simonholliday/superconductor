@@ -12,6 +12,7 @@ run, and anything after it that wants a loop of its own fails.
 """
 
 import importlib.util
+import logging
 import random
 import re
 import sys
@@ -563,6 +564,59 @@ def test_a_cycle_that_is_not_a_whole_number_of_beats_survives_declaration (
 
 	assert rig.NINE_BEATS == 2.25
 	assert isinstance(rig.link.controls["nine"].declaration()["beats"], float)
+
+
+def test_the_slot_count_is_bounded_and_the_one_measured_in_beats_is_not (
+	rig: typing.Any, caplog: pytest.LogCaptureFixture) -> None:
+	"""#2413 against the real catalogue, which is the only place it could be seen.
+
+	`grid` is on eight of Subsequence's entries.  Seven mean *how many slots the
+	pattern has* and are rightly bounded to this pattern's length; `swing.grid`
+	means *grid size in beats* and opens at 0.25, which that bound forbids — and
+	a control born outside its own range has every write refused, which freezes
+	the whole stack because bypass, reorder, add and remove each write all of it.
+	Simon met exactly that and could then toggle nothing on the stack he had
+	added a swing to.
+
+	**Nothing on the wire told the two apart until Subsequence declared its
+	units**, so the composition now names the unit alongside the parameter and
+	the bound reaches only what it was written for.  Asserted here rather than in
+	`test_recipe.py` because the fault lives in the *real* catalogue: a hand-built
+	one proves the mechanism and this proves the rig.
+
+	**The silence is the half that says it was fixed rather than survived.**  The
+	outcome — seven bounded, one not — is what the backstop produced too: notice
+	that a bound excludes the parameter's own default and drop it, with a warning.
+	So a stack built here must say *nothing at all*, which it can only do if the
+	bound never reached swing in the first place.
+	"""
+
+	with caplog.at_level(
+		logging.WARNING, logger="superconductor.subsequence_adapter"):
+		rig._stack_for("grid", "probe_recipe", "Probe")
+
+	dropped = [one.getMessage() for one in caplog.records if "not bounding" in one.getMessage()]
+
+	assert dropped == [], f"a bound still had to be dropped: {dropped}"
+
+	said = rig.drum_recipe.declaration()
+	grids = {one["name"]: p
+	         for one in said["generators"] + said.get("transforms", [])
+	         for p in one["parameters"] if p["name"] == "grid"}
+
+	assert len(grids) > 1, "only one entry has a `grid`, so this proves nothing"
+
+	counted = {name: p for name, p in grids.items() if p.get("unit") == "steps"}
+	beaten = {name: p for name, p in grids.items() if p.get("unit") == "beats"}
+
+	assert counted and beaten, f"the collision has gone from the catalogue: {grids}"
+
+	for name, p in counted.items():
+		assert p.get("max") == rig.STEPS, f"{name}.grid was not bounded to the pattern"
+
+	for name, p in beaten.items():
+		assert "max" not in p, f"{name}.grid was bounded as though it counted slots"
+		assert p.get("default") == 0.25, "the app's own opening value moved"
 
 
 def test_a_stack_is_bounded_by_the_pattern_it_builds (rig: typing.Any) -> None:

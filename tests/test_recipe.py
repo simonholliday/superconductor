@@ -813,6 +813,62 @@ def test_a_bound_that_would_forbid_the_apps_own_default_is_not_applied () -> Non
 		"and is dropped where it would forbid the app's own opening value"
 
 
+def test_a_bound_named_with_its_unit_reaches_only_that_meaning () -> None:
+	"""And this is the answer to the test above, rather than another guard against
+	it (#2413, fixed by #2436).
+
+	Until an app declared its units there was nothing on the wire that told *how
+	many slots* from *grid size in beats*, so the only thing a composition could
+	do was bound the name and the only thing this could do was notice the bound
+	was impossible and drop it.  A unit separates them, so the bound reaches the
+	seven it was written for and never goes near the eighth.
+
+	**Most specific wins**, which is the shape a page's `parts` already has: a
+	bare name bounds the parameter wherever it appears, and a name with a unit
+	bounds only that meaning.
+	"""
+
+	catalogue: list[dict[str, typing.Any]] = [
+		{
+			"name": "slots", "summary": "Counts them.", "partial": False,
+			"parameters": [{"name": "grid", "label": "grid", "kind": "number",
+			                "unit": "steps", "required": False, "default": None}],
+		},
+		{
+			"name": "feel", "summary": "Measures them in beats.", "partial": False,
+			"parameters": [{"name": "grid", "label": "grid", "kind": "number",
+			                "unit": "beats", "required": False, "default": 0.25}],
+		},
+	]
+
+	def bounded (narrowed: typing.Any) -> dict[str, dict[str, typing.Any]]:
+		return {one["name"]: one["parameters"][0]
+		        for one in adapter.offerable(catalogue, ROWS, narrowed)}
+
+	by_unit = bounded({("grid", "steps"): (1, 16)})
+
+	assert by_unit["slots"].get("max") == 16, "the bound did not reach what it named"
+	assert "max" not in by_unit["feel"], "it reached a parameter measured in something else"
+
+	other = bounded({("grid", "beats"): (0.1, 1.0)})
+
+	assert other["feel"].get("max") == 1.0, "a unit key reaches the entry that carries it"
+	assert "max" not in other["slots"]
+
+	# A bare name still bounds both, which is what every composition wrote
+	# before there was a unit to name — and the backstop above is what stops
+	# that being a frozen stack.
+	plainly = bounded({"grid": (1, 16)})
+
+	assert plainly["slots"].get("max") == 16
+	assert "max" not in plainly["feel"], "the backstop stopped applying"
+
+	# And the specific one wins where both are given.
+	both = bounded({"grid": (1, 16), ("grid", "beats"): (0.1, 1.0)})
+
+	assert both["slots"].get("max") == 16 and both["feel"].get("max") == 1.0
+
+
 def test_a_stack_holding_such_a_layer_can_still_be_rewritten () -> None:
 	"""The symptom rather than the mechanism, because the symptom is what cost
 	an afternoon: every control on the stack went dead at once.

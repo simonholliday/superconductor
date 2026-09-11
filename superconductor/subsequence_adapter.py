@@ -1619,10 +1619,53 @@ def _outside (default: typing.Any, low: float, high: float) -> bool:
 	return not low <= default <= high
 
 
+Bounds = collections.abc.Mapping[
+	"str | tuple[str, str]", tuple[float, float]]
+"""What a composition says a parameter's range is, keyed by name or by name and unit.
+
+A bare name bounds that parameter wherever it appears, and **a name with a unit
+bounds only the meaning measured in that unit** — most specific winning, which
+is the shape a page's `parts` and a composition's own overrides already have.
+
+**One name really does cover two meanings, and it has already cost a session**
+(#2413).  `grid` is on eight of Subsequence's entries: seven mean *how many
+slots the pattern has* and `swing.grid` means *grid size in beats*, opening at
+0.25, which a bound of 1 to 16 forbids — so Simon added a swing layer and could
+then toggle nothing on that stack at all, because a stack is written whole and
+one impossible value refuses every layer on it.
+
+Until an app declared its units there was nothing on the wire that told the two
+apart, and the defence was `_outside` below: notice that a bound excludes the
+parameter's own default, and drop the bound with a warning.  That stays, because
+a composition may still key a name plainly and a *future* collision has no unit
+to separate it either — but it is the backstop now rather than the answer.
+"""
+
+
+def _bound_for (
+	field: dict[str, typing.Any],
+	narrowed: Bounds,
+) -> tuple[float, float] | None:
+	"""The bound this composition set for this parameter, if it set one.
+
+	Most specific wins: a `(name, unit)` key is preferred to a bare name, so a
+	composition can bound *how many slots* without touching the one entry where
+	the same word means beats.
+	"""
+
+	name = str(field.get("name", ""))
+	unit = field.get(superconductor.protocol.UNIT)
+
+	if isinstance(unit, str) and (name, unit) in narrowed:
+		return narrowed[(name, unit)]
+
+	return narrowed.get(name)
+
+
 def offerable (
 	catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 	pitches: collections.abc.Sequence[str],
-	bounds: dict[str, tuple[float, float]] | None = None,
+	bounds: Bounds | None = None,
 ) -> list[dict[str, typing.Any]]:
 	"""An app's catalogue, with the pitches this composition actually has.
 
@@ -1654,7 +1697,7 @@ def offerable (
 	instead of a stepper.
 	"""
 
-	narrowed = bounds or {}
+	narrowed: Bounds = bounds or {}
 	offered: list[dict[str, typing.Any]] = []
 
 	for generator in catalogue:
@@ -1679,8 +1722,10 @@ def offerable (
 				undrawn.append(str(field.get("name")))
 				continue
 
-			if field.get("kind") in ("number", "range") and field.get("name") in narrowed:
-				low, high = narrowed[str(field.get("name"))]
+			bound = _bound_for(field, narrowed) if field.get("kind") in ("number", "range") else None
+
+			if bound is not None:
+				low, high = bound
 
 				# **A bound that excludes the parameter's own default is not
 				# applied**, because a control born outside its own range is one
@@ -1888,7 +1933,7 @@ class Recipe (Control):
 		catalogue: collections.abc.Sequence[dict[str, typing.Any]],
 		pitches: collections.abc.Sequence[str] = (),
 		pitch_notes: collections.abc.Mapping[str, int] | None = None,
-		bounds: dict[str, tuple[float, float]] | None = None,
+		bounds: Bounds | None = None,
 		transforms: collections.abc.Sequence[dict[str, typing.Any]] = (),
 		builds: str | None = None,
 		sources: dict[str, collections.abc.Callable[[typing.Any], None]] | None = None,

@@ -893,7 +893,20 @@ def _stack_for (pattern: str, name: str, title: str,
 		pitch_notes=dict(pitch_notes or {}),
 		bounds={
 			"pulses": (0, steps),
-			"grid": (1, steps),
+
+			# **Named with its unit, because one word covers two meanings**
+			# (#2413, fixed by #2436).  `grid` is on eight of Subsequence's
+			# entries: seven mean *how many slots the pattern has* and
+			# `swing.grid` means *grid size in beats*, opening at 0.25 — which
+			# this range forbids.  Bounded plainly it took the swing layer out
+			# of range at birth, and a stack is written whole, so every control
+			# on that stack was then refused while the message named a layer
+			# nobody had touched.
+			#
+			# The adapter dropped the bound with a warning, which was the right
+			# thing to do knowing nothing; the unit is what lets it be right
+			# instead.
+			("grid", "steps"): (1, steps),
 			"subdivisions": (1, 8),
 			"duration": (0.05, float(beats)),
 
