@@ -415,9 +415,29 @@ panel, which is the whole point of the exercise.
 """
 
 
+VARIANTS = ("A", "B", "C", "D")
+"""The versions of a pattern a person can switch between while it plays (#2485).
+
+**The same four on the drums, the bass and the chords**, which is what lets a
+scene be *cue B on every grid* (#2489).  Letters because they read at a glance,
+fit four targets above a sixteen-step grid at every size, and are what every
+drum machine has taught; a composition wanting names says names here.  A grid
+given none — the shared grid, the lane, the nine, the grids a rack makes — is
+exactly the grid it always was.
+"""
+
+LANDS_EVERY = 1
+"""How many cycles a cued variant waits for: here, to the end of this one.  Two
+would hold every switch for the end of a two-bar phrase over a one-bar pattern
+(#2485 Q3)."""
+
+
 composition = subsequence.Composition(output_device=MIDI_PORT, bpm=120)
 
-composition.data["grid"] = {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}
+# The opening pattern is variant A's.  The other three open empty, and a person
+# starts one from A with a tap (#2485 Q6).
+composition.data["grid"] = {
+	"A": {"rows": {row: sorted(OPENING_PATTERN.get(row, [])) for row in ROWS}}}
 composition.data["shared"] = {row: [] for row in ROWS}
 composition.data["snare_lane"] = {"snare": []}
 composition.data["nine"] = {row: [] for row in ROWS}
@@ -685,7 +705,9 @@ def drums (p: typing.Any) -> None:
 	about 20 ms at 120 BPM — before it can be heard, rather than a whole beat.
 	"""
 
-	_play(p, composition.data["grid"])
+	# Asked at the build rather than read off `composition.data`, because the build
+	# is the one moment a cued variant may start to play (#2485).
+	_play(p, drum_grid.now(p))
 	drum_recipe.build(p)
 
 
@@ -738,7 +760,7 @@ def bass (p: typing.Any) -> None:
 	beats_per_position = STEP_DURATION / BASS_DIVISIONS
 
 	# **As written, and moved with everything else below** (#2454).
-	for row, notes in composition.data["bass"].items():
+	for row, notes in bass_grid.now(p).items():
 		for at, note in notes.items():
 			p.note(
 				BASS_NOTE_MAP[row], beat=int(at) * beats_per_position,
@@ -833,7 +855,7 @@ def chords (p: typing.Any) -> None:
 
 	# One position is one step here, unlike the bass: a chord wants to land on
 	# the beat rather than between two of them, and nothing yet asks otherwise.
-	for row, notes in composition.data["chords"].items():
+	for row, notes in chord_grid.now(p).items():
 		for at, note in notes.items():
 			p.note(
 				CHORD_NOTE_MAP[row], beat=int(at) * STEP_DURATION,
@@ -1246,6 +1268,13 @@ worth saying plainly rather than discovering.
 """
 
 
+drum_grid = superconductor.subsequence_adapter.StepGrid(
+	composition, rows=ROWS, steps=STEPS, beats=BEATS,
+	data_key="grid", name="grid", title="DRM1 — pattern 1",
+	about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
+	pattern="drums", variants=VARIANTS, lands_every=LANDS_EVERY)
+
+
 bass_grid = superconductor.subsequence_adapter.NoteGrid(
 	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 	data_key="bass", name="bass", title="Minitaur — bass",
@@ -1254,7 +1283,7 @@ bass_grid = superconductor.subsequence_adapter.NoteGrid(
 	pattern="bass", divisions=BASS_DIVISIONS,
 	about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 	default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
-	visible_rows=12)
+	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY)
 
 
 chord_grid = superconductor.subsequence_adapter.NoteGrid(
@@ -1267,22 +1296,20 @@ chord_grid = superconductor.subsequence_adapter.NoteGrid(
 	pattern="chords",
 	about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
 	default_length=CHORD_LENGTH, default_velocity=CHORD_VELOCITY,
-	visible_rows=12)
-"""The two pitched patterns, named rather than built in place.
+	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY)
+"""The three patterns that take variants, named rather than built in place.
 
-A pattern function has to read its grid's transposition when it builds, so the
-grid has to be a thing this file can refer to (#2144).
+A pattern function asks its grid what to play when it builds — which variant is
+live, and whether a cued one lands now (#2485) — and reads a pitched grid's
+transposition then too (#2144), so each grid has to be a thing this file can
+refer to.
 """
 
 
 link = superconductor.subsequence_adapter.AppLink(
 	composition,
 	controls=[
-		superconductor.subsequence_adapter.StepGrid(
-			composition, rows=ROWS, steps=STEPS, beats=BEATS,
-			data_key="grid", name="grid", title="DRM1 — pattern 1",
-			about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
-			pattern="drums"),
+		drum_grid,
 		# A grid with no instrument behind it: no channel, no note map, no
 		# pattern function of its own. It makes no sound until something routes
 		# it, and then it makes that thing's sound (#2108).

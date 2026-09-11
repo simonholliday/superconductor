@@ -646,6 +646,49 @@ def test_a_stack_on_a_one_voice_lane_offers_only_that_voice (
 	assert [one["value"] for one in pitch["options"]] == ["snare"]
 
 
+def test_the_drums_the_bass_and_the_chords_take_the_same_four_variants (
+	rig: typing.Any) -> None:
+	"""The same letters on all three is what makes a scene *cue B on every grid*
+	(#2485 Q6, #2489); every other grid on the rig declares none and is the grid
+	it always was."""
+
+	declared = {name: control.declaration() for name, control in rig.link.controls.items()
+	            if isinstance(control, (superconductor.subsequence_adapter.StepGrid,
+	                                    superconductor.subsequence_adapter.NoteGrid))}
+
+	with_variants = {name: one["variants"] for name, one in declared.items() if one.get("variants")}
+
+	assert with_variants == {name: list(rig.VARIANTS) for name in ("grid", "bass", "chords")}
+
+
+def test_the_opening_pattern_is_variant_a_s (rig: typing.Any) -> None:
+	"""A person starts B from A with a tap; the file seeds the first alone."""
+
+	assert rig.drum_grid.rows_now("A")["kick"] == rig.OPENING_PATTERN["kick"]
+	assert all(not any(rig.drum_grid.rows_now(one).values()) for one in ("B", "C", "D"))
+
+
+def test_a_build_plays_the_variant_the_grid_says_and_lands_a_cue (rig: typing.Any) -> None:
+	"""**The whole mechanism, through the rig's own play function**: a cued variant
+	becomes the live one at the build and its steps are what the build places."""
+
+	rig.drum_grid.apply(["variants", "B", "rows"], {"clap": [2]})
+
+	try:
+		rig.drum_grid.apply(["cue"], "B")
+		landed = _built(rig, rig.drums, rig.STEPS)
+
+		assert rig.drum_grid.playing == "B"
+		assert {note.origin for note in landed} == {"clap"}, "the build played A"
+
+	finally:
+		rig.drum_grid.apply(["cue"], "A")
+		rig.drum_grid.now()
+		rig.drum_grid.apply(["variants", "B", "rows"], {})
+
+	assert rig.drum_grid.playing == "A"
+
+
 def test_the_nine_runs_against_the_sixteen_rather_than_inside_it (
 	rig: typing.Any) -> None:
 	"""Subsequence does polyrhythm by independent pattern lengths, so this is a
@@ -867,8 +910,11 @@ def test_a_generated_note_moves_with_the_pattern_s_transposition (
 	monkeypatch.setattr(rig.link, "happened", lambda name, **fields: reported.append(
 		{"name": name, **fields}))
 
-	held = rig.composition.data["bass"]
-	rig.composition.data["bass"] = {"E2": {"0": {"length": 6, "velocity": 100}}}
+	# Through the grid's own whole-variant write, into the variant playing, since
+	# a grid with variants keeps its rows one level down (#2485).
+	playing = rig.bass_grid.playing
+	held = rig.bass_grid.rows_now(playing)
+	rig.bass_grid.apply(["variants", playing, "rows"], {"E2": {"0": {"length": 6, "velocity": 100}}})
 	rig.bass_recipe.apply(["layers"], [
 		{"id": "made", "generator": "hit_steps", "bypassed": False,
 		 "params": {"pitch": "C2", "steps": [4]}}])
@@ -880,7 +926,7 @@ def test_a_generated_note_moves_with_the_pattern_s_transposition (
 	finally:
 		rig.bass_grid.transpose = 0
 		rig.bass_recipe.apply(["layers"], [])
-		rig.composition.data["bass"] = held
+		rig.bass_grid.apply(["variants", playing, "rows"], held)
 
 	assert sorted(note.pitch for note in landed) == [38, 42], (
 		"the tapped E2 and the generated C2 should both sound two semitones up")
