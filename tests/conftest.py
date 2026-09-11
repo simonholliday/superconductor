@@ -165,6 +165,28 @@ CONTROLS: dict[str, typing.Any] = {
 		      "options": [{"value": voice, "label": voice}
 		                  for voice in ("kick", "snare")]},
 		 ]},
+		# **A long `choices` that may hold nothing**, which after #2443 no real
+		# catalogue entry is.  `ratchet.steps` was the only one and it is a
+		# *position*, so it draws as a lane now and never reaches the menu — and
+		# the menu is where "choose" had to become "auto" (#2381).  The rule is
+		# right for any `choices` and this is what holds it, exactly as `duet`
+		# holds a shape no real generator has.
+		{"name": "pick", "summary": "Play some of the voices.", "partial": False,
+		 "parameters": [
+		     # Two pools, one optional and one not, because the word each draws
+		     # is only worth asserting beside the other: a test that looks at
+		     # the optional one alone passes against a build saying "auto" on
+		     # everything.  Six options apiece, which is what puts them behind a
+		     # menu rather than in a row (`CHOICE_BUTTONS`).
+		     {"name": "voices", "label": "voices", "kind": "choices", "role": "pitch",
+		      "required": False, "default": None,
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
+		     {"name": "always", "label": "always", "kind": "choices", "role": "pitch",
+		      "required": True,
+		      "options": [{"value": voice, "label": voice}
+		                  for voice in ("kick", "snare", "clap", "rim", "tom", "hat")]},
+		 ]},
 		# **A generator that wants a place in the pattern** (#2411, #2412), which
 		# is `pitch`'s join a second time: the app says *this is a position* and
 		# the composition says there are these eight and this is what each is

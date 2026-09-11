@@ -2600,6 +2600,80 @@ html, body {
    control reads as live, without a second fill inside the first. */
 .switch.on { border-color: var(--on-edge); }
 
+/* **A rhythm, drawn as the row it is** (#2443).
+ *
+ * One target a place, laid out in the lattice's own units so it lines up with
+ * the pattern it is a shape in — `var(--cell)` wide and `var(--gap)` apart, the
+ * same two numbers the grid above it is built from.  A lane that sat on some
+ * other rhythm of widths would read as a different kind of thing, which is the
+ * whole reason this is not a row of `.choices` buttons.
+ *
+ * **Fixed rather than stretched**, so a nine-place lane is nine cells and not
+ * nine stretched to fill sixteen: the width says how long the pattern is, and a
+ * lane that always filled its row would say nothing.
+ *
+ * **No wrapping, ever.**  `.choices` wraps because a set has no order and a
+ * second line of it costs nothing; a rhythm folded onto two lines is not a
+ * rhythm any more.  The block is sized to hold the lane whole (`BESIDE_A_LANE`),
+ * so there is nothing to wrap.
+ *
+ * The chosen look is `.choices button.here` below, shared deliberately: a place
+ * that is on and an option that is chosen are the same statement, and two ways
+ * of saying it is how a panel stops being read. */
+.grid.params .places {
+	display: flex;
+	gap: var(--gap);
+	flex-wrap: nowrap;
+
+	/* **It does not give way, and that is not tidiness.**  `.setting` is a flex
+	   row and a lane is one item in it beside the way back to unset; left
+	   shrinkable it was squeezed to two thirds of its width while its own
+	   targets — which cannot shrink — carried on past the edge, so the `auto`
+	   button was drawn *on top of* places three and four.  A control a finger
+	   cannot tell from the one behind it is worse than one that does not fit.
+	   The block is sized to hold both (`BESIDE_A_LANE`), so nothing has to. */
+	flex: 0 0 auto;
+}
+
+/* **This says no size at all, and that is the rule rather than an omission**
+   (#2107): a surface decides a control's size, never the control.  A lane sits
+   on `.part-body`, whose surface rule already says *a control is one row* — and
+   `controlRow(cell)` returns the cell, so a lane target is a cell square by
+   construction and lines up with the pattern above it without being told to.
+
+   **Two wrong turns got here and both are worth keeping.**  `min-width: 0` came
+   first, to make a target narrower than a row; that is the exemption #2389
+   forbids — *the fix is a bigger control, not an escape* — and it was also the
+   layout bug: with their floor removed the targets contributed nothing to their
+   container's intrinsic width, so `.places` settled at **103px against 372px of
+   content**, spilled past its own box, and the `auto` button beside it was drawn
+   on top of places three and four.  An explicit `width` fixed the picture and
+   broke the rule instead — `tests/test_page.py` refuses any rule naming a button
+   that states a width, a height or a type, and it was right to.
+
+   **Restoring the floor fixed both at once**, which is the argument for the rule:
+   the targets are a row each because the surface says so, and a container whose
+   items have a floor has an intrinsic width.
+
+   Only the padding goes, because a lane target carries a digit rather than a
+   word and `0 0.7rem` is sized for one. */
+.grid.params .places button {
+	flex: 0 0 auto;
+	padding: 0;
+
+	background: var(--panel);
+	color: var(--ink-quiet);
+	font-family: var(--face-figures);
+	font-variant-numeric: tabular-nums;
+}
+
+.grid.params .places button.here {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: var(--on-ink);
+	font-weight: 600;
+}
+
 .grid.params .choices { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
 .grid.params .choices button {

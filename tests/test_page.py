@@ -6588,15 +6588,7 @@ def test_a_place_in_the_pattern_is_offered_as_the_places_the_pattern_has (
 
 	_open_the_stack(panel)
 	part = _one_hit_steps(panel, fake_app, {"steps": [0, 4]})
-	row = part.locator('.setting[data-field="steps"]')
-
-	assert row.locator(".picker").inner_text().startswith("1, 5"), \
-		f"the places held are not named: {row.locator('.picker').inner_text()}"
-
-	row.locator(".picker").click()
-	_settled(panel)
-
-	offered = row.locator(".options button")
+	offered = part.locator('.setting[data-field="steps"] .places button')
 
 	assert offered.count() == 8, f"{offered.count()} places offered"
 	assert [offered.nth(at).inner_text() for at in range(8)] == \
@@ -6616,6 +6608,89 @@ def test_a_place_in_the_pattern_is_offered_as_the_places_the_pattern_has (
 		f"a place was sent as something other than the app's own value: {asked['v']}"
 
 
+def test_a_lane_is_a_row_of_targets_the_size_of_the_pattern_above_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2443.  A rhythm is read as a row, so it is drawn as one — in the lattice's
+	own units, so it lines up with the pattern it is a shape in.
+
+	**No size is declared for it anywhere**, and that is the rule rather than an
+	omission (#2107): a surface decides a control's size, and `.part-body`'s
+	already says *a control is one row*.  `controlRow(cell)` returns the cell, so
+	a lane target comes out a cell square without being told to.
+
+	**Two wrong turns got here.**  `min-width: 0` made a target smaller than a
+	row, which is the exemption #2389 forbids — and it was also a layout bug,
+	because targets with no floor contribute nothing to their container's
+	intrinsic width: `.places` settled at 103px against 372px of content, spilled
+	past its own box, and the `auto` button beside it was drawn on top of places
+	three and four.  An explicit `width` fixed the picture and broke the rule
+	instead.  Restoring the floor fixed both.
+	"""
+
+	_open_the_stack(panel)
+	part = _one_hit_steps(panel, fake_app, {"steps": [0, 4], "accents": [2]})
+
+	assert part.locator('.setting[data-field="accents"] .places').count() == 1, \
+		"no lane is drawn at all, so there is nothing here to measure"
+
+	measured = panel.eval_on_selector(
+		'.part[data-part="stack/one"] .setting[data-field="accents"]',
+		"""(el) => {
+			const lane = el.querySelector('.places');
+			const one = lane.children[0].getBoundingClientRect();
+			const auto = el.querySelector('button.auto').getBoundingClientRect();
+			const cell = parseFloat(getComputedStyle(document.querySelector('.grid-wrap'))
+				.getPropertyValue('--cell'));
+
+			return {
+				cell, wide: one.width, high: one.height,
+				spill: lane.scrollWidth > lane.clientWidth + 1,
+				over: lane.getBoundingClientRect().right > auto.left + 1,
+			};
+		}""")
+
+	assert abs(measured["wide"] - measured["cell"]) < 1.5, \
+		f"a place is not a lattice cell wide: {measured}"
+	assert abs(measured["high"] - measured["cell"]) < 1.5, \
+		f"a place is not a lattice cell high: {measured}"
+
+	assert not measured["spill"], f"the lane ran past its own box: {measured}"
+	assert not measured["over"], f"the lane was drawn under the way back to unset: {measured}"
+
+
+def test_a_block_holding_a_lane_is_as_wide_as_the_lane (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Sixteen places in six cells would be nine pixels a target at the compact
+	size, which is under anything a finger can work — so the width is not a
+	preference, it is the difference between a rhythm you tap and a menu you read.
+
+	**A grid already does this**: `Grid` lays out `repeat(steps, …)`, so the drum
+	block is sixteen cells wide because it has sixteen steps.  A generator block
+	holding a pattern-width control being pattern-width is consistent rather than
+	novel.
+
+	Asserted against a block *without* a lane as well, because a rule that widened
+	every block would pass the first half and be wrong.
+	"""
+
+	_open_the_stack(panel)
+	_one_hit_steps(panel, fake_app, {"steps": [0, 4]})
+
+	def columns (part: str) -> int:
+		return panel.eval_on_selector(
+			f'.part[data-part="{part}"] .grid.params',
+			"el => getComputedStyle(el).gridTemplateColumns.split(' ').length")
+
+	# Eight places, and room beside them for the way back `accents` may want.
+	assert columns("stack/one") == 1 + 8 + 3, \
+		"the block is not sized to hold its lane and what shares the row"
+
+	_one_euclidean(panel, fake_app, {"duration": 1})
+
+	assert columns("stack/one") == 1 + 6, \
+		"a block with no lane in it grew anyway"
+
+
 def test_a_list_that_may_hold_nothing_says_auto_rather_than_choose (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**"choose" is an instruction and "auto" is a state** (#2381).
@@ -6626,27 +6701,37 @@ def test_a_list_that_may_hold_nothing_says_auto_rather_than_choose (
 
 	A `choice` has said this since #2381 and its plural had not, which is the
 	one-kind-fixed-and-its-neighbour-left shape this file has met three times.
-	It could not be seen until #2412: **`ratchet.steps` is the only `choices` in
-	Subsequence's entire catalogue that may hold nothing**, and it did not exist
-	as a drawable control until positions did.
+	It could not be seen until #2412: `ratchet.steps` was the only `choices` in
+	Subsequence's catalogue that may hold nothing.
 
-	Both are asserted, because a test that only looks at the optional one passes
-	against a build that says `auto` on everything.
+	**And after #2443 no real entry reaches this at all**, because that one is a
+	*position* and a position is a lane rather than a menu.  The rule is still
+	right for any `choices`, so the fixture carries `pick` to hold it — the same
+	job `duet` does for a shape no real generator has.
+
+	Both words are asserted, because a test that only looks at the optional one
+	passes against a build that says `auto` on everything.
 	"""
 
 	_open_the_stack(panel)
-	part = _one_hit_steps(panel, fake_app, {})
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "pick", "index": 1, "bypassed": False, "params": {}},
+	], by="app")
+	_settled(panel)
 
 	# Lower-cased because the panel letters in capitals: the word is the code's
 	# and the case is the stylesheet's, and asserting the second would make this
 	# a test about `text-transform`.
 	def says (field: str) -> str:
-		return part.locator(f'.setting[data-field="{field}"] .picker').inner_text().lower()
+		return panel.locator(
+			f'.part[data-part="stack/one"] .setting[data-field="{field}"] .picker'
+		).inner_text().lower()
 
-	assert says("accents").startswith("auto"), \
+	assert says("voices").startswith("auto"), \
 		"a list the app may fill itself asked to be chosen from"
 
-	assert says("steps").startswith("choose"), \
+	assert says("always").startswith("choose"), \
 		"a list that must hold something offered an auto it has not got"
 
 

@@ -277,6 +277,20 @@ const NOTE_CONTROL_CELLS = 2;
    snap to, and the selected note's length. Counted here because a block's
    height is decided before anything is drawn, and a strip the fit did not know
    about is a strip that overflows its own block. */
+const BESIDE_A_LANE = 3;
+/* Room on a lane's own row for whatever else it carries — today the way back to
+ * unset, which is four characters and a floor of one row (#2381).
+ *
+ * **Held for whether the parameter *can* be unset rather than whether it is**,
+ * because a block that grew a cell the moment somebody set a value would resize
+ * the whole arrangement under their finger, and #2217 is what that costs. It is
+ * a declaration fact, so the width is settled before anything is touched.
+ *
+ * Three cells rather than a measurement, for the same reason `PARAM_CELLS` is
+ * six: the lattice is what everything here is counted in, and a block that
+ * measured its own contents would be asking the question `useCellSize` is
+ * already answering from the other end. */
+
 const PARAM_CELLS = 6;
 /* A control's row is one cell. The same cell as everything else.
  *
@@ -1814,6 +1828,33 @@ function Setting ({ field, held, onSet }) {
 				onPointerDown=${(event) => { event.preventDefault(); toggle(value); }}
 			>${label}</button>`;
 
+		/* **A rhythm is read as a row, so it is drawn as one** (#2443).
+		
+		   Every other `choices` on this panel is a set — pitches, waveforms — and
+		   a menu is a fair way to pick from a set. **A list of positions is not a
+		   set, it is a shape in time**, and the thing it is a shape in is drawn
+		   directly above it as sixteen cells across. Offered as a menu it was
+		   sixteen rows to read; offered as a lane it is the rhythm, tapped where
+		   it sounds.
+		
+		   This is #2374 one layer down and for the same reason: a pitch pool was
+		   thirty-three toggles until a keyboard made a triad three taps in the
+		   shape of the chord, and *the value was always right — only the drawing
+		   was wrong*.
+		
+		   **The count is ignored here**, where every other `choices` consults
+		   `CHOICE_BUTTONS`: a rhythm of sixteen is the ordinary case rather than
+		   the overflowing one, and the block is sized to hold it.
+		
+		   The labels are the composition's, as the options are (#2144): a
+		   musician counts from one, and inside a beat from the beat. */
+		if (field.role === "position") {
+			return html`
+				<div class="places">
+					${options.map((one) => option(one.value, one.label || one.value))}
+				</div>`;
+		}
+
 		if (options.length <= CHOICE_BUTTONS) {
 			return html`
 				<div class="choices">
@@ -2184,11 +2225,26 @@ function Keyboard ({ pitches, chosen, onSet }) {
 
 
 function Contribution ({ name, layer, layers, offered, why, onSet }) {
+	/* **A block that holds a lane is as wide as the lane** (#2443), which is
+	   exactly what a grid already does: `Grid` lays out `repeat(steps, …)`, so
+	   the drum block is sixteen cells wide because it has sixteen steps. A
+	   generator block holding a pattern-width control being pattern-width is
+	   consistent rather than novel.
+	
+	   Sixteen places in six cells would be nine pixels a target at the compact
+	   size, which is under anything a finger can work — so the width is not a
+	   preference, it is the difference between a rhythm you tap and a menu you
+	   read. */
+	const cells = Math.max(PARAM_CELLS, ...(offered ? offered.parameters : [])
+		.filter((field) => field.role === "position")
+		.map((field) => (field.options || []).length
+			+ (opensUnset(field) ? BESIDE_A_LANE : 0)));
+
 	const style = {
-		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
+		gridTemplateColumns: `var(--label) repeat(${cells}, var(--cell))`,
 	};
 
-	const full = { gridColumn: `span ${PARAM_CELLS + 1}` };
+	const full = { gridColumn: `span ${cells + 1}` };
 	const index = layers.findIndex((one) => one.id === layer.id);
 	const send = (next) => onSet(`${name}/layers`, next);
 
@@ -2295,7 +2351,7 @@ function Contribution ({ name, layer, layers, offered, why, onSet }) {
 								</div>`,
 							html`
 								<div class="setting" key=${field.name} data-field=${field.name}
-									style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+									style=${{ gridColumn: `span ${cells}` }}>
 									${patched
 										? html`<${PatchedFrom} from=${value.id} />`
 										: html`
