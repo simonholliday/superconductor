@@ -395,8 +395,11 @@ def test_the_store_is_written_off_the_clock_and_never_on_it (
 	real = adapter.PatternStore.save
 
 	def save (store: adapter.PatternStore, controls: dict[str, typing.Any]) -> None:
-		writers.append(threading.current_thread())
+		# Noted once the file is written rather than before, or the wait below
+		# ends while the write is still going and the read finds no file — which
+		# is what a slow runner did on the first push.
 		real(store, controls)
+		writers.append(threading.current_thread())
 
 	monkeypatch.setattr(adapter.PatternStore, "save", save)
 
