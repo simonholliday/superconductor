@@ -1048,10 +1048,25 @@ def test_dragging_out_from_empty_ground_places_a_note_and_sizes_it (
 	# The last of them, not the first: placing sends the snap's own length so
 	# the note exists at a legal size from the moment it is drawn, and the
 	# release then sends what the drag actually decided.
-	fake_app.await_set("bass/D2/2/length")
-	lengths = [frame["v"] for frame in fake_app.sets if frame.get("path") == "bass/D2/2/length"]
+	#
+	# **Waited for until the release's frame has landed, not until the path has
+	# been seen.**  The first frame on this path is the placement's, so waiting
+	# for the path returned the moment it arrived — and on a busy runner the
+	# release's had not, so the list read `[1]` and the test failed on code that
+	# was right (CI, 2026-09-11).  Waiting for a frame's kind is not waiting for
+	# its contents.
+	deadline = time.monotonic() + 5
+	lengths: list[typing.Any] = []
 
-	assert lengths[0] == 1, "placed at the snap's own length"
+	while time.monotonic() < deadline:
+		lengths = [frame["v"] for frame in fake_app.sets if frame.get("path") == "bass/D2/2/length"]
+
+		if lengths and lengths[-1] == 3:
+			break
+
+		time.sleep(0.02)
+
+	assert lengths and lengths[0] == 1, f"placed at the snap's own length: {lengths}"
 	assert lengths[-1] == 3, f"and sized by the drag: {lengths}"
 
 
