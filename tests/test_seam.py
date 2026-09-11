@@ -113,6 +113,36 @@ def test_a_step_grid_and_the_service_agree_after_every_write (
 	_agree(_steps(), rest, value)
 
 
+def _variant_steps () -> typing.Any:
+	"""A two-variant step grid, the first holding a pattern (#2485)."""
+
+	composition = Composition()
+	composition.data["grid"] = {"A": {"rows": {"kick": [0, 4]}}}
+
+	return adapter.StepGrid(
+		composition, rows=["kick", "snare"], steps=8, beats=2,
+		data_key="grid", name="grid", variants=("A", "B"))
+
+
+@pytest.mark.parametrize(("rest", "value"), [
+	(["variants", "B", "rows", "kick", "2"], True),
+	(["variants", "A", "rows", "kick", "0"], False),
+	(["variants", "B", "rows"], {"snare": [5, 1, 5]}),
+	(["variants", "A", "rows"], {}),
+	(["cue"], "B"),
+	(["cue"], "A"),
+	(["enabled"], False),
+])
+def test_a_grid_with_variants_and_the_service_agree_after_every_write (
+	rest: list[str], value: typing.Any) -> None:
+	"""**A new path shape is exactly the join this file exists for** (#2485): a
+	variant's cells one level further down, a whole variant written at once, and
+	a cue — including the one that takes a cue back by naming the one playing,
+	which is answered with what was kept rather than what was asked."""
+
+	_agree(_variant_steps(), rest, value)
+
+
 @pytest.mark.parametrize(("rest", "value"), [
 	(["rows"], {}),
 	(["rows"], {"C2": {"3": {"length": 2, "velocity": 90}}}),

@@ -367,7 +367,279 @@ class Control:
 			LOG.warning("this composition cannot mute %r", self.pattern)
 
 
-class StepGrid (Control):
+class _Variants:
+	"""What lets a grid hold several versions of its notes and play one of them (#2485).
+
+	**Declared by the composition, and a grid declaring none is exactly the grid
+	it always was**: the same paths, the same state, the same drawing.  A grid
+	declaring ``("A", "B", "C", "D")`` keeps four sets of rows under
+	``composition.data[data_key]`` — ``{"A": {"rows": {...}}, ...}``, a variant
+	being an object so that whatever one later holds beside its rows cannot
+	collide with a row name — and plays one of them.
+
+	**Which one plays is the app's, and moves only at a build.**  A panel asks with
+	``cue``; the play function asks the grid what to play with `now`, which is the
+	one moment a cue may land, and the change is reported from there.  So the
+	blinking on the glass stops when the app says so, rather than when a panel
+	guesses the bar is over, and a panel reloading mid-cue sees the cue.
+
+	**One address per cell**: ``grid/variants/B/rows/kick/3``.  ``grid/kick/3`` is
+	refused on a grid with variants rather than read as "the one playing" — two
+	spellings of one cell is how two ends come to disagree (#2426).
+
+	Only the notes are a variant's.  The mute, a note grid's transposition and the
+	stack that builds the pattern stay the pattern's, because they are how it is
+	being played rather than what was written (#2485 Q4).
+	"""
+
+	composition: typing.Any
+	data_key: str
+	name: str
+
+	link: "AppLink | None" = None
+
+	variants: list[str]
+	"""The ids the composition declared, in order.  Empty for a grid without any."""
+
+	lands_every: int = 1
+	"""A cue lands at the first build whose cycle is a multiple of this."""
+
+	playing: str | None = None
+	"""Which variant is sounding.  Written by the app alone, at a build."""
+
+	cue: str | None = None
+	"""Which variant a panel has asked for next, until it lands."""
+
+	def _take_variants (self, variants: collections.abc.Sequence[str], lands_every: int) -> None:
+		"""Hold the declared ids, and make the composition's dict the shape they need.
+
+		**A plain set of rows seeded for a grid that declares variants is refused,
+		and loudly**: it would sit beside the variants as though it were one of
+		them, and a person would find their seed nowhere on the glass.  Seed a
+		variant instead, which is one line: ``{"A": {"rows": {...}}}``.
+		"""
+
+		self.variants = [str(one) for one in variants]
+
+		if len(set(self.variants)) != len(self.variants):
+			raise ValueError(f"{self.name} declares two variants with one name: {self.variants}")
+
+		if any(not one or "/" in one for one in self.variants):
+			raise ValueError(f"a variant's name is part of a path, so {self.variants} will not do")
+
+		if isinstance(lands_every, bool) or not isinstance(lands_every, int) or lands_every < 1:
+			raise ValueError(f"a cue lands every whole number of cycles, not {lands_every!r}")
+
+		self.lands_every = lands_every
+		self.playing = self.variants[0] if self.variants else None
+		self.cue = None
+
+		if not self.variants:
+			return
+
+		held = self.composition.data.setdefault(self.data_key, {})
+		strange = [key for key in held if key not in self.variants]
+
+		if strange:
+			raise ValueError(
+				f"{self.name} declares variants {self.variants}, and the composition put "
+				f"{strange[:3]} beside them: seed a variant instead, as "
+				f"{{{self.variants[0]!r}: {{'rows': {{...}}}}}}")
+
+		for one in self.variants:
+			held.setdefault(one, {}).setdefault("rows", {})
+
+	def _variant_fields (self) -> dict[str, typing.Any]:
+		"""What a declaration says about the variants, which is nothing if there are none."""
+
+		return {"variants": list(self.variants), "lands_every": self.lands_every} if self.variants else {}
+
+	def _rows_of (self, variant: str | None) -> dict[str, typing.Any]:
+		"""The rows a variant holds — the grid's own if it has no variants — to write to."""
+
+		held: dict[str, typing.Any] = self.composition.data.setdefault(self.data_key, {})
+
+		if not self.variants:
+			return held
+
+		one = held.setdefault(variant or self.playing or self.variants[0], {})
+
+		rows: dict[str, typing.Any] = one.setdefault("rows", {})
+
+		return rows
+
+	def _rows_read (self, variant: str | None) -> dict[str, typing.Any]:
+		"""The same rows, to read from another thread: nothing is made that is missing."""
+
+		held = self.composition.data.get(self.data_key) or {}
+
+		if not self.variants:
+			return held
+
+		rows: dict[str, typing.Any] = (held.get(variant or self.playing) or {}).get("rows") or {}
+
+		return rows
+
+	def _addressed (self, rest: list[str]) -> tuple[str | None, list[str]]:
+		"""Which variant's rows a path reaches into, and the rest of the way there.
+
+		The rest is empty for the whole of those rows — a clear, or *start from A* —
+		and names a cell or a note otherwise.  A grid without variants reads
+		``rows`` as the whole grid and anything else as a cell, as it always did.
+		"""
+
+		if not self.variants:
+			return None, ([] if rest == ["rows"] else rest)
+
+		if rest == ["playing"]:
+			raise Refused("which variant plays is the app's to say: ask for one with cue")
+
+		if len(rest) < 3 or rest[0] != "variants" or rest[2] != "rows":
+			raise Refused(
+				f"{'/'.join(rest)!r} names no variant: a cell here is "
+				f"variants/<variant>/rows/<row>/<step>")
+
+		if rest[1] not in self.variants:
+			raise Refused(f"this grid has no variant called {rest[1]!r}")
+
+		return rest[1], rest[3:]
+
+	def _where (self, variant: str | None, *cell: typing.Any) -> str:
+		"""The path of a cell, whichever spelling this grid uses — for a report."""
+
+		prefix = f"{self.name}/variants/{variant or self.playing}/rows" if self.variants else self.name
+
+		return "/".join([prefix, *(str(one) for one in cell)])
+
+	def _keep_cue (self, value: typing.Any) -> bool:
+		"""Ask for a variant to be played next, or take the asking back.
+
+		Cueing the one already playing takes back any cue, which is what a person
+		pressing the lit ▶ means: stay here.
+		"""
+
+		if value is not None and value not in self.variants:
+			raise Refused(f"this grid has no variant called {value!r} to cue")
+
+		wanted = None if value == self.playing else value
+
+		if wanted == self.cue:
+			return False
+
+		self.cue = wanted
+
+		return True
+
+	def now (self, pattern: typing.Any = None) -> dict[str, typing.Any]:
+		"""What to play, which is the rows of whichever variant is live.
+
+		**Called by a play function at the build**, which is the one moment a cued
+		variant may become the live one: if a cue is waiting and this build's
+		cycle is one it may land on (`lands_every`), it lands here, and the link is
+		told.  No timer, no thread, nothing new on the clock loop — choosing a dict
+		is free, and the report is the frame any change already sends (#2485).
+
+		*pattern* is the builder, read for its cycle; without one a cue lands at
+		once, which is what a test or a composition with no cycle to wait for
+		wants.  A grid without variants hands back its rows as they have always
+		been read.
+		"""
+
+		if not self.variants:
+			return self._rows_of(None)
+
+		if self.cue is not None and self._lands(pattern):
+			self.playing, self.cue = self.cue, None
+
+			if self.link is not None:
+				self.link.report(f"{self.name}/playing", self.playing)
+				self.link.report(f"{self.name}/cue", None)
+				self.link.kept_changed()
+
+		return self._rows_of(self.playing)
+
+	def _lands (self, pattern: typing.Any) -> bool:
+		"""Whether a cue may land at this build."""
+
+		if pattern is None:
+			return True
+
+		return int(getattr(pattern, "cycle", 0) or 0) % self.lands_every == 0
+
+	def _variants_state (self, rows: collections.abc.Callable[[str], typing.Any]) -> dict[str, typing.Any]:
+		"""Every variant's rows, which one plays and which is cued, for a snapshot."""
+
+		return {"variants": {one: {"rows": rows(one)} for one in self.variants},
+		        "playing": self.playing, "cue": self.cue}
+
+
+def _restore_variants (
+	grid: typing.Any,
+	kept: dict[str, typing.Any],
+	restored: collections.abc.Callable[[dict[str, typing.Any], str | None], list[str]],
+) -> list[str] | None:
+	"""Put a grid's kept rows back, whichever shape they were kept in (#2485, #2487).
+
+	*restored* puts one set of rows back into one variant — or into the grid, for
+	``None`` — and says what it refused.  None comes back when the kept value is
+	no shape a grid ever wrote.
+
+	- **Kept with variants, into a grid with variants**: each variant exactly, and
+	  which one plays.  A variant the composition no longer declares is said.
+	- **Kept before the grid had variants**: what there was becomes the first,
+	  which is the conversion #2485 asks for.
+	- **Kept with variants the grid no longer declares**: the one that was playing
+	  becomes the grid, and every other is said rather than dropped in silence.
+	"""
+
+	name = grid.name
+	variants = kept.get("variants")
+	rows = kept.get("rows")
+
+	if grid.variants and isinstance(variants, dict):
+		refused: list[str] = []
+
+		for one, held in variants.items():
+			if one not in grid.variants:
+				refused.append(f"{name} has no variant called {one} any more")
+
+			elif not isinstance(held, dict) or not isinstance(held.get("rows"), dict):
+				refused.append(f"{name}: variant {one} was kept as something other than rows")
+
+			else:
+				refused.extend(restored(held["rows"], one))
+
+		playing = kept.get("playing")
+
+		if playing in grid.variants:
+			grid.playing = playing
+
+		elif playing is not None:
+			refused.append(f"{name} has no variant called {playing} to play any more")
+
+		return refused
+
+	if grid.variants and isinstance(rows, dict):
+		return restored(rows, grid.variants[0])
+
+	if isinstance(rows, dict):
+		return restored(rows, None)
+
+	if isinstance(variants, dict):
+		playing = kept.get("playing")
+		held = variants.get(playing) if isinstance(playing, str) else None
+
+		if not isinstance(held, dict) or not isinstance(held.get("rows"), dict):
+			return [f"{name} was kept with variants it no longer has, and none of them playing"]
+
+		return restored(held["rows"], None) + [
+			f"{name} has no variants any more, so {one} was not put back"
+			for one in variants if one != playing]
+
+	return None
+
+
+class StepGrid (_Variants, Control):
 	"""A grid of rows against steps, kept as a plain dict on ``composition.data``.
 
 	The dict is the composition's: the pattern builder reads it and this writes
@@ -395,8 +667,15 @@ class StepGrid (Control):
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		visible_rows: int | None = None,
 		pattern: str | None = None,
+		variants: collections.abc.Sequence[str] = (),
+		lands_every: int = 1,
 	) -> None:
-		"""Describe the grid to offer over a dict the composition already keeps."""
+		"""Describe the grid to offer over a dict the composition already keeps.
+
+		*variants* names the versions of its steps a person can switch between
+		while it plays (#2485), and *lands_every* how many cycles a switch waits
+		for; see `_Variants`.
+		"""
 
 		self.composition = composition
 		self.rows = list(rows)
@@ -406,6 +685,8 @@ class StepGrid (Control):
 		self.name = name
 		self.title = title
 		self.about = list(about)
+
+		self._take_variants(variants, lands_every)
 
 		self.pattern = pattern
 		"""Which of the composition's patterns this grid drives, if it drives one.
@@ -441,7 +722,8 @@ class StepGrid (Control):
 			# which is a MIDI number in a package that carries no MIDI; a note
 			# grid already declared this and a step grid did not, so the one that
 			# said nothing was the one being guessed at.
-			"velocity_range": list(VELOCITY_RANGE)}
+			"velocity_range": list(VELOCITY_RANGE),
+			**self._variant_fields()}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -450,8 +732,13 @@ class StepGrid (Control):
 
 		return declared
 
-	def _keep_rows (self, value: typing.Any) -> bool:
-		"""Replace the whole grid, which is how it is cleared.
+	def attach (self, link: "AppLink") -> None:
+		"""Keep the link, so a variant landing at a build can be said (#2485)."""
+
+		self.link = link
+
+	def _keep_rows (self, value: typing.Any, variant: str | None = None) -> bool:
+		"""Replace the whole grid, or one variant of it, which is how it is cleared.
 
 		A cell at a time would be a hundred and sixty requests to empty a drum
 		pattern, and a clear that stops half way through is worse than one that
@@ -469,7 +756,7 @@ class StepGrid (Control):
 			if steps:
 				wanted[row] = steps
 
-		return self._put_rows(wanted)
+		return self._put_rows(wanted, variant)
 
 	def _checked_row (self, row: typing.Any, held: typing.Any) -> list[int]:
 		"""One row of a whole-grid write, refused if the grid could not hold it.
@@ -494,10 +781,10 @@ class StepGrid (Control):
 
 		return sorted(set(held))
 
-	def _put_rows (self, wanted: dict[str, list[int]]) -> bool:
-		"""Make the grid hold exactly *wanted*, and say whether that changed it."""
+	def _put_rows (self, wanted: dict[str, list[int]], variant: str | None = None) -> bool:
+		"""Make the grid, or one variant of it, hold exactly *wanted*; say if it changed."""
 
-		grid = self.composition.data.setdefault(self.data_key, {})
+		grid = self._rows_of(variant)
 
 		if {row: steps for row, steps in grid.items() if steps} == wanted:
 			return False
@@ -508,10 +795,20 @@ class StepGrid (Control):
 		return True
 
 	def kept (self) -> dict[str, typing.Any]:
-		"""The steps somebody put down, and whether they are heard (#2487)."""
+		"""The steps somebody put down, and whether they are heard (#2487).
 
-		return {"rows": {row: steps for row, steps in self.rows_now().items() if steps},
-		        "enabled": self.enabled}
+		Every variant, and which one plays; never the cue, which is a request in
+		flight rather than something anybody made.
+		"""
+
+		def written (variant: str | None) -> dict[str, list[int]]:
+			return {row: steps for row, steps in self.rows_now(variant).items() if steps}
+
+		if not self.variants:
+			return {"rows": written(None), "enabled": self.enabled}
+
+		return {"variants": {one: {"rows": written(one)} for one in self.variants},
+		        "playing": self.playing, "enabled": self.enabled}
 
 	def restore (self, kept: typing.Any) -> list[str]:
 		"""Put the grid back exactly, taking out whatever the composition seeded.
@@ -520,15 +817,29 @@ class StepGrid (Control):
 		restore tool: a composition seeds a pattern on every start, and a store
 		that only added what it kept would bring back every seeded step a person
 		had taken out.
+
+		**Kept before this grid had variants, it becomes the first of them** — the
+		conversion #2485 asks for — and kept with variants this grid no longer
+		has, the one that was playing becomes the grid and the rest are said.
 		"""
 
-		if not isinstance(kept, dict) or not isinstance(kept.get("rows"), dict):
+		if not isinstance(kept, dict):
 			return [f"{self.name} was kept as something other than a grid"]
+
+		refused = _restore_variants(self, kept, self._restored_rows)
+
+		if refused is None:
+			return [f"{self.name} was kept as something other than a grid"]
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
+
+	def _restored_rows (self, rows: dict[str, typing.Any], variant: str | None) -> list[str]:
+		"""One set of kept rows put back exactly, a refused row at a time."""
 
 		refused: list[str] = []
 		wanted: dict[str, list[int]] = {}
 
-		for row, held in kept["rows"].items():
+		for row, held in rows.items():
 			try:
 				steps = self._checked_row(row, held)
 
@@ -539,21 +850,28 @@ class StepGrid (Control):
 			if steps:
 				wanted[row] = steps
 
-		self._put_rows(wanted)
+		self._put_rows(wanted, variant)
 
-		return refused + self._restore_enabled(kept.get("enabled", True))
+		return refused
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the grid now holds, which for a whole-grid write is not the ask.
 
 		A row given the same step twice, or out of order, is kept once and in
 		order — so the request and the result differ, and the panel has to be
-		told the second.
+		told the second.  A cue is answered with the cue as kept, because cueing
+		the variant already playing takes a cue back rather than making one.
 		"""
+
+		if rest == ["cue"]:
+			return self.cue
+
+		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
+			return self.rows_now(rest[1])
 
 		return self.rows_now() if rest == ["rows"] else value
 
-	def rows_now (self) -> dict[str, list[int]]:
+	def rows_now (self, variant: str | None = None) -> dict[str, list[int]]:
 		"""The grid as it stands, one row at a time, empty rows included.
 
 		Read from the link thread rather than the clock loop, deliberately: the
@@ -567,9 +885,11 @@ class StepGrid (Control):
 		the snapshot here made the service refuse the whole frame — `enabled` is
 		not a declared row — so a cleared grid stayed lit on every panel while
 		the music went quiet.
+
+		*variant* says which; the one playing if none is named.
 		"""
 
-		grid = self.composition.data.get(self.data_key) or {}
+		grid = self._rows_read(variant)
 
 		return {row: sorted(grid.get(row, [])) for row in self.rows}
 
@@ -580,7 +900,10 @@ class StepGrid (Control):
 		# state is one object and a panel reads it as one. `rows` is already
 		# reserved here for the whole-grid write, so a row cannot be called that
 		# either; this is the second word spent and it buys a mute.
-		return {**self.rows_now(), "enabled": self.enabled}
+		if not self.variants:
+			return {**self.rows_now(), "enabled": self.enabled}
+
+		return {**self._variants_state(self.rows_now), "enabled": self.enabled}
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Switch one cell, absolutely rather than by toggling.
@@ -592,13 +915,18 @@ class StepGrid (Control):
 		if rest == ["enabled"]:
 			return self._keep_enabled(value)
 
-		if rest == ["rows"]:
-			return self._keep_rows(value)
+		if self.variants and rest == ["cue"]:
+			return self._keep_cue(value)
 
-		if len(rest) != 2 or not rest[1].isdigit():
+		variant, cell = self._addressed(rest)
+
+		if not cell:
+			return self._keep_rows(value, variant)
+
+		if len(cell) != 2 or not cell[1].isdigit():
 			raise Refused(f"{'/'.join(rest)!r} does not name a cell of this grid")
 
-		row, step = rest[0], int(rest[1])
+		row, step = cell[0], int(cell[1])
 
 		if row not in self.rows:
 			raise Refused(f"this grid has no {row!r} row")
@@ -606,7 +934,7 @@ class StepGrid (Control):
 		if not 0 <= step < self.steps:
 			raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
 
-		steps = self.composition.data.setdefault(self.data_key, {}).setdefault(row, [])
+		steps = self._rows_of(variant).setdefault(row, [])
 
 		if value and step not in steps:
 			steps.append(step)
@@ -633,7 +961,7 @@ def _overlaps (at: int, span: int, other_at: int, other: dict[str, typing.Any]) 
 	return at < other_at + other_span and other_at < at + span
 
 
-class NoteGrid (Control):
+class NoteGrid (_Variants, Control):
 	"""A pitched pattern: one row per note, and a cell that is a note.
 
 	The same plain dict on ``composition.data`` that a step grid uses, one level
@@ -702,8 +1030,15 @@ class NoteGrid (Control):
 		default_length: int = 1,
 		default_velocity: int = 100,
 		visible_rows: int | None = None,
+		variants: collections.abc.Sequence[str] = (),
+		lands_every: int = 1,
 	) -> None:
-		"""Describe the pattern to offer over a dict the composition keeps."""
+		"""Describe the pattern to offer over a dict the composition keeps.
+
+		*variants* and *lands_every* are a step grid's, and mean the same (#2485):
+		the notes are a variant's, and the transposition and the mute stay the
+		pattern's, because switching variant should not change the key you are in.
+		"""
 
 		self.composition = composition
 		self.rows = list(rows)
@@ -780,6 +1115,8 @@ class NoteGrid (Control):
 
 		self.link: "AppLink | None" = None
 
+		self._take_variants(variants, lands_every)
+
 	def attach (self, link: "AppLink") -> None:
 		"""Keep the link, so clearing a note the panel did not name can be said."""
 
@@ -800,7 +1137,8 @@ class NoteGrid (Control):
 			"voices": self.voices, "divisions": self.divisions,
 			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
-			"max_length": self.positions, "velocity_range": list(VELOCITY_RANGE)}
+			"max_length": self.positions, "velocity_range": list(VELOCITY_RANGE),
+			**self._variant_fields()}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -809,14 +1147,15 @@ class NoteGrid (Control):
 
 		return declared
 
-	def rows_now (self) -> dict[str, typing.Any]:
+	def rows_now (self, variant: str | None = None) -> dict[str, typing.Any]:
 		"""Every note as it stands, copied so nothing shares a dict with the loop.
 
 		**Rows and nothing else**, for the reason a step grid's says: the answer
-		to a write names what the path named.
+		to a write names what the path named.  *variant* says which; the one
+		playing if none is named.
 		"""
 
-		grid = self.composition.data.get(self.data_key) or {}
+		grid = self._rows_read(variant)
 
 		# Each row copied whole before it is walked, because this is read off the
 		# clock loop — by a declaration, and by the store (#2487) — while a tap
@@ -836,8 +1175,9 @@ class NoteGrid (Control):
 		"""
 
 		labels, unreachable = self._relabelled()
+		notes = self._variants_state(self.rows_now) if self.variants else self.rows_now()
 
-		return {**self.rows_now(), "enabled": self.enabled,
+		return {**notes, "enabled": self.enabled,
 		        "transpose": self.transpose,
 		        "labels": labels, "unreachable": unreachable}
 
@@ -857,13 +1197,18 @@ class NoteGrid (Control):
 		if rest == ["transpose"]:
 			return self._keep_transpose(value)
 
-		if rest == ["rows"]:
-			return self._keep_rows(value)
+		if self.variants and rest == ["cue"]:
+			return self._keep_cue(value)
 
-		if len(rest) not in (2, 3) or not rest[1].isdigit():
+		variant, cell = self._addressed(rest)
+
+		if not cell:
+			return self._keep_rows(value, variant)
+
+		if len(cell) not in (2, 3) or not cell[1].isdigit():
 			raise Refused("that does not name a note")
 
-		row, step = rest[0], rest[1]
+		row, step = cell[0], cell[1]
 
 		if row not in self.rows:
 			raise Refused(f"this pattern has no row called {row}")
@@ -871,11 +1216,11 @@ class NoteGrid (Control):
 		if not 0 <= int(step) < self.positions:
 			raise Refused(f"{step} is outside a pattern {self.positions} positions long")
 
-		grid = self.composition.data.setdefault(self.data_key, {})
+		grid = self._rows_of(variant)
 		notes = grid.setdefault(row, {})
 
-		if len(rest) == 3:
-			return self._shape(grid, row, notes, step, rest[2], value)
+		if len(cell) == 3:
+			return self._shape(grid, row, notes, step, cell[2], value, variant)
 
 		if value:
 			if step in notes:
@@ -883,7 +1228,7 @@ class NoteGrid (Control):
 
 			notes[step] = {"length": self.default_length, "velocity": self.default_velocity}
 
-			self._keep_voices(grid, row, int(step), self.default_length)
+			self._keep_voices(grid, row, int(step), self.default_length, variant)
 
 			return True
 
@@ -909,6 +1254,7 @@ class NoteGrid (Control):
 		step: str,
 		field: str,
 		value: typing.Any,
+		variant: str | None = None,
 	) -> bool:
 		"""Change a note's length or velocity, refusing what would not sound."""
 
@@ -927,7 +1273,7 @@ class NoteGrid (Control):
 		# placed. Velocity changes nothing about when a note sounds, so this
 		# asks about the extent it now has either way and finds nothing to do.
 		if field == "length":
-			self._keep_voices(grid, row, int(step), wanted)
+			self._keep_voices(grid, row, int(step), wanted, variant)
 
 		return True
 
@@ -1019,8 +1365,8 @@ class NoteGrid (Control):
 
 		return labels, unreachable
 
-	def _keep_rows (self, value: typing.Any) -> bool:
-		"""Replace the whole grid, which is how it is cleared."""
+	def _keep_rows (self, value: typing.Any, variant: str | None = None) -> bool:
+		"""Replace the whole grid, or one variant of it, which is how it is cleared."""
 
 		if not isinstance(value, dict):
 			raise Refused("a grid is a set of rows")
@@ -1033,7 +1379,7 @@ class NoteGrid (Control):
 			if placed:
 				wanted[row] = placed
 
-		return self._put_rows(wanted)
+		return self._put_rows(wanted, variant)
 
 	def _checked_row (self, row: typing.Any, held: typing.Any) -> dict[str, typing.Any]:
 		"""One row of a whole-grid write, each note given its shape, or refused.
@@ -1066,10 +1412,10 @@ class NoteGrid (Control):
 
 		return placed
 
-	def _put_rows (self, wanted: dict[str, dict[str, typing.Any]]) -> bool:
-		"""Make the grid hold exactly *wanted*, and say whether that changed it."""
+	def _put_rows (self, wanted: dict[str, dict[str, typing.Any]], variant: str | None = None) -> bool:
+		"""Make the grid, or one variant of it, hold exactly *wanted*; say if it changed."""
 
-		grid = self.composition.data.setdefault(self.data_key, {})
+		grid = self._rows_of(variant)
 
 		if {row: notes for row, notes in grid.items() if notes} == wanted:
 			return False
@@ -1084,21 +1430,47 @@ class NoteGrid (Control):
 
 		The notes as drawn rather than as sounding: a transposition moves the
 		sound and never the drawing (#2152), so the offset is kept beside them
-		and the labels it implies are worked out again rather than stored.
+		and the labels it implies are worked out again rather than stored.  Every
+		variant, and which one plays; never the cue.
 		"""
 
-		return {"rows": self.rows_now(), "enabled": self.enabled, "transpose": self.transpose}
+		beside = {"enabled": self.enabled, "transpose": self.transpose}
+
+		if not self.variants:
+			return {"rows": self.rows_now(), **beside}
+
+		return {"variants": {one: {"rows": self.rows_now(one)} for one in self.variants},
+		        "playing": self.playing, **beside}
 
 	def restore (self, kept: typing.Any) -> list[str]:
-		"""Put the notes back exactly, then the offset, then the mute."""
+		"""Put the notes back exactly, then the offset, then the mute.
 
-		if not isinstance(kept, dict) or not isinstance(kept.get("rows"), dict):
+		Whichever shape they were kept in, as a step grid's are (`_restore_variants`).
+		"""
+
+		if not isinstance(kept, dict):
 			return [f"{self.name} was kept as something other than a grid"]
+
+		refused = _restore_variants(self, kept, self._restored_rows)
+
+		if refused is None:
+			return [f"{self.name} was kept as something other than a grid"]
+
+		try:
+			self._keep_transpose(kept.get("transpose", 0))
+
+		except (Refused, TypeError, ValueError) as refusal:
+			refused.append(f"{self.name}: {refusal}")
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
+
+	def _restored_rows (self, rows: dict[str, typing.Any], variant: str | None) -> list[str]:
+		"""One set of kept notes put back exactly, a refused row at a time."""
 
 		refused: list[str] = []
 		wanted: dict[str, dict[str, typing.Any]] = {}
 
-		for row, held in kept["rows"].items():
+		for row, held in rows.items():
 			try:
 				placed = self._checked_row(row, held)
 
@@ -1109,23 +1481,31 @@ class NoteGrid (Control):
 			if placed:
 				wanted[row] = placed
 
-		self._put_rows(wanted)
+		self._put_rows(wanted, variant)
 
-		try:
-			self._keep_transpose(kept.get("transpose", 0))
-
-		except (Refused, TypeError, ValueError) as refusal:
-			refused.append(f"{self.name}: {refusal}")
-
-		return refused + self._restore_enabled(kept.get("enabled", True))
+		return refused
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the grid now holds, which for a whole-grid write is not the ask:
-		a note arrives without its shape and is kept with one."""
+		a note arrives without its shape and is kept with one.  A cue is answered
+		with the cue as kept, as a step grid's is."""
+
+		if rest == ["cue"]:
+			return self.cue
+
+		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
+			return self.rows_now(rest[1])
 
 		return self.rows_now() if rest == ["rows"] else value
 
-	def _keep_voices (self, grid: dict[str, typing.Any], keep: str, at: int, span: int) -> None:
+	def _keep_voices (
+		self,
+		grid: dict[str, typing.Any],
+		keep: str,
+		at: int,
+		span: int,
+		variant: str | None = None,
+	) -> None:
 		"""Take notes away until no more than the instrument's voices sound, and say so.
 
 		**By extent, not by starting position** (#2114).  A note beginning
@@ -1160,8 +1540,11 @@ class NoteGrid (Control):
 
 			del grid[row][step]
 
+			# At the cell's own address, which on a grid with variants names the
+			# variant the note was taken from — the one being edited, and not
+			# necessarily the one playing.
 			if self.link is not None:
-				self.link.report(f"{self.name}/{row}/{step}", False)
+				self.link.report(self._where(variant, row, step), False)
 
 			# Dropped once its last note goes, as removing one by hand already
 			# does. Nothing on the wire differs either way — the snapshot filters
@@ -5080,6 +5463,18 @@ class AppLink:
 
 		self._emit(superconductor.protocol.changed(
 			self.app_name, path, value, self.version, by="app"))
+
+	def kept_changed (self) -> None:
+		"""Say that something worth keeping changed of the app's own accord (#2487).
+
+		A panel's change is noted where it lands, in `_apply`; this is for the few
+		an app makes by itself, of which a cued variant landing at a build is the
+		first (#2485) — without it the store would go on saying the old one plays
+		until somebody happened to tap something else.  On the clock loop, and as
+		cheap as the note `_apply` makes.
+		"""
+
+		self._note_change()
 
 	def _settle (self, control: Control, owed: list[tuple[str, typing.Any]]) -> None:
 		"""Tell an instrument what it is owed, on the link thread.

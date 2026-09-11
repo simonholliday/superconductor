@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.30.0"
+CONTRACT_VERSION = "1.31.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -288,6 +288,16 @@ the glass, drawn in the bar with the transport rather than as a block (#2487).
 Its fields say when it last wrote and whether anything went wrong, and it offers
 ``start_again`` — back to the composition as its file has it.  A service too old
 for the kind marks it unsupported, as it would any kind it does not know.
+
+1.31.0 lets a step grid or a note grid declare ``variants`` — versions of its
+notes a person switches between while it plays — and ``lands_every`` (#2485).
+Such a grid's state is ``{variants: {A: {rows}}, playing, cue}`` beside its mute,
+its cells are ``grid/variants/B/rows/kick/3``, a panel asks with ``cue`` and only
+the app writes ``playing``, at a build.  **One address per cell**: the old
+spelling is refused on a grid with variants rather than read as the one playing.
+A grid declaring none is unchanged in every respect, so this is additive — but a
+panel too old for it would draw a variant grid empty and have its taps refused,
+which the contract check on its own bar is for (#2164).
 """
 
 UNIT = "unit"

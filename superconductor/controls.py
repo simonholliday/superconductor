@@ -286,6 +286,23 @@ def _apply_cell (
 		grid["enabled"] = bool(value)
 		return
 
+	if declaration.get("variants"):
+		landed = _in_variant(grid, declaration, rest, value, path)
+
+		if landed is not None:
+			rows, cell = landed
+
+			if cell:
+				_step(rows, declaration, cell, value, path)
+
+			else:
+				# A whole variant, checked entire; nothing sits beside its rows.
+				kept = _readable_rows(declaration, value, path)
+				rows.clear()
+				rows.update(kept)
+
+		return
+
 	if rest == ["rows"]:
 		# Checked entire before a single row is touched. Clearing first and
 		# validating afterwards left the grid empty when the new one was
@@ -306,10 +323,61 @@ def _apply_cell (
 
 		return
 
-	if len(rest) != 2 or not rest[1].isdigit():
+	_step(grid, declaration, rest, value, path)
+
+
+def _in_variant (
+	grid: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> tuple[dict[str, typing.Any], list[str]] | None:
+	"""Where a path lands in a grid with variants (#2485), or None if it was kept here.
+
+	A variant's cells are ``variants/<id>/rows/...`` and the whole of its rows is
+	``variants/<id>/rows``: the rows come back with the rest of the way in, which
+	is empty for the whole of them.  ``cue`` — what a panel asked for next — and
+	``playing`` — what the app says is sounding — are kept here and read by
+	nothing.  **Any other shape is refused**, because a grid with variants has one
+	address per cell, and a second spelling is how two ends come to disagree.
+	"""
+
+	named = declaration.get("variants") or []
+
+	if rest in (["cue"], ["playing"]):
+		if not (rest == ["cue"] and value is None) and value not in named:
+			raise ControlError(f"this grid has no variant called {value!r}")
+
+		grid[rest[0]] = value
+		return None
+
+	if len(rest) < 3 or rest[0] != "variants" or rest[2] != "rows":
+		raise ControlError(f"{path!r} names no variant: this grid's cells are variants/<variant>/rows/...")
+
+	if rest[1] not in named:
+		raise ControlError(f"this grid has no variant called {rest[1]!r}")
+
+	variant = grid.setdefault("variants", {}).setdefault(rest[1], {})
+
+	rows: dict[str, typing.Any] = variant.setdefault("rows", {})
+
+	return rows, rest[3:]
+
+
+def _step (
+	rows: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	cell: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Switch one step of a step grid's rows, wherever those rows are kept."""
+
+	if len(cell) != 2 or not cell[1].isdigit():
 		raise ControlError(f"{path!r} does not name a cell as control/row/step")
 
-	row, step = rest[0], int(rest[1])
+	row, step = cell[0], int(cell[1])
 
 	if row not in declaration.get("rows", []):
 		raise ControlError(f"this grid has no row named {row!r}")
@@ -319,7 +387,7 @@ def _apply_cell (
 	if not 0 <= step < steps:
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
-	_set_cell(grid, row, step, bool(value))
+	_set_cell(rows, row, step, bool(value))
 
 
 def _readable_rows (
@@ -933,6 +1001,24 @@ def _apply_note (
 		grid[rest[0]] = dict(value) if rest == ["labels"] else list(value)
 		return
 
+	# The notes are a variant's; the mute, the offset and the labels it implies
+	# stay the pattern's, which is why they are answered above this (#2485 Q4).
+	if declaration.get("variants"):
+		landed = _in_variant(grid, declaration, rest, value, path)
+
+		if landed is not None:
+			rows, cell = landed
+
+			if cell:
+				_note(rows, declaration, cell, value, path)
+
+			else:
+				kept = _readable_notes(declaration, value, path)
+				rows.clear()
+				rows.update(kept)
+
+		return
+
 	if rest == ["rows"]:
 		kept = _readable_notes(declaration, value, path)
 
@@ -950,10 +1036,22 @@ def _apply_note (
 
 		return
 
-	if len(rest) not in (2, 3) or not rest[1].isdigit():
+	_note(grid, declaration, rest, value, path)
+
+
+def _note (
+	rows: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	cell: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Place, remove or reshape one note of a note grid's rows, wherever they are kept."""
+
+	if len(cell) not in (2, 3) or not cell[1].isdigit():
 		raise ControlError(f"{path!r} does not name a note as control/row/step or control/row/step/field")
 
-	row, step = rest[0], rest[1]
+	row, step = cell[0], cell[1]
 
 	if row not in declaration.get("rows", []):
 		raise ControlError(f"this grid has no row named {row!r}")
@@ -963,9 +1061,9 @@ def _apply_note (
 	if not 0 <= int(step) < positions:
 		raise ControlError(f"{step} is outside a grid {positions} positions wide")
 
-	notes = grid.setdefault(row, {})
+	notes = rows.setdefault(row, {})
 
-	if len(rest) == 2:
+	if len(cell) == 2:
 		if value:
 			notes.setdefault(step, {
 				"length": declaration.get("default_length", 1),
@@ -975,11 +1073,11 @@ def _apply_note (
 			notes.pop(step, None)
 
 			if not notes:
-				grid.pop(row, None)
+				rows.pop(row, None)
 
 		return
 
-	field = rest[2]
+	field = cell[2]
 
 	# **Any field, not only the ones this version knows.** Refusing an unknown
 	# one made "add a feature and it appears on the panel" false of an app's
