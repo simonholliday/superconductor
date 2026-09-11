@@ -1049,22 +1049,12 @@ def test_dragging_out_from_empty_ground_places_a_note_and_sizes_it (
 	# the note exists at a legal size from the moment it is drawn, and the
 	# release then sends what the drag actually decided.
 	#
-	# **Waited for until the release's frame has landed, not until the path has
-	# been seen.**  The first frame on this path is the placement's, so waiting
-	# for the path returned the moment it arrived — and on a busy runner the
-	# release's had not, so the list read `[1]` and the test failed on code that
-	# was right (CI, 2026-09-11).  Waiting for a frame's kind is not waiting for
-	# its contents.
-	deadline = time.monotonic() + 5
-	lengths: list[typing.Any] = []
-
-	while time.monotonic() < deadline:
-		lengths = [frame["v"] for frame in fake_app.sets if frame.get("path") == "bass/D2/2/length"]
-
-		if lengths and lengths[-1] == 3:
-			break
-
-		time.sleep(0.02)
+	# **Settled, not merely seen.**  The first frame on this path is the
+	# placement's, so waiting for the path returned the moment it arrived — and
+	# on a busy runner the release's had not, so the list read `[1]` and the test
+	# failed on code that was right (CI, 2026-09-11).  Waiting for a frame's kind
+	# is not waiting for its contents.
+	lengths = [frame["v"] for frame in fake_app.settled("bass/D2/2/length")]
 
 	assert lengths and lengths[0] == 1, f"placed at the snap's own length: {lengths}"
 	assert lengths[-1] == 3, f"and sized by the drag: {lengths}"
@@ -1216,7 +1206,10 @@ def test_the_lane_does_nothing_where_there_is_no_note (
 	panel.mouse.down()
 	panel.mouse.up()
 
-	assert not any(frame.get("path", "").startswith("bass/") for frame in fake_app.sets)
+	# Given a second to arrive, because this asserts that nothing did — and a
+	# frame still crossing the socket would make it pass for the wrong reason.
+	assert not fake_app.settled(
+		lambda frame: str(frame.get("path", "")).startswith("bass/"), limit=1.0)
 
 
 def test_a_pitch_grid_is_drawn_high_note_first (panel: typing.Any) -> None:
@@ -1575,7 +1568,7 @@ def test_a_generator_is_added_from_the_glass (panel: typing.Any, fake_app: typin
 	panel.wait_for_selector(".sheet", timeout=5_000)
 	panel.locator(".sheet .offer", has_text="euclidean").click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert asked, "adding a generator asked for nothing"
 	# The fixture opens with two layers — a euclidean and a chord patched at the
@@ -1626,7 +1619,7 @@ def test_a_long_pool_of_pitches_takes_several_from_one_menu (
 	panel.wait_for_selector(".options", timeout=5_000)
 	panel.locator(".options button", has_text="snare").click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "stack/one/pitches"]
+	sent = fake_app.settled("stack/one/pitches")
 
 	assert sent, "picking a second pitch asked for nothing"
 	assert sent[-1]["v"] == ["kick", "snare"]
@@ -1735,7 +1728,7 @@ def test_a_short_pool_is_drawn_flat_and_a_second_tap_takes_one_back_out (
 
 	buttons.filter(has_text="down").click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "stack/one/shape"]
+	sent = fake_app.settled("stack/one/shape")
 
 	assert sent[-1]["v"] == ["up", "down"]
 
@@ -1747,9 +1740,10 @@ def test_a_short_pool_is_drawn_flat_and_a_second_tap_takes_one_back_out (
 		"'.part[data-part=\"stack/one\"] .setting[data-field=\"shape\"] .here').length === 2",
 		timeout=5_000)
 
+	before = len(fake_app.sets)
 	buttons.filter(has_text="up").click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "stack/one/shape"]
+	sent = fake_app.settled("stack/one/shape", since=before)
 
 	assert sent[-1]["v"] == ["down"], "a second tap did not take the pitch back out"
 
@@ -1805,7 +1799,7 @@ def test_one_parameter_is_addressed_on_its_own_not_as_the_whole_stack (
 
 	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
 
-	moved = [one for one in fake_app.sets if one["path"].startswith("stack/one/")]
+	moved = fake_app.settled(lambda one: str(one.get("path", "")).startswith("stack/one/"))
 
 	assert moved, "turning a knob addressed no parameter"
 	assert moved[-1]["path"] == "stack/one/pulses"
@@ -1865,7 +1859,7 @@ def test_a_range_moves_the_end_the_finger_took_hold_of (
 	# Held is 40–80 of 1–127, so the left quarter is nearest the low end.
 	panel.mouse.click(box["x"] + box["width"] * 0.1, box["y"] + box["height"] / 2)
 
-	moved = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+	moved = fake_app.settled("stack/one/velocity")
 
 	assert moved, "the range asked for nothing"
 
@@ -1898,7 +1892,7 @@ def test_a_layer_is_moved_up_and_down_the_stack (
 	# The second layer's own window, and the arrow that sends it up one.
 	panel.locator('.part[data-part="stack/two"] .move').first.click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert [layer["id"] for layer in asked[-1]["v"]] == ["two", "one"]
 
@@ -1938,7 +1932,7 @@ def test_turning_a_layers_knob_moves_the_control_it_turned (
 
 	panel.mouse.click(box["x"] + box["width"] * 0.9, box["y"] + box["height"] / 2)
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/one/pulses"][-1]
+	asked = fake_app.settled("stack/one/pulses")[-1]
 
 	assert asked["v"] > 3, "the drag did not ask for a larger value"
 
@@ -1966,7 +1960,7 @@ def test_one_of_many_is_chosen_from_a_menu_rather_than_a_wall_of_buttons (
 
 	menu.locator(".options button", has_text="clap").click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/one/pitch"]
+	asked = fake_app.settled("stack/one/pitch")
 
 	assert asked and asked[-1]["v"] == "clap"
 	playwright_api.expect(panel.locator('.part[data-part="stack/one"] .menu .options')).to_have_count(0)
@@ -1989,7 +1983,7 @@ def test_transposing_asks_for_a_number_and_moves_nothing_on_its_own (
 
 	panel.locator(f'{block} [data-transpose="+1"]').click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "bass/transpose"]
+	sent = fake_app.settled("bass/transpose")
 
 	assert sent and sent[-1]["v"] == 1
 
@@ -2014,7 +2008,7 @@ def test_transposing_is_bounded_by_what_the_app_declared (
 
 	panel.locator(f'{block} [data-transpose="+12"]').click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "bass/transpose"]
+	sent = fake_app.settled("bass/transpose")
 
 	assert sent[-1]["v"] == 3, "the panel asked to go past the declared ceiling"
 
@@ -2083,7 +2077,7 @@ def test_an_action_never_draws_a_chosen_button (
 
 	buttons.filter(has_text="4").click()
 
-	sent = [one for one in fake_app.sets if one["path"] == "moog/voicing"]
+	sent = fake_app.settled("moog/voicing")
 
 	assert sent, "pressing an action asked for nothing"
 	assert sent[-1]["v"] == "four"
@@ -2166,7 +2160,7 @@ def test_a_float_with_no_declared_step_is_not_snapped_to_whole_numbers (
 
 	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/one/probability"]
+	asked = fake_app.settled("stack/one/probability")
 
 	assert asked, "the probability slider asked for nothing"
 	assert 0 < asked[-1]["v"] < 1, f"snapped to {asked[-1]['v']} instead of landing between"
@@ -2561,7 +2555,7 @@ def test_a_range_is_moved_by_its_middle_without_changing_its_width (
 	                 box["y"] + box["height"] / 2, steps=6)
 	panel.mouse.up()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+	asked = fake_app.settled("stack/one/velocity")
 
 	assert asked, "the range asked for nothing"
 
@@ -2588,7 +2582,7 @@ def test_a_range_moved_to_the_end_stops_rather_than_squashing (
 	panel.mouse.move(box["x"] + box["width"] - 2, box["y"] + box["height"] / 2, steps=8)
 	panel.mouse.up()
 
-	low, high = [one for one in fake_app.sets if one["path"] == "stack/one/velocity"][-1]["v"]
+	low, high = fake_app.settled("stack/one/velocity")[-1]["v"]
 
 	assert high == 127, f"the span did not reach the ceiling: {low}–{high}"
 	assert high - low == 40, f"the span was squashed: {low}–{high}"
@@ -2650,7 +2644,7 @@ def test_a_range_dragged_past_the_edge_still_goes_the_way_the_finger_went (
 	panel.mouse.move(beyond, box["y"] + box["height"] / 2, steps=8)
 	panel.mouse.up()
 
-	asked = [one["v"] for one in fake_app.sets if one["path"] == "stack/one/velocity"]
+	asked = [one["v"] for one in fake_app.settled("stack/one/velocity")]
 
 	assert asked, "the drag asked for nothing"
 
@@ -2719,7 +2713,7 @@ def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
 	panel.wait_for_selector(".sheet", timeout=5_000)
 	panel.locator(".sheet .answers button.danger").click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "grid/rows"]
+	asked = fake_app.settled("grid/rows")
 
 	assert len(asked) == 1, f"clearing sent {len(asked)} requests"
 	assert asked[0]["v"] == {}
@@ -5019,7 +5013,7 @@ def test_the_head_of_an_arrow_silences_the_link (
 
 	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert asked, "tapping the head asked for nothing"
 	assert asked[-1]["v"][0]["bypassed"] is True
@@ -5027,9 +5021,10 @@ def test_the_head_of_an_arrow_silences_the_link (
 	fake_app.confirm("stack/layers", asked[-1]["v"], by="panel")
 	panel.wait_for_selector('[data-join^="second>grid#"].off', timeout=5_000)
 
+	before = len(fake_app.sets)
 	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers", since=before)
 
 	assert asked[-1]["v"][0]["bypassed"] is False, "the head would not turn it back on"
 
@@ -5422,7 +5417,7 @@ def test_the_sheet_sends_a_grid_again_rather_than_taking_the_first_route_away (
 
 	offered.click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 	sent = asked[-1]["v"]
 
 	assert len(sent) == 2, f"the sheet did not append a second route: {sent}"
@@ -5570,7 +5565,7 @@ def test_closing_a_window_does_not_drag_it (panel: typing.Any, fake_app: typing.
 
 	panel.locator('.part[data-part="stack/two"] .part-title .close').click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert [layer["id"] for layer in asked[-1]["v"]] == ["one"], "the close did not remove it"
 	assert panel.locator('.part[data-part="stack/one"]').bounding_box() == before, \
@@ -5703,7 +5698,7 @@ def test_a_grid_can_be_sent_to_a_pattern_from_its_own_footer (
 
 	panel.locator(".sheet .offer").first.click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert asked, "sending a grid asked for nothing"
 
@@ -6316,7 +6311,9 @@ def test_silencing_a_route_leaves_its_source_alone (
 
 	panel.locator('[data-join^="second>grid#"] circle.node').click()
 
-	asked = [one["path"] for one in fake_app.sets]
+	# Settled on everything, because this asserts what was *not* sent — and a
+	# frame still crossing the socket would make that pass for the wrong reason.
+	asked = [one["path"] for one in fake_app.settled(lambda one: True)]
 
 	assert "second/enabled" not in asked, f"silencing a route touched its source: {asked}"
 	assert panel.locator(
@@ -6732,7 +6729,7 @@ def test_a_confirmed_request_never_flashes_as_refused (
 	cell.click()
 	cell.click()
 
-	asked = [one for one in fake_app.sets if one["path"] == path]
+	asked = fake_app.settled(path)
 
 	assert len(asked) >= 2, f"two taps sent {len(asked)} requests"
 
@@ -7134,7 +7131,7 @@ def test_a_tempo_with_no_declared_range_is_not_clamped_by_the_panel (
 
 	panel.locator(".tempo button", has_text="+5").click()
 
-	asked = [one for one in fake_app.sets[before:] if one["path"] == "transport/bpm"]
+	asked = fake_app.settled("transport/bpm", since=before)
 
 	assert asked, "the panel sent nothing"
 	assert asked[-1]["v"] > 260.0, (
@@ -7686,7 +7683,7 @@ def test_a_transform_added_from_the_sheet_reaches_the_app_as_a_transform (
 	panel.wait_for_selector(".sheet", timeout=5_000)
 	panel.locator(".sheet .offer", has_text="rotate").click()
 
-	asked = [one for one in fake_app.sets if one["path"] == "stack/layers"]
+	asked = fake_app.settled("stack/layers")
 
 	assert asked, "adding a transform asked for nothing"
 

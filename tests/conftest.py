@@ -565,6 +565,55 @@ class FakeApp:
 		raise AssertionError(f"the panel never asked for {path!r}; it asked for "
 		                     f"{[f.get('path') for f in self.sets]}")
 
+	def settled (
+		self,
+		which: str | typing.Callable[[superconductor.protocol.Frame], bool],
+		since: int = 0,
+		quiet: float = 0.25,
+		limit: float = 5.0,
+	) -> list[superconductor.protocol.Frame]:
+		"""Every frame the panel sent that *which* names, once it has stopped sending them.
+
+		**Waiting for the first is not waiting for the last.**  A drag, a dial or a
+		note placed and then sized sends several frames on one path, and each
+		crosses the service to reach this thread some time after the browser sent
+		it.  A test reading the list the moment Playwright hands back control reads
+		whatever had arrived by then — `[1]` for a length that went on to be `3`,
+		in CI on 2026-09-11 — and a dozen tests here were reading it with no wait at
+		all, passing only because the socket was usually quicker than Playwright.
+
+		So this waits for a match and then for *quiet* seconds with no more, and the
+		last frame returned is the last one sent.  It never raises: a test that
+		expects nothing, or asserts on an empty list with its own message, gets the
+		list as it stands at *limit*.  *which* is a path, or a test over a frame.
+
+		**Pass *since* for a second action on a path that already has frames** —
+		`len(fake_app.sets)` taken before the action.  Otherwise the frames from
+		the first action satisfy the wait on their own, the quiet period can run
+		out before the new frame lands, and the test reads the old value.  Only
+		frames after *since* are counted, and at least one must arrive.
+		"""
+
+		matches = ((lambda frame: frame.get("path") == which)
+		           if isinstance(which, str) else which)
+
+		deadline = time.monotonic() + limit
+		count, changed = -1, time.monotonic()
+		frames: list[superconductor.protocol.Frame] = []
+
+		while time.monotonic() < deadline:
+			frames = [frame for frame in list(self.sets)[since:] if matches(frame)]
+
+			if len(frames) != count:
+				count, changed = len(frames), time.monotonic()
+
+			elif frames and time.monotonic() - changed >= quiet:
+				break
+
+			time.sleep(0.02)
+
+		return frames
+
 
 @pytest.fixture(scope="session")
 def browser_name () -> str:
