@@ -2178,8 +2178,11 @@ class Params (Control):
 
 		if parameter.kind == "action":
 			# **Nothing changed, and something happened.**  The composition is
-			# told so it can act; the panel is acked by the service either way,
-			# which is what clears its ring.  What it must not get is a
+			# told so it can act, and the panel is answered with an `ack` and no
+			# `changed` — which `_apply` sends for anything it accepted that
+			# moved nothing (#2502).  **This said the service acked it either
+			# way, and nothing did**: the ring sat for five seconds and then
+			# flashed a successful press as refused.  What it must not get is a
 			# `changed` frame, because that is the service's cue to remember a
 			# value — and remembering one here is the whole thing #2179 exists
 			# to prevent.
@@ -5229,6 +5232,16 @@ class AppLink:
 			return
 
 		if not changed:
+			# **A request that changed nothing is still answered** (#2502).  The
+			# app accepted it — an action, which keeps nothing at all (#2179), a
+			# note taken away that was not there, a length a note already has —
+			# and with no `changed` frame the service has nothing to acknowledge,
+			# so the panel's ring sat out its five-second expiry and was then
+			# recorded as a failure for something that had succeeded.  An `ack`
+			# says *done, and nothing moved*; it names the path because no
+			# `changed` travels beside it.
+			self._emit(superconductor.protocol.ack(
+				self.app_name, client, seq, self.version, path))
 			return
 
 		self.version += 1

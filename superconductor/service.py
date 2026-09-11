@@ -449,6 +449,9 @@ async def _serve_app (hub: superconductor.hub.Hub, websocket: starlette.websocke
 			elif kind == "nack":
 				await hub.refusal_reported(app, frame)
 
+			elif kind == "ack":
+				await hub.settled_reported(app, frame)
+
 			else:
 				LOG.debug("app %r sent %r, which this version ignores", app.name, kind)
 

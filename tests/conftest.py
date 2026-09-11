@@ -513,6 +513,16 @@ class FakeApp:
 		self.send(superconductor.protocol.changed(
 			"subsequence", path, value, self.version, by=by, client=client, seq=seq))
 
+	def nothing_changed (self, path: str, client: str, seq: int) -> None:
+		"""Answer a request that was taken and moved nothing, as an app does (#2502).
+
+		An action keeps nothing at all, and a value already held moves nothing, so
+		there is no `changed` frame to acknowledge — the app says so itself, and
+		the service passes it to the panel that asked.
+		"""
+
+		self.send(superconductor.protocol.ack("subsequence", client, seq, self.version, path))
+
 	def beat (self, beat: int, interval: float = 0.5,
 	          steps: int = 8, beats: int = 2) -> None:
 		"""Sound one beat, the way a running composition does.

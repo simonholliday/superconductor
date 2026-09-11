@@ -25,6 +25,12 @@ import superconductor.protocol
 import test_hub
 
 
+# Bound to a name of its own because the rule is enforced by reading the line
+# above every `async def test_` in this directory, and it looks for this exact
+# spelling (`test_no_test_borrows_the_main_threads_event_loop`).
+_on_a_loop_of_its_own = test_hub._on_a_loop_of_its_own
+
+
 def _tool (name: str) -> typing.Any:
 	"""One of the tools in `tools/`, imported as a module — which runs nothing."""
 
@@ -65,7 +71,7 @@ async def _captured (where: pathlib.Path, contract: str | None) -> None:
 		await _tool("capture_state").main(url=f"ws://127.0.0.1:{port}/ws/panel", where=where)
 
 
-@test_hub._on_a_loop_of_its_own
+@_on_a_loop_of_its_own
 async def test_a_capture_is_stamped_with_the_contract_the_service_speaks () -> None:
 	"""And not with the tool's own, which is the version of the checkout it runs
 	from (#2501).
@@ -91,7 +97,7 @@ async def test_a_capture_is_stamped_with_the_contract_the_service_speaks () -> N
 	assert written["apps"]["subsequence"] == {"grid": {"kick": [0, 4]}}
 
 
-@test_hub._on_a_loop_of_its_own
+@_on_a_loop_of_its_own
 async def test_a_service_that_never_says_leaves_a_capture_the_restore_converts () -> None:
 	"""A service too old to say which contract it speaks is exactly the file that
 	needs converting, so a capture of one is read as unstamped rather than

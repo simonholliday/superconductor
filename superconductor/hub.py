@@ -452,7 +452,8 @@ class Hub:
 		))
 
 		if isinstance(client, str) and isinstance(seq, int):
-			await self.to_panel(client, superconductor.protocol.ack(app.name, client, seq, app.version))
+			await self.to_panel(client, superconductor.protocol.ack(
+				app.name, client, seq, app.version, path))
 
 	async def refusal_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass an app's refusal back to the panel that asked for it.
@@ -467,6 +468,28 @@ class Hub:
 
 		if isinstance(client, str):
 			await self.to_panel(client, dict(frame, app=app.name))
+
+	async def settled_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:
+		"""Pass on an app's answer to a request that changed nothing (#2502).
+
+		An app answers everything it accepted.  Where something moved, that is a
+		``changed`` and `change_reported` acknowledges it; where nothing did —
+		an action, which keeps nothing at all (#2179), or a value the app already
+		held — there is nothing to broadcast and this is the whole answer.
+
+		**Only the panel that asked**, because nothing about the app moved for
+		anybody else.  Without it that panel's request sat until its own
+		five-second expiry and was then recorded as a failure, for something that
+		had succeeded.
+		"""
+
+		client = frame.get("client")
+		seq = frame.get("seq")
+		path = frame.get("path")
+
+		if isinstance(client, str) and isinstance(seq, int):
+			await self.to_panel(client, superconductor.protocol.ack(
+				app.name, client, seq, app.version, path if isinstance(path, str) else None))
 
 	async def to_panel (self, client: str, frame: superconductor.protocol.Frame) -> None:
 		"""Send one frame to one named panel, if it is still connected."""

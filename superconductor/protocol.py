@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.32.0"
+CONTRACT_VERSION = "1.33.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -307,6 +307,14 @@ are told instead of rebuilding it from ``default_length``.  The ask is still
 ``true``, and an app still answering ``true`` gets the default as before; a
 panel too old for this draws such a note a whole default long, off the end of
 the grid, which is what Simon found.
+
+1.33.0 answers **every request an app accepted**, including the ones that change
+nothing (#2502).  An app sends an ``ack`` naming the path where it applied a set
+and nothing moved — an action, which keeps nothing at all (#2179), or a value
+already held — and the service passes it to the panel that asked.  ``ack`` now
+carries ``path`` for that reason, since no ``changed`` frame accompanies it.  A
+panel too old ignores the field and lets the request expire as it always did; an
+app too old sends nothing and the service ignores what it never sends.
 """
 
 UNIT = "unit"
@@ -818,10 +826,22 @@ def changed (
 	return frame
 
 
-def ack (app: str, client: str, seq: int, version: int) -> Frame:
-	"""Confirmation that a named request has been applied."""
+def ack (app: str, client: str, seq: int, version: int, path: str | None = None) -> Frame:
+	"""Confirmation that a named request has been applied.
 
-	return {"t": "ack", "app": app, "client": client, "seq": seq, "ver": version}
+	**The path is carried since 1.33.0** (#2502), because an ack now arrives on
+	its own: an app answers a request that changed nothing with one, and there is
+	no `changed` frame beside it naming the cell.  A panel keeps what it asked for
+	by path, so an ack without one could only be matched by hunting for its
+	sequence number.
+	"""
+
+	frame: Frame = {"t": "ack", "app": app, "client": client, "seq": seq, "ver": version}
+
+	if path is not None:
+		frame["path"] = path
+
+	return frame
 
 
 def nack (app: str, path: str, client: str, seq: int, reason: str) -> Frame:

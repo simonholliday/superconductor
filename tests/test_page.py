@@ -8530,3 +8530,46 @@ def test_somebody_who_asked_for_less_motion_gets_a_steady_mark (
 
 	assert cued.evaluate("el => getComputedStyle(el).animationName") == "none"
 	assert cued.evaluate("el => getComputedStyle(el).borderTopStyle") == "dashed"
+
+
+def test_a_press_answered_with_nothing_to_change_never_flashes_as_refused (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""**An app answers everything it accepted, including what moved nothing**
+	(#2502).
+
+	A press can ask for what the app already holds — a second tap before the
+	first is answered, which on glass is an ordinary double tap, or an action,
+	which keeps nothing at all.  No value moves, so no `changed` frame travels,
+	so nothing acknowledged it: the ring sat out its five-second expiry and the
+	cell then flashed a press that had succeeded as refused.
+
+	The whole expiry is waited out on purpose.  There is no shorter way to watch
+	a timer that must not fire, and the alternative — trusting that one branch
+	of the `changed` handler is enough — is what let this through.
+	"""
+
+	_settled(panel)
+
+	before = len(fake_app.sets)
+
+	panel.locator(conftest.cell("grid/kick/0")).click()
+
+	asked = fake_app.settled("grid/kick/0", since=before)
+
+	assert asked, "the press was never sent"
+
+	fake_app.nothing_changed("grid/kick/0", asked[-1]["client"], asked[-1]["seq"])
+
+	# **Watched across the whole window rather than sampled after it.**  The
+	# expiry fires five seconds after the press and the flash lasts 900 ms, so one
+	# look afterwards can miss it — and `expect(...).to_have_count(0)` *retries
+	# until it is true*, which is precisely the wrong way round for something that
+	# must never happen.  Measured: against a build with the answer taken out, the
+	# sampling version passed.
+	failed = panel.locator(f'{conftest.cell("grid/kick/0")}.failed')
+	deadline = time.monotonic() + 7.0
+
+	while time.monotonic() < deadline:
+		assert failed.count() == 0, "a press the app accepted flashed as refused"
+
+		panel.wait_for_timeout(100)

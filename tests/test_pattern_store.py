@@ -882,7 +882,13 @@ def test_a_failed_save_says_why_until_one_succeeds (
 def test_starting_again_is_a_press_on_the_store_and_is_remembered_by_nobody (
 	tmp_path: pathlib.Path, unthreaded: None) -> None:
 	"""A panel asks with `store/start_again`; the app does it and declares again.
-	Nothing is reported for the press itself, because nothing holds it (#2179)."""
+
+	Nothing is *remembered* for the press, because nothing holds it (#2179) — so
+	no `changed` frame, which is the service's cue to keep a value.  It is still
+	**answered**, with an `ack` naming the path (#2502): a press nothing replies
+	to sat out its five-second expiry on the glass and was then recorded as a
+	failure, for the one control here whose whole job is to be pressed once.
+	"""
 
 	path = tmp_path / "piece.patterns.json"
 	link, composition = _piece(path)
@@ -898,7 +904,9 @@ def test_starting_again_is_a_press_on_the_store_and_is_remembered_by_nobody (
 	link._apply("store/start_again", True, "panel-1", 2)
 
 	assert composition.data["grid"]["kick"] == [0, 8], "the file's seed is back"
-	assert not [frame for frame in sent if frame.get("path") == "store/start_again"]
+	assert [frame["t"] for frame in sent if frame.get("path") == "store/start_again"] == ["ack"], (
+		f"the press was answered with {[frame['t'] for frame in sent]}, and a `changed` "
+		f"among them would be the service keeping a value nothing holds")
 
 	link._apply("store/start_again", "please", "panel-1", 3)
 

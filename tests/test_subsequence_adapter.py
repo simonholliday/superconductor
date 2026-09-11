@@ -728,3 +728,59 @@ def test_starting_a_link_survives_a_control_that_registers_more_controls (
 	assert rack.link is link, "the walk never reached the rack"
 	assert "rack-a" in link.controls, "the grid the rack put back never reached the link"
 	assert rack.made() == ["rack-a"], "the rack does not know what it put there"
+
+
+def test_a_request_that_changed_nothing_is_still_answered () -> None:
+	"""**Everything the app accepted gets an answer** (#2502).
+
+	`_apply` returned in silence when a control reported that nothing moved, so
+	the service had no `changed` frame to acknowledge and sent no `ack`.  The
+	panel's ring then sat out its five-second expiry and recorded a success as a
+	failure — and the request stayed in the map that a reconnect re-sends, which
+	for an action means doing it twice.
+
+	Answered with an `ack` naming the path, because no `changed` travels beside
+	it to say which cell it was for.
+	"""
+
+	link, sent = _link()
+
+	link._apply("grid/kick/4", True, "panel-1", 1)
+
+	assert [frame["t"] for frame in sent] == ["changed"], "a change is answered by the change"
+
+	sent.clear()
+
+	link._apply("grid/kick/4", True, "panel-1", 2)
+
+	assert [frame["t"] for frame in sent] == ["ack"], f"a request that moved nothing sent {sent}"
+	assert sent[0]["path"] == "grid/kick/4"
+	assert (sent[0]["client"], sent[0]["seq"]) == ("panel-1", 2)
+
+
+def test_an_action_is_answered_although_it_keeps_nothing () -> None:
+	"""The case #2502 was found on: an action holds nothing by design (#2179), so
+	it can never report a change, and every press of one went unanswered."""
+
+	composition = FakeComposition()
+	told: list[tuple[str, typing.Any]] = []
+
+	settings = superconductor.subsequence_adapter.Params(
+		composition,
+		parameters=[superconductor.subsequence_adapter.Parameter(
+			"voicing", "action", label="Set voicing",
+			options=[("one", "1"), ("four", "4")])],
+		data_key="moog", name="moog",
+		on_change=lambda name, value: told.append((name, value)))
+
+	link = superconductor.subsequence_adapter.AppLink(composition, controls=[settings])
+	sent: list[superconductor.protocol.Frame] = []
+
+	link._emit = sent.append  # type: ignore[assignment, method-assign]
+
+	link._apply("moog/voicing", "four", "panel-1", 3)
+
+	assert told == [("voicing", "four")], "the composition was never told to act"
+	assert [frame["t"] for frame in sent] == ["ack"], f"the press was answered with {sent}"
+	assert sent[0]["path"] == "moog/voicing", "the ack must name what it answers"
+	assert "voicing" not in composition.data.get("moog", {}), "an action kept a value (#2179)"

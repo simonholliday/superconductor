@@ -464,3 +464,37 @@ def test_no_test_borrows_the_main_threads_event_loop () -> None:
 		"these run on whatever loop the main thread already has, which is "
 		f"Playwright's once a page test has run: {borrowed}. Decorate them with "
 		"@_on_a_loop_of_its_own, as the rest of this file does.")
+
+
+@_on_a_loop_of_its_own
+async def test_an_app_that_changed_nothing_still_answers_the_panel_that_asked () -> None:
+	"""**Everything an app accepted is answered** (#2502).
+
+	An action keeps nothing at all (#2179) and a value already held moves
+	nothing, so no `changed` frame travels — and without one there was nothing to
+	acknowledge, so the panel that asked sat until its own five-second expiry and
+	then recorded a success as a failure.
+
+	**Only that panel.**  Nothing about the app moved, so there is nothing for
+	anybody else to hear, and an `ack` is addressed to the asker by construction.
+	"""
+
+	hub, app, _ = await _hub_with_app()
+	asked = Recorder()
+	other = Recorder()
+
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-1", send=asked.send))
+	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-2", send=other.send))
+
+	before = len(other.frames)
+
+	await hub.settled_reported(app, {
+		"t": "ack", "app": "subsequence", "path": "moog/voicing", "client": "panel-1", "seq": 7})
+
+	acks = asked.of_kind("ack")
+
+	assert len(acks) == 1, f"the panel that asked was sent {acks}"
+	assert acks[0]["path"] == "moog/voicing", "an ack arriving alone must name the cell it answers"
+	assert acks[0]["seq"] == 7
+
+	assert other.frames[before:] == [], "a panel that asked for nothing was told about it"

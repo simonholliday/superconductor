@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.32.0";
+const CONTRACT = "1.33.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -5195,6 +5195,14 @@ function Panel () {
 					break;
 
 				case "ack":
+					/* **An answer with nothing to draw** (#2502): the app took the
+					   request and nothing moved — an action, which keeps nothing,
+					   or a value it already held. The ring goes and the face,
+					   which never moved, is all there is. A `changed` drops the
+					   same path when something did move, and dropping twice costs
+					   nothing. Older services send no path, and dropping nothing
+					   is what this did for its whole life before now. */
+					drop(frame.path);
 					break;
 
 				case "nack":
