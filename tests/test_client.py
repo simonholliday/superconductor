@@ -450,3 +450,77 @@ def test_both_languages_agree_about_a_parameter_that_opens_unset () -> None:
 
 	assert said == [superconductor.protocol.may_be_unset(one) for one in cases], (
 		f"the two languages disagree: JavaScript said {said}")
+
+
+def test_a_panel_and_the_service_keep_the_same_note_for_the_same_frame () -> None:
+	"""The third cross-language twin, and the one for a pitched grid's cells (#2503).
+
+	The service's copy of a note grid and a panel's are both built from the
+	frames the app sends, and a panel that reloads reads the first while one that
+	stayed reads the second.  So for every frame the two must hold the same
+	note, or the glass depends on when somebody last reloaded.
+
+	**A placement is answered with its shape since 1.32.0**, because a note placed
+	near the end of a pattern is shorter than the default — and a panel that
+	rebuilt it from the declaration drew it off the end of the grid, which is
+	what Simon found.  `withCell` is the panel's half, and `controls._note` —
+	reached through `apply_change`, as the service reaches it — the other.
+	"""
+
+	node = _node()
+
+	if node is None:
+		pytest.skip("no JavaScript engine on this machine")
+
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+
+	# Sliced rather than imported, for the reason the others are: the module
+	# reaches for the DOM as it loads.  Asserted to hold the note branch, because
+	# a slice that caught only the step grid's half would compare nothing here.
+	start = source.index("function withCell (rows, declared, cell, value) {")
+	end = source.index("\n}\n", start)
+	sliced = source[start:end + 3]
+
+	assert "note_grid" in sliced, f"the slice did not catch the note branch: {sliced!r}"
+
+	declared = {"type": "note_grid", "rows": ["C2", "D2"], "steps": 4, "divisions": 4,
+	            "default_length": 4, "default_velocity": 100}
+	opening = {"C2": {"0": {"length": 1, "velocity": 100}}}
+
+	cases: list[tuple[list[str], typing.Any]] = [
+		# Placed near the end, and answered with the shape the app gave it.
+		(["D2", "14"], {"length": 2, "velocity": 100}),
+		# Placed by an app older than 1.32.0, which answers only `true`.
+		(["D2", "8"], True),
+		(["C2", "0"], False),
+		(["C2", "0", "length"], 3),
+		(["C2", "0", "velocity"], 64),
+	]
+
+	driver = (f"{sliced}\n"
+	          f"const declared = {json.dumps(declared)};\n"
+	          f"const opening = {json.dumps(opening)};\n"
+	          f"const cases = {json.dumps(cases)};\n"
+	          "console.log(JSON.stringify(cases.map(([cell, value]) =>"
+	          " withCell(opening, declared, cell, value))));\n")
+
+	run = subprocess.run([str(node), "--input-type=module", "-"], input=driver,
+	                     capture_output=True, text=True, timeout=30)
+
+	assert run.returncode == 0, f"the client's own function would not run: {run.stderr}"
+
+	said = json.loads(run.stdout.strip())
+
+	for (cell, value), panel in zip(cases, said, strict=True):
+		state = {"bass": json.loads(json.dumps(opening))}
+
+		superconductor.controls.apply_change(
+			state, {"bass": declared}, "/".join(["bass", *cell]), value)
+
+		# A row whose last note went is dropped by the service and left empty by
+		# the panel, and neither draws anything for it.
+		kept = {row: notes for row, notes in state["bass"].items() if notes}
+		drawn = {row: notes for row, notes in panel.items() if notes}
+
+		assert drawn == kept, (
+			f"after {cell} = {value!r} the panel holds {drawn} and the service {kept}")

@@ -62,6 +62,7 @@ def _grid (
 	divisions: int = 1,
 	rows: list[str] | None = None,
 	relabel: typing.Any = None,
+	default_length: int = 1,
 ) -> tuple[adapter.NoteGrid, FakeComposition, FakeLink]:
 	"""A three-row, eight-step pattern with a link listening to it."""
 
@@ -71,7 +72,7 @@ def _grid (
 	grid = adapter.NoteGrid(
 		composition, rows=rows or ["C2", "C#2", "D2"], steps=8, beats=2,
 		data_key="bass", name="bass", voices=voices, divisions=divisions,
-		relabel=relabel)
+		relabel=relabel, default_length=default_length)
 
 	grid.attach(typing.cast(typing.Any, link))
 
@@ -120,6 +121,25 @@ def test_a_row_with_no_notes_left_is_forgotten () -> None:
 	superconductor.controls.apply_change(state, controls, "bass/C2/4", False)
 
 	assert state["bass"] == {}
+
+
+def test_a_placed_note_is_kept_with_the_shape_the_app_answered () -> None:
+	"""The app says what it placed, and the service keeps that (#2503).
+
+	A placement used to travel as ``true``, and each copy rebuilt the note from
+	the declared default.  So a note the app had to shorten, because the pattern
+	ends before the default length does, would have been three copies
+	disagreeing about one note — and only a panel that reloaded would see the
+	service's.
+	"""
+
+	state: dict[str, typing.Any] = {}
+	declared = {**DECLARED, "default_length": 4}
+
+	superconductor.controls.apply_change(
+		state, {"bass": declared}, "bass/C2/6", {"length": 2, "velocity": 100})
+
+	assert state["bass"]["C2"]["6"] == {"length": 2, "velocity": 100}
 
 
 # --- what the app does ------------------------------------------------------
@@ -456,8 +476,112 @@ def test_a_length_may_run_the_whole_pattern_in_positions () -> None:
 
 	assert composition.data["bass"]["C2"]["0"]["length"] == 48
 
-	with pytest.raises(adapter.Refused, match="between 1 and 48"):
+	with pytest.raises(adapter.Refused, match="at most 48 positions long"):
 		grid.apply(["C2", "0", "length"], 49)
+
+
+# --- a note ends inside its pattern (#2503) ---------------------------------
+
+def test_a_note_placed_too_near_the_end_for_its_length_is_given_the_room_there_is () -> None:
+	"""**Simon found one on the glass**: a note at 95, six positions long, on a
+	pattern 96 long — drawn off the right-hand edge of the grid and sounding into
+	the next bar.  A placement checked where a note starts, and gave it the
+	default length whatever room was left (#2503).
+
+	Given the room rather than refused, because a placement asks for a note and
+	not for a length: the default is only what a note is when nobody said, and a
+	finger on the last sixth of a step wants a note there.
+	"""
+
+	grid, composition, _ = _grid(divisions=6, default_length=6)
+
+	assert grid.apply(["C2", "45"], True) is True
+	assert composition.data["bass"]["C2"]["45"] == {"length": 3, "velocity": 100}
+
+
+def test_a_placed_note_is_answered_with_the_shape_it_was_given () -> None:
+	"""So the service and every panel keep what the app has, rather than each
+	rebuilding it from the default — which a shortened note would make three
+	copies disagreeing about one note.  `applied` is the hook for a control
+	that kept something other than what it was asked (#2503)."""
+
+	grid, _, _ = _grid(divisions=6, default_length=6)
+
+	grid.apply(["C2", "45"], True)
+
+	assert grid.applied(["C2", "45"], True) == {"length": 3, "velocity": 100}
+	assert grid.applied(["C2", "45", "velocity"], 90) == 90, "a field is answered with itself"
+
+
+def test_a_length_that_would_run_past_the_end_is_refused_with_the_room_there_is () -> None:
+	"""The note buttons were checked against the whole pattern, so a quarter
+	note on the last sixteenth of a bar ran three steps past its end."""
+
+	grid, composition, _ = _grid(divisions=6)
+
+	grid.apply(["C2", "42"], True)
+	grid.apply(["C2", "42", "length"], 6)
+
+	with pytest.raises(adapter.Refused, match="at most 6 positions long"):
+		grid.apply(["C2", "42", "length"], 7)
+
+	assert composition.data["bass"]["C2"]["42"]["length"] == 6, "the refused length landed"
+
+
+def test_a_whole_grid_holding_a_note_that_runs_past_the_end_is_refused () -> None:
+	"""The same rule through a clear, a paste or a restore, so a length that is
+	legal one way cannot be illegal the other — which is why the check is shared."""
+
+	grid, composition, _ = _grid(divisions=6)
+
+	with pytest.raises(adapter.Refused, match="at most 3 positions long"):
+		grid.apply(["rows"], {"C2": {"45": {"length": 6, "velocity": 100}}})
+
+	assert not composition.data.get("bass", {}).get("C2"), "part of a refused write landed"
+
+
+def test_a_note_written_whole_without_a_length_is_given_the_room_there_is () -> None:
+	"""A note arriving without its shape is kept with one, as a placement is."""
+
+	grid, _, _ = _grid(divisions=6, default_length=6)
+
+	grid.apply(["rows"], {"C2": {"45": {"velocity": 90}}})
+
+	assert grid.rows_now() == {"C2": {"45": {"length": 3, "velocity": 90}}}
+
+
+def test_a_restore_sets_aside_a_row_holding_a_note_that_runs_past_the_end () -> None:
+	"""What the pattern store meets on the rig once this is fixed: the row Simon
+	found it in is kept that way.  A row is the unit a restore refuses (#2487),
+	so the rest of the grid comes back and the store says which row did not."""
+
+	grid, _, _ = _grid(divisions=6)
+
+	refused = grid.restore({"rows": {"C2": {"42": {"length": 6, "velocity": 100}},
+	                                 "D2": {"45": {"length": 6, "velocity": 100}}},
+	                        "enabled": True, "transpose": 0})
+
+	assert grid.rows_now() == {"C2": {"42": {"length": 6, "velocity": 100}}}
+	assert len(refused) == 1 and "45" in refused[0], f"the store would say {refused}"
+
+
+def test_a_variant_keeps_its_notes_inside_the_pattern_as_well () -> None:
+	"""The rig's shape exactly: the Minitaur's bass has variants and sixteen
+	steps of six positions, and the note was in B."""
+
+	grid = adapter.NoteGrid(
+		FakeComposition(), rows=["G#1"], steps=16, beats=4, data_key="bass", name="bass",
+		voices=1, divisions=6, default_length=6, variants=("A", "B"))
+
+	placed = ["variants", "B", "rows", "G#1", "95"]
+
+	grid.apply(placed, True)
+
+	assert grid.rows_now("B") == {"G#1": {"95": {"length": 1, "velocity": 100}}}
+	assert grid.applied(placed, True) == {"length": 1, "velocity": 100}
+
+	with pytest.raises(adapter.Refused, match="at most 1 position long"):
+		grid.apply([*placed, "length"], 6)
 
 
 # --- one note at a time means one at a time ---------------------------------

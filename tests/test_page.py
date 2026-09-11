@@ -1147,6 +1147,140 @@ def test_a_note_shorter_than_a_step_is_that_fraction_of_the_cell (
 		f"a quarter-step note was {drawn['note']}px of a {drawn['cell']}px cell")
 
 
+def _press_inside (panel: typing.Any, path: str, across: float) -> None:
+	"""Press one of the fine grid's cells a fraction of the way across it, and let go.
+
+	In view before it is measured, because a press aimed outside the window is
+	clamped into it silently and lands somewhere else (#2487)."""
+
+	cell = panel.locator(f'.part[data-part="fine"] [data-path="{path}"]')
+	cell.scroll_into_view_if_needed()
+	box = cell.bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * across, box["y"] + box["height"] / 2)
+
+
+def _fine_frames (fake_app: conftest.FakeApp, row: str, since: int) -> list[typing.Any]:
+	"""Everything the panel asked of one row of the fine grid, once it stopped asking."""
+
+	return fake_app.settled(
+		lambda one: str(one.get("path", "")).startswith(f"fine/{row}/"), since=since)
+
+
+def test_a_press_on_the_right_half_of_a_cell_places_the_note_in_that_cell (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""**At the snap point under the finger, not the nearest one** (#2503).
+
+	A press rounded to the nearest point of the snap's lattice, so wherever a
+	finger landed on the right half of a cell the note went into the next one.
+	Every note-grid test pressed at a cell's left edge, where rounding never goes
+	up, so nothing saw it.  Every piano roll draws a note in the division the
+	pointer is in; it is a drag that rounds, because an edge follows a finger to
+	the nearest line.
+	"""
+
+	_open_the_fine_grid(panel)
+
+	before = len(fake_app.sets)
+
+	# Seven tenths across the second step, which is position 6 of a grid keeping
+	# four to a step — rounded, the third step.
+	_press_inside(panel, "fine/D2/4", 0.7)
+
+	asked = [one["path"] for one in _fine_frames(fake_app, "D2", before)]
+
+	assert asked and asked[0] == "fine/D2/4", f"the note went elsewhere: {asked}"
+	assert not [path for path in asked if path.startswith("fine/D2/8")], asked
+
+
+def test_a_press_at_the_end_of_the_last_cell_places_a_note_that_ends_with_the_pattern (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""**What Simon found on the rig** (#2503): a note drawn off the right-hand
+	edge of the grid.  Rounded, a press near the end of the last cell reached the
+	end of the pattern; the clamp that kept it on the glass put it one position
+	short of the end, off the snap's own lattice; and the placement then sent a
+	whole snap's length for it."""
+
+	_open_the_fine_grid(panel)
+
+	before = len(fake_app.sets)
+
+	_press_inside(panel, "fine/D2/12", 0.9)
+
+	asked = _fine_frames(fake_app, "D2", before)
+	placed = [one["path"] for one in asked if one["v"] is True]
+	lengths = {one["path"].rsplit("/", 1)[0]: one["v"] for one in asked
+	           if one["path"].endswith("/length")}
+
+	assert placed == ["fine/D2/12"], f"placed at {placed}, in a pattern sixteen positions long"
+	assert lengths == {"fine/D2/12": 4}, f"and given {lengths}"
+
+
+def test_a_length_the_selected_note_has_no_room_for_cannot_be_pressed (
+	panel: typing.Any) -> None:
+	"""A note ends inside its pattern (#2503), so a length that would carry it
+	past the end is drawn and cannot be pressed — as a stack's move arrows are at
+	its ends, so nothing shifts under a finger as the selection moves.
+
+	The fixture's note at 6 has ten positions before its pattern ends at 16, so a
+	quarter note (16) and a dotted eighth (12) have no room and the rest do.
+	"""
+
+	_open_the_fine_grid(panel)
+
+	# Three quarters across the second step is position 7, inside the note at 6.
+	_press_inside(panel, "fine/C2/4", 0.75)
+	panel.wait_for_selector('.part[data-part="fine"] .note.chosen', timeout=5_000)
+
+	offered = panel.eval_on_selector_all(
+		'.part[data-part="fine"] .note-controls button[data-length]',
+		"els => Object.fromEntries(els.map(el => [el.dataset.length, !el.disabled]))")
+
+	assert offered == {"1/4": False, "1/8.": False, "1/8": True, "1/16.": True,
+	                   "1/16": True, "1/32": True}, f"offered {offered}"
+
+
+def _share_of_its_cell (panel: typing.Any, path: str) -> float:
+	"""How much of its cell a note's bar covers, as a fraction."""
+
+	return float(panel.evaluate("""(path) => {
+		const cell = document.querySelector(`.part[data-part="fine"] .cell[data-path="${path}"]`);
+
+		return cell.querySelector('.note').getBoundingClientRect().width
+			/ cell.getBoundingClientRect().width;
+	}""", path))
+
+
+def test_a_note_the_app_placed_shorter_is_drawn_as_the_app_placed_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""By a panel that was watching and by one that reloads (#2503).
+
+	A placement is asked for as ``true``, and the app answers with the note it
+	made — which near the end of a pattern is shorter than the default.  Rebuilt
+	from the declaration instead, a watching panel drew it a whole step long, off
+	the end of the grid, and the service's copy that a reloading panel reads said
+	the same.
+	"""
+
+	_open_the_fine_grid(panel)
+
+	fake_app.confirm("fine/D2/12", {"length": 2, "velocity": 100}, by="app")
+
+	bar = panel.locator('.part[data-part="fine"] [data-path="fine/D2/12"] .note')
+	playwright_api.expect(bar).to_have_count(1, timeout=5_000)
+
+	assert abs(_share_of_its_cell(panel, "fine/D2/12") - 0.5) < 0.05, (
+		f"a note two positions long covers {_share_of_its_cell(panel, 'fine/D2/12'):.0%} "
+		f"of a four-position cell")
+
+	panel.reload()
+	_open_the_fine_grid(panel)
+	playwright_api.expect(bar).to_have_count(1, timeout=5_000)
+
+	assert abs(_share_of_its_cell(panel, "fine/D2/12") - 0.5) < 0.05, (
+		"a panel that reloads reads the service's copy, and it held the default")
+
+
 def test_the_subdivision_marks_are_spaced_across_the_cell (panel: typing.Any) -> None:
 	"""Which is what Simon was actually looking at when he reported it.
 
@@ -6695,13 +6829,20 @@ def test_a_velocity_lane_marks_the_same_beats_as_the_grid_above_it (
 
 def test_a_press_that_snaps_onto_a_note_does_not_rewrite_it (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""Aiming at the gap before a note must not shorten the note.
+	"""Pressing empty ground whose snap point is a note's start must not reshape
+	that note.
 
-	`snapped` rounds, so a press on empty ground can round *up* onto a position
-	where a note already starts.  Asking only about where the finger landed read
-	that as empty, and placing there sent a `/length` for the note that was
-	already there — the `true` beside it is a no-op on the app, but the length
-	is not, so a note quietly took the current snap as its length.
+	A press places a note at the snap point, and the snap point need not be where
+	the finger is — so it can be where a note already starts.  Asking only about
+	where the finger landed read that as empty, and placing there sent a
+	`/length` for the note that was already there: the `true` beside it is a
+	no-op on the app, but the length is not, so the note quietly took the current
+	snap as its length.  A press whose snap point holds a note selects that note.
+
+	Written when a press rounded, and the snap point could be the start of the
+	note *after* the finger.  A press takes the point under the finger since
+	#2503, so the note at risk is now the short one the finger has just passed —
+	the same hazard from the other side, and the same guard.
 
 	Reachable wherever a step holds more than one position, which is the whole
 	point of `divisions`: this fixture's `fine` grid keeps four.
@@ -6710,16 +6851,16 @@ def test_a_press_that_snaps_onto_a_note_does_not_rewrite_it (
 	panel.locator(".pages button", has_text="Bass").click()
 	_settled(panel)
 
-	# A note starting one whole step in, and deliberately not the length the
-	# snap would give it — otherwise the defect writes the value that is already
-	# there and nothing can see it.
-	fake_app.confirm("fine/rows", {"C2": {"4": {"length": 2, "velocity": 100}}})
+	# A quarter-step note at the start of the first step, and deliberately not
+	# the length the snap would give it — otherwise the defect writes the value
+	# that is already there and nothing can see it.
+	fake_app.confirm("fine/rows", {"C2": {"0": {"length": 1, "velocity": 100}}})
 	_settled(panel)
 
 	before = len(fake_app.sets)
 
-	# The last quarter of step 0, which is position 3: empty ground, and one the
-	# default snap of a whole step rounds up to position 4.
+	# The last quarter of step 0, which is position 3: empty ground past the short
+	# note, and a snap of a whole step puts a note pressed there at position 0.
 	cell = panel.locator('.part[data-part="fine"] [data-path="fine/C2/0"]')
 	box = cell.bounding_box()
 
@@ -6731,8 +6872,8 @@ def test_a_press_that_snaps_onto_a_note_does_not_rewrite_it (
 
 	asked = [one["path"] for one in fake_app.sets[before:]]
 
-	assert not [path for path in asked if path.startswith("fine/C2/4")], (
-		f"pressing the gap before a note wrote to it: {asked}")
+	assert not [path for path in asked if path.startswith("fine/C2/0")], (
+		f"pressing the ground after a note wrote to it: {asked}")
 
 	# And it selected that note rather than doing nothing at all, which is the
 	# other way this assertion could be satisfied.

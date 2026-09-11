@@ -1226,9 +1226,11 @@ class NoteGrid (_Variants, Control):
 			if step in notes:
 				return False
 
-			notes[step] = {"length": self.default_length, "velocity": self.default_velocity}
+			length = self._unsaid_length(int(step))
 
-			self._keep_voices(grid, row, int(step), self.default_length, variant)
+			notes[step] = {"length": length, "velocity": self.default_velocity}
+
+			self._keep_voices(grid, row, int(step), length, variant)
 
 			return True
 
@@ -1261,7 +1263,7 @@ class NoteGrid (_Variants, Control):
 		if step not in notes:
 			raise Refused("there is no note there to shape")
 
-		wanted = self._checked_field(field, value)
+		wanted = self._checked_field(field, value, int(step))
 
 		if notes[step][field] == wanted:
 			return False
@@ -1277,18 +1279,32 @@ class NoteGrid (_Variants, Control):
 
 		return True
 
-	def _checked_field (self, field: str, value: typing.Any) -> int:
+	def _checked_field (self, field: str, value: typing.Any, at: int) -> int:
 		"""One of a note's two numbers, refused if it would not sound.
 
 		Shared between shaping a note and writing a whole grid, so a length that
 		is legal one way cannot be illegal the other.
+
+		**A note ends inside its pattern** (#2503), so the room a length has is
+		what is left after *at*, where the note starts, and not the whole pattern.
+		Checked against the whole pattern, the length buttons ran the last note of
+		a bar a quarter note past its end, and a note placed on the last position
+		ran its default length past it — which Simon found drawn off the right-hand
+		edge of the grid.
 		"""
 
 		wanted = int(value)
 
 		if field == "length":
-			if not 1 <= wanted <= self.positions:
-				raise Refused(f"a note is between 1 and {self.positions} positions long")
+			room = self.positions - at
+
+			if wanted < 1:
+				raise Refused("a note is at least 1 position long")
+
+			if wanted > room:
+				raise Refused(
+					f"a note at {at} can be at most {room} {'position' if room == 1 else 'positions'} "
+					f"long, because the pattern ends at {self.positions}")
 
 		elif field == "velocity":
 			# **The pair this grid declared, rather than the same two numbers
@@ -1403,14 +1419,28 @@ class NoteGrid (_Variants, Control):
 			if not isinstance(note, dict):
 				raise Refused("a note is an object")
 
+			at = int(step)
+
 			placed[str(step)] = {
 				"length": self._checked_field(
-					"length", note.get("length", self.default_length)),
+					"length", note.get("length", self._unsaid_length(at)), at),
 				"velocity": self._checked_field(
-					"velocity", note.get("velocity", self.default_velocity)),
+					"velocity", note.get("velocity", self.default_velocity), at),
 			}
 
 		return placed
+
+	def _unsaid_length (self, at: int) -> int:
+		"""How long a note starting at *at* is when nobody said: the default, or as
+		much of it as the pattern has left (#2503).
+
+		**Given the room rather than refused**, because a note placed without a
+		length is asking for a note and not for a length — a finger on the last
+		sixth of a bar wants a note there.  One place, so a placement and a whole
+		grid written without lengths cannot shape the same note two ways.
+		"""
+
+		return min(self.default_length, self.positions - at)
 
 	def _put_rows (self, wanted: dict[str, dict[str, typing.Any]], variant: str | None = None) -> bool:
 		"""Make the grid, or one variant of it, hold exactly *wanted*; say if it changed."""
@@ -1488,7 +1518,14 @@ class NoteGrid (_Variants, Control):
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the grid now holds, which for a whole-grid write is not the ask:
 		a note arrives without its shape and is kept with one.  A cue is answered
-		with the cue as kept, as a step grid's is."""
+		with the cue as kept, as a step grid's is.
+
+		**So is a note placed on its own** (#2503).  A placement is asked for as
+		``true`` and kept with a shape — the default length, or as much of it as
+		the pattern has left — and it is answered with that shape.  Answered with
+		``true``, the service and every panel rebuilt the note from the declared
+		default, which is the one thing a note near the end is not.
+		"""
 
 		if rest == ["cue"]:
 			return self.cue
@@ -1496,7 +1533,17 @@ class NoteGrid (_Variants, Control):
 		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
 			return self.rows_now(rest[1])
 
-		return self.rows_now() if rest == ["rows"] else value
+		if rest == ["rows"]:
+			return self.rows_now()
+
+		variant, cell = (rest[1], rest[3:]) if self.variants and rest[:1] == ["variants"] else (None, rest)
+
+		if len(cell) == 2 and value:
+			placed = (self._rows_read(variant).get(cell[0]) or {}).get(cell[1])
+
+			return dict(placed) if placed else value
+
+		return value
 
 	def _keep_voices (
 		self,

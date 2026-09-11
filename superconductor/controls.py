@@ -1064,7 +1064,16 @@ def _note (
 	notes = rows.setdefault(row, {})
 
 	if len(cell) == 2:
-		if value:
+		# **The shape the app placed it with, when the app says** (#2503).  A note
+		# placed near the end of a pattern is shorter than the default, and only
+		# the app works out by how much — rebuilt here from the declaration, this
+		# copy would disagree with the app about exactly those notes, and a panel
+		# that reloaded would draw one off the end of the grid.  An app older than
+		# 1.32.0 answers ``true`` and gets the default, as it always did.
+		if isinstance(value, dict):
+			notes[step] = dict(value)
+
+		elif value:
 			notes.setdefault(step, {
 				"length": declaration.get("default_length", 1),
 				"velocity": declaration.get("default_velocity", 100)})

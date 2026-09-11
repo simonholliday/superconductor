@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.31.0";
+const CONTRACT = "1.32.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -930,9 +930,29 @@ function noteAt (held, position) {
 	return found;
 }
 
-/* Round a position onto the snap lattice, never off the pattern. */
+/* Round a position onto the snap lattice, never off the pattern — for a drag,
+ * where an edge follows the finger to the nearest line. */
 function snapped (position, unit, positions) {
 	return Math.max(0, Math.min(positions - 1, Math.round(position / unit) * unit));
+}
+
+/* Where a press on empty ground puts a note, and how long it is.
+ *
+ * **At the snap point under the finger, not the nearest one** (#2503). Rounded,
+ * a finger on the right half of a cell put the note in the next one — and on the
+ * last cell of a bar, rounding reached the end of the pattern and the clamp that
+ * kept it on the glass left it one position short of the end, off the snap's
+ * own lattice, with a whole snap's length still to run. Simon found it drawn off
+ * the right-hand edge of the grid. Every piano roll draws a note in the division
+ * the pointer is in; it is a drag that rounds.
+ *
+ * **As long as the snap, or as long as the pattern has room for**, because a note
+ * ends inside its pattern — the app refuses one that would not, and a pattern
+ * need not be a whole number of snaps long. */
+function placing (position, unit, positions) {
+	const at = Math.floor(position / unit) * unit;
+
+	return { at, span: Math.min(unit, positions - at) };
 }
 
 const DRAG_SLOP = 8;
@@ -1022,31 +1042,32 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 		event.preventDefault();
 
 		const at = positionIn(event, step);
-		const put = snapped(at, snap, positions);
+		const { at: put, span } = placing(at, snap, positions);
 
 		/* **Where the finger landed, or where the snap would put a note** —
 		   either counts as pressing an existing one.
-		
-		   `snapped` rounds, so it can round *up* onto a position where a note
-		   already starts. Asking only about the landing then read as empty
-		   ground, and placing there rewrote that note's length with the current
-		   snap: the `true` set is a no-op on the app, but the `/length` set
-		   beside it is not. Reachable on a grid keeping six positions to a step
-		   — press position 5 with a snap of 6 and the note at 6 is shortened by
-		   somebody who aimed at the gap before it. */
+
+		   The snap point need not be under the finger, so it can be where a
+		   note already starts: the short one the finger has just passed. Asking
+		   only about the landing then read as empty ground, and placing there
+		   rewrote that note's length with the current snap — the `true` set is
+		   a no-op on the app, but the `/length` set beside it is not. Reachable
+		   on a grid keeping six positions to a step: a note at 0 one position
+		   long, and a press at 5 with a snap of 6. */
 		const found = noteAt(notes[row], at) || noteAt(notes[row], put);
 
 		event.currentTarget.setPointerCapture(event.pointerId);
 
 		if (!found) {
-			/* Placed on the landing, at the snap's own length, and selected so
-			   the length values below act on what was just drawn. */
+			/* Placed under the finger, at the snap's own length or as much of it
+			   as the pattern has left, and selected so the length values below
+			   act on what was just drawn. */
 			onSet(`${cellsAt}/${row}/${put}`, true);
-			onSet(`${cellsAt}/${row}/${put}/length`, snap);
+			onSet(`${cellsAt}/${row}/${put}/length`, span);
 			onSelect({ row, at: put });
 
 			drag.current = { pointer: event.pointerId, kind: "draw", row, at: put,
-				span: snap, velocity: null, x: event.clientX, y: event.clientY, moved: false };
+				span, velocity: null, x: event.clientX, y: event.clientY, moved: false };
 			return;
 		}
 
@@ -1096,10 +1117,12 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 		}
 
 		/* "end" and "draw" are the same gesture: the right edge follows the
-		   finger and the note keeps where it starts. */
+		   finger and the note keeps where it starts — and never past the end of
+		   the pattern, however short that leaves it (#2503). */
 		const edge = snapped(held.at + held.span + across, snap, positions + 1);
 
-		shade({ row: held.row, at: held.at, span: Math.max(snap, edge - held.at) });
+		shade({ row: held.row, at: held.at,
+			span: Math.min(positions - held.at, Math.max(snap, edge - held.at)) });
 	};
 
 	const finish = (event) => {
@@ -1374,8 +1397,14 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, no
  * **Then the selected note's length, by name.** The finest values are two or
  * three pixels of bar, so an edge grip can never reach them however carefully
  * it is drawn; a dotted eighth is not something a drag arrives at either. A
- * musician picks the value, which is the thing they were thinking of anyway. */
-function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, onRemove,
+ * musician picks the value, which is the thing they were thinking of anyway.
+ *
+ * **A value the note has no room for is drawn and cannot be pressed** (#2503),
+ * because a note ends inside its pattern: `room` is what is left between the
+ * note's start and the end. Disabled rather than absent, as a stack's move
+ * arrows are at its ends, so nothing along the row shifts under a finger as the
+ * selection moves from one note to another. */
+function NoteControls ({ values, snaps, snap, onSnap, selected, note, room, onLength, onRemove,
                         transpose, transposeRange, onTranspose }) {
 	/* **Two buttons and a readout, not a picker** — which is what every piece of
 	 * hardware that transposes offers, because a performer's hand does not choose
@@ -1423,9 +1452,10 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, 
 								key=${`len-${value.label}`}
 								class=${`offer ${value.positions === note.length ? "on" : ""}`}
 								data-length=${value.label}
+								disabled=${value.positions > room}
 								onPointerDown=${(event) => {
 									event.preventDefault();
-									onLength(value.positions);
+									if (value.positions <= room) onLength(value.positions);
 								}}
 							>${value.label}</button>`)}
 						<span class="spacer"></span>
@@ -1475,6 +1505,9 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 	   takes the selection with it instead of leaving buttons acting on nothing. */
 	const note = selected ? (notes[selected.row] || {})[String(selected.at)] || null : null;
 
+	/* How long the selected note may be: what is left before its pattern ends. */
+	const room = note ? steps * divisions - selected.at : 0;
+
 	return html`
 		<${NoteGrid} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} beats=${beats}
 			divisions=${divisions}
@@ -1496,7 +1529,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 				divisions=${divisions} tight
 				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
-			selected=${selected} note=${note}
+			selected=${selected} note=${note} room=${room}
 			transpose=${notes.transpose} transposeRange=${control.transpose_range}
 			onTranspose=${control.transpose_range
 				? (semitones) => onSet(`${name}/transpose`, semitones)
@@ -5098,20 +5131,12 @@ function Panel () {
 							app[control] = held;
 						} else if (rest.length === 2 && declared && declared.type === "note_grid") {
 							/* Placing or taking away a note, which carries its
-							   own shape rather than being present or absent. */
-							const grid = { ...(app[control] || {}) };
-							const row = { ...(grid[rest[0]] || {}) };
-
-							if (frame.v) {
-								row[rest[1]] = row[rest[1]] || {
-									length: declared.default_length || 1,
-									velocity: declared.default_velocity || 100 };
-							} else {
-								delete row[rest[1]];
-							}
-
-							grid[rest[0]] = row;
-							app[control] = grid;
+							   own shape rather than being present or absent —
+							   the shape the app answered with, where it did
+							   (#2503). Through the one function a variant's cells
+							   use, so the two cannot keep a note two ways; what
+							   sits beside the rows is carried through untouched. */
+							app[control] = withCell(app[control] || {}, declared, rest, frame.v);
 						} else if (rest.length === 2) {
 							const grid = { ...(app[control] || {}) };
 							const list = new Set(grid[rest[0]] || []);
@@ -6881,7 +6906,15 @@ function Panel () {
  * The same four answers the `changed` handler gives a grid without variants —
  * the whole of the rows, a step on or off, a note placed or taken away, and one
  * field of a note — written once for a variant's rows (#2485), where the cell's
- * address is the rest of the path after `variants/<id>/rows`. */
+ * address is the rest of the path after `variants/<id>/rows`. A note grid
+ * without variants places and removes its notes through here as well, so the
+ * shape a placed note is kept with is decided in one place.
+ *
+ * **A placed note is kept with the shape the app answered** (#2503): the
+ * default length, or as much of it as the pattern had left, which only the app
+ * works out. Rebuilt from the declaration, a note placed near the end was drawn
+ * a whole default long, off the right-hand edge of the grid. An app older than
+ * 1.32.0 answers `true`, and gets the default as it always did. */
 function withCell (rows, declared, cell, value) {
 	if (!cell.length) return { ...(value || {}) };
 
@@ -6894,6 +6927,8 @@ function withCell (rows, declared, cell, value) {
 		if (field !== undefined) {
 			// Only ever sent for a note that is there, so an absent one stays absent.
 			if (notes[step]) notes[step] = { ...notes[step], [field]: value };
+		} else if (value && typeof value === "object") {
+			notes[step] = { ...value };
 		} else if (value) {
 			notes[step] = notes[step] || {
 				length: declared.default_length || 1,

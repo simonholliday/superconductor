@@ -157,6 +157,32 @@ def test_a_note_grid_and_the_service_agree_after_every_write (
 	_agree(_notes(), rest, value)
 
 
+def _divided_notes (variants: tuple[str, ...] = ()) -> typing.Any:
+	"""A note grid keeping six positions to a step and placing a note a step long,
+	as the rig's bass does — so a note placed near the end cannot have its default."""
+
+	return adapter.NoteGrid(
+		Composition(), rows=["C2", "D2"], steps=8, beats=2, data_key="bass", name="bass",
+		voices=None, divisions=6, default_length=6, variants=variants)
+
+
+@pytest.mark.parametrize("rest", [["C2", "0"], ["C2", "45"], ["C2", "47"]])
+def test_a_note_too_near_the_end_for_its_default_crosses_with_its_shape (
+	rest: list[str]) -> None:
+	"""A note the app shortened, because the pattern ends before its default
+	length does, is the note both halves hold (#2503).  Rebuilt from the
+	declaration on this side it would be six long here and three in the app, and
+	a panel that reloaded would draw it off the end of the grid."""
+
+	_agree(_divided_notes(), rest, True)
+
+
+def test_a_note_placed_at_the_very_end_of_a_variant_crosses_with_its_shape () -> None:
+	"""The same through a variant's rows, which is where the rig's note was."""
+
+	_agree(_divided_notes(("A", "B")), ["variants", "B", "rows", "C2", "47"], True)
+
+
 def test_clearing_a_grid_leaves_the_mute_where_it_was () -> None:
 	"""The mute is not one of the rows, so replacing the rows must not take it.
 

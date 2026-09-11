@@ -2652,6 +2652,11 @@ html, body {
 .note-row .hint,
 .note-row.idle .row-label { color: var(--ink-quiet); }
 
+/* A length the selected note has no room for before its pattern ends (#2503):
+   still drawn, so nothing along the row moves, and faded as a stack's move
+   arrows are at its ends. */
+.note-row .offer:disabled { opacity: 0.35; }
+
 /* A note name is a name and a number, so it is set in figures rather than in
    the panel face: C#2 and D2 have to line up under one another, and a condensed
    face bought for narrow words does not do that. Already uppercase by its own

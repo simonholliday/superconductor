@@ -148,12 +148,22 @@ same size it always was.
 A step grid's cells are on or off. A **note grid**'s cells are notes: one row
 per pitch, and a cell that carries its own length and velocity.
 
-Press an empty cell to place a note, and keep dragging right to make it longer —
-it grows a step at a time, and each length is sent as it changes, so the bar you
-see is never longer than the instrument has agreed to. Press a note to take it
-away. Beneath the grid is a velocity lane, one bar to a step, aligned with the
-grid above so a column is the same moment in both; drag a bar up or down to set
-how hard that note is struck.
+Press an empty cell to place a note where your finger is, to the snap chosen
+beneath the grid, and keep dragging right to make it longer. What you drag is
+drawn as a ghost until you let go, because the note on the glass is only ever
+the one the instrument has agreed to. Press a note to select it and press it
+again to take it away; drag it to move it in time or in pitch, and drag either
+end of a long one to change where it starts or stops. A selected note's length
+can also be chosen by name beneath the grid, which is the only way to reach the
+finest values.
+
+A note always ends inside its pattern. One placed near the end is as long as
+there is room for, and a length that would carry it past the end cannot be
+chosen.
+
+Beneath the grid is a velocity lane, one bar to a step, aligned with the grid
+above so a column is the same moment in both; drag a bar up or down to set how
+hard that note is struck.
 
 Rows are drawn in the order they are declared, so a pitched part lists its
 highest note first and a rising line rises. A part that declares `visible_rows`

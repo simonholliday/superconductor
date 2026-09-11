@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.31.0"
+CONTRACT_VERSION = "1.32.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -298,6 +298,15 @@ spelling is refused on a grid with variants rather than read as the one playing.
 A grid declaring none is unchanged in every respect, so this is additive — but a
 panel too old for it would draw a variant grid empty and have its taps refused,
 which the contract check on its own bar is for (#2164).
+
+1.32.0 answers a note placed on a note grid with the **shape it was kept with**
+rather than with ``true`` (#2503).  A note ends inside its pattern, so one
+placed too near the end for the default length is given the room there is — and
+only the app works that out, so the service and every panel keep the shape they
+are told instead of rebuilding it from ``default_length``.  The ask is still
+``true``, and an app still answering ``true`` gets the default as before; a
+panel too old for this draws such a note a whole default long, off the end of
+the grid, which is what Simon found.
 """
 
 UNIT = "unit"
