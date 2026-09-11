@@ -1795,6 +1795,11 @@ def test_one_parameter_is_addressed_on_its_own_not_as_the_whole_stack (
 	panel.locator('.part[data-part="stack/one"] .switch').first.click()
 
 	dial = panel.locator('.part[data-part="stack/one"] .dial').first
+
+	# In view before it is measured: a click aimed below the window is clamped
+	# into it silently, and how far down the page this sits depends on how tall
+	# the bar is (#2487).
+	dial.scroll_into_view_if_needed()
 	box = dial.bounding_box()
 
 	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
@@ -2156,6 +2161,13 @@ def test_a_float_with_no_declared_step_is_not_snapped_to_whole_numbers (
 
 	dials = panel.locator('.part[data-part="stack/one"] .dial:not(.ranged)')
 	probability = dials.last
+
+	# **Brought into view before it is measured**, because it sits sixteen pixels
+	# above the bottom of a 1280×720 window here and a mouse aimed below the
+	# window is clamped into it silently.  A bar one line taller — the store's
+	# status joining it (#2487), with a runner's wider fonts — pushed it off the
+	# glass on CI and the click landed on nothing.
+	probability.scroll_into_view_if_needed()
 	box = probability.bounding_box()
 
 	panel.mouse.click(box["x"] + box["width"] * 0.5, box["y"] + box["height"] / 2)
@@ -5758,7 +5770,10 @@ def test_a_block_can_be_silenced_from_its_own_footer (
 	assert switch.get_attribute("data-on") == "true"
 	assert _pressed_end(panel, '.part[data-part="grid"] .part-foot .switch') == "on"
 
-	switch.click()
+	# **The OFF end, by name.**  A click on the rocker itself lands on its middle,
+	# which is the line between its two ends — so which one it pressed depended on
+	# the cell size, and a bar one line taller shrinks every cell (#2487).
+	switch.locator(".end", has_text="off").click()
 
 	asked = fake_app.await_set("grid/enabled")
 
