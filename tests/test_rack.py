@@ -57,12 +57,12 @@ def _made (spec: dict[str, typing.Any]) -> typing.Any:
 		title=spec.get("title") or "Grid")
 
 
-def _rack (store: typing.Any = None) -> tuple[adapter.GridRack, Link]:
+def _rack () -> tuple[adapter.GridRack, Link]:
 	"""A rack over three voices, attached to a link."""
 
 	rack = adapter.GridRack(
 		Composition(), make=_made, rows=ROWS, steps=(1, 32),
-		data_key="rack", name="rack", store=store)
+		data_key="rack", name="rack")
 
 	link = Link()
 	rack.attach(typing.cast(typing.Any, link))
@@ -190,25 +190,42 @@ def test_the_same_list_again_changes_nothing () -> None:
 	assert link.said == before
 
 
-def test_what_somebody_made_comes_back_after_a_restart (
-	tmp_path: pathlib.Path) -> None:
-	"""**The cost this feature actually has** (#2226).  A restart already loses
-	the notes on a grid (#2067); without this it would lose the grid itself,
-	which is somebody losing what they made rather than what they played.
+def test_what_somebody_made_comes_back_after_a_restart () -> None:
+	"""**The cost this feature actually has** (#2226).  Without it a restart would
+	lose the grid itself, which is somebody losing what they made rather than
+	what they played.
 
-	What comes back is the grids, empty.  That is honest and it is better than
-	nothing coming back at all.
+	The link's pattern store keeps the list with everything else a person made
+	(#2487), and `tests/test_pattern_store.py` restarts a whole piece; this is the
+	rack's own half — what it keeps, and making it all again from that.
 	"""
 
-	store = adapter.PageStore(tmp_path / "made.grids.json")
-
-	rack, _ = _rack(store)
+	rack, _ = _rack()
 	rack.apply(["grids"], [_grid("a", ["snare"], 9)])
 
-	again, link = _rack(adapter.PageStore(tmp_path / "made.grids.json"))
+	again, link = _rack()
 
+	assert again.restore(rack.kept()) == []
 	assert [one["id"] for one in again.grids()] == ["a"]
 	assert link.controls["rack-a"].steps == 9
+
+
+def test_a_kept_grid_the_rack_no_longer_offers_costs_that_grid_alone () -> None:
+	"""Each grid stands alone, so a row dropped from the rack between two starts
+	costs the grid that used it and not every grid a person made."""
+
+	rack, _ = _rack()
+	rack.apply(["grids"], [_grid("a", ["snare"]), _grid("b", ["kick"])])
+
+	kept = rack.kept()
+	kept["grids"][0]["rows"] = ["cowbell"]
+
+	again, link = _rack()
+	refused = again.restore(kept)
+
+	assert len(refused) == 1 and "cowbell" in refused[0]
+	assert [one["id"] for one in again.grids()] == ["b"]
+	assert "rack-b" in link.controls
 
 
 def test_a_grid_that_goes_is_unmade_as_well_as_undeclared () -> None:

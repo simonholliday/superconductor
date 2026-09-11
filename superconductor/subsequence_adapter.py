@@ -22,11 +22,15 @@ Subroutine #1972 and is still open.
 import asyncio
 import collections
 import collections.abc
+import contextlib
+import datetime
 import inspect
 import json
 import logging
+import os
 import pathlib
 import random
+import tempfile
 import threading
 import time
 import typing
@@ -71,6 +75,24 @@ DEFAULT_URL = "ws://127.0.0.1:8090/ws/app"
 RECONNECT_FLOOR = 0.25
 RECONNECT_CEILING = 5.0
 """Seconds between attempts to dial the service, backing off to the ceiling."""
+
+KEEP_AFTER = 1.5
+"""Seconds of quiet after a change before what a person made is written down (#2487).
+
+Long enough that a run of taps is one write rather than thirty, short enough that
+a composition killed outright loses a second and a half of work."""
+
+KEEP_AT_MOST = 10.0
+"""And the longest a change waits, however busy the hands are.
+
+A person tapping steadily never gives the store its quiet, so without a ceiling
+an hour's work would be one power cut from gone."""
+
+KEEP_ON_STOP_WITHIN = 5.0
+"""How long a clean stop waits for a save already under way before giving up.
+
+A save stuck on a disk that has stopped answering must not hold the composition
+open for ever; the last save that did finish is still on disk."""
 
 
 class Refused (Exception):
@@ -245,6 +267,67 @@ class Control:
 		correct.
 		"""
 
+	def started (self) -> None:
+		"""Called on the clock loop once the composition's patterns are running.
+
+		At the first beat, and again after the piece is started again from its
+		file.  **A mute put back from a store is held until now**, because the
+		store is read before `play()` and Subsequence cannot mute a pattern it
+		has not started — it raises rather than remembering (#2487).
+		"""
+
+		if not self._mute_owed:
+			return
+
+		self._mute_owed = False
+		self._tell_the_pattern()
+
+	def kept (self) -> typing.Any:
+		"""What a person has made of this control, which a restart must not lose.
+
+		Everything *authored* on the glass and nothing an algorithm produced
+		(#1965): a person's taps are intent, and what a generator played is an
+		event that is gone by the next cycle.  ``None`` for a control holding
+		nothing of the kind — a transport's tempo and pause are how the piece is
+		being played rather than what was made, and a store that brought a pause
+		back would bring back a stopped-looking clock on every start (#2487).
+
+		Called off the clock loop, by whatever writes the store down.  Every
+		container is copied at C level before anything walks it, because the
+		clock may be changing the same dict at that moment: `dict(d)` does not
+		release the interpreter's lock and a Python-level walk over a live one
+		can (`a4b7e74`).
+		"""
+
+		return None
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put back what `kept` said, and say why anything could not be.
+
+		A store may have been written by an earlier version of the composition,
+		which offered an option since renamed or a row since dropped.  Each part
+		is checked exactly as a panel's request would be; what is refused is
+		*said*, never half-taken and never dropped in silence, and the rest
+		comes back.  Nothing here reports to a panel: a restore is read before
+		the first declaration, which carries everything, or is followed by one.
+		"""
+
+		return []
+
+	_mute_owed: bool = False
+	"""Whether the composition's pattern still has to be told this control's mute."""
+
+	def _restore_enabled (self, value: typing.Any) -> list[str]:
+		"""Take back a kept mute, owing it to the pattern until `started`."""
+
+		if not isinstance(value, bool):
+			return [f"{self.name} is on or off, and was kept as {value!r}"]
+
+		if value != self.enabled:
+			self.enabled = value
+			self._mute_owed = self.pattern is not None
+
+		return []
 
 	def _keep_enabled (self, value: typing.Any) -> bool:
 		"""Silence this control, or bring it back.
@@ -265,17 +348,23 @@ class Control:
 			return False
 
 		self.enabled = wanted
-
-		if self.pattern is not None:
-			switch = getattr(self.composition, "unmute" if wanted else "mute", None)
-
-			if callable(switch):
-				switch(self.pattern)
-
-			else:
-				LOG.warning("this composition cannot mute %r", self.pattern)
+		self._tell_the_pattern()
 
 		return True
+
+	def _tell_the_pattern (self) -> None:
+		"""Make the composition's pattern agree with this control's mute."""
+
+		if self.pattern is None:
+			return
+
+		switch = getattr(self.composition, "unmute" if self.enabled else "mute", None)
+
+		if callable(switch):
+			switch(self.pattern)
+
+		else:
+			LOG.warning("this composition cannot mute %r", self.pattern)
 
 
 class StepGrid (Control):
@@ -375,21 +464,38 @@ class StepGrid (Control):
 		wanted: dict[str, list[int]] = {}
 
 		for row, held in value.items():
-			if row not in self.rows:
-				raise Refused(f"this grid has no {row!r} row")
+			steps = self._checked_row(row, held)
 
-			if not isinstance(held, list):
-				raise Refused(f"the {row!r} row takes a list of steps")
+			if steps:
+				wanted[row] = steps
 
-			for step in held:
-				if isinstance(step, bool) or not isinstance(step, int):
-					raise Refused("a step is a whole number")
+		return self._put_rows(wanted)
 
-				if not 0 <= step < self.steps:
-					raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+	def _checked_row (self, row: typing.Any, held: typing.Any) -> list[int]:
+		"""One row of a whole-grid write, refused if the grid could not hold it.
 
-			if held:
-				wanted[row] = sorted(set(held))
+		A row at a time so a panel's write and a store's restore check the same
+		things the same way, and differ only in what a refusal costs: a panel's
+		write is refused entire, and a restore keeps every row it still can.
+		"""
+
+		if row not in self.rows:
+			raise Refused(f"this grid has no {row!r} row")
+
+		if not isinstance(held, list):
+			raise Refused(f"the {row!r} row takes a list of steps")
+
+		for step in held:
+			if isinstance(step, bool) or not isinstance(step, int):
+				raise Refused("a step is a whole number")
+
+			if not 0 <= step < self.steps:
+				raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+
+		return sorted(set(held))
+
+	def _put_rows (self, wanted: dict[str, list[int]]) -> bool:
+		"""Make the grid hold exactly *wanted*, and say whether that changed it."""
 
 		grid = self.composition.data.setdefault(self.data_key, {})
 
@@ -400,6 +506,42 @@ class StepGrid (Control):
 		grid.update(wanted)
 
 		return True
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""The steps somebody put down, and whether they are heard (#2487)."""
+
+		return {"rows": {row: steps for row, steps in self.rows_now().items() if steps},
+		        "enabled": self.enabled}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put the grid back exactly, taking out whatever the composition seeded.
+
+		**Exactly, not additively**, which is #2465's whole complaint about the
+		restore tool: a composition seeds a pattern on every start, and a store
+		that only added what it kept would bring back every seeded step a person
+		had taken out.
+		"""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("rows"), dict):
+			return [f"{self.name} was kept as something other than a grid"]
+
+		refused: list[str] = []
+		wanted: dict[str, list[int]] = {}
+
+		for row, held in kept["rows"].items():
+			try:
+				steps = self._checked_row(row, held)
+
+			except Refused as refusal:
+				refused.append(f"{self.name}: {refusal}")
+				continue
+
+			if steps:
+				wanted[row] = steps
+
+		self._put_rows(wanted)
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the grid now holds, which for a whole-grid write is not the ask.
@@ -676,8 +818,13 @@ class NoteGrid (Control):
 
 		grid = self.composition.data.get(self.data_key) or {}
 
+		# Each row copied whole before it is walked, because this is read off the
+		# clock loop — by a declaration, and by the store (#2487) — while a tap
+		# may be adding a note to the same row.  `dict(row)` is one step under the
+		# interpreter's lock; a comprehension over the live row is many, and a
+		# note arriving between two of them raises (`a4b7e74`).
 		return {
-			row: {step: dict(note) for step, note in (grid.get(row) or {}).items()}
+			row: {step: dict(note) for step, note in dict(grid.get(row) or {}).items()}
 			for row in self.rows if grid.get(row)}
 
 	def snapshot (self) -> dict[str, typing.Any]:
@@ -881,30 +1028,46 @@ class NoteGrid (Control):
 		wanted: dict[str, dict[str, typing.Any]] = {}
 
 		for row, held in value.items():
-			if row not in self.rows:
-				raise Refused(f"this grid has no {row!r} row")
-
-			if not isinstance(held, dict):
-				raise Refused(f"the {row!r} row takes notes by step")
-
-			placed: dict[str, typing.Any] = {}
-
-			for step, note in held.items():
-				if not str(step).isdigit() or not 0 <= int(step) < self.positions:
-					raise Refused(f"{step} is outside a grid {self.positions} positions wide")
-
-				if not isinstance(note, dict):
-					raise Refused("a note is an object")
-
-				placed[str(step)] = {
-					"length": self._checked_field(
-						"length", note.get("length", self.default_length)),
-					"velocity": self._checked_field(
-						"velocity", note.get("velocity", self.default_velocity)),
-				}
+			placed = self._checked_row(row, held)
 
 			if placed:
 				wanted[row] = placed
+
+		return self._put_rows(wanted)
+
+	def _checked_row (self, row: typing.Any, held: typing.Any) -> dict[str, typing.Any]:
+		"""One row of a whole-grid write, each note given its shape, or refused.
+
+		A row at a time for the reason a step grid's is: a panel's write is
+		refused entire, and a restore keeps every row it still can.
+		"""
+
+		if row not in self.rows:
+			raise Refused(f"this grid has no {row!r} row")
+
+		if not isinstance(held, dict):
+			raise Refused(f"the {row!r} row takes notes by step")
+
+		placed: dict[str, typing.Any] = {}
+
+		for step, note in held.items():
+			if not str(step).isdigit() or not 0 <= int(step) < self.positions:
+				raise Refused(f"{step} is outside a grid {self.positions} positions wide")
+
+			if not isinstance(note, dict):
+				raise Refused("a note is an object")
+
+			placed[str(step)] = {
+				"length": self._checked_field(
+					"length", note.get("length", self.default_length)),
+				"velocity": self._checked_field(
+					"velocity", note.get("velocity", self.default_velocity)),
+			}
+
+		return placed
+
+	def _put_rows (self, wanted: dict[str, dict[str, typing.Any]]) -> bool:
+		"""Make the grid hold exactly *wanted*, and say whether that changed it."""
 
 		grid = self.composition.data.setdefault(self.data_key, {})
 
@@ -915,6 +1078,46 @@ class NoteGrid (Control):
 		grid.update(wanted)
 
 		return True
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""Every note, the transposition and the mute (#2487).
+
+		The notes as drawn rather than as sounding: a transposition moves the
+		sound and never the drawing (#2152), so the offset is kept beside them
+		and the labels it implies are worked out again rather than stored.
+		"""
+
+		return {"rows": self.rows_now(), "enabled": self.enabled, "transpose": self.transpose}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put the notes back exactly, then the offset, then the mute."""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("rows"), dict):
+			return [f"{self.name} was kept as something other than a grid"]
+
+		refused: list[str] = []
+		wanted: dict[str, dict[str, typing.Any]] = {}
+
+		for row, held in kept["rows"].items():
+			try:
+				placed = self._checked_row(row, held)
+
+			except (Refused, TypeError, ValueError) as refusal:
+				refused.append(f"{self.name}: {refusal}")
+				continue
+
+			if placed:
+				wanted[row] = placed
+
+		self._put_rows(wanted)
+
+		try:
+			self._keep_transpose(kept.get("transpose", 0))
+
+		except (Refused, TypeError, ValueError) as refusal:
+			refused.append(f"{self.name}: {refusal}")
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the grid now holds, which for a whole-grid write is not the ask:
@@ -1418,6 +1621,48 @@ class Params (Control):
 		"""What every setting holds at the moment."""
 
 		return dict(self.composition.data.get(self.data_key) or {})
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""Every setting somebody can move, which is every one but an action (#2179)."""
+
+		return {name: value for name, value in self.snapshot().items()
+		        if name in self.parameters and self.parameters[name].kind != "action"}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put each setting back on its own, checked as a panel's would be.
+
+		One at a time because settings are independent of one another: an option
+		the instrument definition has since renamed costs that one setting, which
+		opens where the composition says, and not the other thirty-five.
+
+		**The instrument is owed every setting afterwards**, exactly as it is when
+		the app declares itself, because it holds its own idea of each and says
+		nothing about it — a setting put back here and never sent would be a
+		face on the glass that the instrument does not agree with.
+		"""
+
+		if not isinstance(kept, dict):
+			return [f"{self.name} was kept as something other than a set of settings"]
+
+		refused: list[str] = []
+		held = self.composition.data.setdefault(self.data_key, {})
+
+		for name, value in kept.items():
+			parameter = self.parameters.get(name)
+
+			if parameter is None or parameter.kind == "action":
+				refused.append(f"{self.name} has no setting called {name} any more")
+				continue
+
+			try:
+				held[name] = checked_value(parameter, value)
+
+			except (Refused, TypeError, ValueError) as refusal:
+				refused.append(f"{self.name}: {refusal} (it was kept as {value!r})")
+
+		self._to_assert = True
+
+		return refused
 
 	def declared (self) -> None:
 		"""Owe the instrument every setting, to be paid at the next beat."""
@@ -1935,6 +2180,36 @@ class PitchSet (Control):
 
 		return {"chosen": list(self.chosen), "enabled": self.enabled}
 
+	def kept (self) -> dict[str, typing.Any]:
+		"""What is in the set, in the order it was chosen, and its mute (#2487)."""
+
+		return self.snapshot()
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put the set back in its order, leaving out any pitch no longer offered.
+
+		A pool can shrink between two starts, and a set holding one pitch that
+		has gone is still worth the others: the order they were chosen in is
+		kept, because a generator handed a root first is entitled to it.
+		"""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("chosen"), list):
+			return [f"{self.name} was kept as something other than a set of pitches"]
+
+		refused: list[str] = []
+		taken: list[str] = []
+
+		for one in kept["chosen"]:
+			if not isinstance(one, str) or one not in self.pitches:
+				refused.append(f"{self.name} offers no pitch called {one} any more")
+
+			elif one not in taken:
+				taken.append(str(one))
+
+		self.chosen = taken
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
+
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Replace the set entire, or switch it off."""
 
@@ -2223,6 +2498,55 @@ class Recipe (Control):
 		"""The stack as it stands, in order."""
 
 		return {"layers": self.layers()}
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""The layers in order, and the numbers handed out so far (#2487).
+
+		The numbers are kept because a window is known by one — "Euclidean 2" —
+		and one is never handed out twice; without them a restart would start
+		counting again from what happens to be standing.
+		"""
+
+		held = self.composition.data.get(self.data_key) or {}
+
+		return {"layers": self.layers(), "counts": dict(held.get("counts") or {})}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put the stack back entire, or leave it as it was and say why.
+
+		**All or nothing, for the reason a panel's rewrite is** (#2413): a stack is
+		an order, and the layers after a missing one would build something nobody
+		asked for.  So one value the catalogue no longer takes costs the stack,
+		which opens as the composition says, and the store's copy is kept aside by
+		whoever asked for this.
+		"""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("layers"), list):
+			return [f"{self.name} was kept as something other than a stack"]
+
+		held = self.composition.data.setdefault(self.data_key, {})
+		before = {key: held[key] for key in ("layers", "counts") if key in held}
+		counts = kept.get("counts")
+
+		# Emptied first, so the numbers come from what was kept rather than from
+		# whatever happens to be standing — which is what makes starting again
+		# from the file count from one again.
+		held["layers"] = []
+		held["counts"] = ({str(one): int(mark) for one, mark in counts.items()
+		                   if isinstance(mark, int) and not isinstance(mark, bool)}
+		                  if isinstance(counts, dict) else {})
+
+		try:
+			self._keep_stack(kept["layers"])
+
+		except Refused as refusal:
+			held.pop("layers", None)
+			held.pop("counts", None)
+			held.update(before)
+
+			return [f"{self.name}: {refusal}"]
+
+		return []
 
 	def layers (self) -> list[dict[str, typing.Any]]:
 		"""A copy of the stack, so a caller cannot edit it by accident."""
@@ -3235,12 +3559,15 @@ class GridRack (Control):
 	be a rack that had opinions about a studio.
 
 	**Persistence is the real cost and it is worse than a lost pattern** (#2067).
-	A restart already discards the notes on a grid; without a store it would
-	discard the grid's *existence*, which is a person losing something they made
-	rather than something they played.  So a rack takes a :class:`PageStore` —
-	the same mechanism a page arrangement already uses, pointed at a file of its
-	own — and what comes back is the grids they made, empty.  Honest, and better
-	than nothing coming back at all.
+	Without a store a restart would discard the grid's *existence*, which is a
+	person losing something they made rather than something they played.  So
+	the list is kept by the link's :class:`PatternStore` with everything else a
+	person made (#2487), and the grids come back with what was drawn on them.
+
+	It used to take a :class:`PageStore` of its own and write it from `apply` —
+	on the clock loop, and on the rig onto a network share where a write can
+	wedge (nuc14 #2438).  One store for everything authored is also one place
+	that can be started again from the file.
 	"""
 
 	kind = "grids"
@@ -3253,7 +3580,6 @@ class GridRack (Control):
 		unmake: collections.abc.Callable[[str], None] | None = None,
 		steps: tuple[int, int] = (1, 32),
 		opening_steps: int = 16,
-		store: "PageStore | None" = None,
 		data_key: str = "rack",
 		name: str = "rack",
 		title: str | None = None,
@@ -3281,7 +3607,6 @@ class GridRack (Control):
 		self.rows = list(rows)
 		self.steps = steps
 		self.opening_steps = opening_steps
-		self.store = store
 		self.data_key = data_key
 		self.name = name
 		self.title = title
@@ -3297,12 +3622,6 @@ class GridRack (Control):
 		is a map from id to *name*, which is the one thing the list does not
 		itself carry.
 		"""
-
-		if store is not None:
-			kept = store.load().get(name)
-
-			if kept:
-				self.composition.data.setdefault(data_key, {})["grids"] = kept
 
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to offer a new grid and draw the rack."""
@@ -3357,24 +3676,41 @@ class GridRack (Control):
 		seen: set[str] = set()
 
 		for entry in value:
-			if not isinstance(entry, dict):
-				raise Refused("a grid is an object")
+			wanted.append(self._checked_grid(entry, seen))
 
-			one = str(entry.get("id") or "")
+		return self._put_grids(wanted)
 
-			if not one:
-				raise Refused("a grid needs an id of its own")
+	def _checked_grid (self, entry: typing.Any, seen: set[str]) -> dict[str, typing.Any]:
+		"""One specification, as this rack would keep it, or refused with a reason.
 
-			if one in seen:
-				raise Refused(f"two grids both call themselves {one}")
+		*seen* holds the ids already taken in the same list, so two grids cannot
+		share one — the name a grid is drawn and routed by is made from it.
+		"""
 
-			seen.add(one)
-			wanted.append({
-				"id": one,
-				"rows": self._checked_rows(entry.get("rows")),
-				"steps": self._checked_steps(entry.get("steps")),
-				"title": str(entry["title"]) if entry.get("title") else None,
-			})
+		if not isinstance(entry, dict):
+			raise Refused("a grid is an object")
+
+		one = str(entry.get("id") or "")
+
+		if not one:
+			raise Refused("a grid needs an id of its own")
+
+		if one in seen:
+			raise Refused(f"two grids both call themselves {one}")
+
+		checked = {
+			"id": one,
+			"rows": self._checked_rows(entry.get("rows")),
+			"steps": self._checked_steps(entry.get("steps")),
+			"title": str(entry["title"]) if entry.get("title") else None,
+		}
+
+		seen.add(one)
+
+		return checked
+
+	def _put_grids (self, wanted: list[dict[str, typing.Any]]) -> bool:
+		"""Hold exactly *wanted*, make and unmake to match, and say whether it moved."""
 
 		if self.grids() == wanted:
 			return False
@@ -3382,10 +3718,41 @@ class GridRack (Control):
 		self.composition.data.setdefault(self.data_key, {})["grids"] = wanted
 		self._materialise()
 
-		if self.store is not None:
-			self.store.save(self.name, wanted)
-
 		return True
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""Every grid somebody asked for, in order (#2487).
+
+		What is drawn on each is the grid's own to keep, under its own name, and
+		comes back once this rack has made it again.
+		"""
+
+		return {"grids": self.grids()}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Make every grid that was kept, one at a time, and unmake the rest.
+
+		One at a time because each grid stands alone: a row this rack no longer
+		offers costs that grid, not every grid a person made.
+		"""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("grids"), list):
+			return [f"{self.name} was kept as something other than a list of grids"]
+
+		refused: list[str] = []
+		wanted: list[dict[str, typing.Any]] = []
+		seen: set[str] = set()
+
+		for entry in kept["grids"]:
+			try:
+				wanted.append(self._checked_grid(entry, seen))
+
+			except Refused as refusal:
+				refused.append(f"{self.name}: {refusal}")
+
+		self._put_grids(wanted)
+
+		return refused
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the rack now holds, which is the whole list."""
@@ -3708,17 +4075,14 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 
 
 class PageStore:
-	"""Where a composition keeps what a panel arranged or made.
+	"""Where a composition keeps what a panel arranged: where the blocks sit.
 
-	**Two things use this and they are the same mechanism.**  A page's
-	arrangement is where somebody put the blocks; a rack's list is what grids
-	somebody made (#2226).  Both are a key against a list of objects, both are
-	the panel's doing rather than the composition author's, and both have to
-	come back after a restart or the person has lost what they did.  A second
-	class would have been the same file format written twice.
-
-	Pointed at a file of its own per use — the keys are a page id in one case
-	and a control name in the other, and they share no namespace.
+	**A rack's list of grids used to be kept here too** (#2226), as the same
+	shape — a key against a list of objects.  It moved to the
+	:class:`PatternStore` with everything else a person makes (#2487), because
+	it is the piece rather than the view of it: it is written off the clock,
+	and started again from the file with the rest.  An arrangement stays here
+	because it is neither.
 
 	A data file beside the composition, not inside it (#2075).  The composition
 	is Python and there is no safe round trip from a dragged block back into
@@ -3774,6 +4138,204 @@ class PageStore:
 
 		spare.write_text(json.dumps(held, indent="\t") + "\n", encoding="utf-8")
 		spare.replace(self.path)
+
+
+class PatternStore:
+	"""Where a composition keeps what a person made on the glass, across a restart (#2487).
+
+	**Everything authored and nothing else**: every grid's cells, the stacks,
+	the settings, the note set, transpositions, mutes, and the grids a rack
+	made.  Not what an algorithm played (#1965), and not the transport.  Each
+	control says what it keeps (`Control.kept`) and how it takes that back
+	(`Control.restore`); this holds a file and knows nothing about any of them.
+
+	**Read once, before the link first declares**, so the first manifest a panel
+	sees already carries it.  **Written off the clock**, once the hands have been
+	still for `KEEP_AFTER`, never later than `KEEP_AT_MOST`, and at a clean stop.
+	This is #2067 decided: the composition file stops being the score after the
+	first edit, taken knowingly, and `AppLink.start_again` is the way back.
+
+	**Where it writes is the composition's to say.**  Beside it is the ordinary
+	answer (`beside`).  This rig's composition sits on a network share where a
+	write can wedge (nuc14 #2438), so it keeps its store on local disk instead.
+	The service never learns the path, exactly as with a page's arrangement.
+
+	**Nothing it could not take is ever written over.**  A file that is not this
+	format is moved aside byte for byte and the piece starts as its file says:
+	refusing to play is the worse failure on a stage, and a first save landing on
+	somebody's only copy is the worst of all.  A file that was read but whose
+	contents the composition no longer entirely takes is copied aside, as it was,
+	before anything is written.
+	"""
+
+	FORMAT = 1
+	"""The shape of the file, so a later one is refused rather than misread."""
+
+	def __init__ (self, path: pathlib.Path | str) -> None:
+		"""Keep what a person makes in this file, which is made when first needed."""
+
+		self.path = pathlib.Path(path)
+
+		self.writable = True
+		"""False once a file was found that could be neither read nor moved aside,
+		so that nothing written this run lands on top of it."""
+
+		self._as_read: bytes | None = None
+		"""The file exactly as `load` found it, for a copy put aside afterwards."""
+
+	@classmethod
+	def beside (cls, composition: pathlib.Path | str) -> "PatternStore":
+		"""A store next to its composition: ``piece.py`` keeps ``piece.patterns.json``."""
+
+		return cls(pathlib.Path(composition).with_suffix(".patterns.json"))
+
+	def load (self) -> dict[str, typing.Any] | None:
+		"""What was kept, by control, or None when there is nothing to put back.
+
+		No file is the ordinary case: a piece nobody has touched on the glass.
+		A file that is not what this writes is refused loudly and moved aside, so
+		the piece starts as its file says and no save can land on it.
+		"""
+
+		try:
+			raw = self.path.read_bytes()
+
+		except FileNotFoundError:
+			return None
+
+		except OSError:
+			self.writable = False
+
+			LOG.error(
+				"could not read %s, so nothing kept there is put back; nothing is written "
+				"there this run either, so it cannot be overwritten", self.path, exc_info=True)
+
+			return None
+
+		self._as_read = raw
+
+		try:
+			held = json.loads(raw.decode("utf-8"))
+
+		except (UnicodeDecodeError, ValueError):
+			held = None
+
+		if (not isinstance(held, dict) or held.get("format") != self.FORMAT
+				or not isinstance(held.get("controls"), dict)):
+			aside = self.put_aside("unreadable")
+
+			LOG.error(
+				"%s is not a pattern store this version can read, so the piece starts as "
+				"its file says. %s", self.path,
+				f"It has been moved, untouched, to {aside}" if aside is not None else
+				"It could not be moved aside, so nothing is written there this run")
+
+			return None
+
+		kept: dict[str, typing.Any] = held["controls"]
+
+		return kept
+
+	def save (self, controls: dict[str, typing.Any]) -> None:
+		"""Write what every control keeps, whole, so no moment holds half of it.
+
+		Into a new file beside this one, moved into place once it is on the disk.
+		**The new file is created rather than truncated**, which also keeps this
+		off the one call a network share's kernel bug turns into a wedge (nuc14
+		#2438); and it is flushed before the move, so a power cut leaves the
+		previous store rather than an empty one.
+		"""
+
+		if not self.writable:
+			return
+
+		written = json.dumps({
+			"format": self.FORMAT,
+			"contract": superconductor.protocol.CONTRACT_VERSION,
+			"written": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+			"controls": controls,
+		}, indent="\t", sort_keys=True) + "\n"
+
+		self.path.parent.mkdir(parents=True, exist_ok=True)
+
+		handle, spare = tempfile.mkstemp(
+			prefix=f"{self.path.name}.", suffix=".part", dir=self.path.parent)
+
+		try:
+			with os.fdopen(handle, "w", encoding="utf-8") as out:
+				out.write(written)
+				out.flush()
+				os.fsync(out.fileno())
+
+			os.replace(spare, self.path)
+
+		except BaseException:
+			with contextlib.suppress(OSError):
+				os.unlink(spare)
+
+			raise
+
+	def put_aside (self, why: str) -> pathlib.Path | None:
+		"""Move the file out of the way, untouched, and say where it went.
+
+		None if it could not be moved, and then nothing is written this run.
+		"""
+
+		aside = self._aside(why)
+
+		try:
+			os.rename(self.path, aside)
+
+		except OSError:
+			self.writable = False
+
+			LOG.error("could not move %s aside to %s", self.path, aside, exc_info=True)
+
+			return None
+
+		return aside
+
+	def copy_aside (self, why: str) -> pathlib.Path | None:
+		"""Keep a copy of the file as `load` read it, byte for byte, beside it.
+
+		None if it could not be made, and then nothing is written this run: the
+		file itself is the only copy left.
+		"""
+
+		if self._as_read is None:
+			return None
+
+		aside = self._aside(why)
+
+		try:
+			handle = os.open(aside, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+
+			with os.fdopen(handle, "wb") as out:
+				out.write(self._as_read)
+				out.flush()
+				os.fsync(out.fileno())
+
+		except OSError:
+			self.writable = False
+
+			LOG.error("could not keep a copy of %s at %s", self.path, aside, exc_info=True)
+
+			return None
+
+		return aside
+
+	def _aside (self, why: str) -> pathlib.Path:
+		"""A name beside the file saying why and when, and taken by nothing yet."""
+
+		stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+		aside = self.path.with_name(f"{self.path.name}.{why}-{stamp}")
+		count = 1
+
+		while aside.exists():
+			count += 1
+			aside = self.path.with_name(f"{self.path.name}.{why}-{stamp}-{count}")
+
+		return aside
 
 
 class Page:
@@ -3849,6 +4411,7 @@ class AppLink:
 		url: str = DEFAULT_URL,
 		pages: collections.abc.Sequence[Page] | None = None,
 		page_store: PageStore | None = None,
+		pattern_store: PatternStore | None = None,
 	) -> None:
 		"""Describe what to offer, without connecting anything yet."""
 
@@ -3858,6 +4421,27 @@ class AppLink:
 		self.url = url
 		self.pages = list(pages or [])
 		self.page_store = page_store
+
+		self.pattern_store = pattern_store
+		"""Where what a person makes is kept across a restart, if anywhere (#2487)."""
+
+		self._opening: dict[str, typing.Any] = {}
+		"""What every control held as the composition file left it, before anything
+		kept was put back — which is what starting again from the file goes to."""
+
+		self._changes = 0
+		"""How many changes the clock loop has applied.  Counted there and only read
+		anywhere else, so a save knows what it covered without a lock on the clock."""
+
+		self._kept_through = 0
+		"""How many of those the store has written down."""
+
+		self._keep_timer: asyncio.TimerHandle | None = None
+		self._keep_first: float | None = None
+		"""When the oldest change not yet written arrived, in the link loop's time."""
+
+		self._keeping = threading.Lock()
+		"""One writer at a time, because a timer's save and a stop's can meet."""
 
 		self.version = 0
 
@@ -3900,18 +4484,111 @@ class AppLink:
 		for control in list(self.controls.values()):
 			control.attach(self)
 
+		self._take_back()
+
 		self._thread = threading.Thread(target=self._run_link, name="superconductor-link", daemon=True)
 		self._thread.start()
 
 		LOG.info("Superconductor link started; dialling %s", self.url)
 
 	def stop (self) -> None:
-		"""Stop dialling and let the link thread finish."""
+		"""Keep what is not kept yet, stop dialling, and let the link thread finish.
+
+		A composition calls this once `play()` returns, which it does on Ctrl-C and
+		on a polite kill alike — Subsequence stops cleanly on both.  Whatever a
+		timer had not yet written is written here rather than left to a timer that
+		will now never fire.
+		"""
+
+		self._keep_now(wait=KEEP_ON_STOP_WITHIN)
 
 		self._stopping.set()
 
 		if self._link_loop is not None:
 			self._link_loop.call_soon_threadsafe(self._link_loop.stop)
+
+	def _take_back (self) -> None:
+		"""Put back what the store kept, before anything is declared (#2487).
+
+		**After every control is attached**, because a rack makes its grids there
+		and a stack refuses a route to a grid that does not exist.  **Before the
+		link thread starts**, so the first declaration already carries it all and
+		no panel ever sees the composition's seed and then the person's work.
+		"""
+
+		store = self.pattern_store
+
+		if store is None:
+			return
+
+		self._opening = {name: control.kept() for name, control in self.controls.items()}
+
+		kept = store.load()
+
+		if kept is None:
+			return
+
+		refused = self._restore(kept)
+
+		if not refused:
+			LOG.info("put back what was kept in %s", store.path)
+			return
+
+		for why in refused:
+			LOG.warning("not put back: %s", why)
+
+		aside = store.copy_aside("refused")
+
+		LOG.error(
+			"%d thing(s) kept in %s could not be put back, and play as the composition "
+			"file has them. %s", len(refused), store.path,
+			f"The store as it was is kept at {aside}" if aside is not None else
+			"No copy could be made, so nothing is written there this run")
+
+		# Written again at once, so the store says what is playing and the next
+		# start does not refuse the same things all over again.
+		self._keep_now(everything=True)
+
+	def _restore (self, kept: dict[str, typing.Any]) -> list[str]:
+		"""Hand each control what was kept for it, and say what could not be put back.
+
+		**Racks first.**  The grids a rack makes are controls in their own right,
+		and a stack may route from one: put the stack back first and it refuses a
+		route to a grid that does not exist yet.
+		"""
+
+		refused: list[str] = []
+		racks = [name for name, control in self.controls.items() if isinstance(control, GridRack)]
+
+		for name in racks:
+			if name in kept:
+				refused.extend(self._restore_one(name, kept[name]))
+
+		# Walked as it now stands, which is after the racks made their grids.
+		for name in list(self.controls):
+			if name not in racks and name in kept:
+				refused.extend(self._restore_one(name, kept[name]))
+
+		refused.extend(f"there is no {name} here any more" for name in kept
+		               if name not in self.controls)
+
+		return refused
+
+	def _restore_one (self, name: str, kept: typing.Any) -> list[str]:
+		"""One control's restore, which may refuse and may not stop the piece starting.
+
+		Every restore refuses what it cannot take rather than raising, and this is
+		what makes that a promise: a store is a file anybody can edit, and a shape
+		nobody foresaw must cost that control and not the music.
+		"""
+
+		try:
+			return self.controls[name].restore(kept)
+
+		except Exception as error:
+			LOG.warning("putting back %r failed", name, exc_info=True)
+
+			return [f"{name} could not be put back: {error}"]
 
 	# ------------------------------------------------------------------
 	# On the composition's clock loop
@@ -3928,6 +4605,11 @@ class AppLink:
 		if self._clock_loop is None:
 			self._clock_loop = asyncio.get_running_loop()
 			LOG.debug("clock loop captured from the first beat")
+
+			# The patterns exist now, so a mute put back from the store before
+			# `play()` can at last be handed to the one it silences.
+			for control in list(self.controls.values()):
+				control.started()
 
 		now = time.monotonic()
 		interval = None if self._last_beat_at is None else now - self._last_beat_at
@@ -3987,6 +4669,184 @@ class AppLink:
 		self._emit(superconductor.protocol.changed(
 			self.app_name, path, control.applied(rest.split("/"), value), self.version,
 			by="panel", client=client, seq=seq))
+
+		self._note_change()
+
+	def _note_change (self) -> None:
+		"""Say that something worth keeping changed; the keeping happens elsewhere.
+
+		**On the clock loop, so this is all it does** (#2487): a count, and one
+		hand-off to the link loop — the crossing `_emit` already makes for every
+		frame.  The store is gathered and written on another thread, later.
+		"""
+
+		if self.pattern_store is None:
+			return
+
+		self._changes += 1
+
+		loop = self._link_loop
+
+		# No link loop yet: the count is enough, and `stop` keeps what it covers.
+		if loop is None:
+			return
+
+		# A loop that has closed is a composition on its way out, and `stop`
+		# keeps what is left.
+		with contextlib.suppress(RuntimeError):
+			loop.call_soon_threadsafe(self._keep_later)
+
+	def _keep_later (self) -> None:
+		"""Write the store once the changes stop, and never later than the ceiling.
+
+		On the link loop.  Each change moves the write back to `KEEP_AFTER` from
+		now, but no further than `KEEP_AT_MOST` after the oldest change not yet
+		written.
+		"""
+
+		loop = self._link_loop
+
+		if loop is None:
+			return
+
+		now = loop.time()
+
+		if self._keep_first is None:
+			self._keep_first = now
+
+		if self._keep_timer is not None:
+			self._keep_timer.cancel()
+
+		self._keep_timer = loop.call_at(
+			min(now + KEEP_AFTER, self._keep_first + KEEP_AT_MOST), self._keep_due)
+
+	def _keep_due (self) -> None:
+		"""The hands stopped, or the ceiling came: write it, off this loop too.
+
+		**On a worker of the link loop's rather than on the loop**, so a disk that
+		stalls holds a worker and not every frame on its way to the panel.
+		"""
+
+		self._keep_timer = None
+		self._keep_first = None
+
+		loop = self._link_loop
+
+		if loop is not None:
+			loop.run_in_executor(None, self._keep_now)
+
+	def _keep_now (self, wait: float = -1, everything: bool = False) -> None:
+		"""Write down what every control keeps, if anything changed since the last time.
+
+		**Never on the clock loop.**  Called by a worker once a change has settled,
+		by `stop`, and by a start that put back less than it was given.  *wait*
+		is how long to wait for a save already under way; *everything* writes
+		even when nothing changed, which is how a store gets back in step with
+		what is playing.
+		"""
+
+		store = self.pattern_store
+
+		if store is None:
+			return
+
+		if not self._keeping.acquire(timeout=wait):
+			LOG.warning("a save to %s is still under way, so this one was not made", store.path)
+			return
+
+		try:
+			covered = self._changes
+
+			if covered <= self._kept_through and not everything:
+				return
+
+			kept: dict[str, typing.Any] = {}
+
+			# A snapshot of the controls, because a rack can add one on the clock
+			# loop at this moment and `list(d.items())` is one step, not many.
+			for name, control in list(self.controls.items()):
+				held = control.kept()
+
+				if held is not None:
+					kept[name] = held
+
+			store.save(kept)
+
+			self._kept_through = max(self._kept_through, covered)
+
+		except Exception:
+			LOG.warning("could not keep what was made in %s", store.path, exc_info=True)
+
+		finally:
+			self._keeping.release()
+
+	def start_again (self) -> None:
+		"""Put every control back as the composition file has it, and put the store aside.
+
+		**The way back to the piece as written**, once a store has taken over from
+		it (#2487): grids go back to their seed, stacks to what the file builds,
+		settings to where the file opens them — and the instrument is told each
+		one again — while the grids a person made go and every mute lifts.  The
+		store is moved aside rather than deleted, so nothing is lost for good, and
+		the next start is the file's too until somebody edits something.
+
+		On the clock loop, where every control's state lives, because a panel's
+		action reaches it there.  So nothing here waits: panels are told by a
+		declaration, and the store is moved on a worker of the link loop.
+		"""
+
+		store = self.pattern_store
+
+		if store is None:
+			return
+
+		for why in self._restore(self._opening):
+			LOG.warning("not started again from the file: %s", why)
+
+		for control in list(self.controls.values()):
+			control.started()
+
+		# Nothing since the file is worth keeping, so a save already on its way
+		# finds nothing to write.
+		self._kept_through = self._changes
+
+		self.redeclare()
+
+		loop = self._link_loop
+
+		if loop is not None:
+			with contextlib.suppress(RuntimeError):
+				loop.call_soon_threadsafe(self._forget_kept)
+
+	def _forget_kept (self) -> None:
+		"""Stop any save that was waiting, and move the store aside, off this loop."""
+
+		if self._keep_timer is not None:
+			self._keep_timer.cancel()
+			self._keep_timer = None
+
+		self._keep_first = None
+
+		loop = self._link_loop
+
+		if loop is not None:
+			loop.run_in_executor(None, self._put_the_store_aside)
+
+	def _put_the_store_aside (self) -> None:
+		"""Move the store out of the way, under the same lock a save takes."""
+
+		store = self.pattern_store
+
+		if store is None:
+			return
+
+		with self._keeping:
+			if not store.path.exists():
+				return
+
+			aside = store.put_aside("started-again")
+
+		LOG.info("started again from the file; what was kept is at %s", aside)
 
 	def redeclare (self) -> None:
 		"""Say what this app offers again, because it has changed (#2226).

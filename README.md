@@ -39,17 +39,19 @@ What runs today: as many pages as an application declares, holding step grids,
 pitched note grids with sub-step timing, an instrument's own settings, stacks of
 generators and transforms that contribute to a pattern, a set of notes chosen on
 a keyboard, and a transport with a bar-beat-step counter. Blocks are arranged by
-dragging and the arrangement is kept by the application. A generator is wired to
+dragging, and the arrangement — and, if the application asks, everything made
+on the glass — is kept by the application. A generator is wired to
 the pattern it builds; a grid that belongs to no instrument, or a set of notes,
 is patched into as many places as you like by dragging a cable from its outlet —
 and a grid can be made on the glass as well as declared. Everything below
 documents one of those.
 
 **One thing to know before you play anything into it.** A pattern you edit on
-the glass lives in the running composition and nothing writes it down, so
-restarting that composition throws away every note you tapped. Until that is
-settled there are two tools for it, and the habit is to run the first before
-restarting anything:
+the glass lives in the running composition, and it is kept across a restart
+only if the composition asks for that — see *Keeping what you make* below.
+Without it, restarting the composition throws away every note you tapped.
+Either way there are two tools in the repository as a safety net, and the habit
+is to run the first before restarting anything:
 
 ```
 python tools/capture_state.py      # before
@@ -274,6 +276,44 @@ Leave `page_store` out and arranging still works — it simply is not kept, and
 the panel says so rather than letting you find out at the next reload. Because
 the arrangement belongs to the application rather than to one browser, a second
 panel sees it too.
+
+## Keeping what you make
+
+Whatever you make on the glass can outlive the composition holding it. Give the
+link a `PatternStore` and it keeps every grid's steps and notes, the stacks, the
+settings, the set of notes, transpositions, mutes and the grids you made. It
+never keeps what a generator played, and never the tempo or a pause:
+
+```python
+link = superconductor.subsequence_adapter.AppLink(
+    composition,
+    controls=[...],
+    pattern_store=superconductor.subsequence_adapter.PatternStore.beside(__file__),
+)
+
+link.start()
+
+try:
+    composition.play()
+
+finally:
+    link.stop()      # writes down anything not written yet
+```
+
+It is written a moment after your hands stop, never on the thread that keeps
+time, and it is read when the composition starts, before any panel sees it. So
+after your first edit the composition file is no longer the score: its opening
+pattern and opening values apply only where the store holds nothing.
+
+`beside(__file__)` keeps it next to the composition. Give a path instead to keep
+it anywhere else — the example rig keeps its own on the machine's own disk,
+because its compositions sit on a network share.
+
+If the store cannot be read, it is moved aside untouched, the log says where,
+and the piece starts as its file says. Anything the composition no longer
+accepts — an option renamed, a row taken away — is refused on its own and
+logged, the rest comes back, and a copy of the store as it was is kept beside
+it.
 
 ## Connecting an application
 

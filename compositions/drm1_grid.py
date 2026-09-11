@@ -46,6 +46,16 @@ DRUM_CHANNEL = 10
 SERVICE_URL = "ws://127.0.0.1:8090/ws/app"
 """The Superconductor service, running on this machine."""
 
+PATTERN_FILE = pathlib.Path.home() / "superconductor-drm1_grid.patterns.json"
+"""Where what is made on the glass is kept between starts (#2487).
+
+**Not beside this file, which is where a composition would ordinarily keep it.**
+This one sits on a network share, and on this rig's kernel a write there can wedge
+the process making it (nuc14 #2438) — and the store is written every time somebody
+stops tapping.  So it lives on this machine's own disk.  A composition on local
+disk would say ``PatternStore.beside(__file__)`` and keep it next to itself.
+"""
+
 VELOCITY = 100
 """One fixed velocity per hit: a cell is on or off, with no accent (#2046)."""
 
@@ -1220,11 +1230,13 @@ made_grids = superconductor.subsequence_adapter.GridRack(
 	# (#2228).
 	steps=(1, STEPS),
 	opening_steps=STEPS,
-	store=superconductor.subsequence_adapter.PageStore(
-		pathlib.Path(__file__).with_suffix(".grids.json")),
 	data_key="made_grids", name="made_grids", title="Make a grid",
 	about=[("", "no instrument")])
-"""Grids this rig's panel can make for itself, and where they are remembered.
+"""Grids this rig's panel can make for itself.
+
+**Remembered with everything else a person makes**, in `PATTERN_FILE` (#2487), and
+what is drawn on each comes back with it.  The list used to sit in a file of its
+own beside this one, written from the clock loop onto the network share.
 
 **What they cannot do yet is take generators.**  A stack is declared against the
 pattern it builds, and nothing here declares one for a grid that did not exist
@@ -1390,9 +1402,16 @@ link = superconductor.subsequence_adapter.AppLink(
 	],
 	page_store=superconductor.subsequence_adapter.PageStore(
 		pathlib.Path(__file__).with_suffix(".pages.json")),
+	pattern_store=superconductor.subsequence_adapter.PatternStore(PATTERN_FILE),
 	url=SERVICE_URL,
 )
-"""Four views over this rig, and where their arrangement is kept.
+"""Five views over this rig, where their arrangement is kept, and where what is
+made on them is.
+
+**After the first edit on the glass this file is not the score** (#2067, #2487).
+Every pattern, stack, setting and mute is put back from `PATTERN_FILE` on each
+start, and `OPENING_PATTERN` and every other opening value here apply only where
+the store holds nothing — which is the trade #2067 named, taken knowingly.
 
 The arrangement file sits beside this one and is written by the adapter when a
 finger lifts from a block that moved.  It is data rather than code because there
@@ -1417,4 +1436,11 @@ the second of each is the one worth keeping.
 
 if __name__ == "__main__":
 	link.start()
-	composition.play()
+
+	# `play()` returns on Ctrl-C and on a polite kill alike, and `stop` writes down
+	# whatever the store had not yet (#2487).
+	try:
+		composition.play()
+
+	finally:
+		link.stop()
