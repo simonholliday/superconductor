@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.29.0"
+CONTRACT_VERSION = "1.30.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -282,6 +282,12 @@ service entirely and only a person can end it.
 1.29.0 lets a ``pitch_set`` carry ``opens_at``: the pitch a panel's view begins
 on when it shows less than the whole pool (#2389).  A drawing hint the service
 keeps and never reads; a panel too old for it opens where it always did.
+
+1.30.0 adds the ``store`` control kind: where an app keeps what a person made on
+the glass, drawn in the bar with the transport rather than as a block (#2487).
+Its fields say when it last wrote and whether anything went wrong, and it offers
+``start_again`` — back to the composition as its file has it.  A service too old
+for the kind marks it unsupported, as it would any kind it does not know.
 """
 
 UNIT = "unit"
@@ -388,7 +394,7 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 
 
 CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
-                 "transport", "grids", "pitch_set")
+                 "transport", "grids", "pitch_set", "store")
 """Every kind of control there is, in the words the wire uses.
 
 **It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to

@@ -13,6 +13,7 @@ run, and anything after it that wants a loop of its own fails.
 
 import importlib.util
 import logging
+import pathlib
 import random
 import re
 import sys
@@ -309,17 +310,34 @@ def test_every_control_this_composition_declares_reaches_a_page (rig: typing.Any
 	panel is told about it, and it is simply never drawn.  The only symptom is
 	somebody looking for a block that was there last week.
 
-	The transport is the one exception and is not a part — it is chrome, drawn
-	on the header bar whatever page is open, which is why it names no page and
-	why this asks for it by type rather than by name.
+	The transport and the store are the exceptions and are not parts — they are
+	chrome, drawn on the header bar whatever page is open (#2487), which is why
+	they name no page and why this asks for them by type rather than by name.
 	"""
 
 	drawn = {name for name, control in rig.link.controls.items()
-	         if not isinstance(control, superconductor.subsequence_adapter.Transport)}
+	         if not isinstance(control, (superconductor.subsequence_adapter.Transport,
+	                                     superconductor.subsequence_adapter.StoreStatus))}
 	placed = {part for page in rig.link.pages for part in page.parts}
 
 	assert drawn - placed == set(), f"declared and on no page: {sorted(drawn - placed)}"
 	assert placed - drawn == set(), f"on a page and never declared: {sorted(placed - drawn)}"
+
+
+def test_the_rig_keeps_what_is_made_off_the_share_its_composition_sits_on (
+	rig: typing.Any) -> None:
+	"""#2487's one decision that is this rig's rather than the package's.
+
+	This composition sits on a network share, where a write can wedge the
+	process making it (nuc14 #2438) — and the store is written every time a
+	person stops tapping.  So it is declared somewhere else, and a composition
+	copied from this one and dropped on local disk is free to say `beside`.
+	"""
+
+	store = rig.link.pattern_store
+
+	assert store is not None, "nothing made on the glass would survive a restart"
+	assert store.path.parent != pathlib.Path(rig.__file__).resolve().parent
 
 
 def test_the_page_set_still_fits_the_row_of_named_buttons (rig: typing.Any) -> None:

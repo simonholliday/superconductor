@@ -684,6 +684,227 @@ def test_a_restore_that_fails_outright_costs_that_control_and_not_the_start (
 	assert "nobody foresaw this" in "\n".join(record.getMessage() for record in caplog.records)
 
 
+# --- what the store says on the glass ---------------------------------------
+
+@contextlib.contextmanager
+def _clock_thread (link: adapter.AppLink) -> typing.Iterator[asyncio.AbstractEventLoop]:
+	"""Give the link a clock loop that stays running, as a playing composition's does."""
+
+	loop = asyncio.new_event_loop()
+	thread = threading.Thread(target=loop.run_forever, name="clock", daemon=True)
+	thread.start()
+
+	link._clock_loop = loop
+
+	try:
+		yield loop
+
+	finally:
+		loop.call_soon_threadsafe(loop.stop)
+		thread.join(timeout=5)
+		loop.close()
+
+
+def _status (link: adapter.AppLink) -> dict[str, typing.Any]:
+	"""What the store's own control says about it."""
+
+	assert link.status is not None, "a link with a store has no status"
+
+	return link.status.snapshot()
+
+
+def test_a_link_with_a_store_offers_its_status_and_one_without_offers_none (
+	tmp_path: pathlib.Path) -> None:
+	"""Made by the link rather than listed by the composition, so a composition
+	that keeps something cannot forget to say so on the glass, and one keeping
+	nothing offers nothing."""
+
+	link, _ = _piece(tmp_path / "piece.patterns.json")
+
+	assert link.controls["store"].declaration()["type"] == "store"
+	assert link.controls["store"].declaration()["start_again"], "nothing for a panel to ask with"
+
+	bare = adapter.AppLink(Composition(), controls=[])
+
+	assert "store" not in bare.controls
+
+
+def test_the_name_store_is_the_status_s_and_nobody_else_s (tmp_path: pathlib.Path) -> None:
+	"""A composition control called `store` beside a pattern store would be two
+	things at one address, and the second would silently shadow the first."""
+
+	composition = Composition()
+
+	with pytest.raises(ValueError, match="already called 'store'"):
+		adapter.AppLink(
+			composition,
+			controls=[adapter.StepGrid(composition, rows=ROWS, name="store", data_key="store")],
+			pattern_store=adapter.PatternStore(tmp_path / "piece.patterns.json"))
+
+
+def test_the_store_says_when_it_last_wrote_and_what_it_started_from (
+	tmp_path: pathlib.Path, unthreaded: None) -> None:
+	"""The ordinary case, and the one a person reads at a glance: when it last
+	kept anything — and after a restart, when the store it started from was."""
+
+	path = tmp_path / "piece.patterns.json"
+
+	first, composition = _piece(path)
+	first.start()
+
+	assert _status(first)["kept"] is None, "nothing kept yet"
+	assert _status(first)["where"] == str(path)
+
+	composition.running = True
+	first._apply("grid/snare/4", True, "panel-1", 1)
+	first._keep_now()
+
+	written = json.loads(path.read_text(encoding="utf-8"))["written"]
+
+	assert _status(first)["kept"] == written
+
+	again, _ = _piece(path)
+	again.start()
+
+	assert _status(again)["kept"] == written
+	assert _status(again)["trouble"] is None
+
+
+def test_a_store_that_could_not_be_read_says_so_on_the_glass (
+	tmp_path: pathlib.Path, unthreaded: None) -> None:
+	"""**The gap this control was chosen to close.**  Moved aside and logged, the
+	piece starting as its file says — which on the glass looked exactly like a
+	piece nobody had ever touched."""
+
+	path = tmp_path / "piece.patterns.json"
+	path.write_text("{ this is not json", encoding="utf-8")
+
+	link, _ = _piece(path)
+	link.start()
+
+	said = _status(link)
+
+	assert said["trouble"] and "could not be read" in said["trouble"]
+	assert said["aside"] == str(next(tmp_path.glob("piece.patterns.json.unreadable-*")))
+
+
+def test_what_the_store_held_and_was_refused_is_said_on_the_glass (
+	tmp_path: pathlib.Path, unthreaded: None) -> None:
+	"""Each refusal in the app's own words, and where the whole store went."""
+
+	path = tmp_path / "piece.patterns.json"
+
+	first, composition = _piece(path)
+	first.start()
+	composition.running = True
+	first._apply("synth/rate", 90, "panel-1", 1)
+	first._keep_now()
+
+	held = json.loads(path.read_text(encoding="utf-8"))
+	held["controls"]["synth"]["mode"] = "sine"
+	path.write_text(json.dumps(held), encoding="utf-8")
+
+	again, _ = _piece(path)
+	again.start()
+
+	said = _status(again)
+
+	assert said["trouble"] == "1 thing the store held could not be put back"
+	assert len(said["refused"]) == 1 and "sine" in said["refused"][0]
+	assert said["aside"] == str(next(tmp_path.glob("piece.patterns.json.refused-*")))
+
+
+def test_what_the_store_says_reaches_the_glass_from_the_clock_loop (
+	tmp_path: pathlib.Path, unthreaded: None) -> None:
+	"""A save finishes on a worker, and a change is numbered and sent on the
+	clock loop: reporting from the worker would number two frames at once when a
+	tap landed at the same moment."""
+
+	path = tmp_path / "piece.patterns.json"
+	link, composition = _piece(path)
+	link.start()
+	composition.running = True
+
+	sent: list[tuple[typing.Any, threading.Thread]] = []
+
+	def heard (frame: dict[str, typing.Any]) -> None:
+		"""Note each frame and the thread that sent it, instead of sending it."""
+
+		sent.append((frame, threading.current_thread()))
+
+	link._emit = heard  # type: ignore[method-assign]
+
+	with _clock_thread(link):
+		link._apply("grid/snare/4", True, "panel-1", 1)
+		link._keep_now()
+
+		deadline = time.monotonic() + 5
+
+		while not any(frame.get("path") == "store/kept" for frame, _ in sent) \
+				and time.monotonic() < deadline:
+			time.sleep(0.01)
+
+	kept = [(frame, thread) for frame, thread in sent if frame.get("path") == "store/kept"]
+
+	assert kept, "the glass was never told the store had written"
+	assert kept[0][0]["v"] == _status(link)["kept"]
+	assert kept[0][1].name == "clock"
+
+
+def test_a_failed_save_says_why_until_one_succeeds (
+	tmp_path: pathlib.Path, unthreaded: None, monkeypatch: pytest.MonkeyPatch) -> None:
+	"""A disk that is full or has gone is the other thing a log used to be the
+	only one to know about."""
+
+	path = tmp_path / "piece.patterns.json"
+	link, composition = _piece(path)
+	link.start()
+	composition.running = True
+
+	real = adapter.PatternStore.save
+
+	def full (store: adapter.PatternStore, controls: dict[str, typing.Any]) -> str | None:
+		raise OSError(28, "No space left on device")
+
+	monkeypatch.setattr(adapter.PatternStore, "save", full)
+	link._apply("grid/snare/4", True, "panel-1", 1)
+	link._keep_now()
+
+	assert "No space left on device" in (_status(link)["unwritten"] or "")
+
+	monkeypatch.setattr(adapter.PatternStore, "save", real)
+	link._keep_now()
+
+	assert _status(link)["unwritten"] is None
+	assert _status(link)["kept"] is not None
+
+
+def test_starting_again_is_a_press_on_the_store_and_is_remembered_by_nobody (
+	tmp_path: pathlib.Path, unthreaded: None) -> None:
+	"""A panel asks with `store/start_again`; the app does it and declares again.
+	Nothing is reported for the press itself, because nothing holds it (#2179)."""
+
+	path = tmp_path / "piece.patterns.json"
+	link, composition = _piece(path)
+	link.start()
+	composition.running = True
+
+	sent: list[typing.Any] = []
+	link._emit = sent.append  # type: ignore[assignment, method-assign]
+
+	link._apply("grid/rows", {}, "panel-1", 1)
+	sent.clear()
+
+	link._apply("store/start_again", True, "panel-1", 2)
+
+	assert composition.data["grid"]["kick"] == [0, 8], "the file's seed is back"
+	assert not [frame for frame in sent if frame.get("path") == "store/start_again"]
+
+	link._apply("store/start_again", "please", "panel-1", 3)
+
+	assert sent[-1]["t"] == "nack", "anything but a press is refused, with a reason"
+
+
 # --- starting again from the file -------------------------------------------
 
 def test_starting_again_puts_back_what_the_file_seeds_and_puts_the_store_aside (

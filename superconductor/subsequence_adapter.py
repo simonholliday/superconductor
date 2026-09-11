@@ -4016,6 +4016,102 @@ class Transport (Control):
 		return True
 
 
+STARTING_AGAIN = (
+	"Every pattern, stack, setting and mute goes back to how the composition file "
+	"has them, and the grids made on the glass go. What is kept now is moved "
+	"aside, not deleted.")
+"""What a panel asks before starting again from the file, in this app's words.
+
+The app's rather than the panel's because what starting again *does* is the
+app's to say: another app keeping a different kind of thing would put different
+things back, and a panel inventing the sentence would be wrong about one of them.
+"""
+
+
+class StoreStatus (Control):
+	"""The pattern store's own voice on the glass, drawn in the bar (#2487).
+
+	Simon, 2026-09-11, choosing it over a block on a page and a button on the
+	transport: a thing that concerns the whole piece lives with the piece, it is
+	reachable from every page, and **the store stops being a thing only a log
+	can talk about**.  A store refused at start, or one that could not be written,
+	used to be a line in a file nobody reads while the glass looked exactly as it
+	would have with nothing wrong.
+
+	Made by the link when it is handed a :class:`PatternStore`, so a composition
+	that keeps nothing offers nothing and one that keeps something cannot forget
+	to say so.
+
+	**Its fields describe the store, never what is in it**: every control already
+	carries its own state, and a second copy of that here would be one that could
+	disagree with it.  ``start_again`` is a press rather than a field — it puts
+	every control back as the composition file has it (`AppLink.start_again`),
+	and like any action it is remembered by nobody (#2179).
+	"""
+
+	kind = "store"
+
+	FIELDS = ("kept", "where", "trouble", "refused", "aside", "unwritten")
+	"""What the store says about itself.
+
+	- ``kept``: when it last wrote, or when the file it was read from was written.
+	- ``where``: the file, as a person on this machine would find it.
+	- ``trouble``: what went wrong with the store this piece started from.
+	- ``refused``: each thing that store held and this composition would not take.
+	- ``aside``: where a store that was not taken whole, or started again from,
+	  was put — never deleted.
+	- ``unwritten``: why the last save failed, until one succeeds.
+	"""
+
+	def __init__ (self, store: "PatternStore", name: str = "store") -> None:
+		"""Speak for *store*, under *name*."""
+
+		self.store = store
+		self.name = name
+
+		self.state: dict[str, typing.Any] = {
+			"kept": None, "where": str(store.path), "trouble": None,
+			"refused": [], "aside": None, "unwritten": None}
+
+		self.link: "AppLink | None" = None
+
+	def attach (self, link: "AppLink") -> None:
+		"""Keep the link, which is what starting again asks."""
+
+		self.link = link
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""Its fields, and what starting again will do, for the panel to ask with."""
+
+		return {"type": self.kind, "fields": list(self.FIELDS), "start_again": STARTING_AGAIN}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""What the store says about itself at the moment."""
+
+		return {**self.state, "refused": list(self.state["refused"])}
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Start again from the file, which is the one thing a panel may ask of this."""
+
+		if rest != ["start_again"]:
+			raise Refused(f"the store has no {'/'.join(rest)} to set")
+
+		if value is not True:
+			raise Refused("starting again is a press, and takes true")
+
+		if self.link is None:
+			raise Refused("this store is not attached to anything that can start again")
+
+		self.link.start_again()
+
+		return False
+
+	def said (self) -> dict[str, typing.Any]:
+		"""No title and no facts: it is drawn in the bar, where it names itself."""
+
+		return {}
+
+
 def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | None:
 	"""An arrangement reduced to what a panel could draw, or None if it could not.
 
@@ -4183,6 +4279,12 @@ class PatternStore:
 		self._as_read: bytes | None = None
 		"""The file exactly as `load` found it, for a copy put aside afterwards."""
 
+		self.written: str | None = None
+		"""When the file `load` read was written, as it says of itself."""
+
+		self.moved: pathlib.Path | None = None
+		"""Where `load` put a file it could not read, if it found one."""
+
 	@classmethod
 	def beside (cls, composition: pathlib.Path | str) -> "PatternStore":
 		"""A store next to its composition: ``piece.py`` keeps ``piece.patterns.json``."""
@@ -4223,6 +4325,7 @@ class PatternStore:
 		if (not isinstance(held, dict) or held.get("format") != self.FORMAT
 				or not isinstance(held.get("controls"), dict)):
 			aside = self.put_aside("unreadable")
+			self.moved = aside
 
 			LOG.error(
 				"%s is not a pattern store this version can read, so the piece starts as "
@@ -4232,12 +4335,15 @@ class PatternStore:
 
 			return None
 
+		written = held.get("written")
+		self.written = written if isinstance(written, str) else None
+
 		kept: dict[str, typing.Any] = held["controls"]
 
 		return kept
 
-	def save (self, controls: dict[str, typing.Any]) -> None:
-		"""Write what every control keeps, whole, so no moment holds half of it.
+	def save (self, controls: dict[str, typing.Any]) -> str | None:
+		"""Write what every control keeps, whole, and say when; None if it may not.
 
 		Into a new file beside this one, moved into place once it is on the disk.
 		**The new file is created rather than truncated**, which also keeps this
@@ -4247,12 +4353,14 @@ class PatternStore:
 		"""
 
 		if not self.writable:
-			return
+			return None
+
+		stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 		written = json.dumps({
 			"format": self.FORMAT,
 			"contract": superconductor.protocol.CONTRACT_VERSION,
-			"written": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+			"written": stamp,
 			"controls": controls,
 		}, indent="\t", sort_keys=True) + "\n"
 
@@ -4274,6 +4382,8 @@ class PatternStore:
 				os.unlink(spare)
 
 			raise
+
+		return stamp
 
 	def put_aside (self, why: str) -> pathlib.Path | None:
 		"""Move the file out of the way, untouched, and say where it went.
@@ -4425,6 +4535,18 @@ class AppLink:
 		self.pattern_store = pattern_store
 		"""Where what a person makes is kept across a restart, if anywhere (#2487)."""
 
+		self.status: StoreStatus | None = None
+		"""The store's voice on the glass, made here so no composition can forget it."""
+
+		if pattern_store is not None:
+			if "store" in self.controls:
+				raise ValueError(
+					"a control is already called 'store', which is the name the pattern "
+					"store's own status goes by on the wire")
+
+			self.status = StoreStatus(pattern_store)
+			self.controls[self.status.name] = self.status
+
 		self._opening: dict[str, typing.Any] = {}
 		"""What every control held as the composition file left it, before anything
 		kept was put back — which is what starting again from the file goes to."""
@@ -4524,9 +4646,18 @@ class AppLink:
 		self._opening = {name: control.kept() for name, control in self.controls.items()}
 
 		kept = store.load()
+		status = self.status.state if self.status is not None else {}
 
 		if kept is None:
+			if store.moved is not None or not store.writable:
+				status["trouble"] = (
+					"the store could not be read, so this started as the composition file "
+					"has it" + ("" if store.writable else ", and nothing is written there"))
+				status["aside"] = str(store.moved) if store.moved is not None else None
+
 			return
+
+		status["kept"] = store.written
 
 		refused = self._restore(kept)
 
@@ -4544,6 +4675,12 @@ class AppLink:
 			"file has them. %s", len(refused), store.path,
 			f"The store as it was is kept at {aside}" if aside is not None else
 			"No copy could be made, so nothing is written there this run")
+
+		status["trouble"] = (
+			f"{len(refused)} thing{'s' if len(refused) != 1 else ''} the store held "
+			f"could not be put back")
+		status["refused"] = list(refused)
+		status["aside"] = str(aside) if aside is not None else None
 
 		# Written again at once, so the store says what is playing and the next
 		# start does not refuse the same things all over again.
@@ -4770,15 +4907,63 @@ class AppLink:
 				if held is not None:
 					kept[name] = held
 
-			store.save(kept)
+			stamp = store.save(kept)
 
 			self._kept_through = max(self._kept_through, covered)
 
-		except Exception:
+		except Exception as error:
 			LOG.warning("could not keep what was made in %s", store.path, exc_info=True)
+
+			self._say(unwritten=f"the last change could not be written: {error}")
+
+		else:
+			if stamp is not None:
+				self._say(kept=stamp, unwritten=None)
 
 		finally:
 			self._keeping.release()
+
+	def _say (self, **fields: typing.Any) -> None:
+		"""Tell the glass what the store now says about itself, from any thread.
+
+		The fields change here and are *reported* from the clock loop, because
+		that is the one thread that numbers and sends a change (`report`): a save
+		finishing on a worker while a tap lands on the clock would otherwise
+		number two frames at once.  Before the first beat there is no clock loop,
+		and nothing needs one — the declaration carries the fields as they stand.
+		"""
+
+		status = self.status
+
+		if status is None:
+			return
+
+		changed = {field: value for field, value in fields.items()
+		           if status.state.get(field) != value}
+
+		if not changed:
+			return
+
+		status.state.update(changed)
+
+		loop = self._clock_loop
+
+		if loop is None:
+			return
+
+		with contextlib.suppress(RuntimeError):
+			loop.call_soon_threadsafe(self._report_status, changed)
+
+	def _report_status (self, changed: dict[str, typing.Any]) -> None:
+		"""Report each field that moved, on the clock loop, as any control does."""
+
+		status = self.status
+
+		if status is None:
+			return
+
+		for field, value in changed.items():
+			self.report(f"{status.name}/{field}", value)
 
 	def start_again (self) -> None:
 		"""Put every control back as the composition file has it, and put the store aside.
@@ -4842,11 +5027,15 @@ class AppLink:
 
 		with self._keeping:
 			if not store.path.exists():
+				self._say(kept=None, trouble=None, refused=[], unwritten=None)
 				return
 
 			aside = store.put_aside("started-again")
 
 		LOG.info("started again from the file; what was kept is at %s", aside)
+
+		self._say(kept=None, trouble=None, refused=[], unwritten=None,
+		          aside=str(aside) if aside is not None else None)
 
 	def redeclare (self) -> None:
 		"""Say what this app offers again, because it has changed (#2226).

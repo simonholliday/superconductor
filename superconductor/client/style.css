@@ -1004,6 +1004,7 @@ html, body {
 	.unsupported,
 	.notice,
 	.sheet .ask,
+	.store .choices p,
 	.bar .build,
 	.grid.params .dial span {
 		-webkit-user-select: text;
@@ -1349,7 +1350,8 @@ html, body {
 	.sheet button,
 	.menu .options button,
 	.sizes .choices button,
-	.theme .choices button {
+	.theme .choices button,
+	.store .choices button {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -1397,7 +1399,8 @@ html, body {
 	.sheet button,
 	.menu .options button,
 	.sizes .choices button,
-	.theme .choices button {
+	.theme .choices button,
+	.store .choices button {
 		min-width: 44px;
 		min-height: 44px;
 		padding: 0 0.8rem;
@@ -2031,17 +2034,20 @@ html, body {
  * Two rules holding one number is how they come to disagree, and a purpose
  * quietly winning a size is the fault the layer exists to prevent even when the
  * number it wins with is the right one. */
-.sizes, .theme { position: relative; display: flex; align-items: center; }
+.sizes, .theme, .store { position: relative; display: flex; align-items: center; }
 
-.sizes > button, .theme > button {
+.sizes > button, .theme > button, .store > button {
 	background: var(--panel);
 	color: var(--ink-quiet);
 	touch-action: none;
 }
 
-.sizes > button.open, .theme > button.open { color: var(--ink); border-color: var(--ring); }
+.sizes > button.open, .theme > button.open, .store > button.open {
+	color: var(--ink);
+	border-color: var(--ring);
+}
 
-.sizes .choices, .theme .choices {
+.sizes .choices, .theme .choices, .store .choices {
 	position: absolute;
 	top: calc(100% + 0.5rem);
 	right: 0;
@@ -2084,6 +2090,44 @@ html, body {
 }
 
 .sizes .choices .measure { margin-left: auto; color: var(--ink-quiet); font-size: var(--type-chrome-quiet); }
+
+/* **The store's status, and what it says when asked** (#2487).  The face is one
+   short line of lettering like its neighbours; the popover is sentences, which
+   is the one thing on the bar in the body face, because what went wrong with a
+   store is read rather than glanced at.  A path runs long and breaks anywhere
+   rather than pushing the popover off the glass. */
+/* A width of its own, because sentences have no natural one: shrunk to fit, the
+   popover took the width of its button and broke every path mid-word. */
+.store .choices { width: min(24rem, calc(100vw - 16px)); }
+
+.store .choices p {
+	margin: 0;
+	padding: 0.15rem 0.4rem;
+	color: var(--ink-quiet);
+	font-family: var(--face-body);
+	font-size: var(--type-chrome-quiet);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.store .choices p b { color: var(--ink); }
+
+.store .choices p.wrong { color: var(--warn); }
+
+/* Something went wrong with the store, which is a thing to act on — boxed in the
+   warning ink, as two copies of one app are. */
+.store.trouble > button { border-color: var(--warn); color: var(--warn); }
+
+/* The one thing here that cannot be taken back is the one that is coloured, as
+   in the sheet that asks about it. */
+.store .choices button.again {
+	margin-top: 0.3rem;
+	background: var(--panel);
+	border-color: var(--danger);
+	color: var(--danger);
+	white-space: nowrap;
+	touch-action: none;
+}
 
 /* **One column of eleven, and the two-column version is a dead end worth
    recording.**

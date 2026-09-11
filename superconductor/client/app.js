@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.29.0";
+const CONTRACT = "1.30.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -327,6 +327,12 @@ const GRIDS = ["step_grid", "note_grid"];
 const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids", "pitch_set"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
+
+const BAR = ["transport", "store"];
+/* The kinds drawn in the bar instead, because each concerns the whole piece
+   rather than one part of it: how it is playing, and where what was made on it
+   is kept (#2487). Every kind is one or the other, and `tests/test_client.py`
+   holds the two lists together against Python's. */
 
 const DEFAULT_SIZE = "fit";
 
@@ -4628,6 +4634,68 @@ function Sizes ({ cell, choice, onChoose }) {
 		</div>`;
 }
 
+/* The pattern store's own voice, in the bar (#2487).
+ *
+ * Simon chose this over a block on a page and a button on the transport: what
+ * concerns the whole piece lives with the piece, is reachable from every page,
+ * and a store the app could not read — or could only partly put back — is said
+ * here, where until now it was a line in a log while the glass looked exactly as
+ * it would with nothing wrong.
+ *
+ * **It says when it last kept anything and nothing more, until something is
+ * wrong.** Its popover says where, what went wrong, and offers the one thing a
+ * person can do about any of it: start again from the file, which is asked
+ * first, because it cannot be taken back from here. Every word in it is the
+ * app's (#2144) but the time, which is a clock read in this panel's own zone. */
+function Store ({ control, fields, onStartAgain }) {
+	const [open, setOpen] = useState(false);
+	const [box, shift] = useOnGlass(open);
+
+	const refused = Array.isArray(fields.refused) ? fields.refused : [];
+	const wrong = Boolean(fields.trouble || fields.unwritten);
+	const kept = fields.kept ? clockTime(fields.kept) : null;
+
+	return html`
+		<div class=${`store ${wrong ? "trouble" : ""}`}>
+			<button
+				class=${open ? "open" : ""}
+				onPointerDown=${(event) => { event.preventDefault(); setOpen(!open); }}
+			>${wrong ? "store · trouble" : kept ? `kept · ${kept}` : "kept · nothing yet"}</button>
+
+			${open && html`
+				<div role="group" class="choices" ref=${box} style=${shift}>
+					${fields.where && html`<p><span>kept in </span><b>${fields.where}</b></p>`}
+					${kept && html`<p><span>last written at </span><b>${kept}</b></p>`}
+					${fields.trouble && html`<p class="wrong">${fields.trouble}</p>`}
+					${refused.map((one) => html`<p key=${one} class="wrong">${one}</p>`)}
+					${fields.unwritten && html`<p class="wrong">${fields.unwritten}</p>`}
+					${fields.aside && html`<p><span>the store as it was is at </span><b>${fields.aside}</b></p>`}
+					${control.start_again && html`
+						<button
+							class="again"
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								setOpen(false);
+								onStartAgain();
+							}}
+						>start again from the file</button>`}
+				</div>`}
+		</div>`;
+}
+
+/* A moment the app wrote down, as a person reads it off a clock on the wall.
+ *
+ * Null for anything that is not a time, so a store written by something else
+ * cannot put nonsense on the bar; it says "nothing yet" instead, which is what
+ * a panel knows when it cannot read the answer. */
+function clockTime (iso) {
+	const when = new Date(iso);
+
+	return Number.isNaN(when.getTime())
+		? null
+		: when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 /* ------------------------------------------------------------------ */
 /* The page                                                            */
 /* ------------------------------------------------------------------ */
@@ -4668,6 +4736,12 @@ function Panel () {
 	const [adding, setAdding] = useState(null);
 	const [making, setMaking] = useState(null);
 	const [clearing, setClearing] = useState(null);
+
+	/* Whether the sheet asking to start again from the file is open (#2487). Held
+	   here rather than in the bar's control for the reason `clearing` is: a sheet
+	   covers the whole glass, and one drawn from inside the bar would be drawn
+	   inside whatever the bar is drawn inside. */
+	const [startingAgain, setStartingAgain] = useState(false);
 	const [sending, setSending] = useState(null);
 	const [moved, setMoved] = useState({});
 	const [touched, setTouched] = useState(null);
@@ -6110,6 +6184,9 @@ function Panel () {
 	const transportName = Object.keys(controls).find((name) => controls[name].type === "transport");
 	const transportFields = transportName ? (state[appName] || {})[transportName] || {} : {};
 
+	const storeName = Object.keys(controls).find((name) => controls[name].type === "store");
+	const storeFields = storeName ? (state[appName] || {})[storeName] || {} : {};
+
 	if (!declaredGrids.length) {
 		return html`
 			<div class="bar">
@@ -6152,6 +6229,12 @@ function Panel () {
 			${!up && !notice && html`<span class="warn">not running — taps will be refused</span>`}
 			<${Sizes} cell=${size.cell} choice=${size.choice} onChoose=${size.choose} />
 			<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
+			${/* Beside the lamp, because both say something about the app rather
+			     than about this panel: whether it is there, and whether what is
+			     made on it is being kept. */ ""}
+			${storeName && html`
+				<${Store} control=${controls[storeName]} fields=${storeFields}
+					onStartAgain=${() => setStartingAgain(true)} />`}
 			<span class=${`lamp ${status === "up" && up ? "up" : ""}`}>
 				${status !== "up" ? "no service" : up ? "connected" : "app gone"}
 			</span>
@@ -6542,6 +6625,26 @@ function Panel () {
 							setClearing(null);
 						}}
 					>clear</button>
+				</div>
+			<//>`}
+
+		${startingAgain && storeName && html`
+			<${Sheet} title="start again from the file" onClose=${() => setStartingAgain(false)}>
+				${/* What starting again does is the app's to say, so the sentence
+				     is the one it declared rather than one written here (#2144). */ ""}
+				<p class="ask">${controls[storeName].start_again}</p>
+				<div class="answers">
+					<button
+						onPointerDown=${(event) => { event.preventDefault(); setStartingAgain(false); }}
+					>keep what is here</button>
+					<button
+						class="danger"
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							request(`${storeName}/start_again`, true);
+							setStartingAgain(false);
+						}}
+					>start again</button>
 				</div>
 			<//>`}`;
 }

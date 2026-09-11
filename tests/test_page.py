@@ -5880,17 +5880,19 @@ def test_every_size_and_face_on_the_page_is_one_the_scale_names (
 SURFACE_RULES = {
 	".part-title button, .part-body button, .part-foot button, .bar button,"
 	" .sheet button, .menu .options button, .sizes .choices button,"
-	" .theme .choices button",
+	" .theme .choices button, .store .choices button",
 	".part-title button",
 	".part-body button, .part-foot button",
 	".bar button, .sheet button, .menu .options button, .sizes .choices button,"
-	" .theme .choices button",
+	" .theme .choices button, .store .choices button",
 	".part-body .menu .options button, .part-foot .menu .options button",
 }
 """The only rules allowed to give a control a height or a type.
 
 Named rather than matched by a prefix, so a fourth surface cannot arrive by
-accident — adding one is a decision, and this is where it is made.
+accident — adding one is a decision, and this is where it is made.  The store's
+popover joined the chrome on 2026-09-11 (#2487): it hangs from the bar exactly
+as the size and theme popovers do, and its one button is a chrome finger.
 """
 
 
@@ -5899,7 +5901,8 @@ def _button_sizes (panel: typing.Any) -> dict[str, dict[str, set]]:
 
 	return panel.evaluate("""() => {
 		const surface = (one) =>
-			one.closest(".sheet, .menu .options, .sizes .choices, .theme .choices") ? "chrome"
+			one.closest(".sheet, .menu .options, .sizes .choices, .theme .choices, .store .choices")
+				? "chrome"
 			: one.closest(".bar") ? "chrome"
 			: one.closest(".part-title") ? "title"
 			: one.closest(".part") ? "lattice" : "loose";
@@ -6368,6 +6371,15 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	note("the theme popover open")
 	panel.locator(".theme > button").click()
 	playwright_api.expect(panel.locator(".theme .choices")).to_have_count(0, timeout=5_000)
+
+	# And the store's, which is sentences with one target among them — a shape
+	# neither of the other two has, so a third state rather than one they stand
+	# for (#2487).
+	panel.locator(".store > button").click()
+	panel.wait_for_selector(".store .choices button.again", timeout=5_000)
+	note("the store popover open")
+	panel.locator(".store > button").click()
+	playwright_api.expect(panel.locator(".store .choices")).to_have_count(0, timeout=5_000)
 
 	# The inventory, which only exists while the layout is unlocked — the default
 	# since #2215, so this is the state a panel opens in rather than one to
@@ -7996,3 +8008,84 @@ def test_a_rack_is_offered_no_resize_grip (panel: typing.Any) -> None:
 	_unlocked(panel)
 
 	assert panel.locator('.part[data-part="rack"] .part-grip').count() == 0
+
+
+# --- the store, in the bar (#2487) -------------------------------------------
+
+def test_the_store_says_in_the_bar_when_it_last_kept_anything (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The ordinary case, read at a glance: a time, on the clock this panel keeps,
+	and nothing else until something is wrong."""
+
+	face = panel.locator(".bar .store > button")
+	written = conftest.STATE["store"]["kept"]
+	clock = panel.evaluate(
+		"(iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })",
+		written)
+
+	assert face.inner_text().strip().lower() == f"kept · {clock}".lower()
+
+	fake_app.confirm("store/kept", None, by="app")
+
+	playwright_api.expect(face).to_have_text(re.compile("nothing yet", re.IGNORECASE), timeout=5_000)
+
+
+def test_starting_again_is_asked_first_in_the_app_s_words_and_is_one_press (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""It cannot be taken back from the glass, so a sheet asks — in the app's own
+	sentence, because what starting again puts back is the app's to say — and only
+	the second answer sends anything."""
+
+	before = len(fake_app.sets)
+
+	panel.locator(".bar .store > button").click()
+	panel.locator(".store .choices button.again").click()
+	panel.wait_for_selector(".sheet .ask", timeout=5_000)
+
+	assert panel.locator(".store .choices").count() == 0, "the popover stayed open under the sheet"
+	assert panel.locator(".sheet .ask").inner_text().strip() == conftest.CONTROLS["store"]["start_again"]
+
+	panel.locator(".sheet .answers button", has_text="keep what is here").click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	assert fake_app.settled("store/start_again", since=before) == [], "keeping it sent something"
+
+	panel.locator(".bar .store > button").click()
+	panel.locator(".store .choices button.again").click()
+	panel.locator(".sheet .answers button.danger").click()
+
+	sent = fake_app.settled("store/start_again", since=before)
+
+	assert [one["v"] for one in sent] == [True]
+
+
+def test_a_store_in_trouble_says_so_in_the_bar_and_what_in_its_popover (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The gap this control was chosen to close.**  A store refused at start was
+	a line in a log while the glass looked exactly as it would with nothing
+	wrong; now the bar says so, and the popover says what, in the app's words,
+	and where the store it could not take was put."""
+
+	face = panel.locator(".bar .store > button")
+	resting = face.evaluate("el => getComputedStyle(el).borderTopColor")
+
+	fake_app.confirm("store/trouble", "1 thing the store held could not be put back", by="app")
+	fake_app.confirm("store/refused", ["synth: mode has no option called sine"], by="app")
+	fake_app.confirm("store/aside", "/rig/piece.patterns.json.refused-20260911T143200Z", by="app")
+
+	playwright_api.expect(panel.locator(".bar .store")).to_have_class(
+		re.compile(r"\btrouble\b"), timeout=5_000)
+
+	assert "trouble" in face.inner_text().lower()
+
+	# **Measured rather than inferred from the class**: a stylesheet with the
+	# rule deleted would still carry it.
+	assert face.evaluate("el => getComputedStyle(el).borderTopColor") != resting, (
+		"a store in trouble looks exactly like one that is fine")
+
+	face.click()
+	said = panel.locator(".store .choices").inner_text()
+
+	assert "could not be put back" in said
+	assert "no option called sine" in said
+	assert "refused-20260911T143200Z" in said

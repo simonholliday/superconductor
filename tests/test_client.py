@@ -326,7 +326,7 @@ def test_both_languages_name_the_same_kinds_of_control () -> None:
 
 	named = {}
 
-	for held in ("GRIDS", "DRAWN"):
+	for held in ("GRIDS", "DRAWN", "BAR"):
 		line = next((one for one in source.splitlines()
 		             if one.startswith(f"const {held} = [")), None)
 
@@ -340,12 +340,16 @@ def test_both_languages_name_the_same_kinds_of_control () -> None:
 		assert names <= known, (
 			f"the client's {held} names {sorted(names - known)}, which Python does not")
 
-	# **Everything a page can draw, against everything there is.**  A transport is
-	# the one kind deliberately left out — it lives in the header, with what is
-	# constant across pages (#2075) — so this is an equality once it is added
-	# back, rather than a subset that would pass while a kind went undrawn.
-	assert named["DRAWN"] | {"transport"} == known, (
-		f"the client draws {sorted(named['DRAWN'])} and Python has {sorted(known)}")
+	# **Everything the panel can draw, against everything there is.**  A kind is
+	# drawn as a block on a page or in the bar — the transport and the store live
+	# in the header, with what is constant across pages (#2075, #2487) — so this
+	# is an equality over the two, rather than a subset that would pass while a
+	# kind went undrawn, and a kind may not be both.
+	assert named["DRAWN"] | named["BAR"] == known, (
+		f"the client draws {sorted(named['DRAWN'] | named['BAR'])} and Python has "
+		f"{sorted(known)}")
+	assert not named["DRAWN"] & named["BAR"], (
+		f"{sorted(named['DRAWN'] & named['BAR'])} is drawn both as a block and in the bar")
 
 
 def test_the_app_side_declares_exactly_the_kinds_the_service_knows () -> None:

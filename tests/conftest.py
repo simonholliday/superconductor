@@ -21,6 +21,7 @@ import superconductor.config
 import superconductor.controls
 import superconductor.protocol
 import superconductor.service
+import superconductor.subsequence_adapter
 
 
 CONTROLS: dict[str, typing.Any] = {
@@ -247,6 +248,13 @@ CONTROLS: dict[str, typing.Any] = {
 	          "about": [{"label": "feeds", "value": "any generator that takes pitches"}]},
 
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
+
+	# **The store's fields and its question come from the adapter itself** (#2487),
+	# because a fake that lags the wire is how two halves pass their own tests and
+	# fail together — the reason this file exists at all.
+	"store": {"type": "store",
+	          "fields": list(superconductor.subsequence_adapter.StoreStatus.FIELDS),
+	          "start_again": superconductor.subsequence_adapter.STARTING_AGAIN},
 }
 """A small declaration: enough shapes to draw, few enough cells to read.
 
@@ -312,6 +320,8 @@ STATE: dict[str, typing.Any] = {
 		 "params": {"pitches": {"from": "control", "id": "notes"}, "shape": ["up"]}},
 	]},
 	"transport": {"paused": False, "bpm": 120.0},
+	"store": {"kept": "2026-09-11T14:32:00+00:00", "where": "/rig/piece.patterns.json",
+	          "trouble": None, "refused": [], "aside": None, "unwritten": None},
 }
 """What the stand-in app starts out holding.
 

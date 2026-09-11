@@ -610,6 +610,33 @@ def _patchable () -> tuple[typing.Any, dict[str, typing.Any]]:
 	return stack, {name: one.declaration() for name, one in Link.controls.items()}
 
 
+def test_what_the_store_says_about_itself_and_the_service_agree () -> None:
+	"""A store's fields are reported by the app of its own accord (#2487) rather
+	than asked for by a panel, so this crosses the join the way `AppLink.report`
+	does: every field, set to what the adapter would say, lands where the app
+	holds it — the list of refusals included, which no other field is."""
+
+	status = adapter.StoreStatus(adapter.PatternStore("/rig/piece.patterns.json"))
+	declared = {status.name: status.declaration()}
+	held = {status.name: status.snapshot()}
+
+	said: dict[str, typing.Any] = {
+		"kept": "2026-09-11T14:32:00+00:00",
+		"trouble": "1 thing the store held could not be put back",
+		"refused": ["synth: mode has no option called sine"],
+		"aside": "/rig/piece.patterns.json.refused-20260911T143200Z",
+		"unwritten": "the last change could not be written: No space left on device",
+	}
+
+	assert set(said) | {"where"} == set(status.FIELDS), "a field this does not cross"
+
+	for field, value in said.items():
+		status.state[field] = value
+		superconductor.controls.apply_change(held, declared, f"{status.name}/{field}", value)
+
+	assert held[status.name] == status.snapshot()
+
+
 def test_a_cable_the_app_accepts_is_a_cable_the_service_keeps () -> None:
 	"""**The seam, asked of a patch** (#2419).
 

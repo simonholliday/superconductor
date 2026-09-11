@@ -163,6 +163,22 @@ Matriarch that starts there cannot both play the literal same notes.
 """
 
 
+STORE = "store"
+"""Where an app keeps what a person made on the glass, and whether that is going well.
+
+**Named fields, kept exactly as a transport's are** (#2487): when the store last
+wrote, where it is, and anything that went wrong reading or writing it.  The
+service keeps the values for a panel arriving late and reads none of them.  What
+is *in* the store never crosses the wire — every control already carries its
+own state, and a second copy of it would be one that could disagree.
+
+It also answers ``start_again``, which is a press rather than a value: the app
+puts every control back as its file has it and declares again, and nothing here
+is remembered for it, which is #2179's rule for anything that does something and
+holds nothing.
+"""
+
+
 PATCHED = superconductor.protocol.PATCHED
 """The key that makes a parameter's value a reference rather than a literal.
 
@@ -234,7 +250,7 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	elif kind == RECIPE:
 		_apply_recipe(state.setdefault(control, {}), declaration, rest, value, path, controls)
 
-	elif kind == TRANSPORT:
+	elif kind in (TRANSPORT, STORE):
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
 	elif kind == GRIDS:
@@ -1025,7 +1041,7 @@ def _apply_field (
 	value: typing.Any,
 	path: str,
 ) -> None:
-	"""Write one named field of a transport."""
+	"""Write one named field of a transport or a store, which are both a set of them."""
 
 	if len(rest) != 1:
 		raise ControlError(f"{path!r} does not name a field as control/field")
@@ -1033,7 +1049,7 @@ def _apply_field (
 	field = rest[0]
 
 	if field not in declaration.get("fields", []):
-		raise ControlError(f"this transport has no field named {field!r}")
+		raise ControlError(f"this {declaration.get('type')} has no field named {field!r}")
 
 	fields[field] = value
 

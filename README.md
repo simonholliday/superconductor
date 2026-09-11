@@ -309,11 +309,18 @@ pattern and opening values apply only where the store holds nothing.
 it anywhere else — the example rig keeps its own on the machine's own disk,
 because its compositions sit on a network share.
 
-If the store cannot be read, it is moved aside untouched, the log says where,
-and the piece starts as its file says. Anything the composition no longer
-accepts — an option renamed, a row taken away — is refused on its own and
-logged, the rest comes back, and a copy of the store as it was is kept beside
-it.
+The bar says when the store last wrote — **KEPT · 15:32** — and says **STORE ·
+TROUBLE** if anything went wrong with it. Tap it for the details, and for
+**START AGAIN FROM THE FILE**, which puts every pattern, stack, setting and mute
+back as the composition file has them and removes the grids made on the glass.
+It asks first. The store is moved aside rather than deleted, so nothing is lost
+for good.
+
+If the store cannot be read, it is moved aside untouched, the bar and the log
+say where, and the piece starts as its file says. Anything the composition no
+longer accepts — an option renamed, a row taken away — is refused on its own
+and listed, the rest comes back, and a copy of the store as it was is kept
+beside it.
 
 ## Connecting an application
 
