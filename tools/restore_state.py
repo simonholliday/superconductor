@@ -238,8 +238,12 @@ def _read (where: pathlib.Path) -> tuple[dict, bool]:
 
 	held = json.loads(where.read_text())
 
-	if isinstance(held.get("apps"), dict) and "contract" in held:
-		return held["apps"], True
+	if isinstance(held.get("apps"), dict):
+		# **A contract of null means the service never said** (#2501), which is
+		# what a service too old to send one looks like.  Read as unstamped and
+		# converted, rather than trusted for a version nobody stated — the whole
+		# point of the stamp being the service's word and not the tool's.
+		return held["apps"], isinstance(held.get("contract"), str)
 
 	return held, False
 
