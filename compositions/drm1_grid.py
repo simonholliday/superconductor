@@ -1037,14 +1037,27 @@ than drawn note by note.
 """
 
 NOTES_RANGE = [midi_notes.note_to_name(note)
-               for note in range(midi_notes.name_to_note("C3"), midi_notes.name_to_note("C5") + 1)]
-"""Two octaves to choose notes from, belonging to no instrument.
+               for note in range(midi_notes.name_to_note("A0"), midi_notes.name_to_note("C8") + 1)]
+"""A piano's eighty-eight keys to choose notes from, belonging to no instrument.
 
 **A register of its own on purpose.**  This set is patched into a Minitaur that
 reaches C1 to C3 and a Matriarch that reaches C3 to C5, and picking either of
 their ranges would make the set look like it belonged to that one.  It is folded
-into whichever instrument reads it (#2374), so what matters here is only that it
-is a comfortable two octaves to play a chord in.
+into whichever instrument reads it (#2374), so a note chosen anywhere on it lands
+in each instrument's own register and a wide pool costs nothing downstream.
+
+**It was C3 to C5 until 2026-09-11** (#2389), and the panel drew all twenty-five
+keys at once — thirty lattice cells.  Simon's decision was a whole keyboard seen
+an octave at a time, so the range and the view changed together: narrowing the
+range alone would have left notes already chosen outside it.
+"""
+
+NOTES_OPEN_AT = "C2"
+"""Where the keyboard's octave of view begins: C2 to C3.
+
+Between the two instruments the set feeds, which is why it is this rig's and not
+the package's to say — a bass line and a lead line meet about here (Simon,
+2026-09-11).
 """
 
 notes = superconductor.subsequence_adapter.PitchSet(
@@ -1053,6 +1066,7 @@ notes = superconductor.subsequence_adapter.PitchSet(
 	title="Notes",
 	pitches={row: midi_notes.name_to_note(row) for row in NOTES_RANGE},
 	about=[("feeds", "any generator that takes pitches")],
+	opens_at=NOTES_OPEN_AT,
 )
 """One set of notes, shared by everything patched to it.
 

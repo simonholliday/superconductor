@@ -1492,6 +1492,54 @@ html, body {
 	opacity: 0.75;
 }
 
+/* **Across, the strip lies under what it moves** (#2389).  A keyboard seen an
+   octave at a time has no label column for the strip to sit over, so it takes a
+   row of its own beneath the keys: still a row across and edged, because it is
+   still the one thing here a finger pushes.  The window shrinks to the keys it
+   shows, so the strip is exactly as long as the view and not the block. */
+.window.across { align-self: flex-start; }
+
+.window.across .track {
+	position: relative;
+	top: auto;
+	bottom: auto;
+	left: auto;
+	width: auto;
+	height: var(--row);
+	margin-top: var(--gap);
+}
+
+/* An outline rather than a bar, so a chosen note under it still shows. */
+.window.across .track i {
+	top: 3px;
+	bottom: 3px;
+	left: auto;
+	right: auto;
+	background: none;
+	border: 2px solid var(--ink);
+}
+
+/* Where the chosen notes are along the whole range, which is the context an
+   octave-wide view hides: a note chosen two octaves up is still in the set, and
+   this is what says so without scrolling to find it.  A mark, not a target — the
+   strip is the target and a press anywhere on it moves the view.  `--on` over a
+   4% wash on the block's ground is the `on`/`part` pairing `test_themes.py`
+   already holds at 3:1, which is a mark's floor. */
+.window .track b {
+	position: absolute;
+	top: 30%;
+	bottom: 30%;
+	width: 3px;
+	margin-left: -1.5px;
+	border-radius: 1px;
+	background: var(--on);
+}
+
+/* Whole keys at both edges, always.  A view left resting on half a white key
+   reads as a different octave from the one it is showing. */
+.window.across .scroller { scroll-snap-type: x mandatory; }
+.window.across .key.natural { scroll-snap-align: start; }
+
 /* One scrollbar, and it is ours. The browser's own is a second bar on a
    desktop and an overlay that fades on a touch panel — neither of which is a
    thing to take hold of. */
@@ -3770,9 +3818,15 @@ html, body {
 	height: calc(var(--row) * 2);
 }
 
+/* The keys, as the one thing the window scrolls.  Positioned so the black keys
+   are placed against the row of whites and not against whatever holds it. */
+.keyboard .keys { position: relative; }
+
 .keyboard .accidentals {
 	height: 0;
-	position: relative;
+	left: 0;
+	position: absolute;
+	top: 0;
 }
 
 .keyboard .key {
@@ -3799,11 +3853,11 @@ html, body {
 	height: calc(var(--row) * 1.25);
 	position: absolute;
 
-	/* **The naturals' height *and* the gap above this strip.**  `.keyboard` is a
-	   flex column, so the accidentals begin one gap below the whites; lifting by
-	   the key height alone left every black key sitting a gap too low, which is
-	   4px and looks like nothing until you notice the keyboard has no top edge. */
-	top: calc((var(--row) * 2 + var(--gap)) * -1);
+	/* **Level with the tops of the whites, by construction.**  This used to lift
+	   itself by the naturals' height plus the flex gap above its strip, and
+	   lifting by the height alone had left every black key a gap too low (#2389).
+	   The strip sits on the keys' own top now, so there is nothing to add up. */
+	top: 0;
 	width: calc(var(--natural) * 0.6);
 	z-index: 1;
 }
@@ -3823,6 +3877,15 @@ html, body {
 
 .keyboard .key.accidental b {
 	color: var(--ink);
+}
+
+/* A C's name, on the white key's own face: `--ink-quiet` on `--panel`, which
+   `test_themes.py` holds at 4.5:1. */
+.keyboard .key .octave {
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	line-height: 1;
 }
 
 .keyboard .key.here b {

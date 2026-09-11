@@ -701,3 +701,24 @@ def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
 	assert declared["type"] == "grids"
 	assert declared["max_steps"] == rig.STEPS
 	assert declared["rows"] == rig.ROWS
+
+
+def test_the_note_set_is_a_whole_keyboard_seen_from_c2 (rig: typing.Any) -> None:
+	"""Eighty-eight keys, opening on the octave between the bass and the lead (#2389)."""
+
+	declared = rig.notes.declaration()
+	midi = [one["midi"] for one in declared["pitches"]]
+
+	assert midi == list(range(21, 109)), "A0 to C8, every key of a piano and nothing else"
+	assert declared["opens_at"] == "C2"
+
+
+def test_every_note_the_old_range_offered_is_still_offered (rig: typing.Any) -> None:
+	"""**The range widened and the view narrowed in one change**, or a capture of
+	the set as it was — ``C4 G4 C3 G3 D#3 D#4 C5`` on the rig when this changed —
+	would be refused on restore.  C3 to C5 was the whole of the range before."""
+
+	offered = set(rig.notes.pitches)
+	before = {rig.midi_notes.note_to_name(note) for note in range(48, 73)}
+
+	assert before <= offered, f"a set chosen before #2389 would lose {sorted(before - offered)}"

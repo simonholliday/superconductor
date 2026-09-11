@@ -1888,6 +1888,7 @@ class PitchSet (Control):
 		pitches: collections.abc.Mapping[str, int] | None = None,
 		chosen: collections.abc.Sequence[str] = (),
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+		opens_at: str | None = None,
 	) -> None:
 		"""Hold a set of pitches, from the pool the composition says exists."""
 
@@ -1902,15 +1903,32 @@ class PitchSet (Control):
 		self.chosen: list[str] = [one for one in chosen if one in self.pitches]
 		"""What is in the set now, in the order it was chosen."""
 
+		if opens_at is not None and opens_at not in self.pitches:
+			raise ValueError(f"a set cannot open at {opens_at}, which is not one of its pitches")
+
+		self.opens_at = opens_at
+		"""Where a panel's view of the pool begins, when it shows less than all of it.
+
+		**The composition's to say** (#2389), because which octave is worth seeing
+		first is a fact about the instruments on a rig (#1465): a pool of eighty-eight
+		keys seen an octave at a time has to start somewhere, and the lowest key is
+		the one place nothing on this rig plays.  A drawing hint and nothing else — it
+		limits nothing and a panel may show more or less than an octave."""
+
 	def declaration (self) -> dict[str, typing.Any]:
 		"""The pool, with the note behind each name."""
 
-		return {
+		declared: dict[str, typing.Any] = {
 			"type": self.kind,
 			"pitches": [{"value": named, "label": named, "midi": note}
 			            for named, note in self.pitches.items()],
 			**self.said(),
 		}
+
+		if self.opens_at is not None:
+			declared["opens_at"] = self.opens_at
+
+		return declared
 
 	def snapshot (self) -> dict[str, typing.Any]:
 		"""What is in the set, and whether it is contributing at all."""

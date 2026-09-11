@@ -96,6 +96,22 @@ def test_a_set_switched_off_is_empty_rather_than_absent () -> None:
 	assert held.chosen == ["C4", "E4"], "a mute is not a delete"
 
 
+def test_a_set_says_where_a_panel_s_view_of_it_opens () -> None:
+	"""Which octave to show first is the composition's to say (#2389), and it rides along."""
+
+	held = adapter.PitchSet(Composition(), name="notes", pitches=LEAD, opens_at="E4")
+
+	assert held.declaration()["opens_at"] == "E4"
+	assert "opens_at" not in _set().declaration(), "a set that says nothing declares nothing"
+
+
+def test_a_set_cannot_open_at_a_pitch_it_does_not_have () -> None:
+	"""A view beginning on a key the keyboard has not got is a composition fault, said at once."""
+
+	with pytest.raises(ValueError, match="not one of its pitches"):
+		adapter.PitchSet(Composition(), name="notes", pitches=LEAD, opens_at="C2")
+
+
 def test_one_set_reaches_two_instruments_that_share_almost_no_range () -> None:
 	"""The case this was built for, and the reason folding exists at all."""
 

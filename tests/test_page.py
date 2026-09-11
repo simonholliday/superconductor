@@ -4425,6 +4425,135 @@ def test_a_note_set_has_an_outlet_to_take_a_cable_from (panel: typing.Any) -> No
 		"a set of notes has nothing to take a cable from"
 
 
+def _keyboard (panel: typing.Any) -> typing.Any:
+	"""The Generators page drawn, and the note set's keyboard on it."""
+
+	_open_the_stack(panel)
+	_settled(panel)
+
+	board = panel.locator('.part[data-part="notes"] .keyboard')
+	board.scroll_into_view_if_needed()
+
+	return board
+
+
+def _in_view (board: typing.Any) -> list[str]:
+	"""The keys wholly inside the keyboard's window, by name, low to high.
+
+	**Wholly**, because a black key past the last white one is always cut by the
+	window's edge — that sliver is a keyboard seen through a frame, not a key in
+	view."""
+
+	return typing.cast(list[str], board.evaluate("""(board) => {
+		const box = board.querySelector('.scroller').getBoundingClientRect();
+
+		return [...board.querySelectorAll('.key')]
+			.filter((key) => {
+				const at = key.getBoundingClientRect();
+				return at.left >= box.left - 0.5 && at.right <= box.right + 0.5;
+			})
+			.sort((one, other) => Number(one.dataset.midi) - Number(other.dataset.midi))
+			.map((key) => key.title);
+	}"""))
+
+
+def test_a_keyboard_shows_an_octave_from_c_to_c_where_the_app_said (
+	panel: typing.Any) -> None:
+	"""#2389, Simon's decision of 2026-09-11: *one octave in view, thirteen notes,
+	the lowest and highest the same note an octave apart* — over a range far wider
+	than that, opening where the composition declared (`opens_at`).
+
+	The fixture offers C2 to C5 and opens at C3, so every key it has drawn at once
+	is the failure this guards: thirty-odd lattice cells of keyboard."""
+
+	board = _keyboard(panel)
+
+	assert _in_view(board) == [
+		"C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3", "C4"], \
+		"the window does not show C3 to C4"
+
+	seen = board.locator(".scroller").evaluate(
+		"(box) => ({ whole: box.scrollWidth, seen: box.clientWidth })")
+
+	assert seen["whole"] > 2 * seen["seen"], f"the rest of the range is not behind the window: {seen}"
+
+	# Which octave this is, said on the glass rather than left to the strip — and
+	# a chosen C says where it sits in the list instead, never both.
+	assert board.locator('.key[title="C3"]').inner_text() == "C3", "the view does not name its octave"
+	assert board.locator('.key[title="C4"]').inner_text() == "1", "a chosen C lost its place in the list"
+
+
+def test_the_strip_moves_the_keyboard_and_it_stops_on_whole_keys (
+	panel: typing.Any) -> None:
+	"""The grid's own gesture, turned on its side: a finger on the strip brings
+	that part of the range to the middle of the view (#2073 — the keys are targets
+	and never scroll it).
+
+	**Pressed where the answer is not whole**: at 60% along twenty-two white keys
+	the view would begin 9.2 keys in, so a half-key at each edge — which reads as
+	a different octave from the one it is showing.  Eight whole whites is the
+	assertion that a view always stops on a key."""
+
+	board = _keyboard(panel)
+	strip = board.locator(".track").bounding_box()
+	assert strip is not None, "the keyboard has no strip to move it with"
+
+	panel.mouse.move(strip["x"] + strip["width"] * 0.6, strip["y"] + strip["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.up()
+
+	panel.wait_for_function(
+		"""(box) => { const was = window.__at; window.__at = box.scrollLeft; return was === box.scrollLeft; }""",
+		arg=board.locator(".scroller").element_handle(), timeout=5_000, polling=100)
+
+	shown = _in_view(board)
+	whites = [name for name in shown if "#" not in name]
+
+	assert shown[0] != "C3", "pressing the strip did not move the keyboard"
+	assert len(whites) == 8, f"the view stopped part-way across a key: {shown}"
+
+
+def test_a_chosen_note_out_of_view_is_still_held_and_marked_on_the_strip (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The context an octave-wide view hides.  The fixture holds C4 and D#4 and
+	opens on C3, so D#4 is chosen, off the glass, and still in the set: the strip
+	says where it is, and choosing another key keeps it."""
+
+	board = _keyboard(panel)
+
+	marks = board.locator(".track b")
+	assert marks.count() == 2, "the strip does not mark every chosen note"
+
+	thumb = board.locator(".track i").bounding_box()
+	furthest = max(marks.nth(n).bounding_box()["x"] for n in range(marks.count()))
+
+	assert furthest > thumb["x"] + thumb["width"], \
+		"nothing on the strip says a chosen note lies beyond the view"
+
+	board.locator('.key[title="E3"]').click()
+
+	assert fake_app.await_set("notes/chosen")["v"] == ["C4", "D#4", "E3"], \
+		"choosing a key in view lost the note out of it"
+
+
+def test_a_keyboard_is_as_wide_as_its_view_and_not_its_range (
+	panel: typing.Any) -> None:
+	"""Eight white keys at two cells each: exactly a drum grid, whatever the range.
+	The block used to be as wide as every key it held, which at eighty-eight keys
+	is a hundred and four lattice cells."""
+
+	board = _keyboard(panel)
+
+	widths = board.evaluate("""(board) => ({
+		part: board.closest('.part').getBoundingClientRect().width,
+		view: board.querySelector('.scroller').getBoundingClientRect().width,
+		white: board.querySelector('.key.natural').getBoundingClientRect().width,
+	})""")
+
+	assert abs(widths["view"] - 8 * widths["white"]) < 1, f"the view is not eight white keys: {widths}"
+	assert widths["part"] < 10 * widths["white"], f"the block is as wide as the range: {widths}"
+
+
 def test_the_two_kinds_of_connection_are_drawn_as_two_things (
 	panel: typing.Any) -> None:
 	"""Simon, 2026-09-10: *"anything which is tied is indicated by a solid routing

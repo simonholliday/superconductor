@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.28.0";
+const CONTRACT = "1.29.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -488,10 +488,25 @@ class Link {
  * in time, and scrolling up and down does not change the time.
  *
  * Left unpositioned deliberately — the playhead measures its offset against the
- * block's body, and a positioned scroller would put itself in between. */
-function Window ({ rows, visible, cell, tight, children }) {
+ * block's body, and a positioned scroller would put itself in between.
+ *
+ * **It faces across as well as down** (#2389), for a keyboard of eighty-eight
+ * notes seen an octave at a time.  The same strip, the same gesture and the same
+ * rule that a resize keeps what was being looked at — only the axis differs, so
+ * the axis is a table rather than a second component.  Across, the caller says
+ * how wide the window is as a length (`extent`), because a keyboard is measured
+ * in keys and not in lattice cells; where it opens (`opening`); and which places
+ * along the whole are worth marking on the strip (`marks`, as fractions), so a
+ * chosen note out of view still says where it is. */
+const DOWN = { at: "scrollTop", whole: "scrollHeight", seen: "clientHeight",
+               pointer: "clientY", start: "top", extent: "height" };
+const ACROSS = { at: "scrollLeft", whole: "scrollWidth", seen: "clientWidth",
+                 pointer: "clientX", start: "left", extent: "width" };
+
+function Window ({ rows, visible, cell, tight, across, extent, opening, marks, children }) {
 	const seen = useRef(null);
 	const windowed = Boolean(visible && visible < rows);
+	const axis = across ? ACROSS : DOWN;
 
 	/* Where the window sits on what it is looking at, as two fractions. */
 	const [view, setView] = useState({ from: 0, span: 1 });
@@ -506,12 +521,12 @@ function Window ({ rows, visible, cell, tight, children }) {
 	const measure = useCallback(() => {
 		const box = seen.current;
 
-		if (!box || !box.scrollHeight) return;
+		if (!box || !box[axis.whole]) return;
 
-		at.current = box.scrollTop / box.scrollHeight;
+		at.current = box[axis.at] / box[axis.whole];
 
-		setView({ from: at.current, span: box.clientHeight / box.scrollHeight });
-	}, []);
+		setView({ from: at.current, span: box[axis.seen] / box[axis.whole] });
+	}, [axis]);
 
 	useEffect(() => {
 		const box = seen.current;
@@ -527,14 +542,17 @@ function Window ({ rows, visible, cell, tight, children }) {
 			   also throwing the window back to its lowest rows: a person
 			   zooming in on the top of a pattern watched it run away from them
 			   at each step. Opening at the bottom is a mount behaviour and the
-			   dependency list had quietly made it a resize behaviour too. */
-			box.scrollTop = box.scrollHeight;
+			   dependency list had quietly made it a resize behaviour too.
+			   **A caller that knows better says so**: a keyboard opens where
+			   its composition asked, not at its lowest key. */
+			if (opening) opening(box);
+			else box.scrollTop = box.scrollHeight;
 			opened.current = true;
 
 		} else {
 			/* A resize keeps what was being looked at. The content has just
 			   changed height, so the same fraction is the same music. */
-			box.scrollTop = at.current * box.scrollHeight;
+			box[axis.at] = at.current * box[axis.whole];
 		}
 
 		measure();
@@ -551,9 +569,9 @@ function Window ({ rows, visible, cell, tight, children }) {
 		if (!box) return;
 
 		const strip = event.currentTarget.getBoundingClientRect();
-		const part = (event.clientY - strip.top) / strip.height;
+		const part = (event[axis.pointer] - strip[axis.start]) / strip[axis.extent];
 
-		box.scrollTop = part * box.scrollHeight - box.clientHeight / 2;
+		box[axis.at] = part * box[axis.whole] - box[axis.seen] / 2;
 	};
 
 	const take = (event) => {
@@ -572,7 +590,7 @@ function Window ({ rows, visible, cell, tight, children }) {
 	};
 
 	return html`
-		<div class=${`window ${windowed ? "windowed" : ""}`}>
+		<div class=${["window", windowed ? "windowed" : "", across ? "across" : ""].filter(Boolean).join(" ")}>
 			<div
 				class="scroller"
 				ref=${seen}
@@ -582,9 +600,9 @@ function Window ({ rows, visible, cell, tight, children }) {
 				     `cell + GAP` — measured in one place and the content in
 				     another, a two-row window quietly held three rows and there
 				     was nothing left to scroll. */ ""}
-				style=${windowed
-					? { maxHeight: `${visible * (tight ? cell : cell + GAP)}px`, overflowY: "auto" }
-					: null}
+				style=${!windowed ? null
+					: across ? { width: extent, overflowX: "auto", overflowY: "hidden" }
+					: { maxHeight: extent || `${visible * (tight ? cell : cell + GAP)}px`, overflowY: "auto" }}
 			>${children}</div>
 
 			${windowed && html`
@@ -596,9 +614,11 @@ function Window ({ rows, visible, cell, tight, children }) {
 					onPointerCancel=${drop}
 				>
 					<i style=${{
-						top: `${view.from * 100}%`,
-						height: `${Math.max(8, view.span * 100)}%`,
+						[axis.start]: `${view.from * 100}%`,
+						[axis.extent]: `${Math.max(8, view.span * 100)}%`,
 					}}></i>
+					${(marks || []).map((where, n) => html`
+						<b key=${n} style=${{ [axis.start]: `${where * 100}%` }}></b>`)}
 				</div>`}
 		</div>`;
 }
@@ -2167,8 +2187,24 @@ function NewGrid ({ rows, steps, onMake }) {
  * not work out a *label*, because spelling needs a key, and it may count.
  *
  * Pick order is kept, because the pitches of a chord are not a set: the number on
- * a chosen key is where it sits in the list a generator is handed. */
-function Keyboard ({ pitches, chosen, onSet }) {
+ * a chosen key is where it sits in the list a generator is handed.
+ *
+ * **An octave is in view and the rest is a push away** (#2389, Simon's decision
+ * of 2026-09-11).  Finger-sized keys make two octaves thirty lattice cells wide,
+ * so the whole range sits behind a window `KEYBOARD_VIEW` white keys wide — C to
+ * C, thirteen notes, exactly a drum grid — moved by the strip every grid already
+ * has.  The keys stay targets and never scroll the view, as a grid's cells never
+ * do (#2073).
+ *
+ * **It opens where the composition said** (`opens_at`), because which octave is
+ * worth seeing first is a fact about the instruments on a rig (#1465) — Simon's
+ * is C2, between a bass line and a lead.  Told nothing, it opens on the lowest
+ * note chosen, and with nothing chosen on the middle of the range. */
+const KEYBOARD_VIEW = 8;
+
+const accidental = (midi) => [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
+
+function Keyboard ({ pitches, chosen, opensAt, cell, onSet }) {
 	const held = Array.isArray(chosen) ? chosen : [];
 
 	const toggle = (value) => onSet(
@@ -2176,21 +2212,53 @@ function Keyboard ({ pitches, chosen, onSet }) {
 			? held.filter((one) => one !== value)
 			: [...held, value]);
 
-	const accidental = (midi) => [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
-
 	/* Naturals lay the row out and accidentals sit over the joins, which is how
 	   a keyboard is built and the only way the widths come out right. A black key
 	   between two whites belongs to neither, so it is placed rather than flowed. */
 	const naturals = pitches.filter((one) => !accidental(one.midi));
 
-	const key = (one) => {
+	/* How many whites lie below a key: a white's own place in the row, or the
+	   join a black key sits over. */
+	const whitesBelow = (one) => {
 		const at = naturals.findIndex((natural) => natural.midi > one.midi);
-		const over = at < 0 ? naturals.length : at;
+		return at < 0 ? naturals.length : at;
+	};
+
+	/* Where a key's middle falls along the whole keyboard, as a fraction — which
+	   is where the strip marks it. A white key's middle is half a key in; a black
+	   key's is the join it sits over. */
+	const along = (one) => (accidental(one.midi)
+		? whitesBelow(one)
+		: whitesBelow(one) + 0.5) / Math.max(1, naturals.length);
+
+	/* The white key the view begins on. An accidental asked for opens on the
+	   white below it, so the view is always whole keys. */
+	const opensOn = () => {
+		const named = pitches.find((one) => one.value === opensAt);
+		const lowest = pitches.filter((one) => held.includes(one.value))
+			.sort((one, other) => one.midi - other.midi)[0];
+		const wanted = named || lowest || naturals[Math.floor(naturals.length / 2)];
+
+		return wanted && [...naturals].reverse().find((one) => one.midi <= wanted.midi);
+	};
+
+	const opening = (box) => {
+		const first = opensOn();
+		const target = first && box.querySelector(`.key[data-midi="${first.midi}"]`);
+
+		if (target) {
+			box.scrollLeft += target.getBoundingClientRect().left - box.getBoundingClientRect().left;
+		}
+	};
+
+	const key = (one) => {
+		const over = whitesBelow(one);
 
 		return html`
 			<button
 				key=${one.value}
 				type="button"
+				data-midi=${one.midi}
 				class=${`key ${accidental(one.midi) ? "accidental" : "natural"} ${held.includes(one.value) ? "here" : ""}`}
 				style=${accidental(one.midi)
 					? { left: `calc(${over} * var(--natural) - var(--natural) * 0.3)` }
@@ -2200,6 +2268,14 @@ function Keyboard ({ pitches, chosen, onSet }) {
 				onPointerDown=${(event) => { event.preventDefault(); toggle(one.value); }}
 			>${held.includes(one.value)
 				? html`<b>${held.indexOf(one.value) + 1}</b>`
+				/* **Every C says which octave it is**, because a window an
+				   octave wide hides the context two octaves on the glass gave
+				   (#2389) — and the strip says where the view is without saying
+				   what is there. The name is the app's (#2144); which keys carry
+				   one is counting. A chosen C shows its place in the list
+				   instead, so a key never says two things. */
+				: ((one.midi % 12) + 12) % 12 === 0
+				? html`<span class="octave">${one.label || one.value}</span>`
 				: ""}</button>`;
 	};
 
@@ -2212,8 +2288,15 @@ function Keyboard ({ pitches, chosen, onSet }) {
 		     (`0dc3993`). A white key is two rows and the keyboard is as wide as
 		     its keys; `--natural` is declared in the stylesheet beside them. */ ""}
 		<div class="keyboard">
-			<div class="naturals">${naturals.map(key)}</div>
-			<div class="accidentals">${pitches.filter((one) => accidental(one.midi)).map(key)}</div>
+			<${Window} across rows=${naturals.length} visible=${KEYBOARD_VIEW} cell=${cell}
+				extent=${`calc(var(--natural) * ${KEYBOARD_VIEW})`}
+				opening=${opening}
+				marks=${pitches.filter((one) => held.includes(one.value)).map(along)}>
+				<div class="keys">
+					<div class="naturals">${naturals.map(key)}</div>
+					<div class="accidentals">${pitches.filter((one) => accidental(one.midi)).map(key)}</div>
+				</div>
+			<//>
 			${/* What it is worth, in the order it will be played. Without it a
 			     person cannot see the difference between the chord they meant and
 			     the same notes in another order. */ ""}
@@ -5102,11 +5185,13 @@ function Panel () {
 				
 				   Two lattice cells to a white key, which is what makes the black
 				   ones legal targets as well (see `style.css`), so the block is
-				   twice the number of naturals.  A two-octave set is a wide block
-				   and that is the honest cost of a playable one. */
-				rows: 4,
-				steps: Math.max(PARAM_CELLS, 2 * (controls[name].pitches || []).filter(
-					(one) => ![1, 3, 6, 8, 10].includes(((one.midi % 12) + 12) % 12)).length),
+				   twice the number of naturals — **up to an octave's worth**
+				   (#2389): past `KEYBOARD_VIEW` whites the rest of the range is
+				   behind a window, so eighty-eight keys are as wide as a drum grid.
+				   The extra row is the strip that moves it. */
+				rows: 5,
+				steps: Math.max(PARAM_CELLS, 2 * Math.min(KEYBOARD_VIEW, (controls[name].pitches || [])
+					.filter((one) => !accidental(one.midi)).length)),
 			});
 			continue;
 		}
@@ -6166,6 +6251,8 @@ function Panel () {
 						? html`
 							<${Keyboard}
 								pitches=${controls[one.control].pitches || []}
+								opensAt=${controls[one.control].opens_at}
+								cell=${size.cell}
 								chosen=${((state[appName] || {})[one.control] || {}).chosen || []}
 								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
 						: kindOf(one.control) === "params"

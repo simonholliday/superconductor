@@ -234,11 +234,16 @@ CONTROLS: dict[str, typing.Any] = {
 	# rendered it, so a keyboard whose black keys came out one row square and a
 	# block that could not draw its own outlet both reached the glass.
 	#
-	# Two octaves would be truer to the rig and is not what a fixture is for;
-	# these are enough to have a natural, an accidental, and one of each chosen.
+	# **Three octaves, opening on the middle one** (#2389): wider than the
+	# octave a keyboard shows, so the window and its strip are drawn at all, and
+	# opening on C3 puts one chosen note in view (C4, at its right-hand edge) and
+	# one out of it (D#4) — the case a person meets the moment a set is wider
+	# than the glass.
 	"notes": {"type": "pitch_set", "title": "Notes",
 	          "pitches": [{"value": named, "label": named, "midi": note} for named, note in
-	                      (("C4", 60), ("C#4", 61), ("D4", 62), ("D#4", 63), ("E4", 64))],
+	                      ((f"{('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')[note % 12]}"
+	                        f"{note // 12 - 1}", note) for note in range(36, 73))],
+	          "opens_at": "C3",
 	          "about": [{"label": "feeds", "value": "any generator that takes pitches"}]},
 
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},

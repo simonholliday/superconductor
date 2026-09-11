@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.28.0"
+CONTRACT_VERSION = "1.29.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -276,6 +276,12 @@ Subsequence is not, and an app that wants two of itself declares two names.  So
 this is not a refusal and never becomes one; it says on the glass that a name is
 being shared, because the harm of an accidental second copy is outside the
 service entirely and only a person can end it.
+
+1.28.0 lets a parameter carry ``unit`` — see ``UNIT`` below (#2435).
+
+1.29.0 lets a ``pitch_set`` carry ``opens_at``: the pitch a panel's view begins
+on when it shows less than the whole pool (#2389).  A drawing hint the service
+keeps and never reads; a panel too old for it opens where it always did.
 """
 
 UNIT = "unit"
