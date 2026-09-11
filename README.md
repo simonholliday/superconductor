@@ -37,11 +37,13 @@ coming.
 
 What runs today: as many pages as an application declares, holding step grids,
 pitched note grids with sub-step timing, an instrument's own settings, stacks of
-generators that contribute to a pattern, and a transport with a bar-beat-step
-counter. Blocks are arranged by dragging and the arrangement is kept by the
-application. A generator is wired to the pattern it builds; a grid that belongs
-to no instrument is patched into as many patterns as you like by dragging a
-cable from its outlet. Everything below documents one of those.
+generators and transforms that contribute to a pattern, a set of notes chosen on
+a keyboard, and a transport with a bar-beat-step counter. Blocks are arranged by
+dragging and the arrangement is kept by the application. A generator is wired to
+the pattern it builds; a grid that belongs to no instrument, or a set of notes,
+is patched into as many places as you like by dragging a cable from its outlet —
+and a grid can be made on the glass as well as declared. Everything below
+documents one of those.
 
 **One thing to know before you play anything into it.** A pattern you edit on
 the glass lives in the running composition and nothing writes it down, so
@@ -204,23 +206,55 @@ The settings worth putting on glass are usually the ones an instrument has no
 knob for at all — reachable otherwise only through editor software. On the
 Minitaur that is most of them.
 
+## A set of notes
+
+A **pitch set** is a block holding notes somebody chose, and it sounds nothing by
+itself. Drag a cable from its outlet onto a generator that takes pitches — an
+arpeggio, a chord — and that generator plays those notes. One set can feed as
+many generators as you like, on as many instruments, and each plays it in its own
+instrument's register, so the same chord reaches a bass synth and a lead without
+being chosen twice.
+
+It is drawn as a keyboard, an octave at a time — thirteen notes, C to C — however
+wide the range it offers. Drag the strip beneath the keys to move along it; marks
+on the strip show where every chosen note is, including ones out of view. Each C
+is labelled with its octave.
+
+The composition says which notes exist and where the view opens:
+
+```python
+superconductor.subsequence_adapter.PitchSet(
+    composition,
+    name="notes",
+    pitches={"C2": 36, "C#2": 37, "D2": 38},    # every note it offers, and the MIDI note each sounds
+    opens_at="C2",
+)
+```
+
+Where it opens is yours to say because it depends on your instruments: the
+worked example offers a piano's eighty-eight keys and opens at C2, between its
+bass synth and its lead.
+
 ## Arranging a page
 
-Tap **ARRANGE** in the bar. While it is latched the grids stop responding and
-each block's title bar becomes its handle: drag one and it moves a cell at a
-time, on the same lattice the steps themselves sit on — so two patterns on a
-page line up step for step rather than nearly.
+A block's title bar is its handle: drag one and it moves a cell at a time, on
+the same lattice the steps themselves sit on — so two patterns on a page line up
+step for step rather than nearly. A grid's bottom edge is a handle too: drag it
+to show more of its rows or fewer. The grids go on playing throughout; only a
+title bar or an edge moves anything.
 
 Any position is allowed, including on top of another block. The last block you
 moved is the one on top, which is what makes a busy page workable. Nothing is
 ever pushed aside to make room: a block you did not touch does not move.
 
 Because a block can be covered completely, and a title bar is the only handle
-it has, the bar lists every block on the page while you are arranging. Tapping
-a name brings that block back to the top.
+it has, the bar lists every block on the page. Tapping a name brings that block
+back to the top.
 
-Tap **DONE** to leave. Outside the latch every touch is a control again, which
-is what stops a stray finger rearranging a page mid-performance.
+Tap **LAYOUT** in the bar to hold the arrangement still — the padlock closes,
+title bars and edges stop moving anything, and the list goes away. That is what
+stops a stray finger rearranging a page mid-performance. The browser remembers
+which way you left it.
 
 An arrangement is saved when you lift your finger from a block that moved, and
 it is saved to the application that declared the page, not to your browser. For a composition using `PageStore` that means a file beside the
@@ -336,19 +370,26 @@ From a checkout, rather than from the package index:
 
 ```
 pip install -e ".[dev]"
-pytest
+pytest --browser firefox
 mypy superconductor
 ```
 
 The suite includes tests that drive the page in a real Firefox, so it needs the
-browser's own dependencies once:
+browser and its dependencies once:
 
 ```
+playwright install firefox
 playwright install-deps firefox
 ```
 
 Firefox rather than all three browsers — it is a third of the packages, and it
-is the browser this is built for. No `sudo` was needed here.
+is the browser this is built for. `--browser firefox` is not optional: the test
+plugin defaults to Chromium.
+
+Two files test the worked example against the sequencer it drives,
+`tests/test_composition.py` and `tests/test_generators.py`, so they import
+Subsequence and fail without it. If you do not run Subsequence, leave them out
+with `--ignore`, as the project's own CI does.
 
 The page is plain ES modules with no build step: Preact and htm are vendored
 under `superconductor/client/vendor/`, with their licences recorded there. Edit
