@@ -566,6 +566,11 @@ def _rack () -> typing.Any:
 		def redeclare (self) -> None:
 			"""Say nothing, because there is nowhere to say it."""
 
+		def alter (self, change: typing.Callable[[], None]) -> None:
+			"""Make the change where it stands, as a link with no loop yet does (#2341)."""
+
+			change()
+
 	rack = adapter.GridRack(
 		Composition(),
 		make=lambda spec: adapter.StepGrid(

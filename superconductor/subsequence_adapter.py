@@ -4230,26 +4230,25 @@ class GridRack (Control):
 	def _materialise (self) -> None:
 		"""Put every specification on the link as a control, and take off the rest.
 
-		**Called on the clock loop, and it touches no socket.**  The re-declaration
-		that tells a panel any of this happened is scheduled on the link loop by
-		the link itself, for the same reason every other frame is.
+		**Called on the clock loop, and it touches no socket.**  Making and
+		unmaking belong there: what a grid *is* is the composition's, and `make`
+		registers a play function with it.
+
+		**What goes on and off the link is handed to the link loop** (#2341),
+		which is where the declaration that follows is built and where nothing
+		else may resize that dict underneath it.  The re-declaration comes with
+		it rather than being asked for separately, so a panel cannot be told about
+		half of one mutation.
 		"""
 
 		if self.link is None:
 			return
 
+		link = self.link
 		wanted = {one["id"]: one for one in self.grids()}
-		moved = False
 
-		for gone in [one for one in self._made if one not in wanted]:
-			name = self._made.pop(gone)
-
-			self.link.controls.pop(name, None)
-
-			if self.unmake is not None:
-				self.unmake(name)
-
-			moved = True
+		gone = {one: name for one, name in self._made.items() if one not in wanted}
+		fresh: dict[str, typing.Any] = {}
 
 		for one, spec in wanted.items():
 			# **A grid that stays is not rebuilt.**  It holds whatever has been
@@ -4258,20 +4257,38 @@ class GridRack (Control):
 			if one in self._made:
 				continue
 
-			made = self.make({**spec, "name": f"{self.name}-{one}"})
+			fresh[one] = self.make({**spec, "name": f"{self.name}-{one}"})
 
-			made.attach(self.link)
-			self.link.controls[made.name] = made
-			self._made[one] = made.name
-			moved = True
+		for name in gone.values():
+			if self.unmake is not None:
+				self.unmake(name)
 
-		# Only when the set of controls actually moved. Re-declaring is every
-		# open panel re-reading everything this app offers, and a rack that
-		# asked for it on a list it had already materialised would do that for
-		# nothing — on the first attach, most often, when the list came back
-		# from a store and the controls were about to be declared anyway.
-		if moved:
-			self.link.redeclare()
+		# Only when the set of controls actually moves. Re-declaring is every open
+		# panel re-reading everything this app offers, and a rack that asked for it
+		# on a list it had already materialised would do that for nothing — on the
+		# first attach, most often, when the list came back from a store and the
+		# controls were about to be declared anyway.
+		if not gone and not fresh:
+			return
+
+		def hold () -> None:
+			"""Put the new grids on the link and take the departed ones off.
+
+			Both halves of one mutation, and the rack's own record of what it has
+			made, in one step on one thread — so a declaration sees all of it or
+			none of it.
+			"""
+
+			for one, name in gone.items():
+				self._made.pop(one, None)
+				link.controls.pop(name, None)
+
+			for one, made in fresh.items():
+				made.attach(link)
+				link.controls[made.name] = made
+				self._made[one] = made.name
+
+		link.alter(hold)
 
 
 class Transport (Control):
@@ -5501,6 +5518,47 @@ class AppLink:
 			return
 
 		asyncio.run_coroutine_threadsafe(self._declare(), loop)
+
+	def alter (self, change: collections.abc.Callable[[], None]) -> None:
+		"""Change what this app offers, on the link loop, and declare once it has.
+
+		**Everything that resizes `self.controls` comes through here** (#2341).  A
+		rack makes and unmakes grids on the clock loop, and `_declare` walks that
+		same dict four times on the link loop — so somebody pressing *make* while
+		another panel's declare was in flight could resize it mid-iteration and
+		kill the declare with *dictionary changed size during iteration*.  The
+		deterministic version of that fault is `a4b7e74`, on `start()`; this is the
+		race, and it needs a second declare already running, which two panels make
+		ordinary rather than rare.
+
+		**Snapshotting the four walks was the other way**, and it would have
+		removed the exception while leaving a declaration that describes half of
+		one mutation.  Running the change where the declare runs removes the
+		question instead: one thread owns the dict, and the declaration that
+		follows is that same thread's next piece of work.
+
+		**Before the link thread exists there is nothing to hand it to**, which is
+		`start()` attaching each control, so the change is made here — where the
+		only thread that could see it is the one making it.
+		"""
+
+		loop = self._link_loop
+
+		if loop is None:
+			change()
+			return
+
+		asyncio.run_coroutine_threadsafe(self._altered(change), loop)
+
+	async def _altered (self, change: collections.abc.Callable[[], None]) -> None:
+		"""Make one change to what this app offers, then say what it offers now."""
+
+		change()
+
+		# Nothing to tell while the socket is down; the declaration a reconnect
+		# sends carries whatever this left behind.
+		if self._socket is not None:
+			await self._declare()
 
 	def happened (self, name: str, **fields: typing.Any) -> None:
 		"""Announce something that is true for one cycle and stored nowhere.

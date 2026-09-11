@@ -40,6 +40,18 @@ class Link:
 
 		self.said += 1
 
+	def alter (self, change: typing.Callable[[], None]) -> None:
+		"""Make a change to what is offered, and count the declaration it causes.
+
+		The real link hands this to its own loop, because that is where a
+		declaration is built and where the dict must not be resized under one
+		(#2341).  A link with no loop yet does it where it stands, which is what
+		this stands in for.
+		"""
+
+		change()
+		self.said += 1
+
 
 def _made (spec: dict[str, typing.Any]) -> typing.Any:
 	"""What this composition turns one specification into.
@@ -263,3 +275,51 @@ def test_a_rack_with_nothing_to_undo_needs_no_undoing () -> None:
 	rack.apply(["grids"], [])
 
 	assert [name for name in link.controls if name.startswith("rack-")] == []
+
+
+def test_a_grid_is_put_on_the_link_by_the_link_and_not_by_the_clock () -> None:
+	"""**The dict the declare walks is resized where the declare runs** (#2341).
+
+	`AppLink._declare` walks `self.controls` four times on the link loop, and a
+	rack made and unmade grids in it from the clock loop — so a press on *make*
+	while another panel's declare was in flight could resize it mid-iteration and
+	kill that declare with *dictionary changed size during iteration*.  It needs a
+	second declare already running, which two panels make ordinary: the rig has
+	run with two more than once.
+
+	The deterministic sibling of this fault took the app down on start and is
+	fixed (`a4b7e74`).  Here the rack hands the change over instead of making it,
+	so this link keeps it rather than running it, and nothing has moved until it
+	does.
+	"""
+
+	class Deferring (Link):
+		"""A link that holds what it was handed until somebody runs it."""
+
+		def __init__ (self) -> None:
+			"""Nothing offered, nothing said, nothing waiting."""
+
+			super().__init__()
+
+			self.waiting: list[typing.Callable[[], None]] = []
+
+		def alter (self, change: typing.Callable[[], None]) -> None:
+			"""Keep the change, as a loop with work ahead of it would."""
+
+			self.waiting.append(change)
+
+	rack = adapter.GridRack(
+		Composition(), make=_made, rows=ROWS, steps=(1, 32), data_key="rack", name="rack")
+	link = Deferring()
+
+	rack.attach(typing.cast(typing.Any, link))
+
+	assert rack.apply(["grids"], [_grid("a")]) is True
+	assert link.controls == {}, "the clock loop resized the dict the link loop walks"
+	assert rack.made() == [], "and said it had made one before the link agreed"
+
+	for change in link.waiting:
+		change()
+
+	assert "rack-a" in link.controls, "the grid never reached the link"
+	assert rack.made() == ["rack-a"], "the rack does not know what it put there"

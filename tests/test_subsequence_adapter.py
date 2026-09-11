@@ -784,3 +784,52 @@ def test_an_action_is_answered_although_it_keeps_nothing () -> None:
 	assert [frame["t"] for frame in sent] == ["ack"], f"the press was answered with {sent}"
 	assert sent[0]["path"] == "moog/voicing", "the ack must name what it answers"
 	assert "voicing" not in composition.data.get("moog", {}), "an action kept a value (#2179)"
+
+
+def test_a_change_to_what_an_app_offers_is_made_on_the_link_loop () -> None:
+	"""**Where the declaration is built** (#2341), so the two cannot interleave.
+
+	`_declare` walks `self.controls` four times on the link loop.  Anything that
+	resizes that dict from another thread can kill a declare that is in flight,
+	and a rack making a grid did exactly that from the clock loop.  Snapshotting
+	the walks would have removed the exception and left a declaration describing
+	half of one mutation; running the change on the loop that declares removes the
+	question.
+	"""
+
+	link = superconductor.subsequence_adapter.AppLink(FakeComposition(), controls=[])
+	ran: list[str] = []
+
+	loop = asyncio.new_event_loop()
+	thread = threading.Thread(target=loop.run_forever, name="link-loop-under-test", daemon=True)
+
+	thread.start()
+
+	try:
+		link._link_loop = loop
+
+		link.alter(lambda: ran.append(threading.current_thread().name))
+
+		# The loop's next piece of work cannot begin before the one queued ahead
+		# of it has finished, so this waits for the change without racing it.
+		asyncio.run_coroutine_threadsafe(asyncio.sleep(0), loop).result(timeout=5)
+
+		assert ran == ["link-loop-under-test"], (
+			f"the change was made on {ran}, and the declare walks that dict on the link loop")
+
+	finally:
+		loop.call_soon_threadsafe(loop.stop)
+		thread.join(timeout=5.0)
+
+
+def test_a_change_before_the_link_thread_exists_is_made_where_it_stands () -> None:
+	"""`start()` attaches every control before the thread is running, and a rack
+	puts back the grids somebody made as it attaches (#2226).  There is nothing to
+	hand it to yet — and nothing else running that could see half of it."""
+
+	link = superconductor.subsequence_adapter.AppLink(FakeComposition(), controls=[])
+	ran: list[str] = []
+
+	link.alter(lambda: ran.append(threading.current_thread().name))
+
+	assert ran == [threading.current_thread().name], "a change was deferred to nowhere"
