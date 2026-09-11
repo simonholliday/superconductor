@@ -722,3 +722,61 @@ def test_every_note_the_old_range_offered_is_still_offered (rig: typing.Any) -> 
 	before = {rig.midi_notes.note_to_name(note) for note in range(48, 73)}
 
 	assert before <= offered, f"a set chosen before #2389 would lose {sorted(before - offered)}"
+
+
+def _pitched (rig: typing.Any, play: typing.Any, note_map: dict[str, int]) -> list[typing.Any]:
+	"""Run a pitched pattern's play function onto a real builder and hand back what landed."""
+
+	pattern = subsequence.pattern.Pattern(
+		channel=rig.BASS_CHANNEL, length=rig.STEPS * rig.STEP_DURATION)
+
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1), drum_note_map=note_map)
+
+	play(builder)
+
+	return list(builder.placed())
+
+
+def test_a_generated_note_moves_with_the_pattern_s_transposition (
+	rig: typing.Any, monkeypatch: pytest.MonkeyPatch) -> None:
+	"""#2454, Simon's decision of 2026-09-11: transposing a pattern moves the
+	notes its generators place as well as the ones tapped in.
+
+	**It was more than a missing feature.**  The row labels have always moved for
+	every note (#2144), so a generated note sat on a row naming a pitch it did not
+	play.  Here the generated C2 has to sound D2, *and* still be reported on the
+	C2 row — whose label at +2 is D2 — or the glass and the ears disagree again."""
+
+	# A stack is handed its link when the link starts, which nothing here does —
+	# so it is handed one for the length of the test, with the send caught.
+	reported: list[dict[str, typing.Any]] = []
+	monkeypatch.setattr(rig.bass_recipe, "link", rig.link)
+	monkeypatch.setattr(rig.link, "happened", lambda name, **fields: reported.append(
+		{"name": name, **fields}))
+
+	held = rig.composition.data["bass"]
+	rig.composition.data["bass"] = {"E2": {"0": {"length": 6, "velocity": 100}}}
+	rig.bass_recipe.apply(["layers"], [
+		{"id": "made", "generator": "hit_steps", "bypassed": False,
+		 "params": {"pitch": "C2", "steps": [4]}}])
+
+	try:
+		rig.bass_grid.transpose = 2
+		landed = _pitched(rig, rig.bass, rig.BASS_NOTE_MAP)
+
+	finally:
+		rig.bass_grid.transpose = 0
+		rig.bass_recipe.apply(["layers"], [])
+		rig.composition.data["bass"] = held
+
+	assert sorted(note.pitch for note in landed) == [38, 42], (
+		"the tapped E2 and the generated C2 should both sound two semitones up")
+
+	cells = [one["cells"] for one in reported if one["name"] == "realised"][-1]
+
+	# In positions rather than steps — this grid divides a step six ways (#2115).
+	assert cells.get("C2"), f"the generated note left its row: {cells}"
+	assert set(cells) == {"C2"}, f"and nothing else was reported: {cells}"
+	assert rig._relabel(rig.BASS_NOTE_MAP, rig.MINITAUR)("C2", 2) == \
+		rig.midi_notes.note_to_name(38), "and the row it is drawn on names what it sounds"

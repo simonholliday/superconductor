@@ -440,10 +440,12 @@ def _sounding (
 ) -> int | None:
 	"""The note *row* actually plays at *semitones*, or None where it cannot.
 
-	**Shared with `_relabel` on purpose.**  A row the label calls unreachable and
-	the player sounds anyway would be a disagreement between the glass and the
-	ears — which is the exact fault transposition was designed to avoid, arriving
-	by the back door.  One function, so they cannot differ.
+	**What the glass reads, and the same arithmetic the player does.**  A row the
+	label calls unreachable and the player sounds anyway would be a disagreement
+	between the glass and the ears — the exact fault transposition was designed to
+	avoid.  The player no longer calls this (#2454): it moves the whole pattern
+	with `_transposed`, by the same number of semitones, and an instrument sounds
+	nothing outside the `note_range` this checks.
 	"""
 
 	note = notes[row] + semitones
@@ -453,6 +455,34 @@ def _sounding (
 		return None
 
 	return note
+
+
+def _transposed (p: typing.Any, semitones: int) -> None:
+	"""Move everything this pattern plays by *semitones*, once its stack has run.
+
+	**The whole pattern, not the notes somebody tapped** (#2454, Simon's decision
+	of 2026-09-11).  Transposition used to be applied while the tapped notes were
+	placed, so every generator's notes went on sounding where they were — while
+	the row labels moved for all of them (#2144), which left each generated note
+	on a row naming a pitch it did not play.  Applied last, after routes and
+	generators and transforms, it moves what the pattern plays as one thing, and
+	every label is true again.
+
+	**`realised` needs nothing**: the stack reports its notes inside `build`,
+	before this runs, so each one is still drawn on the row it was placed on — and
+	that row's label now says what it sounds.
+
+	**A note moved past the instrument's reach is sent, and is silent.**  The
+	definition's own terms: outside `note_range` an instrument sounds nothing
+	(`Voice.plays_note`), and `_sounding` marks exactly those rows unreachable.
+	Before this, a tapped note there was dropped rather than sent — a guarantee
+	by construction where this is one by report.  Subsequence's `transpose`
+	clamps to 0-127 and has no way to drop a note, so asking it for one is
+	filed rather than reaching into the pattern's internals.
+	"""
+
+	if semitones:
+		p.transpose(semitones)
 
 
 def _voice_count (definition: typing.Any, *, when_switchable: int | None = None) -> int | None:
@@ -674,21 +704,16 @@ def bass (p: typing.Any) -> None:
 
 	beats_per_position = STEP_DURATION / BASS_DIVISIONS
 
+	# **As written, and moved with everything else below** (#2454).
 	for row, notes in composition.data["bass"].items():
-		sounding = _sounding(row, bass_grid.transpose, BASS_NOTE_MAP, MINITAUR)
-
-		# Silently, on the instrument — so the row is marked on the glass rather
-		# than played into nothing (#2144).
-		if sounding is None:
-			continue
-
 		for at, note in notes.items():
 			p.note(
-				sounding, beat=int(at) * beats_per_position,
+				BASS_NOTE_MAP[row], beat=int(at) * beats_per_position,
 				velocity=note.get("velocity", BASS_VELOCITY),
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
 	bass_recipe.build(p)
+	_transposed(p, bass_grid.transpose)
 
 
 def send_voicing (name: str, value: typing.Any) -> None:
@@ -776,18 +801,14 @@ def chords (p: typing.Any) -> None:
 	# One position is one step here, unlike the bass: a chord wants to land on
 	# the beat rather than between two of them, and nothing yet asks otherwise.
 	for row, notes in composition.data["chords"].items():
-		sounding = _sounding(row, chord_grid.transpose, CHORD_NOTE_MAP, MATRIARCH)
-
-		if sounding is None:
-			continue
-
 		for at, note in notes.items():
 			p.note(
-				sounding, beat=int(at) * STEP_DURATION,
+				CHORD_NOTE_MAP[row], beat=int(at) * STEP_DURATION,
 				velocity=note.get("velocity", CHORD_VELOCITY),
 				duration=note.get("length", CHORD_LENGTH) * STEP_DURATION)
 
 	chord_recipe.build(p)
+	_transposed(p, chord_grid.transpose)
 
 
 def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
