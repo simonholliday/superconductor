@@ -21,7 +21,8 @@ import typing
 
 import pytest
 
-import pymididefs.instruments
+import pymidiinstrumentdefs
+import pymidiinstrumentdefs.definition
 import subsequence.pattern
 import subsequence.pattern_builder
 
@@ -60,15 +61,15 @@ def test_a_stated_voice_count_is_used_as_it_stands (rig: typing.Any) -> None:
 def test_an_unknown_voice_count_is_not_quietly_read_as_unlimited () -> None:
 	"""**The trap this guard exists for**, on the instrument it is aimed at.
 
-	`pymididefs` uses ``polyphony = None`` for *nobody has established it*; a note
-	grid uses ``voices = None`` for *as many as you like*.  A Matriarch's voicing
-	is a front-panel switch and control change 94 with no documented power-on
-	default, so its definition says null — and a pass-through would draw a
-	five-note chord on a four-voice instrument and say nothing.
+	`pymidiinstrumentdefs` uses ``polyphony = None`` for *nobody has established
+	it*; a note grid uses ``voices = None`` for *as many as you like*.  A
+	Matriarch's voicing is a front-panel switch and control change 94 with no
+	documented power-on default, so its definition says null — and a pass-through
+	would draw a five-note chord on a four-voice instrument and say nothing.
 	"""
 
 	rig = _composition()
-	matriarch = pymididefs.instruments.load("moog_matriarch")
+	matriarch = pymidiinstrumentdefs.load("moog/matriarch")
 
 	assert matriarch.voice.polyphony is None
 	assert matriarch.voice.voicing_modes == (1, 2, 4)
@@ -81,7 +82,7 @@ def test_a_switchable_instrument_may_be_told_which_mode_to_assume () -> None:
 	"""Told, rather than guessed — and only a mode it actually has."""
 
 	rig = _composition()
-	matriarch = pymididefs.instruments.load("moog_matriarch")
+	matriarch = pymidiinstrumentdefs.load("moog/matriarch")
 
 	assert rig._voice_count(matriarch, when_switchable=4) == 4
 
@@ -113,7 +114,7 @@ def test_a_switch_sends_the_state_the_definition_names_not_the_word_on (
 	KeyError on the first instrument whose switch is named after what it does.
 	"""
 
-	assert list(rig.MINITAUR.controls["legato_glide"].values) == ["always", "legato_only"]
+	assert rig.MINITAUR.controls["legato_glide"].states == ["always", "legato_only"]
 
 	assert rig._cc_value("legato_glide", False) == 31
 	assert rig._cc_value("legato_glide", True) == 95
@@ -344,33 +345,126 @@ def test_the_page_set_still_fits_the_row_of_named_buttons (rig: typing.Any) -> N
 		f" draw a counter instead of their names")
 
 
+def _instrument (**controls: typing.Any) -> typing.Any:
+	"""A definition holding only *controls*, for a shape no rig instrument has."""
+
+	return types.SimpleNamespace(
+		model=types.SimpleNamespace(name="Somebody's Synth"), controls=controls)
+
+
 def test_a_choice_the_definition_names_no_states_for_is_drawn_as_a_number (
 	rig: typing.Any) -> None:
-	"""Three of the Matriarch's arpeggiator controls are declared `choice` and
-	name no states — mode, pattern and range, all of them values a manual
-	describes in prose rather than in bands.
+	"""Three of the Matriarch's arpeggiator controls were declared `choice` and
+	named no states, until `pymidiinstrumentdefs` 0.1.1 gave them their bands
+	(#2203).
 
 	Drawn as declared they came out as three empty rows on the glass: a label,
 	and then nothing at all to press.  A definition is a *report* about a
-	particular model and reports are wrong in the wild, which is the whole reason
-	instrument facts live in a file rather than in code — so the kind is taken
-	from what is actually there rather than from what is claimed.
+	particular model and reports are wrong in the wild — one written for
+	somebody's own synth most of all — so the kind is taken from what is
+	actually there rather than from what is claimed.
+
+	No bundled definition has one any more, which is why this builds its own
+	rather than finding one: it used to search the Matriarch and assert it found
+	something, and that assertion is what said the corpus had moved on.
 	"""
 
-	empty = [name for name, control in rig.MATRIARCH.controls.items()
-	         if control.kind == pymididefs.instruments.CHOICE and not control.values]
+	silent = pymidiinstrumentdefs.Control(
+		name="arp_mode", label="Arp Mode", cc=30,
+		kind_override=pymidiinstrumentdefs.CHOICE)
 
-	assert empty, "the definition no longer has an empty choice, so this proves nothing"
+	assert silent.kind == pymidiinstrumentdefs.CHOICE and silent.states == []
 
-	drawn = {parameter.name: parameter.kind
+	drawn = rig._panel_parameter("mode", "arp_mode", "Mode", 0,
+	                             instrument=_instrument(arp_mode=silent))
+
+	assert drawn.kind == "number", "a choice with nothing to choose draws as nothing"
+	assert (drawn.minimum, drawn.maximum) == (0, 127)
+
+
+def test_the_matriarchs_arpeggiator_offers_the_bands_its_manual_prints (
+	rig: typing.Any) -> None:
+	"""Mode, pattern and range, from the table at p. 74 of the manual (#2203).
+
+	They were numbers from 0 to 127 while the definition named no states, and
+	each opened at `0`.  So each opens now at the band `0` falls in — the same
+	setting on the instrument, spelled the way a choice is spelled.
+	"""
+
+	drawn = {parameter.name: parameter
 	         for parameter in (rig._panel_parameter(*setting, instrument=rig.MATRIARCH)
 	                           for setting in rig.CHORD_SETTINGS if setting[0] != "voices")}
 
-	for panel, named, _, _, _ in rig.CHORD_SETTINGS:
-		if named in empty:
-			assert drawn[panel] == "number", (
-				f"{panel} is a choice with nothing to choose, so it draws as nothing")
-			assert panel in drawn
+	offered = {panel: [value for value, _ in drawn[panel].options]
+	           for panel in ("arp_mode", "arp_pattern", "arp_range")}
+
+	assert offered == {
+		"arp_mode": ["arp", "seq", "rec"],
+		"arp_pattern": ["order", "fw_bw", "random"],
+		"arp_range": ["one", "two", "three"],
+	}
+
+	for panel in offered:
+		assert drawn[panel].kind == "choice"
+		assert drawn[panel].default == rig.CHORD_CONTROLS[panel].name_for(0), (
+			f"{panel} no longer opens where the Matriarch did")
+
+	# The middle of 0-42, 43-84 and 85-127, as every band is sent.
+	assert [rig._cc_value("arp_mode", state, rig.CHORD_CONTROLS)
+	        for state in offered["arp_mode"]] == [21, 63, 106]
+
+
+def test_a_control_whose_manual_prints_exact_values_is_sent_exactly_those (
+	rig: typing.Any) -> None:
+	"""`choices` rather than bands (#2467): a manual printing `0 = Base, 1 = Both,
+	2 = 8va` means 0, 1 and 2, and a number between them means nothing.
+
+	**Reading `values` alone sees no states in one**, so it drew the control as a
+	dial from 0 to 127 — and sent a two-state one's `True` as 1, by accident of
+	`int()`, where the instrument wanted 64.  `states` names either shape and the
+	definition's `value_for` knows which it holds.
+	"""
+
+	octave = pymidiinstrumentdefs.Control(
+		name="octave", label="Octave", cc=20, choices={"base": 0, "both": 1, "up": 2})
+	sync = pymidiinstrumentdefs.Control(
+		name="sync", label="Sync", cc=21, choices={"free": 0, "synced": 64})
+	synth = _instrument(octave=octave, sync=sync)
+
+	drawn = rig._panel_parameter("octave", "octave", "Octave", "base", instrument=synth)
+
+	assert drawn.kind == "choice"
+	assert [value for value, _ in drawn.options] == ["base", "both", "up"]
+	assert [rig._cc_value("octave", state, synth.controls)
+	        for state in ("base", "both", "up")] == [0, 1, 2]
+
+	assert rig._panel_parameter("sync", "sync", "Sync", None, instrument=synth).kind == "switch"
+	assert rig._cc_value("sync", True, synth.controls) == 64
+	assert rig._cc_value("sync", False, synth.controls) == 0
+
+
+def test_a_control_the_instrument_only_transmits_is_refused_at_import (
+	rig: typing.Any) -> None:
+	"""A definition says which way a control travels (#2469), and one the
+	instrument sends but ignores on arrival is a row on the glass that moves
+	nothing.
+
+	Refused where a settings table is read, which is at import, because the
+	failure it prevents is silent: the panel would draw it, the app would accept
+	it, the instrument would drop it, and nobody would be told.
+	"""
+
+	fill = pymidiinstrumentdefs.Control(
+		name="auto_fill", label="Auto Fill", cc=91,
+		direction=pymidiinstrumentdefs.definition.TRANSMITS)
+
+	with pytest.raises(ValueError, match="transmits and does not receive"):
+		rig._panel_parameter("fill", "auto_fill", "Fill", None,
+		                     instrument=_instrument(auto_fill=fill))
+
+	# And nothing this rig puts on the glass is one — or it would not have imported.
+	assert all(control.is_sendable
+	           for control in [*rig.BASS_CONTROLS.values(), *rig.CHORD_CONTROLS.values()])
 
 
 def test_every_pattern_can_be_given_a_generator (rig: typing.Any) -> None:

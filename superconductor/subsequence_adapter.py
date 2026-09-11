@@ -518,7 +518,7 @@ class NoteGrid (Control):
 	before there was a count does not have to change.
 
 	**Do not pass an instrument definition's ``polyphony`` straight in.**  In
-	``pymididefs.instruments`` a ``polyphony`` of ``None`` means *nobody has
+	``pymidiinstrumentdefs`` a ``polyphony`` of ``None`` means *nobody has
 	established it*; here ``voices=None`` means *as many as you like*.  They are
 	the same value with opposite meanings, and the Moog Matriarch is exactly the
 	case: its voicing is a front-panel switch and CC 94 with no documented

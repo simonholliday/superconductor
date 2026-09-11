@@ -58,11 +58,18 @@ dev = [
 	"httpx>=0.27",
 	"types-PyYAML",
 	# The compositions are type-checked and tested along with the package, and
-	# they read instrument definitions. It is not a dependency of the package —
-	# nothing under `superconductor/` imports it, and nothing may (#1465) — but
-	# mypy has needed it since `files` grew to cover `compositions/` and said so
-	# only by not being run without it.
-	"pymididefs[instruments]>=0.4",
+	# they read instrument definitions. Neither is a dependency of the package —
+	# nothing under `superconductor/` imports them, and nothing may (#1465) — but
+	# mypy has needed them since `files` grew to cover `compositions/` and said so
+	# only by not being run without them.
+	#
+	# Two packages because they hold two kinds of fact (#2466): `pymididefs` is
+	# the specification — local control is CC 122 on every instrument ever built —
+	# and `pymidiinstrumentdefs` is what one model does.  0.1.1 rather than 0.1,
+	# because the Matriarch's arpeggiator controls have their bands from 0.1.1 on
+	# (#2203) and this rig draws all three.
+	"pymididefs>=0.4",
+	"pymidiinstrumentdefs>=0.1.1",
 	# Drives the page in a real browser. The browser itself is a separate
 	# download ("playwright install firefox") and needs system libraries the
 	# page tests skip cleanly without.

@@ -19,7 +19,7 @@ import pathlib
 import typing
 
 import pymididefs.cc
-import pymididefs.instruments
+import pymidiinstrumentdefs
 
 import subsequence
 import subsequence.constants.durations
@@ -95,15 +95,16 @@ complaining; the first cycle that is not a whole number of beats is this one.
 
 # --- The Minitaur -----------------------------------------------------------
 
-MINITAUR = pymididefs.instruments.load("moog_minitaur")
+MINITAUR = pymidiinstrumentdefs.load("moog/minitaur")
 """What a Moog Minitaur *is*, read from the shared corpus rather than typed here.
 
 **Three tiers meet in this file and only the middle one moved.**  What the
 *specification* says is `pymididefs` — control change 122 is local control, on
-every instrument ever built.  What this *model* does is the definition — control
-change 92 is glide type, and its three bands start at 0, 43 and 85.  What *this
-rig* does stays here: channel 6, two octaves from C1, and a preference for the
-words "Velocity to filter" over the manual's "Filter Velocity Sensitivity".
+every instrument ever built.  What this *model* does is its definition in
+`pymidiinstrumentdefs` — control change 92 is glide type, and its three bands
+start at 0, 43 and 85.  What *this rig* does stays here: channel 6, two octaves
+from C1, and a preference for the words "Velocity to filter" over the manual's
+"Filter Velocity Sensitivity".
 
 The middle tier used to be sixty lines of this file, so every other Minitaur
 owner typed them again and a correction lived only here.
@@ -230,7 +231,7 @@ BASS_LENGTH = BASS_DIVISIONS
 
 # --- The Matriarch ----------------------------------------------------------
 
-MATRIARCH = pymididefs.instruments.load("moog_matriarch")
+MATRIARCH = pymidiinstrumentdefs.load("moog/matriarch")
 """The rig's polyphonic instrument, and the first one on this panel (#2143)."""
 
 CHORD_CHANNEL = 1
@@ -281,7 +282,7 @@ could have played — and the panel never displays a count it cannot verify.
 """
 
 CHORD_VOICING = dict(zip(MATRIARCH.voice.voicing_modes,
-                         MATRIARCH.controls["paraphony_voice_mode"].values))
+                         MATRIARCH.controls["paraphony_voice_mode"].states))
 """Which band of control change 94 selects which voice count.
 
 **Inferred by pairing two ascending lists**, because the definition states the
@@ -324,10 +325,14 @@ CHORD_SETTINGS: list[tuple[str, str, str, typing.Any, str]] = [
 
 	("arp",               "arp_play",                 "Arpeggiator",         None,     "Arpeggiator"),
 	("arp_latch",         "arp_latch",                "Latch",               None,     "Arpeggiator"),
-	("arp_mode",          "arp_mode",                 "Mode",                0,        "Arpeggiator"),
-	("arp_pattern",       "arp_pattern",              "Pattern",             0,        "Arpeggiator"),
+	# **The band the old `0` fell in**, so a Matriarch opens exactly where it did.
+	# Until `pymidiinstrumentdefs` 0.1.1 these three named no states and were drawn
+	# as numbers; the manual's bands arrived there (#2203), and a choice opens at a
+	# state's name.
+	("arp_mode",          "arp_mode",                 "Mode",                "arp",    "Arpeggiator"),
+	("arp_pattern",       "arp_pattern",              "Pattern",             "order",  "Arpeggiator"),
 	("arp_rate",          "arp_rate",                 "Rate",                64,       "Arpeggiator"),
-	("arp_range",         "arp_range",                "Range",               0,        "Arpeggiator"),
+	("arp_range",         "arp_range",                "Range",               "one",    "Arpeggiator"),
 	("arp_swing",         "arp_swing",                "Swing",               64,       "Arpeggiator"),
 	("arp_gate",          "arp_gate_length",          "Gate length",         64,       "Arpeggiator"),
 
@@ -549,26 +554,42 @@ def _panel_parameter (
 	nor the definition knows that.
 	"""
 
-	control = (instrument or MINITAUR).controls[named]
+	definition = instrument or MINITAUR
+	control = definition.controls[named]
+
+	# **A control the instrument only transmits is not something to send**, and a
+	# definition says so in `direction` (#2469).  Offered here it would be a row on
+	# the glass that moves nothing and says nothing about it — the silence the
+	# range checks above exist for — so a table naming one fails at import, where
+	# a person is looking, rather than on the glass, where nobody would know why.
+	if not control.is_sendable:
+		raise ValueError(
+			f"{panel} is the {definition.model.name}'s {named}, which it transmits and "
+			f"does not receive, so nothing the panel sent would reach it")
 
 	# **A choice with nothing to choose is not a choice.**  Three of the
-	# Matriarch's arpeggiator controls are declared `choice` in the definition and
-	# name no states — mode, pattern and range, all of them CC values a manual
-	# describes in prose rather than in bands.  Drawn as declared they came out as
-	# three empty rows: a label, and then nothing at all to press.
+	# Matriarch's arpeggiator controls were declared `choice` and named no states —
+	# mode, pattern and range, whose bands the definition had not recorded.  Drawn
+	# as declared they came out as three empty rows: a label, and then nothing at
+	# all to press.  Their bands arrived upstream in `pymidiinstrumentdefs` 0.1.1,
+	# from the manual's table (#2203).
 	#
-	# A definition is a *report* about a particular model and reports are wrong in
-	# the wild, which is the whole reason instrument facts live in a file rather
-	# than in code.  So this reads what is actually there rather than what the
-	# kind claims, and falls back to the continuous control the range describes.
-	# Filed upstream; the fallback stays either way, because it costs one branch
-	# and the alternative is a blank row nobody can explain.
-	if control.kind == pymididefs.instruments.CHOICE and control.values:
+	# The fallback stays, because a definition is a *report* about a particular
+	# model and reports are wrong in the wild — which is the whole reason instrument
+	# facts live in a file rather than in code, and one somebody writes for their
+	# own synth is the likeliest to have it.  So this reads what is actually there
+	# rather than what the kind claims, and draws the continuous control the range
+	# describes.  It costs one branch; the alternative is a blank row nobody can
+	# explain.
+	#
+	# **`states` and not `values`**: a stepped control is either bands (`values`)
+	# or exact numbers (`choices`, #2467), and `states` names either.
+	if control.kind == pymidiinstrumentdefs.CHOICE and control.states:
 		return superconductor.subsequence_adapter.Parameter(
 			panel, "choice", label=label, default=default, group=group,
-			options=[(state, state.replace("_", " ")) for state in control.values])
+			options=[(state, state.replace("_", " ")) for state in control.states])
 
-	if control.kind == pymididefs.instruments.SWITCH:
+	if control.kind == pymidiinstrumentdefs.SWITCH:
 		return superconductor.subsequence_adapter.Parameter(
 			panel, "switch", label=label, default=default, group=group)
 
@@ -586,7 +607,9 @@ def _cc_value (name: str, value: typing.Any,
 	The definition computes the **middle** of each band rather than its edge, so a
 	value that drifts by one does not become a different setting.  Carried by hand
 	here until #2142, and by hand they were approximate: glide type went out as 0,
-	64 and 110 where the centres are 21, 63 and 106.
+	64 and 110 where the centres are 21, 63 and 106.  A control whose manual prints
+	exact numbers rather than bands (#2467) is sent exactly those, and the
+	definition knows which shape it holds, so this does not have to.
 
 	``controls`` is which instrument's, defaulting to the Minitaur's because it
 	was the only one when this was written.  The band arithmetic is the
@@ -600,13 +623,13 @@ def _cc_value (name: str, value: typing.Any,
 		# exactly — no band, so no middle to sit in (#2081).
 		return 127 if value else 0
 
-	if control.values:
+	if control.states:
 		if isinstance(value, bool):
 			# **A switch's two states in the order the definition gives them**,
 			# which is ascending, so the second is the far end.  It is not always
 			# spelled "on": legato glide is `always` and `legato_only`, and the
 			# panel's own label is what says which way round that reads.
-			states = list(control.values)
+			states = control.states
 			value = states[1] if value else states[0]
 
 		return control.value_for(value)
