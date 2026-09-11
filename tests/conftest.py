@@ -249,6 +249,16 @@ CONTROLS: dict[str, typing.Any] = {
 
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 
+	# **Two grids with variants** (#2485, #2488).  Three letters over eight steps
+	# leaves two cells beside the tabs for what the row says there; five steps is
+	# too narrow for a ▶ each, so that one gets its letters and one PLAY.
+	"phrase": {"type": "step_grid", "title": "Phrase", "rows": ["kick", "snare"],
+	           "steps": 8, "beats": 2, "velocity_range": [1, 127],
+	           "variants": ["A", "B", "C"], "lands_every": 1},
+	"tiny": {"type": "step_grid", "title": "Tiny", "rows": ["kick", "snare"],
+	         "steps": 5, "beats": 1.25, "velocity_range": [1, 127],
+	         "variants": ["A", "B", "C"], "lands_every": 1},
+
 	# **The store's fields and its question come from the adapter itself** (#2487),
 	# because a fake that lags the wire is how two halves pass their own tests and
 	# fail together — the reason this file exists at all.
@@ -266,7 +276,9 @@ a title and one does not, so both halves of that are drawn every run.
 
 PAGES: list[dict[str, typing.Any]] = [
 	{"id": "all", "title": "All", "parts": ["grid", "second"]},
-	{"id": "drums", "title": "Drums", "parts": ["grid"]},
+	# The grids with variants go here rather than on a page of their own, because
+	# seven pages is one more than `PAGE_BUTTONS` (see below).
+	{"id": "drums", "title": "Drums", "parts": ["grid", "phrase", "tiny"]},
 	# Beside the bass rather than on a page of its own: seven pages is one more
 	# than `PAGE_BUTTONS`, and the row of named buttons gives way to previous
 	# and next — which is correct behaviour and takes every test that reaches a
@@ -322,6 +334,14 @@ STATE: dict[str, typing.Any] = {
 	"transport": {"paused": False, "bpm": 120.0},
 	"store": {"kept": "2026-09-11T14:32:00+00:00", "where": "/rig/piece.patterns.json",
 	          "trouble": None, "refused": [], "aside": None, "unwritten": None},
+	"phrase": {"variants": {"A": {"rows": {"kick": [0, 4], "snare": []}},
+	                        "B": {"rows": {"kick": [], "snare": [2]}},
+	                        "C": {"rows": {"kick": [], "snare": []}}},
+	           "playing": "A", "cue": None, "enabled": True},
+	"tiny": {"variants": {"A": {"rows": {"kick": [0], "snare": []}},
+	                      "B": {"rows": {"kick": [], "snare": []}},
+	                      "C": {"rows": {"kick": [], "snare": []}}},
+	         "playing": "A", "cue": None, "enabled": True},
 }
 """What the stand-in app starts out holding.
 

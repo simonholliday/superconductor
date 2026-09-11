@@ -211,6 +211,32 @@ function rememberLock (locked) {
 	}
 }
 
+const VIEWING_KEY = "superconductor.viewing";
+
+/* **Which variant each grid is showing on this panel** (#2485), by `app/grid`.
+ *
+ * The panel's rather than the app's, like the cell size (#2055): two panels
+ * may look at different variants while one plays for both. Remembered so a
+ * reload mid-set returns a performer to the variant they were writing. A grid
+ * nobody has chosen for shows whichever is playing, and follows it. */
+function rememberedViewing () {
+	try {
+		const held = JSON.parse(localStorage.getItem(VIEWING_KEY) || "{}");
+
+		return held && typeof held === "object" && !Array.isArray(held) ? held : {};
+	} catch (error) {
+		return {};
+	}
+}
+
+function rememberViewing (viewing) {
+	try {
+		localStorage.setItem(VIEWING_KEY, JSON.stringify(viewing));
+	} catch (error) {
+		/* Forgotten at the next reload, which costs a tap and nothing else. */
+	}
+}
+
 const SIZE_KEY = "superconductor.cell-size";
 
 /* The sizes a cell can be.
@@ -277,6 +303,9 @@ const NOTE_CONTROL_CELLS = 2;
    snap to, and the selected note's length. Counted here because a block's
    height is decided before anything is drawn, and a strip the fit did not know
    about is a strip that overflows its own block. */
+const VARIANT_CELLS = 1;
+/* The row of tabs above a grid that declares variants (#2485), counted for the
+   same reason: a row the count did not know about puts every block a cell out. */
 const BESIDE_A_LANE = 3;
 /* Room on a lane's own row for whatever else it carries — today the way back to
  * unset, which is four characters and a floor of one row (#2381).
@@ -674,7 +703,82 @@ function BeatStrip ({ steps, beats, tight }) {
 		</div>`;
 }
 
-function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
+/* The versions of a pattern, as tabs above it with a ▶ on each (#2485, #2488).
+ *
+ * **Ableton's clip slot**, the most widely known answer to writing one version
+ * while another plays: a letter shows that variant and edits it, and its ▶ asks
+ * the app to play it next. Two verbs, two targets, on every variant — so cueing
+ * C never means taking your eyes off what is playing. A repeated tap on a letter
+ * only shows it again: a gesture that changed what the room hears on a second
+ * tap is the most natural mistake there is (#2215).
+ *
+ * **Lit is playing and a ring is shown**, the sentence every face here already
+ * says — lit is what sounds. When they are one letter it is both.
+ *
+ * **A cued ▶ blinks until the app says that variant plays**, because the app
+ * decides when a cue lands — at the pattern's next cycle, or the one after if it
+ * arrived too late for this one — and a panel that timed it off the playhead
+ * would be guessing. Somebody who asked their system for less motion gets a
+ * steady mark instead.
+ *
+ * **One row, whatever is shown**, so the block never changes height under a
+ * finger (#2217): what "B — A is playing" and *start B from A* say sits in the
+ * same row, after the tabs, laid on the grid's own columns so a tab lines up
+ * with a step. A block too narrow for two targets a variant gets letters and one
+ * PLAY for the one shown. */
+function Variants ({ ids, playing, cue, showing, steps, emptyShown, onShow, onCue, onStartFrom }) {
+	const narrow = steps < ids.length * 2;
+	const used = narrow ? ids.length + 2 : ids.length * 2;
+	const left = steps - used;
+
+	const style = { gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))` };
+
+	const press = (act) => (event) => { event.preventDefault(); act(); };
+
+	return html`
+		<div class="variants" style=${style}>
+			<span class="variants-label">variant</span>
+			${ids.map((id) => html`
+				<button
+					key=${`show-${id}`}
+					class=${["letter", id === playing ? "playing" : "", id === showing ? "shown" : ""]
+						.filter(Boolean).join(" ")}
+					aria-pressed=${id === showing ? "true" : "false"}
+					data-variant=${id}
+					onPointerDown=${press(() => onShow(id))}
+				>${id}</button>
+				${!narrow && html`
+					<button
+						key=${`play-${id}`}
+						class=${["play", id === playing ? "playing" : "", id === cue ? "cued" : ""]
+							.filter(Boolean).join(" ")}
+						aria-label=${`play ${id}`}
+						data-variant=${id}
+						onPointerDown=${press(() => onCue(id))}
+					>▶</button>`}`)}
+			${narrow && html`
+				<button
+					class=${["play", "solo", showing === playing ? "playing" : "", showing === cue ? "cued" : ""]
+						.filter(Boolean).join(" ")}
+					style=${{ gridColumn: "span 2" }}
+					data-variant=${showing}
+					onPointerDown=${press(() => onCue(showing))}
+				>play</button>`}
+			${left > 0 && showing !== playing && (emptyShown
+				? html`
+					<button class="start-from" style=${{ gridColumn: `span ${left}` }}
+						onPointerDown=${press(() => onStartFrom(playing))}
+					>${`start ${showing} from ${playing}`}</button>`
+				: html`
+					<span class="elsewhere" style=${{ gridColumn: `span ${left}` }}>
+						<b>${showing}</b><span>${` — ${playing} is playing`}</span>
+					</span>`)}
+		</div>`;
+}
+
+/* `cellsAt` is where the cells are addressed: the control's own name, or — on a
+   grid with variants — the variant shown, `grid/variants/B/rows` (#2485). */
+function Grid ({ control, cellsAt = control, rows, steps, beats, weights, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -690,7 +794,7 @@ function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visi
 			${rows.map((row, band) => html`
 				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>
 				${Array.from({ length: steps }, (_, step) => {
-					const path = `${control}/${row}/${step}`;
+					const path = `${cellsAt}/${row}/${step}`;
 					const on = (cells[row] || []).includes(step);
 
 					/* A step an algorithm put here this cycle. Drawn as a dot
@@ -856,7 +960,7 @@ const DRAG_SLOP = 8;
  * goes on showing what the sequencer actually holds until the release is
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
-function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, weights,
+function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes, drawn, kinds, weights,
                     cell, window: windowRows,
                     labels, unreachable, snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
@@ -937,8 +1041,8 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 		if (!found) {
 			/* Placed on the landing, at the snap's own length, and selected so
 			   the length values below act on what was just drawn. */
-			onSet(`${name}/${row}/${put}`, true);
-			onSet(`${name}/${row}/${put}/length`, snap);
+			onSet(`${cellsAt}/${row}/${put}`, true);
+			onSet(`${cellsAt}/${row}/${put}/length`, snap);
 			onSelect({ row, at: put });
 
 			drag.current = { pointer: event.pointerId, kind: "draw", row, at: put,
@@ -1013,7 +1117,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 			   second on a note already selected takes it away. Drawing a note
 			   is never a removal, however briefly the finger stayed. */
 			if (held.already && held.kind !== "draw") {
-				onSet(`${name}/${held.row}/${held.at}`, false);
+				onSet(`${cellsAt}/${held.row}/${held.at}`, false);
 				onSelect(null);
 			}
 
@@ -1023,7 +1127,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 		if (!want) return;
 
 		if (want.row === held.row && want.at === held.at) {
-			if (want.span !== held.span) onSet(`${name}/${held.row}/${held.at}/length`, want.span);
+			if (want.span !== held.span) onSet(`${cellsAt}/${held.row}/${held.at}/length`, want.span);
 
 			return;
 		}
@@ -1033,12 +1137,12 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 		   "the same note, elsewhere". Taken away and put back, oldest first so
 		   a monophonic part cannot clear the note being moved on its way past.
 		   Four frames for a whole gesture, and each of them absolute. */
-		onSet(`${name}/${held.row}/${held.at}`, false);
-		onSet(`${name}/${want.row}/${want.at}`, true);
-		onSet(`${name}/${want.row}/${want.at}/length`, want.span);
+		onSet(`${cellsAt}/${held.row}/${held.at}`, false);
+		onSet(`${cellsAt}/${want.row}/${want.at}`, true);
+		onSet(`${cellsAt}/${want.row}/${want.at}/length`, want.span);
 
 		if (held.velocity != null) {
-			onSet(`${name}/${want.row}/${want.at}/velocity`, held.velocity);
+			onSet(`${cellsAt}/${want.row}/${want.at}/velocity`, held.velocity);
 		}
 
 		onSelect({ row: want.row, at: want.at });
@@ -1095,7 +1199,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 					key=${`label-${row}`} data-row=${row}
 				>${(labels || {})[row] || row}</div>
 				${Array.from({ length: steps }, (_, step) => {
-					const path = `${name}/${row}/${step * divisions}`;
+					const path = `${cellsAt}/${row}/${step * divisions}`;
 					const note = (notes[row] || {})[String(step * divisions)];
 
 					/* Every note starting anywhere inside this cell, not only one
@@ -1132,7 +1236,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 					const reshaped = struck && kinds && kinds[struck.from] === "transform";
 
 					const asked = noteAt(notes[row], step * divisions);
-					const owner = asked ? `${name}/${row}/${asked.at}` : path;
+					const owner = asked ? `${cellsAt}/${row}/${asked.at}` : path;
 
 					return html`
 						<div
@@ -1162,8 +1266,8 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 									class=${["note",
 										selected && selected.row === row && selected.at === one.at
 											? "chosen" : "",
-										pending.has(`${name}/${row}/${one.at}`) ? "pending" : "",
-										failed.has(`${name}/${row}/${one.at}`) ? "failed" : "",
+										pending.has(`${cellsAt}/${row}/${one.at}`) ? "pending" : "",
+										failed.has(`${cellsAt}/${row}/${one.at}`) ? "failed" : "",
 										one.note.length >= 3 * divisions ? "gripped" : ""]
 										.filter(Boolean).join(" ")}
 									style=${barStyle(one.at, Math.max(1, one.note.length || 1), step)}
@@ -1186,7 +1290,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
  *
  * It edits the note in that column and does nothing where there is none —
  * a velocity with no note is not a state the sequencer could report. */
-function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell, tight, onSet }) {
+function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, notes, range, cell, tight, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -1227,7 +1331,7 @@ function VelocityLane ({ name, rows, steps, beats, divisions, notes, range, cell
 
 		if (wanted === found.note.velocity) return;
 
-		onSet(`${name}/${found.row}/${found.at}/velocity`, wanted);
+		onSet(`${cellsAt}/${found.row}/${found.at}/velocity`, wanted);
 	};
 
 	return html`
@@ -1343,7 +1447,11 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, onLength, 
  *
  * Snap starts at one drawn cell, which is what every gesture did before there
  * was a choice. */
-function NoteBlock ({ name, control, shows, notes, drawn, kinds, cell, pending, failed, onSet }) {
+/* `cellsAt` is where this block's notes are addressed: the control's own name,
+   or — on a grid with variants — the variant shown, `bass/variants/B/rows`
+   (#2485).  A note's path is always `${cellsAt}/${row}/${position}`; what is the
+   pattern's, like its transposition, stays under `name` whichever is shown. */
+function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds, cell, pending, failed, onSet }) {
 	const divisions = Math.max(1, control.divisions || 1);
 	const steps = control.steps;
 	const beats = control.beats || 4;
@@ -1368,7 +1476,7 @@ function NoteBlock ({ name, control, shows, notes, drawn, kinds, cell, pending, 
 	const note = selected ? (notes[selected.row] || {})[String(selected.at)] || null : null;
 
 	return html`
-		<${NoteGrid} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
+		<${NoteGrid} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} beats=${beats}
 			divisions=${divisions}
 			${/* What a stack put here this cycle, and what a weight is measured
 			     against — the same two facts the drum grid is given (#2218). */ ""}
@@ -1384,7 +1492,7 @@ function NoteBlock ({ name, control, shows, notes, drawn, kinds, cell, pending, 
 		     that says nothing gets no lane, the same way one that declares no
 		     divisions is honestly offered sixteenths and nothing finer. */ ""}
 		${hasWeights && html`
-			<${VelocityLane} name=${name} rows=${control.rows} steps=${steps} beats=${beats}
+			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} beats=${beats}
 				divisions=${divisions} tight
 				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
@@ -1393,9 +1501,9 @@ function NoteBlock ({ name, control, shows, notes, drawn, kinds, cell, pending, 
 			onTranspose=${control.transpose_range
 				? (semitones) => onSet(`${name}/transpose`, semitones)
 				: null}
-			onLength=${(length) => onSet(`${name}/${selected.row}/${selected.at}/length`, length)}
+			onLength=${(length) => onSet(`${cellsAt}/${selected.row}/${selected.at}/length`, length)}
 			onRemove=${() => {
-				onSet(`${name}/${selected.row}/${selected.at}`, false);
+				onSet(`${cellsAt}/${selected.row}/${selected.at}`, false);
 				setSelected(null);
 			}} />`;
 }
@@ -4742,6 +4850,17 @@ function Panel () {
 	   covers the whole glass, and one drawn from inside the bar would be drawn
 	   inside whatever the bar is drawn inside. */
 	const [startingAgain, setStartingAgain] = useState(false);
+
+	/* Which variant each grid shows on this panel, by `app/grid` (#2485). */
+	const [viewing, setViewing] = useState(rememberedViewing);
+
+	const view = useCallback((key, id) => setViewing((was) => {
+		const now = { ...was, [key]: id };
+
+		rememberViewing(now);
+
+		return now;
+	}), []);
 	const [sending, setSending] = useState(null);
 	const [moved, setMoved] = useState({});
 	const [touched, setTouched] = useState(null);
@@ -4899,7 +5018,24 @@ function Panel () {
 					setState((was) => {
 						const app = { ...(was[frame.app] || {}) };
 
-						if (rest.length === 3) {
+						if (declared && GRIDS.includes(declared.type)
+							&& Array.isArray(declared.variants) && rest[0] === "variants") {
+							/* **A variant's cells, one level further down** (#2485):
+							   `variants/B/rows`, then exactly the address a grid
+							   without variants gives a cell. So the same arithmetic
+							   answers both, from one function, rather than a second
+							   copy of every branch below that could disagree with
+							   the first. `cue` and `playing` are one word long and
+							   are written by the branch that writes any field. */
+							const [, which, , ...cell] = rest;
+							const grid = { ...(app[control] || {}) };
+							const variants = { ...(grid.variants || {}) };
+							const one = variants[which] || {};
+
+							variants[which] = { ...one, rows: withCell(one.rows || {}, declared, cell, frame.v) };
+							grid.variants = variants;
+							app[control] = grid;
+						} else if (rest.length === 3) {
 							/* A note's own length or velocity: control, row,
 							   step, field. Only ever sent for a note that is
 							   there, so an absent one is left absent. */
@@ -5545,7 +5681,9 @@ function Panel () {
 			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 				+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
 				+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
-					? LANE_CELLS : 0) + 1
+					? LANE_CELLS : 0)
+				+ (Array.isArray(controls[name].variants) && controls[name].variants.length
+					? VARIANT_CELLS : 0) + 1
 				/* The title is the `+ 1` above and the grip is this one. A block
 				   measures a whole number of lattice cells and this arithmetic is
 				   what places it, so a fitting the count does not know about puts
@@ -6141,6 +6279,47 @@ function Panel () {
 		return pulled || control.visible_rows || control.rows.length;
 	};
 
+	/* **A grid's variants, as this panel sees them** (#2485), or null for a grid
+	   that declares none — which is then drawn exactly as it always was.
+
+	   What plays and what is cued are the app's, read off its state; what is
+	   shown is this panel's, and until somebody picks a letter it is whichever
+	   plays, and follows it. `at` is where the shown variant's cells are
+	   addressed, so the grid drawing them never has to know variants exist. */
+	const variantOf = (name) => {
+		const declared = controls[name];
+
+		if (!declared || !Array.isArray(declared.variants) || !declared.variants.length) return null;
+
+		const held = (state[appName] || {})[name] || {};
+		const ids = declared.variants;
+		const playing = ids.includes(held.playing) ? held.playing : ids[0];
+		const cue = ids.includes(held.cue) ? held.cue : null;
+		const key = `${appName}/${name}`;
+		const showing = ids.includes(viewing[key]) ? viewing[key] : playing;
+		const rowsOf = (id) => (((held.variants || {})[id] || {}).rows || {});
+
+		return {
+			ids, playing, cue, showing, rowsOf, key,
+			at: `${name}/variants/${showing}/rows`,
+			held,
+		};
+	};
+
+	/* What a ▶ asks for. Pressed on another variant it cues that one; pressed on
+	   the one already cued it takes the cue back; pressed on the one playing it
+	   takes back any cue, which is what somebody pressing the lit ▶ means — stay
+	   here — and asks for nothing when there is nothing to take back. */
+	const cueFor = (name, variant, id) => {
+		if (id === variant.cue || id === variant.playing) {
+			if (variant.cue) request(`${name}/cue`, null);
+
+			return;
+		}
+
+		request(`${name}/cue`, id);
+	};
+
 	/* Only where height is a question at all. A one-row block has nothing to
 	   reveal and nothing to give back, so a grip on it would be a control that
 	   cannot do anything — and this codebase's own rule is that one of those is
@@ -6392,32 +6571,65 @@ function Panel () {
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}
 								values=${(state[appName] || {})[one.control] || {}}
 								cell=${size.cell} onSet=${request} />`
-						: kindOf(one.control) === "note_grid"
-						? html`
-							<${NoteBlock} name=${one.control} control=${controls[one.control]}
-								shows=${rowsShown(one)}
-								notes=${(state[appName] || {})[one.control] || {}} cell=${size.cell}
-								drawn=${up ? realised[one.control] : null}
-								kinds=${layerKinds(one.control)}
-								pending=${pending} failed=${failed} onSet=${request} />`
-						: html`
-							<${Grid} control=${one.control} rows=${controls[one.control].rows}
-								steps=${controls[one.control].steps}
-								beats=${controls[one.control].beats || 4}
-								${/* What a realised cell's weight is measured
-								     against, which is the app's to say and not
-								     this panel's to assume. */ ""}
-								weights=${controls[one.control].velocity_range}
-								cells=${(state[appName] || {})[one.control] || {}}
-								drawn=${up ? realised[one.control] : null}
-								${/* Which layer is a route and which is a
-								     generator, so a dot can say which put it
-								     there. Read from the stack rather than sent
-								     with the event: the panel already holds the
-								     layers, and a second copy could disagree. */ ""}
-								kinds=${layerKinds(one.control)}
-								visible=${rowsShown(one)} cell=${size.cell}
-								pending=${pending} failed=${failed} onTap=${request} />`}
+						: GRIDS.includes(kindOf(one.control)) ? (() => {
+							const variant = one.key === one.control ? variantOf(one.control) : null;
+							const held = (state[appName] || {})[one.control] || {};
+
+							/* **Dots only over the variant they were played from.**
+							   A realised cell is what the playing variant's build
+							   placed, so drawn over another it would lie (#2485 Q1).
+							   The playhead stays: time is shared, and the moment B
+							   is cued you want to know where the bar is. */
+							const drawn = up && (!variant || variant.showing === variant.playing)
+								? realised[one.control] : null;
+							const rows = variant ? variant.rowsOf(variant.showing) : held;
+
+							const strip = variant && html`
+								<${Variants} ids=${variant.ids} playing=${variant.playing}
+									cue=${variant.cue} showing=${variant.showing}
+									steps=${controls[one.control].steps}
+									emptyShown=${countOf(rows) === 0
+										&& countOf(variant.rowsOf(variant.playing)) > 0}
+									onShow=${(id) => view(variant.key, id)}
+									onCue=${(id) => cueFor(one.control, variant, id)}
+									onStartFrom=${(from) => request(variant.at, variant.rowsOf(from))} />`;
+
+							return kindOf(one.control) === "note_grid"
+								? html`
+									${strip}
+									<${NoteBlock} name=${one.control} cellsAt=${variant ? variant.at : one.control}
+										control=${controls[one.control]}
+										shows=${rowsShown(one)}
+										${/* The shown variant's notes, and what stays the
+										     pattern's beside them whichever is shown. */ ""}
+										notes=${variant ? { ...rows, transpose: held.transpose,
+											labels: held.labels, unreachable: held.unreachable } : held}
+										cell=${size.cell}
+										drawn=${drawn}
+										kinds=${layerKinds(one.control)}
+										pending=${pending} failed=${failed} onSet=${request} />`
+								: html`
+									${strip}
+									<${Grid} control=${one.control} cellsAt=${variant ? variant.at : one.control}
+										rows=${controls[one.control].rows}
+										steps=${controls[one.control].steps}
+										beats=${controls[one.control].beats || 4}
+										${/* What a realised cell's weight is measured
+										     against, which is the app's to say and not
+										     this panel's to assume. */ ""}
+										weights=${controls[one.control].velocity_range}
+										cells=${rows}
+										drawn=${drawn}
+										${/* Which layer is a route and which is a
+										     generator, so a dot can say which put it
+										     there. Read from the stack rather than sent
+										     with the event: the panel already holds the
+										     layers, and a second copy could disagree. */ ""}
+										kinds=${layerKinds(one.control)}
+										visible=${rowsShown(one)} cell=${size.cell}
+										pending=${pending} failed=${failed} onTap=${request} />`;
+						})()
+						: null}
 					${up && one.clear && html`
 						<${Playhead} anchor=${anchor} steps=${controls[one.control].steps}
 							beats=${controls[one.control].beats || 4}
@@ -6603,30 +6815,45 @@ function Panel () {
 					})}
 			<//>`}
 
-		${clearing && html`
-			<${Sheet} title="clear this pattern" onClose=${() => setClearing(null)}>
-				<p class="ask">
-					${/* Spaces kept inside the spans: the template collapses the
-					     whitespace around an element, and "taken offDRM1" is what
-					     that looks like on the glass. */ ""}
-					<span>${countOf((state[appName] || {})[clearing])} steps will be taken off </span>
-					<b>${controls[clearing].title || clearing}</b>
-					<span>. There is no undo.</span>
-				</p>
-				<div class="answers">
-					<button
-						onPointerDown=${(event) => { event.preventDefault(); setClearing(null); }}
-					>keep them</button>
-					<button
-						class="danger"
-						onPointerDown=${(event) => {
-							event.preventDefault();
-							request(`${clearing}/rows`, {});
-							setClearing(null);
-						}}
-					>clear</button>
-				</div>
-			<//>`}
+		${clearing && (() => {
+			/* **Clear works on the variant shown** (#2485), as it works on the
+			   grid today, and it says which. What is counted is the declared rows
+			   and nothing else: counting every key a note grid's state holds took
+			   its row labels and its unreachable rows for notes, so the sheet told
+			   a person they were about to lose more than they were. */
+			const variant = variantOf(clearing);
+			const held = (state[appName] || {})[clearing] || {};
+			const named = controls[clearing].rows || [];
+			const rows = variant ? variant.rowsOf(variant.showing)
+				: Object.fromEntries(Object.entries(held).filter(([row]) => named.includes(row)));
+
+			return html`
+				<${Sheet} title=${variant ? `clear variant ${variant.showing}` : "clear this pattern"}
+					onClose=${() => setClearing(null)}>
+					<p class="ask">
+						${/* Spaces kept inside the spans: the template collapses the
+						     whitespace around an element, and "taken offDRM1" is what
+						     that looks like on the glass. */ ""}
+						<span>${countOf(rows)} steps will be taken off </span>
+						<b>${controls[clearing].title || clearing}</b>
+						${variant && html`<span>${`, variant ${variant.showing}`}</span>`}
+						<span>. There is no undo.</span>
+					</p>
+					<div class="answers">
+						<button
+							onPointerDown=${(event) => { event.preventDefault(); setClearing(null); }}
+						>keep them</button>
+						<button
+							class="danger"
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								request(variant ? variant.at : `${clearing}/rows`, {});
+								setClearing(null);
+							}}
+						>clear</button>
+					</div>
+				<//>`;
+		})()}
 
 		${startingAgain && storeName && html`
 			<${Sheet} title="start again from the file" onClose=${() => setStartingAgain(false)}>
@@ -6647,6 +6874,45 @@ function Panel () {
 					>start again</button>
 				</div>
 			<//>`}`;
+}
+
+/* One grid's rows with one change applied to them, wherever those rows are kept.
+ *
+ * The same four answers the `changed` handler gives a grid without variants —
+ * the whole of the rows, a step on or off, a note placed or taken away, and one
+ * field of a note — written once for a variant's rows (#2485), where the cell's
+ * address is the rest of the path after `variants/<id>/rows`. */
+function withCell (rows, declared, cell, value) {
+	if (!cell.length) return { ...(value || {}) };
+
+	const [row, step, field] = cell;
+	const next = { ...rows };
+
+	if (declared.type === "note_grid") {
+		const notes = { ...(next[row] || {}) };
+
+		if (field !== undefined) {
+			// Only ever sent for a note that is there, so an absent one stays absent.
+			if (notes[step]) notes[step] = { ...notes[step], [field]: value };
+		} else if (value) {
+			notes[step] = notes[step] || {
+				length: declared.default_length || 1,
+				velocity: declared.default_velocity || 100 };
+		} else {
+			delete notes[step];
+		}
+
+		next[row] = notes;
+
+		return next;
+	}
+
+	const list = new Set(next[row] || []);
+
+	value ? list.add(Number(step)) : list.delete(Number(step));
+	next[row] = [...list].sort((a, b) => a - b);
+
+	return next;
 }
 
 /* How much a person is about to lose, counted so the dialog can say it.

@@ -6427,6 +6427,16 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	_settled(panel)
 	note("the bass page")
 
+	# **A row of tabs above a grid with variants** (#2488), and then a variant
+	# shown that is not the one playing — which puts what the row says beside the
+	# tabs, and is a state of its own for the same reason two popovers are two.
+	_go_to_the_variants(panel)
+	note("the drums page, with variants")
+
+	panel.locator(f'{PHRASE} .variants .letter[data-variant="C"]').click()
+	panel.wait_for_selector(f"{PHRASE} .variants .start-from", timeout=5_000)
+	note("a variant shown that is not playing")
+
 	return sorted(set(found))
 
 
@@ -8104,3 +8114,250 @@ def test_a_store_in_trouble_says_so_in_the_bar_and_what_in_its_popover (
 	assert "could not be put back" in said
 	assert "no option called sine" in said
 	assert "refused-20260911T143200Z" in said
+
+
+# --- variants (#2485, #2488) --------------------------------------------------
+
+PHRASE = '.part[data-part="phrase"]'
+"""A grid with three variants: A playing and holding a kick, B a snare, C nothing."""
+
+
+def _go_to_the_variants (panel: typing.Any) -> None:
+	"""Go to the page carrying the grids with variants, and wait for their tabs."""
+
+	panel.locator(".pages button", has_text="Drums").click()
+	panel.wait_for_selector(f"{PHRASE} .variants .letter", timeout=5_000)
+	_settled(panel)
+
+
+def _letter (which: str, grid: str = PHRASE) -> str:
+	"""The tab that shows one variant."""
+
+	return f'{grid} .variants .letter[data-variant="{which}"]'
+
+
+def _play (which: str, grid: str = PHRASE) -> str:
+	"""The ▶ that cues one variant."""
+
+	return f'{grid} .variants .play[data-variant="{which}"]'
+
+
+def test_a_grid_with_variants_draws_a_letter_and_a_play_for_each (
+	panel: typing.Any) -> None:
+	"""Ableton's clip slot (#2485 Q2): a tab to show each variant and a ▶ to play
+	it.  **Lit is playing and a ring is shown**, and before anybody has chosen, the
+	one shown is the one playing — so the grid below is A's."""
+
+	_go_to_the_variants(panel)
+
+	letters = panel.locator(f"{PHRASE} .variants .letter")
+
+	assert [one.inner_text().strip() for one in letters.all()] == ["A", "B", "C"]
+	assert panel.locator(f"{PHRASE} .variants .play").count() == 3
+
+	marks = panel.locator(_letter("A")).get_attribute("class") or ""
+
+	assert "playing" in marks and "shown" in marks
+	assert "on" in (panel.locator(conftest.cell("phrase/variants/A/rows/kick/0"))
+	                .get_attribute("class") or "")
+
+
+def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Edit any variant while another plays** (#2485 Q1).  Which one this panel
+	shows is its own business; its cells are addressed in that variant, and the
+	row says plainly that it is not the one sounding."""
+
+	_go_to_the_variants(panel)
+	before = len(fake_app.sets)
+
+	panel.locator(_letter("B")).click()
+	panel.wait_for_selector(conftest.cell("phrase/variants/B/rows/snare/2"), timeout=5_000)
+
+	assert "on" in (panel.locator(conftest.cell("phrase/variants/B/rows/snare/2"))
+	                .get_attribute("class") or "")
+	assert panel.locator(f"{PHRASE} .variants .elsewhere").inner_text().strip().lower() == \
+		"b — a is playing"
+
+	panel.locator(conftest.cell("phrase/variants/B/rows/kick/1")).click()
+
+	asked = fake_app.settled(lambda one: str(one.get("path", "")).startswith("phrase/"),
+	                         since=before)
+
+	assert [(one["path"], one["v"]) for one in asked] == [("phrase/variants/B/rows/kick/1", True)], (
+		"showing a variant asked the app for something, or the tap went elsewhere")
+
+
+def test_a_cell_the_app_confirms_is_drawn_in_its_own_variant_only (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The face follows the app one level further down: a step put in B is drawn
+	on B and nowhere else — the panel's copy of each variant is kept apart as the
+	app's is (#2485)."""
+
+	_go_to_the_variants(panel)
+
+	fake_app.confirm("phrase/variants/B/rows/kick/5", True, by="app")
+
+	panel.locator(_letter("B")).click()
+	playwright_api.expect(panel.locator(conftest.cell("phrase/variants/B/rows/kick/5"))).to_have_class(
+		re.compile(r"\bon\b"), timeout=5_000)
+
+	panel.locator(_letter("A")).click()
+	playwright_api.expect(panel.locator(conftest.cell("phrase/variants/A/rows/kick/5"))).not_to_have_class(
+		re.compile(r"\bon\b"), timeout=5_000)
+
+
+def test_a_play_asks_for_its_variant_and_blinks_until_the_app_says_it_plays (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The app decides when a cue lands**, at the pattern's next cycle — so the ▶
+	blinks until the app says, rather than until a clock on this panel guesses."""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(_play("C")).click()
+	asked = fake_app.await_set("phrase/cue")
+
+	assert asked["v"] == "C"
+
+	fake_app.confirm("phrase/cue", "C", by="panel", client=asked.get("client"), seq=asked.get("seq"))
+
+	cued = panel.locator(_play("C"))
+
+	playwright_api.expect(cued).to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+	assert cued.evaluate("el => getComputedStyle(el).animationName") == "cued"
+
+	fake_app.confirm("phrase/playing", "C", by="app")
+	fake_app.confirm("phrase/cue", None, by="app")
+
+	playwright_api.expect(cued).not_to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+
+	assert "playing" in (cued.get_attribute("class") or "")
+	assert "playing" in (panel.locator(_letter("C")).get_attribute("class") or "")
+
+
+def test_pressing_a_cued_play_again_takes_the_cue_back (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A second press on the blinking ▶ changes the mind rather than asking twice."""
+
+	_go_to_the_variants(panel)
+	before = len(fake_app.sets)
+
+	panel.locator(_play("C")).click()
+	asked = fake_app.await_set("phrase/cue")
+	fake_app.confirm("phrase/cue", "C", by="panel", client=asked.get("client"), seq=asked.get("seq"))
+	playwright_api.expect(panel.locator(_play("C"))).to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+
+	panel.locator(_play("C")).click()
+
+	sent = fake_app.settled("phrase/cue", since=before)
+
+	assert [one["v"] for one in sent] == ["C", None]
+
+
+def test_a_variant_shown_that_is_not_playing_draws_no_dots (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A realised dot is what the playing variant's build placed, and drawn over
+	another it would lie about where an algorithm put a note (#2485 Q1)."""
+
+	_go_to_the_variants(panel)
+
+	fake_app.realised("phrase", {"kick": {"2": 100}})
+	playwright_api.expect(panel.locator(f"{PHRASE} .cell.ghost")).to_have_count(1, timeout=5_000)
+
+	panel.locator(_letter("B")).click()
+	playwright_api.expect(panel.locator(f"{PHRASE} .cell.ghost")).to_have_count(0, timeout=5_000)
+
+	panel.locator(_letter("A")).click()
+	playwright_api.expect(panel.locator(f"{PHRASE} .cell.ghost")).to_have_count(1, timeout=5_000)
+
+
+def test_an_empty_variant_offers_to_start_from_the_one_playing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Starting a variant from another is the ordinary case, so it is one tap**
+	(#2485 Q6): the playing variant's rows, written into the one shown."""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(_letter("C")).click()
+	button = panel.locator(f"{PHRASE} .variants .start-from")
+
+	assert button.inner_text().strip().lower() == "start c from a"
+
+	button.click()
+
+	assert fake_app.await_set("phrase/variants/C/rows")["v"] == {"kick": [0, 4], "snare": []}
+
+
+def test_clear_works_on_the_variant_shown_and_says_which (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""As it works on the grid today — and it says which variant, because a person
+	looking at B while A plays must not wonder which one they are emptying."""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(_letter("B")).click()
+	panel.locator(f"{PHRASE} .part-foot .clear").click()
+	panel.wait_for_selector(".sheet .ask", timeout=5_000)
+
+	said = panel.locator(".sheet .ask").inner_text()
+
+	assert "1 steps will be taken off" in said and "variant B" in said, said
+
+	panel.locator(".sheet .answers button.danger").click()
+
+	assert fake_app.await_set("phrase/variants/B/rows")["v"] == {}
+
+
+def test_the_variant_shown_is_this_panel_s_and_survives_a_reload (
+	panel: typing.Any) -> None:
+	"""Like the cell size (#2055): a performer who reloads mid-set comes back to
+	the variant they were writing, and another panel is unaffected."""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(_letter("B")).click()
+	playwright_api.expect(panel.locator(_letter("B"))).to_have_class(
+		re.compile(r"\bshown\b"), timeout=5_000)
+
+	panel.reload()
+	_go_to_the_variants(panel)
+
+	assert panel.locator(f"{PHRASE} .variants .letter.shown").inner_text().strip() == "B"
+
+
+def test_a_block_too_narrow_for_a_play_each_gets_letters_and_one_play (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Five steps cannot hold six targets, so the letters stay and one PLAY cues
+	whichever is shown — the draft design, kept as the narrow case (#2485 Q2)."""
+
+	_go_to_the_variants(panel)
+
+	tiny = '.part[data-part="tiny"]'
+
+	assert panel.locator(f"{tiny} .variants .letter").count() == 3
+	assert panel.locator(f"{tiny} .variants .play").count() == 1
+
+	panel.locator(_letter("B", tiny)).click()
+	panel.locator(f"{tiny} .variants .play.solo").click()
+
+	assert fake_app.await_set("tiny/cue")["v"] == "B"
+
+
+def test_somebody_who_asked_for_less_motion_gets_a_steady_mark (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""`prefers-reduced-motion` (#2488): a cued ▶ is marked, broken-edged in the
+	lit colour, and does not move."""
+
+	panel.emulate_media(reduced_motion="reduce")
+	_go_to_the_variants(panel)
+
+	panel.locator(_play("C")).click()
+	asked = fake_app.await_set("phrase/cue")
+	fake_app.confirm("phrase/cue", "C", by="panel", client=asked.get("client"), seq=asked.get("seq"))
+
+	cued = panel.locator(_play("C"))
+
+	playwright_api.expect(cued).to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+
+	assert cued.evaluate("el => getComputedStyle(el).animationName") == "none"
+	assert cued.evaluate("el => getComputedStyle(el).borderTopStyle") == "dashed"

@@ -1680,6 +1680,99 @@ html, body {
 
 .beats .beats-label { display: block; }
 
+/* --- Variants (#2485, #2488) ----------------------------------------------
+ *
+ * One row of tabs above a grid, on the grid's own columns so a tab lines up with
+ * a step: a letter to show a variant and a ▶ to play it, for each.  Every target
+ * here takes its size from the lattice's surface rule and says nothing of its
+ * own — they are one row square because the surface says so (#2107).
+ */
+.variants {
+	display: grid;
+	gap: var(--gap);
+	align-items: center;
+	margin-bottom: var(--gap);
+	min-width: min-content;
+}
+
+.variants .variants-label {
+	justify-self: end;
+	padding-right: 0.6rem;
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-body);
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+/* **Lit is playing**, the sentence every face on this panel says: lit is what
+   sounds.  The letter and its ▶ both, so the one playing reads from across the
+   room whichever of the two a hand is over. */
+.variants .letter.playing,
+.variants .play.playing {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: var(--on-ink);
+}
+
+/* **A ring is shown**: the variant this panel is drawing below, which may not be
+   the one sounding.  Inset so a lit tab can carry both at once. */
+.variants .letter.shown {
+	box-shadow: inset 0 0 0 2px var(--ring);
+	color: var(--ink);
+}
+
+.variants .letter.playing.shown { color: var(--on-ink); }
+
+/* **A cued ▶ blinks until the app says that variant plays** — the app decides
+   when a cue lands, so this stops when it is told rather than when a clock here
+   thinks the bar is over. */
+.variants .play.cued { animation: cued 0.55s ease-in-out infinite alternate; }
+
+@keyframes cued {
+	from {
+		background: var(--panel);
+		border-color: var(--edge);
+		color: var(--ink-quiet);
+	}
+
+	to {
+		background: var(--on);
+		border-color: var(--on-edge);
+		color: var(--on-ink);
+	}
+}
+
+/* **And a steady mark for somebody who asked for less motion** (#2488): the lit
+   colour's edge, broken, which says "on its way" without moving. */
+@media (prefers-reduced-motion: reduce) {
+	.variants .play.cued {
+		animation: none;
+		border-color: var(--on-edge);
+		border-style: dashed;
+		color: var(--on);
+	}
+}
+
+/* "B — A is playing", in the row the tabs are in, so the block never changes
+   height as a person moves between letters (#2217). */
+.variants .elsewhere {
+	padding-left: 0.4rem;
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-body);
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.variants .elsewhere b { color: var(--ink); }
+
 /* Thicker than a hairline, because it is being *counted* rather than merely
    noticed — a two-pixel line reads as a rule under the title and says nothing
    about fours. Still a mark: no edge, no target, and it scales with the cell
