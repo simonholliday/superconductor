@@ -183,8 +183,9 @@ CHECKS: tuple[tuple[str, str, float], ...] = (
 	# cells as well as the page.  A cable crosses four grounds — page, block
 	# face, unlit cell, lit cell — and this list measures it against one.
 	#
-	# **Three pairings belong beside this one and none of them is here.  All
-	# three are absent knowingly, so nobody finds a hole that is a decision.**
+	# **Two pairings belong beside this one and neither is here.  Both are
+	# absent knowingly, so nobody finds a hole that is a decision.**  A third,
+	# a patch cable on the page, was absent for a day and is checked below.
 	#
 	# `("ink-quiet", "on", 3.0)` — a raised wired line over a lit step. **Simon
 	# accepted it, 2026-09-10 (#2427)**, against my recommendation, and the
@@ -199,16 +200,20 @@ CHECKS: tuple[tuple[str, str, float], ...] = (
 	# elsewhere.  **No single stroke colour is right for all four grounds**,
 	# which is why this is not a matter of picking a better token.
 	#
-	# `("ring", "ground", 3.0)` — a patch cable on the page.  Fails: Airports
-	# lands at 2.29 with its accent at full strength, its accent being chosen to
-	# sit on a control face.  Open as **#2400**.
-	#
 	# `("ink-quiet", "sunk", 3.0)` — a raised line over a recess.  Unmeasured.
 	#
 	# Adding a check that is red on its first run teaches everyone to ignore the
 	# tick — the same reason `tools/theme_separation.py` is not in CI — so each
 	# is Simon's palette decision first and a check afterwards.
 	("ink-quiet", "ground", 3.0),
+
+	# **A patch cable on the page** (#2400).  It was absent because Airports
+	# failed it — 2.29, the one theme of eleven under the floor, its accent
+	# chosen for a control face on a mid-grey ground — and a check that is red
+	# on arrival teaches everyone to ignore the tick.  Simon lifted the ring
+	# rather than write down an exception, so it is a check now, and the next
+	# cable colour cannot be chosen unmeasured.
+	("ring", "ground", 3.0),
 	("edge-strong", "part", 3.0),
 	("edge-strong", "panel", 3.0),               # #2193 was found here
 	("good", "part", 3.0),

@@ -811,9 +811,21 @@
 	--on-ink: #f4f7f9;
 	--readout: #9ec2e0;
 
-	/* In flight */
-	--ring: #b87f8c;
-	--ring-ink: #1a0f12;
+	/* In flight.  **Darkened to clear a patch cable on the page ground**
+	   (#2400, Simon's decision of 2026-09-11 to lift the ring rather than
+	   record an exception).  It was #b87f8c at 2.29:1 on --ground, the one
+	   theme of eleven under the 3:1 mark floor — Airports' ground is a mid
+	   grey, and an accent is chosen for a control face.
+
+	   **The ink moved too, and had to.**  At this hue the ring has to sit
+	   in a luminance band about 2% wide: dark enough for 3:1 on the ground
+	   and light enough for 4.5:1 under its own near-black ink.  With the old
+	   ink (#1a0f12) that band is empty — measured, no lightness satisfies
+	   both — so the ink went a shade nearer black, which cannot be seen and
+	   opens the band.  3.08 on the ground, 4.53 under the ink: thin margins,
+	   on values that do not drift. */
+	--ring: #a96574;
+	--ring-ink: #0f080a;
 
 	/* The four meanings */
 	--good: #3a6b45;
