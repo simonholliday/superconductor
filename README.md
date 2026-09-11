@@ -58,8 +58,9 @@ python tools/capture_state.py      # before
 python tools/restore_state.py      # after
 ```
 
-A restore is additive and cannot clear, so a composition that seeds an opening
-pattern comes back with that pattern *plus* whatever was captured.
+A restore puts each grid back exactly: a step the composition seeds on every
+start, and that you had taken out, stays out — and the restore says which steps
+it took out.
 
 Those two tools live in the repository rather than in the installed package, as
 does `compositions/drm1_grid.py` below — the only worked example, and the only
