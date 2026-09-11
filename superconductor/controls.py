@@ -871,7 +871,27 @@ def _apply_note (
 		if isinstance(value, bool) or not isinstance(value, int):
 			raise ControlError(f"a transposition is a whole number of semitones, not {value!r}")
 
-		low, high = declaration.get("transpose_range", [-24, 24])
+		# **The range is the app's and there is no fallback** (#2435, Simon's
+		# decision of 2026-09-10: *we cannot assume units in any interface*).
+		#
+		# This read `declaration.get("transpose_range", [-24, 24])` — the service
+		# supplying a musical bound for an app that declared none, which is the
+		# one thing this module's own docstring forbids twice.  Two octaves is
+		# somebody's taste rather than a fact, and the next two apps do not work
+		# in semitones at all.
+		#
+		# **Refusing costs nothing here and is the honest answer.**  Every note
+		# grid this package's own adapter builds declares a range, and the panel
+		# draws no transpose buttons for a control without one — so nothing is
+		# offered that then gets refused.  An app that wants transposition says
+		# how far.
+		wanted = declaration.get("transpose_range")
+
+		if not isinstance(wanted, (list, tuple)) or len(wanted) != 2:
+			raise ControlError(
+				f"{path!r} asks to transpose a grid that declared no range to do it in")
+
+		low, high = wanted
 
 		if not low <= value <= high:
 			raise ControlError(f"a transposition is between {low} and {high} semitones")

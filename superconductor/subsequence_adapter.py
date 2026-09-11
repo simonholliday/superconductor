@@ -352,7 +352,7 @@ class StepGrid (Control):
 			# which is a MIDI number in a package that carries no MIDI; a note
 			# grid already declared this and a step grid did not, so the one that
 			# said nothing was the one being guessed at.
-			"velocity_range": [1, 127]}
+			"velocity_range": list(VELOCITY_RANGE)}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -658,7 +658,7 @@ class NoteGrid (Control):
 			"voices": self.voices, "divisions": self.divisions,
 			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
-			"max_length": self.positions, "velocity_range": [1, 127]}
+			"max_length": self.positions, "velocity_range": list(VELOCITY_RANGE)}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -798,8 +798,14 @@ class NoteGrid (Control):
 				raise Refused(f"a note is between 1 and {self.positions} positions long")
 
 		elif field == "velocity":
-			if not 1 <= wanted <= 127:
-				raise Refused("velocity is between 1 and 127")
+			# **The pair this grid declared, rather than the same two numbers
+			# written out again** (#2436).  A check that disagreed with the
+			# declaration would draw a lane a finger cannot reach the end of, and
+			# nothing would say which of the two was wrong.
+			low, high = VELOCITY_RANGE
+
+			if not low <= wanted <= high:
+				raise Refused(f"velocity is between {low} and {high}")
 
 		else:
 			raise Refused(f"a note has no {field}")
@@ -1531,6 +1537,29 @@ class Params (Control):
 
 		return checked_value(parameter, value)
 
+
+VELOCITY_RANGE = (1, 127)
+"""How hard a note on a grid this adapter declares may be struck.
+
+**Three copies of this pair used to be written out** — a step grid's
+declaration, a note grid's, and the check that refuses a velocity — and two
+halves of one number is how they come to disagree (#2436).  The check is the one
+that mattered: a declaration saying 1 to 127 beside a check reading anything else
+is a panel drawing a lane a person cannot reach the end of.
+
+**It lives in the adapter and may not move to `controls.py` or the client**,
+which is the whole of #2435's rule and the reason this is not simply a constant.
+MIDI is *Subsequence's* domain and this file is the half that faces it; the
+service carries no MIDI at all and says so twice in its own docstrings, and the
+panel draws a mark in proportion to whatever range it was told rather than to
+one it knows.  An adapter for a sampler will declare something else here and
+nothing downstream will need changing.
+
+**No unit beside it, and that is #2049 rather than an oversight.**  A unit is
+drawn beside a *number*, and no number is drawn for a velocity anywhere on this
+panel — a grid's weights are a lane of bars.  The field can be added the day
+something reads it.
+"""
 
 DRAWABLE = superconductor.protocol.PARAMETER_KINDS + ("pitch",)
 """Every parameter kind `offerable` will pass to a panel, and nothing else.

@@ -323,6 +323,57 @@ def test_a_length_outside_the_pattern_is_refused_with_a_reason () -> None:
 		grid.apply(["C2", "4", "velocity"], 200)
 
 
+def test_a_velocity_is_checked_against_the_range_the_grid_declared () -> None:
+	"""Two halves of one number is how they come to disagree (#2436).
+
+	This pair was written out three times — a step grid's declaration, a note
+	grid's, and the check that refuses a velocity — and the check is the one that
+	mattered: a declaration saying 1 to 127 beside a check reading anything else
+	draws a lane a finger cannot reach the end of, with nothing saying which of
+	the two is wrong.
+
+	**This cannot go red today and that is what it is for.**  The three copies
+	held the same numbers, so it passes against the commit before them; it goes
+	red the moment somebody moves one and not the others, which is the only way
+	this fault has ever arrived.  Asked of the declaration rather than of the
+	constant, so it is the wire that is checked and not a second reading of the
+	same source.
+	"""
+
+	grid, _, _ = _grid()
+
+	low, high = grid.declaration()["velocity_range"]
+
+	grid.apply(["C2", "4"], True)
+	grid.apply(["C2", "4", "velocity"], high)
+
+	assert grid.declaration()["velocity_range"] == [low, high], \
+		"declaring is what a panel draws the lane from"
+
+	with pytest.raises(adapter.Refused):
+		grid.apply(["C2", "4", "velocity"], high + 1)
+
+	with pytest.raises(adapter.Refused):
+		grid.apply(["C2", "4", "velocity"], low - 1)
+
+
+def test_a_step_grid_says_what_a_weight_means_as_a_note_grid_does () -> None:
+	"""Both kinds declare the same pair from one place (#2436).
+
+	A step grid's own cells carry no velocity (#2046), but the cells a generator
+	realises on it do, and the panel draws each at the weight it was played — so
+	a step grid that said nothing was the one being guessed at, with a hard-coded
+	MIDI number in a package that carries none.
+	"""
+
+	steps = adapter.StepGrid(
+		FakeComposition(), rows=["kick"], steps=4, beats=1,
+		data_key="drums", name="drums")
+
+	assert steps.declaration()["velocity_range"] == list(adapter.VELOCITY_RANGE)
+	assert _grid()[0].declaration()["velocity_range"] == list(adapter.VELOCITY_RANGE)
+
+
 def test_a_row_the_pattern_does_not_have_is_refused () -> None:
 	"""Row names are the composition's, so a panel asking for another is wrong."""
 

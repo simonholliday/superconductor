@@ -219,6 +219,45 @@ def test_a_transposition_is_kept_and_bounded_by_what_the_app_declared () -> None
 		superconductor.controls.apply_change(state, MOVED, "bass/transpose", 1.5)
 
 
+def test_a_grid_that_declared_no_range_cannot_be_transposed_at_all () -> None:
+	"""#2435, Simon's decision of 2026-09-10: *we cannot assume units in any
+	interface.*
+
+	This read `declaration.get("transpose_range", [-24, 24])` — the service
+	supplying a musical bound for an app that declared none, which is the one
+	thing this module's own docstring forbids twice.  Two octaves is somebody's
+	taste rather than a fact, and the next two apps do not work in semitones at
+	all.
+
+	**Refusing costs nothing and is the honest answer.**  Every note grid this
+	package's own adapter builds declares a range, and the panel draws no
+	transpose buttons for a control without one — so nothing is offered that is
+	then refused.  What used to happen instead was that a value inside a range
+	nobody had declared was accepted and stored, and a panel reloading read it
+	back as though the app had agreed to it.
+	"""
+
+	silent: dict[str, typing.Any] = {
+		"bass": {"type": "note_grid", "rows": ["C2", "D2"], "steps": 4, "beats": 1},
+	}
+
+	state: dict[str, typing.Any] = {}
+
+	with pytest.raises(superconductor.controls.ControlError, match="no range"):
+		superconductor.controls.apply_change(state, silent, "bass/transpose", 0)
+
+	# The control's own entry is made before the change is dispatched, so what
+	# is asserted is that nothing was *written into* it.
+	assert "transpose" not in state.get("bass", {}), \
+		"a transposition was stored against a grid that declared no range"
+
+	# And the same value against a grid that *did* declare one, so this is about
+	# the declaration rather than about the number.
+	superconductor.controls.apply_change(state, MOVED, "bass/transpose", 0)
+
+	assert state == {"bass": {"transpose": 0}}
+
+
 def test_labels_and_unreachable_are_kept_and_checked_against_the_rows () -> None:
 	"""Held and never interpreted — only the app knows a row is a pitch — but a
 	copy naming a row this grid does not have could not have come from it."""
