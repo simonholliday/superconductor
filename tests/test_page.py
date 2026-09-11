@@ -1650,6 +1650,76 @@ def test_a_pool_menu_stays_open_while_several_are_picked (
 	playwright_api.expect(panel.locator(".options")).to_have_count(0, timeout=5_000)
 
 
+def _depths (panel: typing.Any) -> dict[str, int]:
+	"""Each block on the page, by name, against where it is in the stacking order."""
+
+	return typing.cast(dict[str, int], panel.evaluate("""() => Object.fromEntries(
+		[...document.querySelectorAll('.part')].map(
+			(one) => [one.dataset.part, Number(getComputedStyle(one).zIndex)]))"""))
+
+
+def _on_top (depths: dict[str, int]) -> str:
+	"""The block stacked above every other."""
+
+	return max(depths, key=lambda name: depths[name])
+
+
+def test_an_open_menu_is_drawn_above_every_block (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-11: an arpeggio's direction opened its list *under* the
+	block above, so a choice was being made blind.
+
+	A block's `z-index` is its depth, which makes each block a stacking context,
+	so a menu's own 900 only ever counted inside its block.  The fixture's menu
+	opens upward over the note set; raising the note set first — from the bar's
+	list, the way a person brings a buried block back — is what put it on top."""
+
+	part = _open_a_chord(panel, fake_app)
+	panel.locator(".bar .inventory button", has_text="Notes").click()
+	assert _on_top(_depths(panel)) == "notes", "the note set was not raised"
+
+	part.locator('.setting[data-field="pitches"] .picker').click()
+	panel.wait_for_selector(".options", timeout=5_000)
+
+	covered = panel.evaluate("""() => [...document.querySelectorAll('.options button')]
+		.filter((one) => {
+			const at = one.getBoundingClientRect();
+			const hit = document.elementFromPoint(at.left + at.width / 2, at.top + at.height / 2);
+			return !(hit && hit.closest('.options'));
+		})
+		.map((one) => one.textContent)""")
+
+	assert covered == [], f"options drawn under something else: {covered}"
+
+	# **In the top layer**, which is the half raising the block cannot give: every
+	# cable's fittings are on a sheet above all the blocks.
+	assert panel.locator(".options").evaluate("(menu) => menu.matches(':popover-open')"), \
+		"the menu is not in the top layer"
+
+
+def test_working_a_control_brings_its_block_to_the_front_and_playing_does_not (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-11: *when a control is activated, its parent panel is first
+	brought to the front, as happens when we tap and drag.*
+
+	With the same exception the cables have (#2426): tapping a step plays it, and
+	the most-tapped surface here would otherwise reshuffle the page on every hit."""
+
+	part = _open_a_chord(panel, fake_app)
+	panel.locator(".bar .inventory button", has_text="Notes").click()
+	assert _on_top(_depths(panel)) == "notes"
+
+	part.locator('.setting[data-field="pitches"] .picker').click()
+	depths = _depths(panel)
+
+	assert _on_top(depths) == "stack/one", f"working the picker left it buried: {depths}"
+
+	panel.locator(conftest.cell("grid/kick/1")).click()
+	after = _depths(panel)
+
+	assert _on_top(after) == "stack/one", f"playing a step raised its grid: {after}"
+
+
 def test_a_short_pool_is_drawn_flat_and_a_second_tap_takes_one_back_out (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Few enough to take in at a glance are laid out flat, as a choice's are.
@@ -5549,6 +5619,51 @@ def test_a_routed_note_is_drawn_apart_from_an_invented_one (
 	assert panel.locator('.part[data-part="grid"] .cell.ghost.routed').count() == 1
 	assert routed < invented / 2, \
 		f"a routed note is drawn like an invented one: {routed}px against {invented}px"
+
+
+def test_a_note_a_transform_reshaped_is_marked_in_its_corner_not_as_a_new_note (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-11: a swing layer's *"influence appears on the pattern grid
+	in the same way as generated notes. In fact it is not generating notes, but
+	moving them."*
+
+	The read-back sees a moved note as a new one and credits the transform with
+	it, which is true and was drawn as a lie: a generator's round dot on every
+	step somebody had tapped.  A transform's note is marked in the cell's corner,
+	and the middle stays the note's own."""
+
+	_open_the_stack(panel)
+
+	fake_app.confirm("stack/layers", [
+		{"id": "made", "generator": "euclidean", "index": 1, "bypassed": False, "params": {}},
+		{"id": "feel", "kind": "transform", "transform": "rotate", "index": 2,
+		 "bypassed": False, "params": {"steps": 1}},
+	], by="app")
+
+	_settled(panel)
+
+	_realised(panel, fake_app,
+	          {"kick": {"4": 100}, "snare": {"1": 100}},
+	          sources={"kick": "feel", "snare": "made"})
+
+	def mark (path: str) -> dict[str, float]:
+		return typing.cast(dict[str, float], panel.eval_on_selector(conftest.cell(path), """(one) => {
+			const cell = one.getBoundingClientRect();
+			const after = getComputedStyle(one, '::after');
+			return { right: parseFloat(after.right), top: parseFloat(after.top),
+			         width: parseFloat(after.width), cell: cell.width };
+		}"""))
+
+	assert panel.locator('.part[data-part="grid"] .cell.ghost.reshaped').count() == 1, \
+		"the transform's note is not drawn apart from a generator's"
+	assert panel.locator(f'{conftest.cell("grid/kick/4")}.on').count() == 1, \
+		"the reshaped note should sit on a step somebody tapped"
+
+	reshaped = mark("grid/kick/4")
+	invented = mark("grid/snare/1")
+
+	assert reshaped["right"] == 0 and reshaped["top"] == 0, f"not in the corner: {reshaped}"
+	assert invented["top"] > invented["cell"] / 4, f"a generator's dot moved into the corner too: {invented}"
 
 
 def test_a_quiet_generated_note_is_drawn_smaller_than_a_loud_one (

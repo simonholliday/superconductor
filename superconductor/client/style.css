@@ -1759,6 +1759,31 @@ html, body {
 	height: calc(clamp(4px, calc(var(--cell) * 0.5), 24px) * var(--struck, 1));
 }
 
+/* **A note a transform reshaped, rather than one anything added** (Simon,
+ * 2026-09-11).
+ *
+ * Swing adds nothing: it moves the notes above it in the stack.  The read-back
+ * cannot tell a moved note from a new one, so the transform was credited with
+ * every note it touched and drew a generator's round dot on each step somebody
+ * had tapped.  A corner says *this note was reshaped here* — the note is still
+ * the one that was here, so the mark leaves the middle of the cell to it.
+ *
+ * Full strength on a lit face, where it lands most, because the face beneath is
+ * the note itself and a faint corner on it would read as nothing.  `--on-ink` on
+ * `--on` is the pair the theme tests already hold at 4.5:1. */
+.cell.ghost.reshaped::after {
+	left: auto;
+	right: 0;
+	top: 0;
+	transform: none;
+	width: clamp(4px, calc(var(--cell) * 0.42), 20px);
+	height: clamp(4px, calc(var(--cell) * 0.42), 20px);
+	border-radius: 0 max(1px, calc(var(--cell) * 0.09)) 0 0;
+	clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+.cell.on.ghost.reshaped::after { opacity: 0.85; }
+
 /* The ring is the request, never the value: the face below it is always what
    the sequencer actually holds. It clears when the change is confirmed. */
 .cell.pending::after {
@@ -3281,6 +3306,16 @@ html, body {
 	   thing that knows where the button ended up. */
 	position: fixed;
 	z-index: 900;
+
+	/* **A popover, in the top layer** (see `raised` in `app.js`), and the
+	   browser's own popover rule centres one in the viewport with `inset: 0`
+	   and `margin: auto`, and paints it in the system's colours.  Undone here so
+	   the component's own `left` and `top` place it; the `z-index` above stays
+	   for a browser without popovers, where the menu is drawn where it is. */
+	inset: auto;
+	margin: 0;
+	color: inherit;
+
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;

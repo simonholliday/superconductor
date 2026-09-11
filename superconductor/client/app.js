@@ -711,12 +711,20 @@ function Grid ({ control, rows, steps, beats, weights, cells, drawn, kinds, visi
 					   like here; an invented one stays round. */
 					const routed = ghost && kinds && kinds[struck.from] === "route";
 
+					/* **And a note a transform reshaped, which is neither.** A
+					   transform does not add notes, it moves or reshapes the ones
+					   above it — but the read-back sees a moved note as a new one
+					   and credits the transform, so swing drew a generator's dot on
+					   every step somebody had tapped (Simon, 2026-09-11). A corner
+					   rather than a dot: the note is still the one that was here. */
+					const reshaped = ghost && kinds && kinds[struck.from] === "transform";
+
 					return html`
 						<div
 							key=${path}
 							data-path=${path}
 							class=${["cell", on ? "on" : "", ghost ? "ghost" : "",
-								routed ? "routed" : "",
+								routed ? "routed" : "", reshaped ? "reshaped" : "",
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
 								step % beatEvery(steps, beats) === 0 ? "downbeat" : ""]
@@ -1115,6 +1123,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 							|| Number(held.v || 0) > Number(loudest.v || 0) ? held : loudest, null);
 
 					const routed = struck && kinds && kinds[struck.from] === "route";
+					const reshaped = struck && kinds && kinds[struck.from] === "transform";
 
 					const asked = noteAt(notes[row], step * divisions);
 					const owner = asked ? `${name}/${row}/${asked.at}` : path;
@@ -1125,7 +1134,7 @@ function NoteGrid ({ name, rows, steps, beats, divisions, notes, drawn, kinds, w
 							data-path=${path}
 							class=${["cell",
 								struck ? "ghost" : "",
-								routed ? "routed" : "",
+								routed ? "routed" : "", reshaped ? "reshaped" : "",
 								pending.has(owner) && !asked ? "pending" : "",
 								failed.has(owner) && !asked ? "failed" : "",
 								step % per === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
@@ -1615,6 +1624,25 @@ function Setting ({ field, held, onSet }) {
 
 	const [menuBox, onGlass] = useOnGlass(open);
 
+	/* **Drawn in the top layer, above every block and every cable** (2026-09-11).
+	   `fixed` escapes a block's clip and its containing block, and that is all it
+	   escapes: every block carries a `z-index` of its own — its depth (#2415) —
+	   which makes it a stacking context, so the menu's own 900 only ever counted
+	   inside its block. Simon opened an arpeggio's direction and the list was
+	   under the block above. Raising the block on the press fixes that much; the
+	   fittings of every cable are drawn on a sheet above all the blocks, and only
+	   the top layer is above that.
+
+	   **Shown from the ref, before `useOnGlass` measures it**, because a popover
+	   not yet shown is `display: none` and measures as nothing — the hook would
+	   then shift the menu by the whole margin for no reason. A browser without
+	   popovers ignores the attribute and draws the menu where it always did. */
+	const raised = useCallback((element) => {
+		menuBox.current = element;
+
+		if (element && element.showPopover && !element.matches(":popover-open")) element.showPopover();
+	}, [menuBox]);
+
 	/* Both a choice and a choices open the same menu in the same place, so the
 	   placement is written once. Two copies of this drifted apart in an earlier
 	   life of the settings panel and only the one being looked at was fixed. */
@@ -1800,7 +1828,8 @@ function Setting ({ field, held, onSet }) {
 					<div
 						role="group"
 						class="options"
-						ref=${menuBox}
+						popover="manual"
+						ref=${raised}
 						style=${menuStyle()}
 					>
 						${options.map((option) => html`
@@ -1919,7 +1948,7 @@ function Setting ({ field, held, onSet }) {
 						: `${labelOf(chosen[0])} +${chosen.length - 1}`}<i>▾</i></button>
 
 				${open && where && html`
-					<div role="group" class="options" ref=${menuBox} style=${menuStyle()}>
+					<div role="group" class="options" popover="manual" ref=${raised} style=${menuStyle()}>
 						${options.map((one) => option(one.value, one.label || one.value))}
 					</div>`}
 			</div>`;
@@ -2897,10 +2926,25 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 			     scrollbar rather than a pattern, and still raises.
 			
 			     It is let go of at the document, which is the only listener a
-			     pointer captured by a slider cannot slip past. */ ""}
-			onPointerDown=${(event) => {
-				if (event.target.closest(".scroller, .lane")) return;
+			     pointer captured by a slider cannot slip past.
 
+			     **And the same press brings the block itself to the front**
+			     (Simon, 2026-09-11): a control on a block half under another was
+			     being worked blind — an arpeggio's direction opened its list
+			     under the block above. Only the order changes, never the DOM
+			     (blocks are drawn in a fixed order and stacked by `z-index`), so
+			     a slider holding the pointer keeps it; and the order is kept
+			     only when a drag next settles, so this writes nothing.
+
+			     **A keyboard's keys are worked, not played**, although they sit
+			     in a `.scroller` since #2389 — choosing notes is a question
+			     about what the set feeds, and asking the scroller alone had
+			     quietly stopped them raising anything. */ ""}
+			onPointerDown=${(event) => {
+				if (event.target.closest(".lane")
+					|| (event.target.closest(".scroller") && !event.target.closest(".keyboard"))) return;
+
+				onRaise(name);
 				onTouch(name, event.pointerId);
 			}}
 		>
@@ -5589,6 +5633,11 @@ function Panel () {
 	const rearrange = useCallback((name, at) => {
 		setMoved((was) => {
 			const forPage = was[pageId] || {};
+
+			/* **Already on top is nothing to do**, and saying so keeps the page
+			   from redrawing: every press on a block raises it now, and the same
+			   state handed back is how a hook is told nothing changed. */
+			if (!at && (forPage.order || []).at(-1) === name) return was;
 			const order = [...(forPage.order || []).filter((one) => one !== name), name];
 			const placed = at
 				? { ...(forPage.placed || {}),
