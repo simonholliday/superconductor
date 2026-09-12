@@ -765,18 +765,6 @@ function BeatStrip ({ steps, beats, tight }) {
  * spells the other out; a column marks both at once in the faces every other
  * control here uses. "B — A is playing" has nothing left to add, and the row it sat
  * in goes back to the pattern. */
-function variantsBeside (count, rows) {
-	return count > 0 && count <= rows;
-}
-
-/* Whether a grid's variants stand in a column beside it or in a row above it: a
- * column where the block's own contents are at least as tall as there are
- * variants, and the row otherwise.
- *
- * **Asked once and read by both halves** — the fit, which solves for a cell size
- * before anything is drawn, and the render, which draws it. Two copies of this
- * rule is the fit sizing a block for one shape and the page drawing the other,
- * which is a block a cell out with nothing failing (`188722c`). */
 function Variants ({ ids, playing, cue, showing, column, steps, emptyShown,
                      onShow, onCue, onStartFrom }) {
 	const narrow = steps < ids.length * 2;
@@ -863,6 +851,80 @@ function Variants ({ ids, playing, cue, showing, column, steps, emptyShown,
 					<span class="elsewhere" style=${{ gridColumn: `span ${left}` }}>
 						<b>${showing}</b><span>${` — ${playing} is playing`}</span>
 					</span>`)}
+		</div>`;
+}
+
+/* Whether a grid's variants stand in a column beside it or in a row above it: a
+ * column where the block's own contents are at least as tall as there are
+ * variants, and the row otherwise.
+ *
+ * **Asked once and read by both halves** — the fit, which solves for a cell size
+ * before anything is drawn, and the render, which draws it. Two copies of this
+ * rule is the fit sizing a block for one shape while the page drew the other,
+ * which is a block a cell out with nothing failing (`188722c`). */
+function variantsBeside (count, rows) {
+	return count > 0 && count <= rows;
+}
+
+/* The letters a page's grids have in common, which is what a scene can cue
+ * (#2489, #2485 Q8).
+ *
+ * **Fewer than two grids is no scene at all**, and that is the rule rather than
+ * an optimisation: on a page carrying one grid with variants, a scene letter
+ * would do exactly what that grid's own column already does a few inches to the
+ * right. A control that can only duplicate another is worse than none (#2107).
+ * Measured on the rig: of five pages, Band carries three such grids and Notes
+ * two, and the other three carry one each.
+ *
+ * **Shared, so the intersection** — #2485 says *"a row of the page's shared
+ * ids"*. In the first grid's order, because the ids are the composition's and
+ * their order is a statement (#2144); and empty where two grids agree about
+ * nothing, which draws no row rather than a row that cues half a page.
+ *
+ * Pure and module-level so it can be sliced out and run against a table
+ * (`tests/test_client.py`), which is the only kind of test the rule deciding
+ * whether a control exists at all can usefully have. */
+function scenesFor (lists) {
+	if (lists.length < 2) return [];
+
+	const [first, ...rest] = lists;
+
+	return first.filter((id) => rest.every((each) => each.includes(id)));
+}
+
+/* One row of those letters, on the bar beside the transport (#2485 Q8).
+ *
+ * **Switching section is a transport-like act**, so it sits with play and tempo
+ * rather than inside any one block — Simon's decision of 2026-09-11, and the
+ * crowding it was made against is now measured: at 1920x1080 the bar already
+ * wraps to two lines with the layout unlocked, and the last line has 221px spare
+ * on the Band page. Four letters need about 204px of it.
+ *
+ * **Which is why there is no label on the group.** A word here would take it to
+ * roughly 260px and cost a third line of chrome on the two pages that are the
+ * only ones to carry a scene row at all. The letters say what they are by lighting
+ * together with the grids they cue; the label lives in `aria-label`, where it
+ * costs nothing. Worth revisiting if the bar is ever less full — and worth
+ * knowing that a fifth letter is about 49px, so eight would not fit either.
+ *
+ * **It only cues.** There is nothing to show or edit — a scene has no notes of
+ * its own — so it is one target per letter, acting on press like every ▶ (#2046).
+ * Lit when every grid it covers plays that letter, and blinking while any of them
+ * is cued: it never claims a state the grids do not hold, and because each grid
+ * lands at its own cycle boundary (`lands_every`) a scene arrives pattern by
+ * pattern, which the blinking says honestly until the last one lands. */
+function Scenes ({ states, onCue }) {
+	return html`
+		<div class="scenes" role="group" aria-label="scenes">
+			${states.map(({ id, lit, cued }) => html`
+				<button
+					key=${id}
+					class=${[lit ? "playing" : "", cued ? "cued" : ""].filter(Boolean).join(" ")}
+					aria-label=${`play ${id} on every pattern on this page`}
+					title=${`play ${id} on every pattern on this page`}
+					data-scene=${id}
+					onPointerDown=${(event) => { event.preventDefault(); onCue(id); }}
+				>${id}</button>`)}
 		</div>`;
 }
 
@@ -6584,11 +6646,41 @@ function Panel () {
 			</div>`;
 	}
 
+	/* **The scene row: the letters every grid on this page has** (#2489).
+	 *
+	 * Read off the blocks this page draws rather than off everything the app
+	 * declared, because a scene is a fact about an arrangement — `gridNames` is
+	 * already filtered to the page, which is what makes `drawn` the right source.
+	 * `key === control` keeps a stack or a settings block from counting as the
+	 * grid it belongs to, the same guard `stripFor` needs (#2211).
+	 *
+	 * A letter is lit when **every** grid plays it and blinking when **any** has
+	 * it cued, so the row never claims a state the grids do not hold. Pressing one
+	 * does to each grid exactly what pressing that grid's own ▶ would, by calling
+	 * the same function: a second rule for "cue" here is how the two would come to
+	 * disagree about a press that cancels. */
+	const sceneGrids = drawn
+		.filter((one) => one.key === one.control)
+		.map((one) => ({ name: one.control, variant: variantOf(one.control) }))
+		.filter((one) => one.variant);
+
+	const scenes = scenesFor(sceneGrids.map((one) => one.variant.ids)).map((id) => ({
+		id,
+		lit: sceneGrids.every((one) => one.variant.playing === id),
+		cued: sceneGrids.some((one) => one.variant.cue === id),
+	}));
+
+	const cueScene = (id) => {
+		for (const one of sceneGrids) cueFor(one.name, one.variant, id);
+	};
+
 	return html`
 		<div class="bar">
 			${transportName && html`
 				<${Transport} control=${controls[transportName]} name=${transportName}
 					fields=${transportFields} up=${up} anchor=${anchor} onSet=${request} />`}
+			${scenes.length > 0 && html`
+				<${Scenes} states=${scenes} onCue=${cueScene} />`}
 			<${Pages} pages=${pages} current=${page && page.id} onChoose=${choosePage} />
 			<button
 				class=${`latch ${locked ? "held" : ""}`}

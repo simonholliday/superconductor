@@ -452,6 +452,83 @@ def test_both_languages_agree_about_a_parameter_that_opens_unset () -> None:
 		f"the two languages disagree: JavaScript said {said}")
 
 
+def test_the_client_alone_decides_which_letters_a_scene_offers () -> None:
+	"""**A scene is the letters a page's grids have in common** (#2489, #2485 Q8).
+
+	The first slice here with **no Python twin to compare against**, and that is
+	the point rather than a gap: which grids share a page is a fact about an
+	arrangement, and the service has no view about arrangements.  So the table
+	carries its own answers.
+
+	What it guards is the two decisions easiest to undo by accident.  **Fewer than
+	two grids is no scene at all** — on a page carrying one grid with variants a
+	scene letter would do exactly what that grid's own column does a few inches to
+	the right, and a control that can only duplicate another is worse than none
+	(#2107).  And **shared means the intersection**, in the first grid's order, so
+	two grids agreeing about nothing draw no row rather than a row that cues half
+	a page.
+	"""
+
+	node = _node()
+
+	if node is None:
+		pytest.skip("no JavaScript engine on this machine")
+
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+
+	# Sliced rather than imported, for the reason every slice here is: the module
+	# reaches for the DOM as it loads.
+	start = source.index("function scenesFor (lists) {")
+	end = source.index("\n}\n", start)
+	sliced = source[start:end + 3]
+
+	assert "filter" in sliced, f"the slice did not catch the function: {sliced!r}"
+
+	cases: list[list[list[str]]] = [
+		# Nothing to cue: no grid at all, and the one-grid page that is the rule.
+		[],
+		[["A", "B", "C", "D"]],
+
+		# The rig's own shape — the same four on every grid a page carries.
+		[["A", "B", "C", "D"], ["A", "B", "C", "D"]],
+		[["A", "B", "C", "D"], ["A", "B", "C", "D"], ["A", "B", "C", "D"]],
+
+		# Shared means shared, and the order is the first grid's rather than
+		# sorted: the ids are the composition's and their order is a statement.
+		[["A", "B", "C"], ["B", "C", "D"]],
+		[["D", "C", "B", "A"], ["A", "B"]],
+		[["A", "B"], ["C", "D"]],
+		[["A", "B", "C"], ["A", "B", "C"], ["C"]],
+
+		# Names rather than letters, because a composition may declare names.
+		[["verse", "chorus"], ["chorus", "bridge"]],
+	]
+
+	expected = [
+		[],
+		[],
+		["A", "B", "C", "D"],
+		["A", "B", "C", "D"],
+		["B", "C"],
+		["B", "A"],
+		[],
+		["C"],
+		["chorus"],
+	]
+
+	driver = (f"{sliced}\n"
+	          f"const cases = {json.dumps(cases)};\n"
+	          "console.log(JSON.stringify(cases.map(scenesFor)));\n")
+
+	run = subprocess.run([str(node), "--input-type=module", "-"], input=driver,
+	                     capture_output=True, text=True, timeout=30)
+
+	assert run.returncode == 0, f"the client's own function would not run: {run.stderr}"
+
+	assert json.loads(run.stdout.strip()) == expected, (
+		f"the panel would offer the wrong letters: {run.stdout.strip()}")
+
+
 def test_a_panel_and_the_service_keep_the_same_note_for_the_same_frame () -> None:
 	"""The third cross-language twin, and the one for a pitched grid's cells (#2503).
 

@@ -8318,6 +8318,99 @@ def _play (which: str, grid: str = PHRASE) -> str:
 	return f'{grid} .variants .play[data-variant="{which}"]'
 
 
+def _scene (which: str) -> str:
+	"""The letter on the bar that cues one variant on every grid of the page."""
+
+	return f'.bar .scenes button[data-scene="{which}"]'
+
+
+def test_a_page_with_two_variant_grids_offers_a_scene_for_each_shared_letter (
+	panel: typing.Any) -> None:
+	"""**A scene is *cue B on every grid*** (#2489, #2485 Q8), on the bar beside
+	the transport, because switching section is a transport-like act rather than
+	anything belonging to one pattern.
+
+	The fixture's drums page carries two grids with variants — one drawing its
+	letters as a column and one as the row, which is deliberate: a scene is about
+	what the grids share and not about how either draws its own strip.  Both play A
+	to begin with, so A is the lit one.
+	"""
+
+	_go_to_the_variants(panel)
+
+	assert [one.inner_text().strip() for one in panel.locator(".bar .scenes button").all()] \
+		== ["A", "B", "C"]
+
+	# Lit only when *every* grid it covers plays that letter, so the row never
+	# claims a state the grids do not hold.
+	assert "playing" in (panel.locator(_scene("A")).get_attribute("class") or "")
+	assert "playing" not in (panel.locator(_scene("B")).get_attribute("class") or "")
+
+
+def test_a_scene_cues_its_letter_on_every_grid_the_page_carries (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""One press, one cue per grid — and the letter blinks until **every** grid
+	says it is playing, because each lands at its own cycle boundary
+	(`lands_every`) so a scene arrives pattern by pattern (#2485 Q8).
+
+	Pressing a scene does to each grid exactly what pressing that grid's own ▶
+	would, by calling the same function: a second rule for *cue* on the bar is how
+	the two would come to disagree about a press that cancels.
+	"""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(_scene("B")).click()
+
+	asked = {one: fake_app.await_set(f"{one}/cue") for one in ("phrase", "tiny")}
+
+	assert [one["v"] for one in asked.values()] == ["B", "B"], (
+		f"a scene did not reach every grid on the page: {asked}")
+
+	for name, one in asked.items():
+		fake_app.confirm(f"{name}/cue", "B", by="panel",
+		                 client=one.get("client"), seq=one.get("seq"))
+
+	playwright_api.expect(panel.locator(_scene("B"))).to_have_class(
+		re.compile(r"\bcued\b"), timeout=5_000)
+
+	# **One grid landing is not the scene landing.**  It goes on blinking, and is
+	# not yet lit, until the second one says so too.
+	fake_app.confirm("phrase/playing", "B", by="app")
+	fake_app.confirm("phrase/cue", None, by="app")
+
+	playwright_api.expect(panel.locator(_scene("B"))).to_have_class(
+		re.compile(r"\bcued\b"), timeout=5_000)
+	assert "playing" not in (panel.locator(_scene("B")).get_attribute("class") or ""), (
+		"the scene claimed to be playing while one of its grids was still on A"
+	)
+
+	fake_app.confirm("tiny/playing", "B", by="app")
+	fake_app.confirm("tiny/cue", None, by="app")
+
+	playwright_api.expect(panel.locator(_scene("B"))).to_have_class(
+		re.compile(r"\bplaying\b"), timeout=5_000)
+	assert "cued" not in (panel.locator(_scene("B")).get_attribute("class") or "")
+
+
+def test_a_page_with_nothing_to_share_offers_no_scene (panel: typing.Any) -> None:
+	"""No row rather than an empty one, and no row on a page whose grids have no
+	variants at all — a scene that cues nothing is chrome that does nothing.
+
+	The one-grid case is the other half of this rule and is asserted where it can
+	be: `tests/test_client.py` drives `scenesFor` against a table, because six
+	pages is already `PAGE_BUTTONS` and a seventh would turn the row of named
+	buttons into previous-and-next, taking every test that reaches a page by name
+	down with it.
+	"""
+
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector('.part[data-part="grid"]', timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator(".bar .scenes").count() == 0
+
+
 def test_a_grid_with_variants_draws_a_letter_and_a_play_for_each (
 	panel: typing.Any) -> None:
 	"""Ableton's clip slot (#2485 Q2): a tab to show each variant and a ▶ to play
