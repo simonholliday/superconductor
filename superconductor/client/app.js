@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.33.0";
+const CONTRACT = "1.34.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -2695,11 +2695,17 @@ function Contribution ({ name, layer, layers, offered, why, onSet }) {
 		<div class="recipe">
 			<div class="grid params" style=${style}>
 				<div class="layer" style=${full}>
-					<${Toggle}
-						on=${!layer.bypassed}
-						title=${layer.bypassed ? "bring this back" : "silence this"}
-						onFlip=${() => send(layers.map((one) =>
-							one.id === layer.id ? { ...one, bypassed: !one.bypassed } : one))} />
+					${/* **The mute lives in the footer** (#2511, Simon 2026-09-12).
+
+					     A header is information and a footer is control, and this
+					     was the one place the panel disagreed with itself: every
+					     other block's mute sits bottom left in its footer, and a
+					     generator's sat at the head of its parameters. A generator
+					     block had no footer at all until now.
+
+					     What is left in this row is what it says rather than what it
+					     does — which of them runs, and the two buttons that change
+					     that. */ ""}
 					${/* Which of them runs first, said in words because the windows no
 					     longer say it by sitting on top of one another. Left off when
 					     there is only one, where it would be noise. */ ""}
@@ -2966,13 +2972,15 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSettings, settingsOpen }) {
+function Footer ({ onAdd, adds, onSend, onClear, live, onLive, held, onHold, onRedeal,
+                   outlet, onSettings, settingsOpen }) {
 	/* **An outlet counts, and it did not** (#2374). This guard is what keeps a
 	   block from growing an empty strip, and it was written when everything in
 	   the footer was a button — so the first block whose only footer content was
 	   the fitting got no footer at all, and a note set had nothing to pull a
 	   cable out of. A grid never showed it because a grid can also be cleared. */
-	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings && !outlet) {
+	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings && !outlet
+		&& !onHold) {
 		return null;
 	}
 
@@ -2985,6 +2993,45 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
 				<span class="legend">live</span>
 				<${Toggle} on=${live}
 					title=${live ? "silence this" : "bring this back"} onFlip=${onLive} />`}
+			${/* **Hold the bar this layer is playing, and deal it another** (#2263).
+
+			     Here rather than in the header because **a header is information and
+			     a footer is control** — Simon, 2026-09-12, who also named the
+			     inconsistency that made it obvious: a generator's mute sat at the
+			     head of its parameters while every other block's sits here, first,
+			     bottom left. It is one convention, and the generator was the
+			     exception to it (#2511).
+
+			     **Drawn as a latch, which is what it is** — lit while held, like the
+			     settings latch above: a second press puts it back, so a button that
+			     only ever held would need a different word for letting go.
+
+			     **The word is narrower than *freeze* on purpose.** What holds still
+			     is this layer's own draws; harmony, key, section and cycle go on
+			     moving underneath it, which is what somebody wants for a rhythm and
+			     is exactly the thing worth saying rather than leaving to be found
+			     out. The sentence lives in the title, where it costs no width.
+
+			     **And "another" rather than "again"**, because the store's *start
+			     again* already owns that word on a control, and one concept gets one
+			     word at each layer it appears in (#2403). It is drawn only while
+			     something is held, since there is nothing to re-deal otherwise
+			     (#2107). */ ""}
+			${onHold && html`
+				<button
+					class=${`offer hold ${held ? "chosen" : ""}`}
+					aria-pressed=${held ? "true" : "false"}
+					title=${held
+						? "let this layer move again"
+						: "hold the bar this layer is playing — its own notes only; harmony, key and section still move"}
+					onPointerDown=${(event) => { event.preventDefault(); onHold(); }}
+				>hold</button>`}
+			${onRedeal && held && html`
+				<button
+					class="offer another"
+					title="hold a different bar — this layer is dealt another"
+					onPointerDown=${(event) => { event.preventDefault(); onRedeal(); }}
+				>another</button>`}
 			${/* **"Add a contribution" was ours, not a musician's.** Simon: not an
 			     intuitive way to connect items. A *source* is what the protocol
 			     already calls the thing being added, what a mixer calls what
@@ -5797,6 +5844,13 @@ function Panel () {
 					control: name, layer, layers: held, offered: generator, feeds,
 					voice: voiceOf(generator, layer),
 
+					/* **A layer's mute, read the way a grid's is** (#2511), so the
+					   footer draws one control rather than two. Inverted, because a
+					   layer says what it is *not* doing: `bypassed` is the app's
+					   word for silenced, and `live` is what this panel calls the
+					   state everywhere else. */
+					live: !layer.bypassed,
+
 					/* **Where a note cable may land, and where one already has.**
 					 *
 					 * Every input rather than the first, because the drop below
@@ -6844,12 +6898,68 @@ function Panel () {
 							settingsOpen=${Boolean(settingsFor[one.control]
 								&& showing.has(settingsFor[one.control]))}
 							live=${one.live}
+							${/* A contribution sets `live` from `!bypassed` now
+							     (#2511), so a silenced generator block dims like a
+							     muted grid already does — "a block that has been
+							     silenced says so from across the room". */ ""}
 							${/* **Asked of the state, not of the clear.** Every block
 							     with a mute happened also to be clearable, so the
 							     gate borrowed that — and the first block that could
 							     be silenced without being emptied got no switch. */ ""}
-							onLive=${one.live !== undefined
+							${/* **A layer's mute is not a grid's**, and this wrote a
+							     grid's for both until #2511. A grid is silenced at
+							     `enabled` on the control; a layer is `bypassed`
+							     inside the whole stack, with the sense inverted —
+							     so writing `enabled` here would have silenced the
+							     pattern a generator builds rather than the
+							     generator. The stack is written whole because that
+							     is how a stack is written (#2413). */ ""}
+							onLive=${one.layer
+								? (want) => request(`${one.control}/layers`,
+									one.layers.map((each) => each.id === one.layer.id
+										? { ...each, bypassed: !want }
+										: each))
+								: one.live !== undefined
 								? (want) => request(`${one.control}/enabled`, want)
+								: undefined}
+							${/* **Hold this layer at the bar it is playing** (#2263),
+							     and deal it another. Only a layer has a stream to
+							     hold, and a routed grid has none of its own — it
+							     plays what is drawn on it — so neither is offered
+							     there and the app refuses one anyway.
+
+							     The panel asks with `true` and never invents the
+							     number: which base the bar was built with is not a
+							     thing the glass knows, and a person holds a layer
+							     because of what they just heard, so only the app can
+							     answer it (#1965, #2374). */ ""}
+							held=${Boolean(one.layer && one.layer.dealt != null)}
+							onHold=${one.layer && one.layer.kind !== "route"
+								? () => request(`${one.control}/layers`,
+									one.layers.map((each) => {
+										if (each.id !== one.layer.id) return each;
+
+										if (each.dealt == null) return { ...each, dealt: true };
+
+										/* Off is the field **gone**, not a false
+										   beside it: absent is where every layer
+										   starts and what every stack stored before
+										   this one holds. `delete` rather than a
+										   destructuring rest, because a second
+										   `const` of one name in a function is a
+										   module that will not evaluate at all. */
+										const without = { ...each };
+
+										delete without.dealt;
+
+										return without;
+									}))
+								: undefined}
+							onRedeal=${one.layer && one.layer.kind !== "route"
+								? () => request(`${one.control}/layers`,
+									one.layers.map((each) => each.id === one.layer.id
+										? { ...each, dealt: true }
+										: each))
 								: undefined} />`}>
 					${one.rack
 						? html`

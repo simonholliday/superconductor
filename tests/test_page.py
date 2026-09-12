@@ -2368,6 +2368,138 @@ def test_a_layers_controls_are_not_clipped_at_the_smallest_cell_size (
 	assert spilling == [], f"these reach past the block: {spilling}"
 
 
+def test_a_generator_keeps_its_mute_in_its_footer_like_the_other_blocks (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Simon, 2026-09-12** (#2511): *"I see the header as being information not
+	control... Right now the on/off button is in the footer for items which have a
+	footer, but at the top of the control set for generators. This is
+	inconsistent."*
+
+	A generator block had no footer at all, so its mute sat at the head of its
+	parameters while every other block's sits bottom left in its footer — where
+	`Footer`'s own comment says it belongs, *"first, because silencing a thing is
+	the action a hand reaches for soonest"*.
+
+	**A layer's mute is not a grid's**, so the write is checked too: a grid is
+	silenced at `enabled` on the control, and a layer is `bypassed` inside the
+	whole stack with the sense inverted.  Writing a grid's for both would silence
+	the pattern a generator builds rather than the generator.
+	"""
+
+	_open_the_stack(panel)
+
+	part = '.part[data-part="stack/one"]'
+
+	assert panel.locator(f"{part} .part-foot .switch").count() == 1, "no mute in the footer"
+	assert panel.locator(f"{part} .layer .switch").count() == 0, "still a control in the header"
+
+	# **Pressed by its end, never its middle.**  Each end of a rocker *sets*
+	# rather than flips — `if (on !== want) onFlip(want)` — so pressing the one
+	# already down does nothing at all, which is what made the first version of
+	# this test read as a wiring fault when the wiring was fine.
+	assert _pressed_end(panel, f"{part} .part-foot .switch") == "on", (
+		"this layer is not live to begin with, so silencing it would press an end "
+		"that is already down and send nothing")
+
+	before = len(fake_app.sets)
+
+	panel.locator(f"{part} .part-foot .switch .end.no").click()
+
+	# **`settled` rather than `await_set`**, and not only because the latter takes
+	# no `since`: waiting for the *first* frame on a path is not waiting for the
+	# last (#2420, `f2d12c6`), and this path already carries whatever opening the
+	# stack sent — so the first match could be a stale frame from setup and the
+	# assertion would pass for the wrong reason.
+	sent = fake_app.settled("stack/layers", since=before)
+
+	assert sent, "the panel asked the app for nothing at all"
+
+	asked = sent[-1]
+	silenced = [one for one in asked["v"] if one["id"] == "one"]
+
+	assert silenced and silenced[0]["bypassed"] is True, (
+		f"a generator's mute did not silence that layer: {asked['v']}")
+
+
+def test_a_generator_offers_to_hold_the_bar_it_is_playing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2263, on the glass.  The panel asks with `true` and never invents the
+	number: which base the bar was built with is not a thing the glass knows, and
+	a person holds a layer because of what they just heard — so only the app can
+	answer it (#1965, #2374)."""
+
+	_open_the_stack(panel)
+
+	part = '.part[data-part="stack/one"]'
+	before = len(fake_app.sets)
+
+	panel.locator(f"{part} .part-foot .offer.hold").click()
+
+	# **`settled` rather than `await_set`**, and not only because the latter takes
+	# no `since`: waiting for the *first* frame on a path is not waiting for the
+	# last (#2420, `f2d12c6`), and this path already carries whatever opening the
+	# stack sent — so the first match could be a stale frame from setup and the
+	# assertion would pass for the wrong reason.
+	sent = fake_app.settled("stack/layers", since=before)
+
+	assert sent, "the panel asked the app for nothing at all"
+
+	asked = sent[-1]
+	held = [one for one in asked["v"] if one["id"] == "one"]
+
+	assert held and held[0]["dealt"] is True, (
+		f"the panel did not ask to be held, or invented a number: {asked['v']}")
+
+
+def test_another_is_offered_only_while_something_is_held (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Absent rather than dead when there is nothing to go back from** (#2107),
+	the rule the way back to unset already follows: there is nothing to re-deal
+	until a layer is being held.
+
+	And the face says which state it is in — lit while held, like the settings
+	latch, because a second press lets it go.
+	"""
+
+	_open_the_stack(panel)
+
+	part = '.part[data-part="stack/one"]'
+
+	assert panel.locator(f"{part} .part-foot .offer.another").count() == 0
+	assert "chosen" not in (
+		panel.locator(f"{part} .part-foot .offer.hold").get_attribute("class") or "")
+
+	# Held, as the app answers it: a number rather than the `true` that asked.
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3}, "dealt": 4242},
+	], by="app")
+
+	playwright_api.expect(panel.locator(f"{part} .part-foot .offer.hold")).to_have_class(
+		re.compile(r"\bchosen\b"), timeout=5_000)
+
+	assert panel.locator(f"{part} .part-foot .offer.another").count() == 1
+
+	before = len(fake_app.sets)
+
+	panel.locator(f"{part} .part-foot .offer.another").click()
+
+	# **`settled` rather than `await_set`**, and not only because the latter takes
+	# no `since`: waiting for the *first* frame on a path is not waiting for the
+	# last (#2420, `f2d12c6`), and this path already carries whatever opening the
+	# stack sent — so the first match could be a stale frame from setup and the
+	# assertion would pass for the wrong reason.
+	sent = fake_app.settled("stack/layers", since=before)
+
+	assert sent, "the panel asked the app for nothing at all"
+
+	asked = sent[-1]
+	again = [one for one in asked["v"] if one["id"] == "one"]
+
+	assert again and again[0]["dealt"] is True, (
+		f"asking for another bar did not ask the app to choose one: {asked['v']}")
+
+
 def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> None:
 	"""A part clips its own body so the playhead cannot widen the page, and a
 	menu drawn inside one is cut off by the same rule — which is not something a

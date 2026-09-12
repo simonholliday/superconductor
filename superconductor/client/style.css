@@ -3291,6 +3291,30 @@ html, body {
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
+/* --- Holding a layer's own stream (#2263) ---------------------------------
+ *
+ * **Filled means held**, which is what a filled face says everywhere else here:
+ * the page you are on, the variant that plays, the transport that is paused — a
+ * state you are in rather than an action you can take.
+ *
+ * The word is deliberately narrower than *freeze*.  What holds still is this
+ * layer's own draws; harmony, key, section and cycle go on moving underneath it,
+ * which is almost certainly what somebody wants for a rhythm and is exactly the
+ * thing that needs saying rather than discovering (#2263).  The sentence lives in
+ * the control's `title`, where it costs no width.
+ */
+.part-foot .offer.hold.chosen {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: var(--on-ink);
+	font-weight: 600;
+}
+
+/* **Absent rather than dead when there is nothing to go back from** (#2107), the
+   same rule the way back to unset follows: a re-deal only exists while a layer is
+   being held, so it is drawn then and not otherwise. */
+.part-foot .offer.another { color: var(--ink-quiet); }
+
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs
    none, works with one finger, and never claims a limit that was invented. */

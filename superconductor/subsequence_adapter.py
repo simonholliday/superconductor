@@ -2873,6 +2873,17 @@ class Recipe (Control):
 		self.link: "AppLink | None" = None
 		"""How a stack says what it realised, and where it finds the grid it feeds."""
 
+		self._dealt: int | None = None
+		"""The number this stack last built with, or None before the first build.
+
+		**Machinery rather than anything a panel edits or a store keeps** (#2263):
+		a person locks a layer *because* they liked what it just did, so the number
+		to hold is the one this build used and not the one the next build will
+		draw.  Kept here for that reason, and read by `_keep_stack` on the link
+		thread when a lock arrives — so nothing is ever written back from the clock
+		loop.
+		"""
+
 		self._seeds: dict[str, bool] = {}
 		"""Which layers will take a stream of their own, asked once each.
 
@@ -3009,6 +3020,26 @@ class Recipe (Control):
 			else:
 				one["generator"] = layer.get("generator")
 
+			# **The number this layer is held at** (#2263), carried rather than
+			# rebuilt away.  Absent means it follows the pattern's stream, which is
+			# every layer until somebody locks one — so it is written only when
+			# there is something to write, and a stack stored before this reads
+			# exactly as it always did.
+			#
+			# **This is the rebuild that loses a field.**  The dict above is built
+			# name by name, so anything not named here is gone by the time the
+			# build, the declaration or the store sees it — and this project has
+			# lost a field to exactly this rebuild three times.
+			#
+			# Only an integer is carried.  `true` is a panel asking to be held at
+			# whatever it is playing, and `_keep_stack` turns it into a number
+			# before it is ever stored, so one arriving here would be a bug rather
+			# than a state to preserve.
+			dealt = layer.get("dealt")
+
+			if isinstance(dealt, int) and not isinstance(dealt, bool):
+				one["dealt"] = int(dealt)
+
 			kept.append(one)
 
 		return kept
@@ -3091,6 +3122,15 @@ class Recipe (Control):
 				raise Refused(f"a layer cannot be a {kind}")
 
 			if kind == "route":
+				# **A route cannot be held** (#2263).  A routed grid plays what is
+				# drawn on it and draws no random numbers, so there is no stream to
+				# hold still — a lock there would be a control that can do nothing,
+				# which #2107 says is worse than none.  Refused rather than
+				# ignored: the panel does not offer one here, so a request for it
+				# is a fault in the caller and should be told so.
+				if entry.get("dealt") not in (None, False):
+					raise Refused("a routed grid has no stream of its own to hold")
+
 				source = entry.get("source")
 
 				if source not in self.sources:
@@ -3141,14 +3181,43 @@ class Recipe (Control):
 
 				kept[parameter] = checked
 
-			wanted.append({
+			one: dict[str, typing.Any] = {
 				"id": name,
 				"kind": kind,
 				running: generator,
 				"index": self._numbered(str(generator), name, entry, standing, counting),
 				"bypassed": bool(entry.get("bypassed", False)),
 				"params": {**self._opening(str(generator)), **kept},
-			})
+			}
+
+			# **Held at a number, or asking to be** (#2263).
+			#
+			# `true` is a panel saying *hold the bar I am hearing*, and only this
+			# side can answer it: the number is the base this stack last built
+			# with, remembered on the recipe. Substituted here, on the link
+			# thread, so nothing has to be written back from the clock loop and
+			# the panel learns the real number from the echo of its own write.
+			#
+			# Anything absent, false or null lets the layer follow the pattern's
+			# stream again, which is where every layer starts and where every
+			# stack stored before this one stays.
+			dealt = entry.get("dealt")
+
+			if dealt is True:
+				# **Refused rather than dropped**, because it is reachable: a
+				# panel can press this on a paused rig that has not built a bar
+				# yet, and there is genuinely nothing to hold. Silence there
+				# would be a switch that goes on and does nothing.
+				if self._dealt is None:
+					raise Refused(
+						"nothing has been built yet, so there is no bar to hold")
+
+				one["dealt"] = self._dealt
+
+			elif isinstance(dealt, int) and not isinstance(dealt, bool):
+				one["dealt"] = int(dealt)
+
+			wanted.append(one)
 
 		if self.layers() == wanted:
 			return False
@@ -3403,6 +3472,13 @@ class Recipe (Control):
 		# question of what goes in the key, not of a second mechanism.
 		base = self._base(pattern)
 
+		# **Remembered, so a lock can hold the bar somebody just heard** (#2263).
+		# One integer assignment per build, which is nothing on a path where the
+		# clock is paramount — and the alternative is worse than a cost: a lock
+		# answered at the *next* build would hold a bar nobody has heard yet.
+		if base is not None:
+			self._dealt = base
+
 		# **Read between the layers, not only around them.** A dot could say
 		# that *something* put a note there and not what — so Simon went looking
 		# for a generator behind a note the routed grid had contributed, and
@@ -3487,7 +3563,8 @@ class Recipe (Control):
 				continue
 
 			arguments = self._arguments(generator, layer["params"])
-			seed = self._seed_for(method, generator, str(layer["id"]), base)
+			seed = self._seed_for(method, generator, str(layer["id"]), base,
+			                      dealt=layer.get("dealt"))
 
 			if seed is not None:
 				arguments["seed"] = seed
@@ -3713,6 +3790,7 @@ class Recipe (Control):
 		generator: str,
 		layer_id: str,
 		base: int | None,
+		dealt: int | None = None,
 	) -> int | None:
 		"""The stream this layer draws from, or None to leave it on the pattern's.
 
@@ -3737,7 +3815,21 @@ class Recipe (Control):
 		4.5 and a second answer to a settled question.
 		"""
 
-		if base is None or not self._takes_seed(method, generator):
+		if not self._takes_seed(method, generator):
+			return None
+
+		# **A held layer is dealt the same number every cycle** (#2263), which is
+		# the whole of freezing one: the pattern's base moves with the music and a
+		# held one does not, so the bar repeats until somebody lets it go.
+		#
+		# Asked before `base`, and deliberately: a layer may be held on a pattern
+		# that has no stream of its own to draw a base from, and a person who
+		# locked it meant it. The gate above still applies — a generator that takes
+		# no `seed` is handed none, held or not.
+		if dealt is not None:
+			return zlib.crc32(f"{dealt}:{layer_id}".encode())
+
+		if base is None:
 			return None
 
 		return zlib.crc32(f"{base}:{layer_id}".encode())

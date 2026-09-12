@@ -778,7 +778,8 @@ def _apply_rack (
 	rack["grids"] = kept
 
 
-LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "transform", "params", "index")
+LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "transform", "params",
+                "index", "dealt")
 """What a layer carries that **this version has an opinion about**.
 
 Named so that everything else can be carried through untouched.  A field here is
@@ -896,6 +897,21 @@ def _readable_layers (
 
 		if isinstance(number, int) and not isinstance(number, bool) and number > 0:
 			layer["index"] = number
+
+		# **The number a held layer is dealt** (#2263), kept as the app answered
+		# it.  A panel asks to be held with `true` and only the app can say which
+		# number that is — the base it last built with — so what arrives here from
+		# an app is an integer and what arrives from a panel is an intention this
+		# service has no way to resolve.  Both are carried: the `true` goes to the
+		# app, which substitutes the number and answers with it.
+		#
+		# Judged rather than merely carried, like `index` above, because it is
+		# named in `LAYER_FIELDS` — anything else is dropped, so a stack cannot
+		# come back holding a string where a stream key belongs.
+		dealt = entry.get("dealt")
+
+		if dealt is True or (isinstance(dealt, int) and not isinstance(dealt, bool)):
+			layer["dealt"] = dealt
 
 		# **Everything else the app said, carried rather than dropped** (#2128).
 		# `LAYER_FIELDS` is what this version checks, not what a layer may hold:

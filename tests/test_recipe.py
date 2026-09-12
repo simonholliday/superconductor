@@ -1922,3 +1922,102 @@ def test_a_pattern_with_no_stream_of_its_own_is_left_exactly_as_it_was () -> Non
 
 	assert [name for name, _ in builder.calls] == ["euclidean"]
 	assert "seed" not in builder.calls[0][1]
+
+
+def test_holding_a_layer_makes_the_next_cycle_repeat_the_bar_just_played () -> None:
+	"""**The whole of #2263, and the reason the number has to be the app's.**
+
+	A person locks a layer *because* they liked what it just did.  So the number
+	stored is the base this stack **last built with** — remembered on the recipe
+	and substituted when a panel asks with ``true`` — and not the one the next
+	build would draw, which would hold a bar nobody has heard.
+
+	Asserted as the musical property rather than as an integer: play a cycle, hold
+	it, and the cycle after lands in the same place.
+	"""
+
+	recipe, _ = _recipe()
+	stream = random.Random(7)
+
+	first = _played(recipe, _stack("one"), stream)
+	moved = _played(recipe, _stack("one"), stream)
+
+	assert first[0] is not None
+	assert first != moved, "a layer was dealt the same stream two cycles running"
+
+	# Held at what the *second* cycle played, which is the bar being heard when
+	# the switch goes on.
+	recipe.apply(["layers"], [{"id": "one", "generator": "euclidean",
+	                           "params": {}, "dealt": True}])
+
+	assert _played(recipe, recipe.layers(), stream) == moved
+	assert _played(recipe, recipe.layers(), stream) == moved, "held for one cycle only"
+
+
+def test_a_held_layer_keeps_its_number_and_its_neighbours_go_on_moving () -> None:
+	"""Per layer, which is the part a shared stream could never have offered: before
+	#2233 locking one layer was meaningless because its neighbours moved its notes
+	anyway."""
+
+	recipe, _ = _recipe()
+	stream = random.Random(11)
+
+	_played(recipe, _stack("one", "two"), stream)
+
+	held = recipe.layers()
+	held[0]["dealt"] = True
+
+	recipe.apply(["layers"], held)
+
+	kept = recipe.layers()[0]["dealt"]
+	first = _played(recipe, recipe.layers(), stream)
+	second = _played(recipe, recipe.layers(), stream)
+
+	assert isinstance(kept, int) and not isinstance(kept, bool), (
+		f"the app answered a request to be held with {kept!r} rather than a number")
+	assert first[0] == second[0], "the held layer moved"
+	assert first[1] != second[1], "the layer beside it stopped moving too"
+
+
+def test_letting_go_puts_a_layer_back_on_the_pattern_own_stream () -> None:
+	"""Off is the field gone, which is where every layer starts and where every
+	stack stored before this one stays."""
+
+	recipe, _ = _recipe()
+	stream = random.Random(3)
+
+	_played(recipe, _stack("one"), stream)
+	recipe.apply(["layers"], [{"id": "one", "generator": "euclidean",
+	                           "params": {}, "dealt": True}])
+
+	assert "dealt" in recipe.layers()[0]
+
+	recipe.apply(["layers"], _stack("one"))
+
+	assert "dealt" not in recipe.layers()[0]
+	assert _played(recipe, recipe.layers(), stream) \
+		!= _played(recipe, recipe.layers(), stream), "it is still held"
+
+
+def test_asking_to_be_held_before_a_bar_has_been_built_is_refused () -> None:
+	"""**Reachable, so refused rather than dropped**: a panel can press this on a
+	paused rig that has not built anything yet, and there is genuinely no bar to
+	hold.  A switch that goes on and does nothing is the worse answer."""
+
+	recipe, _ = _recipe()
+
+	with pytest.raises(adapter.Refused, match="no bar to hold"):
+		recipe.apply(["layers"], [{"id": "one", "generator": "euclidean",
+		                           "params": {}, "dealt": True}])
+
+
+def test_a_routed_grid_cannot_be_held () -> None:
+	"""It plays what is drawn on it and draws no random numbers, so there is no
+	stream to hold still — and a control that can do nothing is worse than none
+	(#2107)."""
+
+	recipe, _ = _recipe()
+
+	with pytest.raises(adapter.Refused, match="no stream of its own"):
+		recipe.apply(["layers"], [{"id": "one", "kind": "route",
+		                           "source": "shared", "dealt": True}])
