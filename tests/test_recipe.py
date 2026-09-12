@@ -1924,7 +1924,7 @@ def test_a_pattern_with_no_stream_of_its_own_is_left_exactly_as_it_was () -> Non
 	assert "seed" not in builder.calls[0][1]
 
 
-def test_holding_a_layer_makes_the_next_cycle_repeat_the_bar_just_played () -> None:
+def test_locking_a_layer_makes_the_next_cycle_repeat_the_bar_just_played () -> None:
 	"""**The whole of #2263, and the reason the number has to be the app's.**
 
 	A person locks a layer *because* they liked what it just did.  So the number
@@ -1954,7 +1954,7 @@ def test_holding_a_layer_makes_the_next_cycle_repeat_the_bar_just_played () -> N
 	assert _played(recipe, recipe.layers(), stream) == moved, "held for one cycle only"
 
 
-def test_a_held_layer_keeps_its_number_and_its_neighbours_go_on_moving () -> None:
+def test_a_locked_layer_keeps_its_number_and_its_neighbours_go_on_moving () -> None:
 	"""Per layer, which is the part a shared stream could never have offered: before
 	#2233 locking one layer was meaningless because its neighbours moved its notes
 	anyway."""
@@ -1999,21 +1999,21 @@ def test_letting_go_puts_a_layer_back_on_the_pattern_own_stream () -> None:
 		!= _played(recipe, recipe.layers(), stream), "it is still held"
 
 
-def test_asking_to_be_held_before_a_bar_has_been_built_is_refused () -> None:
+def test_asking_to_be_locked_before_a_bar_has_been_built_is_refused () -> None:
 	"""**Reachable, so refused rather than dropped**: a panel can press this on a
 	paused rig that has not built anything yet, and there is genuinely no bar to
-	hold.  A switch that goes on and does nothing is the worse answer."""
+	lock.  A switch that goes on and does nothing is the worse answer."""
 
 	recipe, _ = _recipe()
 
-	with pytest.raises(adapter.Refused, match="no bar to hold"):
+	with pytest.raises(adapter.Refused, match="no bar to lock"):
 		recipe.apply(["layers"], [{"id": "one", "generator": "euclidean",
 		                           "params": {}, "dealt": True}])
 
 
-def test_a_routed_grid_cannot_be_held () -> None:
+def test_a_routed_grid_cannot_be_locked () -> None:
 	"""It plays what is drawn on it and draws no random numbers, so there is no
-	stream to hold still — and a control that can do nothing is worse than none
+	stream to pin — and a control that can do nothing is worse than none
 	(#2107)."""
 
 	recipe, _ = _recipe()

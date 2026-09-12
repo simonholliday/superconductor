@@ -229,7 +229,7 @@ def _stack () -> typing.Any:
 	return recipe
 
 
-def test_a_held_layer_crosses_the_join_carrying_its_number () -> None:
+def test_a_locked_layer_crosses_the_join_carrying_its_number () -> None:
 	"""**A layer held at the stream it was dealt** (#2263), across the join this
 	file exists for.
 
@@ -249,7 +249,7 @@ def test_a_held_layer_crosses_the_join_carrying_its_number () -> None:
 	       [{"id": "a", "generator": "chord", "params": {}, "dealt": 1234567}])
 
 
-def test_a_stack_with_nothing_held_is_unchanged_in_both_halves () -> None:
+def test_a_stack_with_nothing_locked_is_unchanged_in_both_halves () -> None:
 	"""Absent is where every layer starts, and where every stack stored before
 	this one stays — so the field's absence has to survive the round trip as
 	surely as its presence does."""

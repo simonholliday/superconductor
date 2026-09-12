@@ -898,8 +898,8 @@ def _readable_layers (
 		if isinstance(number, int) and not isinstance(number, bool) and number > 0:
 			layer["index"] = number
 
-		# **The number a held layer is dealt** (#2263), kept as the app answered
-		# it.  A panel asks to be held with `true` and only the app can say which
+		# **The number a locked layer is dealt** (#2263), kept as the app answered
+		# it.  A panel asks to be locked with `true` and only the app can say which
 		# number that is — the base it last built with — so what arrives here from
 		# an app is an integer and what arrives from a panel is an intention this
 		# service has no way to resolve.  Both are carried: the `true` goes to the

@@ -3020,7 +3020,7 @@ class Recipe (Control):
 			else:
 				one["generator"] = layer.get("generator")
 
-			# **The number this layer is held at** (#2263), carried rather than
+			# **The number this layer is locked at** (#2263), carried rather than
 			# rebuilt away.  Absent means it follows the pattern's stream, which is
 			# every layer until somebody locks one — so it is written only when
 			# there is something to write, and a stack stored before this reads
@@ -3122,14 +3122,14 @@ class Recipe (Control):
 				raise Refused(f"a layer cannot be a {kind}")
 
 			if kind == "route":
-				# **A route cannot be held** (#2263).  A routed grid plays what is
+				# **A route cannot be locked** (#2263).  A routed grid plays what is
 				# drawn on it and draws no random numbers, so there is no stream to
-				# hold still — a lock there would be a control that can do nothing,
+				# pin — a lock there would be a control that can do nothing,
 				# which #2107 says is worse than none.  Refused rather than
 				# ignored: the panel does not offer one here, so a request for it
 				# is a fault in the caller and should be told so.
 				if entry.get("dealt") not in (None, False):
-					raise Refused("a routed grid has no stream of its own to hold")
+					raise Refused("a routed grid has no stream of its own to lock")
 
 				source = entry.get("source")
 
@@ -3190,9 +3190,9 @@ class Recipe (Control):
 				"params": {**self._opening(str(generator)), **kept},
 			}
 
-			# **Held at a number, or asking to be** (#2263).
+			# **Locked at a number, or asking to be** (#2263).
 			#
-			# `true` is a panel saying *hold the bar I am hearing*, and only this
+			# `true` is a panel saying *lock the bar I am hearing*, and only this
 			# side can answer it: the number is the base this stack last built
 			# with, remembered on the recipe. Substituted here, on the link
 			# thread, so nothing has to be written back from the clock loop and
@@ -3210,7 +3210,7 @@ class Recipe (Control):
 				# would be a switch that goes on and does nothing.
 				if self._dealt is None:
 					raise Refused(
-						"nothing has been built yet, so there is no bar to hold")
+						"nothing has been built yet, so there is no bar to lock")
 
 				one["dealt"] = self._dealt
 
@@ -3818,11 +3818,11 @@ class Recipe (Control):
 		if not self._takes_seed(method, generator):
 			return None
 
-		# **A held layer is dealt the same number every cycle** (#2263), which is
-		# the whole of freezing one: the pattern's base moves with the music and a
-		# held one does not, so the bar repeats until somebody lets it go.
+		# **A locked layer is dealt the same number every cycle** (#2263), which
+		# is the whole of locking one: the pattern's base moves with the music and
+		# a locked one does not, so the bar repeats until somebody lets it go.
 		#
-		# Asked before `base`, and deliberately: a layer may be held on a pattern
+		# Asked before `base`, and deliberately: a layer may be locked on a pattern
 		# that has no stream of its own to draw a base from, and a person who
 		# locked it meant it. The gate above still applies — a generator that takes
 		# no `seed` is handed none, held or not.

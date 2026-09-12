@@ -2909,6 +2909,58 @@ html, body {
 /* Lit from across the room: the frame takes the accent's edge so the whole
    control reads as live, without a second fill inside the first. */
 .switch.on { border-color: var(--on-edge); }
+/* --- One frame, one fitting: controls that depend on one another ----------
+ *
+ * **Simon asked for this as a convention rather than as a fix** (2026-09-12),
+ * on the reroll that appears when a layer is locked: *"not clearly shown as
+ * being related — it appears when hold is active, but it is not obvious what it
+ * does, or that it is directly related"*.  Standing next to something is not the
+ * same as belonging to it, and he named the general case it is wanted for:
+ * *this option is only available because that one is enabled*.
+ *
+ * **It is the rocker's own construction, borrowed with its meaning** (#2403):
+ * the frame is the fitting and the members are what sit in it, divided by a
+ * hairline rather than by the lattice gap that separates unrelated controls.
+ * #2107 already says a group's frame counts as its members' edge, which is what
+ * lets each member be a full target without drawing a box of its own.
+ *
+ * **Neutral frame, and only the state is lit.**  That is the detail two earlier
+ * rockers got wrong: filling the surface *and* marking a member meant a fill
+ * inside a fill, and two ambers touching read as neither.  Here the lit member
+ * is the state you are in and the unlit one is the action it affords.
+ *
+ * **`--edge` rather than the rocker's `--edge-strong`, so a gang of one is
+ * indistinguishable from an ordinary button.**  Nothing is drawn around a lone
+ * control until something depends on it — and the frame widening to take a
+ * second member is then itself the announcement, which is a thing a person sees
+ * happen rather than a mark they have to learn.
+ *
+ * **Not *tied* and not *joined*.**  A tie is a musical mark and a join is this
+ * panel's cable (#2426), and one concept gets one word at each layer it appears
+ * in.  *Ganged* is what the fitting trade calls switches sharing one plate,
+ * which is exactly the fact being drawn and is free here.
+ */
+.gang {
+	display: inline-flex;
+	align-items: stretch;
+	flex: none;
+	overflow: hidden;
+	border: 1px solid var(--edge);
+	border-radius: 8px;
+	background: var(--panel);
+}
+
+/* The members give up their own frame to the one around them, and nothing else:
+   the surface still decides how large each of them is (#2107), so they stay a
+   row apiece however small the panel is set. */
+.gang > button {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+.gang > button + button { border-left: 1px solid var(--edge); }
+
 
 /* **A rhythm, drawn as the row it is** (#2443).
  *
@@ -3291,19 +3343,25 @@ html, body {
 
 .grid.params .layer .move:disabled { opacity: 0.3; }
 
-/* --- Holding a layer's own stream (#2263) ---------------------------------
+/* --- Locking a layer's own stream (#2263) ---------------------------------
  *
- * **Filled means held**, which is what a filled face says everywhere else here:
- * the page you are on, the variant that plays, the transport that is paused — a
- * state you are in rather than an action you can take.
+ * **Filled means locked**, which is what a filled face says everywhere else
+ * here: the page you are on, the variant that plays, the transport that is
+ * paused — a state you are in rather than an action you can take.
  *
- * The word is deliberately narrower than *freeze*.  What holds still is this
- * layer's own draws; harmony, key, section and cycle go on moving underneath it,
- * which is almost certainly what somebody wants for a rhythm and is exactly the
- * thing that needs saying rather than discovering (#2263).  The sentence lives in
- * the control's `title`, where it costs no width.
+ * **The words are Subsequence's own**, by Simon's decision of 2026-09-12:
+ * `lock()` pins a stream so every cycle realises identically, and `reroll()`
+ * deals it a fresh seed to try a new variation.  Borrowed with their meanings
+ * rather than translated (#2403) — and *freeze* refused, because upstream has
+ * already spent that word on capturing a progression and a producer reads it as
+ * bounce-to-audio, which is the opposite of a layer still playing live.
+ *
+ * What holds still is this layer's own draws; harmony, key, section and cycle go
+ * on moving underneath it, which is almost certainly what somebody wants for a
+ * rhythm and is exactly the thing that needs saying rather than discovering.
+ * The sentence lives in the control's `title`, where it costs no width.
  */
-.part-foot .offer.hold.chosen {
+.part-foot .offer.lock.chosen {
 	background: var(--on);
 	border-color: var(--on-edge);
 	color: var(--on-ink);
@@ -3311,9 +3369,57 @@ html, body {
 }
 
 /* **Absent rather than dead when there is nothing to go back from** (#2107), the
-   same rule the way back to unset follows: a re-deal only exists while a layer is
-   being held, so it is drawn then and not otherwise. */
-.part-foot .offer.another { color: var(--ink-quiet); }
+   same rule the way back to unset follows: a reroll only exists while a layer is
+   locked, so it is drawn then and not otherwise.
+
+   Quiet beside the member it depends on, because inside one fitting the filled
+   face is the state you are in and this is the action it affords. */
+.part-foot .offer.reroll { color: var(--ink-quiet); }
+
+/* **A press is the whole of what a reroll has to show** (#2179).  It holds
+   nothing and changes no face — the layer is locked before and after — so
+   without this the tap answered with nothing at all, which is how Simon read it:
+   as not having registered.
+
+   **But not the fill an action wears, and that is the rocker's own lesson one
+   property along.**  A lone action is the only lit thing on its row, so amber
+   there says *just pressed* and nothing else.  Inside a fitting whose other
+   member is lit amber for *locked*, the same fill made the pair one solid amber
+   lozenge with the hairline lost inside it — two ambers touching, reading as
+   neither, and for four hundred milliseconds claiming the reroll was a state.
+   Seen in a screenshot; every assertion still passed.
+
+   **So the press is the recess**: the member goes in and comes back out, which
+   is what a momentary button does on every machine these users own, and it is
+   the one press-mark that cannot be read as *sounding* — amber goes on meaning
+   that, which is the rule this panel is built on.  `--readout` on `--sunk` is
+   already measured at 4.5:1 across all twelve themes, so this borrows a pairing
+   rather than opening one.
+
+   **The duration lives here and nowhere else.**  The client keys the node by a
+   press count so a second tap restarts the animation, and clears that count on
+   `animationend` rather than on a timer of its own — so this number is not also
+   written in JavaScript, which is how two rules holding one number come to
+   disagree. */
+.part-foot .offer.reroll.sent { animation: pressed-in 1.4s ease-out forwards; }
+
+/* Held in while the fingertip is still on top of it, and only then easing back
+   out — the same shape `fired` uses, and for the same reason: a mark that began
+   under the finger that caused it is not visible at all if it starts fading at
+   once. */
+@keyframes pressed-in {
+	0%, 30% {
+		background: var(--sunk);
+		color: var(--readout);
+		box-shadow: inset 0 2px 5px var(--sunk-shadow);
+	}
+
+	100% {
+		background: transparent;
+		color: var(--ink-quiet);
+		box-shadow: none;
+	}
+}
 
 
 /* A number nobody declared bounds for. A slider needs two ends; this needs

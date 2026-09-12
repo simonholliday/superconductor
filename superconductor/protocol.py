@@ -316,13 +316,13 @@ carries ``path`` for that reason, since no ``changed`` frame accompanies it.  A
 panel too old ignores the field and lets the request expire as it always did; an
 app too old sends nothing and the service ignores what it never sends.
 
-1.34.0 lets a layer of a stack be **held at the stream it was dealt**, so a
+1.34.0 lets a layer of a stack be **locked at the stream it was dealt**, so a
 generated bar somebody liked keeps playing while its neighbours move on (#2263).
 A layer carries ``dealt``: absent, it follows the pattern's stream as every layer
-always has; ``true`` is a panel asking to be held at *the bar it is hearing*, and
-only the app can say which number that is, so it substitutes the base it last
-built with and answers with the integer.  Pressing again asks for another.  A
-routed grid is refused one, having no stream of its own to hold.  Additive in
+always has; ``true`` is a panel asking to be locked at *the bar it is hearing*,
+and only the app can say which number that is, so it substitutes the base it last
+built with and answers with the integer.  Asking again rerolls it.  A routed grid
+is refused one, having no stream of its own to lock.  Additive in
 both directions: a stack stored before this reads exactly as it did, an app too
 old never sends the field, and a panel too old neither sends it nor draws it.
 """

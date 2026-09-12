@@ -2972,15 +2972,21 @@ function Sheet ({ title, onClose, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear, live, onLive, held, onHold, onRedeal,
-                   outlet, onSettings, settingsOpen }) {
+function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onLockStream,
+                   onReroll, outlet, onSettings, settingsOpen }) {
+	/* **A reroll's flash is state, and a hook may not sit after a return.** The
+	   guard below leaves early for a block with nothing in its footer, so this is
+	   declared above it: a component that calls a hook only sometimes is one the
+	   renderer cannot keep in order. */
+	const [rerolls, setRerolls] = useState(0);
+
 	/* **An outlet counts, and it did not** (#2374). This guard is what keeps a
 	   block from growing an empty strip, and it was written when everything in
 	   the footer was a button — so the first block whose only footer content was
 	   the fitting got no footer at all, and a note set had nothing to pull a
 	   cable out of. A grid never showed it because a grid can also be cleared. */
 	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings && !outlet
-		&& !onHold) {
+		&& !onLockStream) {
 		return null;
 	}
 
@@ -2993,7 +2999,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, held, onHold, onR
 				<span class="legend">live</span>
 				<${Toggle} on=${live}
 					title=${live ? "silence this" : "bring this back"} onFlip=${onLive} />`}
-			${/* **Hold the bar this layer is playing, and deal it another** (#2263).
+			${/* **Lock this layer at the bar it is playing, and reroll it** (#2263).
 
 			     Here rather than in the header because **a header is information and
 			     a footer is control** — Simon, 2026-09-12, who also named the
@@ -3002,36 +3008,82 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, held, onHold, onR
 			     bottom left. It is one convention, and the generator was the
 			     exception to it (#2511).
 
-			     **Drawn as a latch, which is what it is** — lit while held, like the
-			     settings latch above: a second press puts it back, so a button that
-			     only ever held would need a different word for letting go.
+			     **The words are Subsequence's own** (Simon's decision, 2026-09-12).
+			     `composition.lock(name)` pins a stream so *"every cycle realizes
+			     identically"*, and `reroll(name)` deals it a fresh seed to *"try a
+			     new variation"* — this exact pair, in the app that plays it, so they
+			     are borrowed with their meanings rather than translated (#2403).
+			     *Freeze* was weighed and refused on three counts: upstream has
+			     already spent the word on `Composition.freeze(cadence=)`, which
+			     captures a progression; to a producer it most often means
+			     bounce-to-audio, a track rendered and no longer computing, which is
+			     the opposite of a layer that goes on playing live; and *defrost*
+			     fails on its own terms, meaning thaw rather than *deal me a
+			     different bar*, so the metaphor has no word for the one button that
+			     needed one.
 
-			     **The word is narrower than *freeze* on purpose.** What holds still
-			     is this layer's own draws; harmony, key, section and cycle go on
-			     moving underneath it, which is what somebody wants for a rhythm and
-			     is exactly the thing worth saying rather than leaving to be found
-			     out. The sentence lives in the title, where it costs no width.
+			     **Upstream locks a pattern and this locks a layer, and the word is
+			     the same because the fact is**: a stream's realisation is pinned,
+			     and what you pressed it on says whose. That leaves LOCK on a
+			     pattern's own footer as the word for holding a whole stack, the day
+			     anybody wants one.
 
-			     **And "another" rather than "again"**, because the store's *start
-			     again* already owns that word on a control, and one concept gets one
-			     word at each layer it appears in (#2403). It is drawn only while
-			     something is held, since there is nothing to re-deal otherwise
-			     (#2107). */ ""}
-			${onHold && html`
-				<button
-					class=${`offer hold ${held ? "chosen" : ""}`}
-					aria-pressed=${held ? "true" : "false"}
-					title=${held
-						? "let this layer move again"
-						: "hold the bar this layer is playing — its own notes only; harmony, key and section still move"}
-					onPointerDown=${(event) => { event.preventDefault(); onHold(); }}
-				>hold</button>`}
-			${onRedeal && held && html`
-				<button
-					class="offer another"
-					title="hold a different bar — this layer is dealt another"
-					onPointerDown=${(event) => { event.preventDefault(); onRedeal(); }}
-				>another</button>`}
+			     **Drawn as a latch, lit while locked** — a second press puts it
+			     back, so a button that only ever locked would need a second word for
+			     letting go. What holds still is this layer's own draws; harmony,
+			     key, section and cycle go on moving underneath it, which is what
+			     somebody wants for a rhythm and is exactly the thing worth saying
+			     rather than leaving to be found out. The sentence lives in the
+			     title, where it costs no width. */ ""}
+			${/* **They sit in one frame because one of them depends on the other.**
+			     Simon, on the reroll: *"not clearly shown as being related — it
+			     appears when hold is active, but it is not obvious what it does, or
+			     that it is directly related"*. Standing next to something is not the
+			     same as belonging to it, and he asked for a convention that says so
+			     generally — *this option is only available because that one is
+			     enabled* — which is `.gang` in the stylesheet, built out of the
+			     rocker's own parts. */ ""}
+			${onLockStream && html`
+				<div class="gang" role="group"
+					aria-label="lock the bar this layer is playing, and reroll it">
+					<button
+						class=${`offer lock ${streamLocked ? "chosen" : ""}`}
+						aria-pressed=${streamLocked ? "true" : "false"}
+						title=${streamLocked
+							? "let this layer deal itself a new bar each cycle again"
+							: "lock the bar this layer is playing — its own notes only; harmony, key and section still move"}
+						onPointerDown=${(event) => { event.preventDefault(); onLockStream(); }}
+					>lock</button>
+					${/* **A press is the whole of what a reroll has to show** (#2179),
+					     and it was showing nothing: Simon read the tap as not having
+					     registered. The layer is locked before and after, so no face
+					     here changes — which is an action's situation exactly, and
+					     this panel already has the vocabulary for it. A fill that
+					     marks the press and decays, held full while the fingertip is
+					     still on top of it; not the ring, which promises that a face
+					     is about to change and is a promise this cannot keep.
+
+					     **The node is keyed by the count so the animation restarts**,
+					     because hunting for a bar you like is pressing this several
+					     times in a row — and a class that is already `sent` changes
+					     nothing on a second press, which would be the original
+					     complaint again at the second tap. The count goes back to
+					     zero when the animation ends rather than on a timer, so the
+					     duration lives in the stylesheet alone and no `sent` is left
+					     behind on a control that settled long ago. */ ""}
+					${onReroll && streamLocked && html`
+						<button
+							key=${`reroll${rerolls}`}
+							class=${`offer reroll ${rerolls ? "sent" : ""}`}
+							title="lock a different bar — this layer is dealt another"
+							onAnimationEnd=${() => setRerolls(0)}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onReroll();
+								setRerolls((count) => count + 1);
+							}}
+						>reroll</button>`}
+				</div>`}
 			${/* **"Add a contribution" was ours, not a musician's.** Simon: not an
 			     intuitive way to connect items. A *source* is what the protocol
 			     already calls the thing being added, what a mixer calls what
@@ -6976,19 +7028,26 @@ function Panel () {
 								: one.live !== undefined
 								? (want) => request(`${one.control}/enabled`, want)
 								: undefined}
-							${/* **Hold this layer at the bar it is playing** (#2263),
-							     and deal it another. Only a layer has a stream to
-							     hold, and a routed grid has none of its own — it
-							     plays what is drawn on it — so neither is offered
-							     there and the app refuses one anyway.
+							${/* **Lock this layer at the bar it is playing** (#2263),
+							     and reroll it. Only a layer has a stream to lock,
+							     and a routed grid has none of its own — it plays
+							     what is drawn on it — so neither is offered there
+							     and the app refuses one anyway.
+
+							     **`onHold` is not this**, and the two were one word
+							     for a day: `Part` has carried an `onHold` since
+							     #2417 meaning *a hand is on this block*, which
+							     lifts its cables. One concept, one word, at each
+							     layer it appears in (#2403) — so a layer's stream
+							     says whose stream it is.
 
 							     The panel asks with `true` and never invents the
 							     number: which base the bar was built with is not a
 							     thing the glass knows, and a person holds a layer
 							     because of what they just heard, so only the app can
 							     answer it (#1965, #2374). */ ""}
-							held=${Boolean(one.layer && one.layer.dealt != null)}
-							onHold=${one.layer && one.layer.kind !== "route"
+							streamLocked=${Boolean(one.layer && one.layer.dealt != null)}
+							onLockStream=${one.layer && one.layer.kind !== "route"
 								? () => request(`${one.control}/layers`,
 									one.layers.map((each) => {
 										if (each.id !== one.layer.id) return each;
@@ -7009,7 +7068,7 @@ function Panel () {
 										return without;
 									}))
 								: undefined}
-							onRedeal=${one.layer && one.layer.kind !== "route"
+							onReroll=${one.layer && one.layer.kind !== "route"
 								? () => request(`${one.control}/layers`,
 									one.layers.map((each) => each.id === one.layer.id
 										? { ...each, dealt: true }

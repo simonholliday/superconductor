@@ -2368,7 +2368,7 @@ def test_a_layers_controls_are_not_clipped_at_the_smallest_cell_size (
 	assert spilling == [], f"these reach past the block: {spilling}"
 
 
-def test_holding_a_layer_leaves_the_notes_its_algorithm_placed (
+def test_locking_a_layer_leaves_the_notes_its_algorithm_placed (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**Simon, 2026-09-12**: tapping hold made the generated notes vanish and
 	return a cycle later — *"to the user, this looks momentarily as if they have
@@ -2401,7 +2401,7 @@ def test_holding_a_layer_leaves_the_notes_its_algorithm_placed (
 	# **Waited for a consequence of that frame rather than for a moment**, so the
 	# assertion below cannot pass by reading the glass before it landed.
 	playwright_api.expect(
-		panel.locator('.part[data-part="stack/one"] .part-foot .offer.hold')
+		panel.locator('.part[data-part="stack/one"] .part-foot .offer.lock')
 	).to_have_class(re.compile(r"\bchosen\b"), timeout=5_000)
 
 	# Nothing will put them back — no further `realised` frame is sent — so this
@@ -2464,7 +2464,7 @@ def test_a_generator_keeps_its_mute_in_its_footer_like_the_other_blocks (
 		f"a generator's mute did not silence that layer: {asked['v']}")
 
 
-def test_a_generator_offers_to_hold_the_bar_it_is_playing (
+def test_a_generator_offers_to_lock_the_bar_it_is_playing (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""#2263, on the glass.  The panel asks with `true` and never invents the
 	number: which base the bar was built with is not a thing the glass knows, and
@@ -2476,7 +2476,7 @@ def test_a_generator_offers_to_hold_the_bar_it_is_playing (
 	part = '.part[data-part="stack/one"]'
 	before = len(fake_app.sets)
 
-	panel.locator(f"{part} .part-foot .offer.hold").click()
+	panel.locator(f"{part} .part-foot .offer.lock").click()
 
 	# **`settled` rather than `await_set`**, and not only because the latter takes
 	# no `since`: waiting for the *first* frame on a path is not waiting for the
@@ -2494,7 +2494,7 @@ def test_a_generator_offers_to_hold_the_bar_it_is_playing (
 		f"the panel did not ask to be held, or invented a number: {asked['v']}")
 
 
-def test_another_is_offered_only_while_something_is_held (
+def test_a_reroll_is_offered_only_while_a_layer_is_locked (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**Absent rather than dead when there is nothing to go back from** (#2107),
 	the rule the way back to unset already follows: there is nothing to re-deal
@@ -2508,9 +2508,9 @@ def test_another_is_offered_only_while_something_is_held (
 
 	part = '.part[data-part="stack/one"]'
 
-	assert panel.locator(f"{part} .part-foot .offer.another").count() == 0
+	assert panel.locator(f"{part} .part-foot .offer.reroll").count() == 0
 	assert "chosen" not in (
-		panel.locator(f"{part} .part-foot .offer.hold").get_attribute("class") or "")
+		panel.locator(f"{part} .part-foot .offer.lock").get_attribute("class") or "")
 
 	# Held, as the app answers it: a number rather than the `true` that asked.
 	fake_app.confirm("stack/layers", [
@@ -2518,14 +2518,14 @@ def test_another_is_offered_only_while_something_is_held (
 		 "params": {"pitch": "kick", "pulses": 3}, "dealt": 4242},
 	], by="app")
 
-	playwright_api.expect(panel.locator(f"{part} .part-foot .offer.hold")).to_have_class(
+	playwright_api.expect(panel.locator(f"{part} .part-foot .offer.lock")).to_have_class(
 		re.compile(r"\bchosen\b"), timeout=5_000)
 
-	assert panel.locator(f"{part} .part-foot .offer.another").count() == 1
+	assert panel.locator(f"{part} .part-foot .offer.reroll").count() == 1
 
 	before = len(fake_app.sets)
 
-	panel.locator(f"{part} .part-foot .offer.another").click()
+	panel.locator(f"{part} .part-foot .offer.reroll").click()
 
 	# **`settled` rather than `await_set`**, and not only because the latter takes
 	# no `since`: waiting for the *first* frame on a path is not waiting for the
@@ -2541,6 +2541,178 @@ def test_another_is_offered_only_while_something_is_held (
 
 	assert again and again[0]["dealt"] is True, (
 		f"asking for another bar did not ask the app to choose one: {asked['v']}")
+
+
+def _lock_the_one_layer (fake_app: typing.Any) -> None:
+	"""Answer a lock as the app does: with the number, rather than the `true` that
+	asked for it (#2263)."""
+
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3}, "dealt": 4242},
+	], by="app")
+
+
+def test_a_reroll_marks_the_press_because_it_has_nothing_else_to_show (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-12: *"No state change on tap: the tap does not appear to
+	have registered.  We have visual conventions for this already defined — let's
+	use them."*
+
+	The convention is an `action`'s (#2179): a reroll holds nothing and changes no
+	face — the layer is locked before and after — so what a press gets is a fill
+	that marks it and decays, rather than the ring, which promises a face is about
+	to change.
+
+	**And it restarts on every press**, which is the half that would regress in
+	silence: hunting for a bar you like is pressing this several times in a row,
+	and a class that is already `sent` changes nothing on a second tap — which is
+	Simon's own complaint again, one press later.
+	"""
+
+	_open_the_stack(panel)
+
+	part = '.part[data-part="stack/one"]'
+
+	_lock_the_one_layer(fake_app)
+
+	reroll = panel.locator(f"{part} .part-foot .offer.reroll")
+
+	playwright_api.expect(reroll).to_have_count(1, timeout=5_000)
+
+	assert "sent" not in (reroll.get_attribute("class") or ""), (
+		"a reroll nobody has touched is already showing a press")
+
+	reroll.click()
+
+	playwright_api.expect(reroll).to_have_class(re.compile(r"\bsent\b"), timeout=5_000)
+
+	# **The animation rather than the class that starts it.**  A class can be
+	# present while the stylesheet draws nothing at all, and what Simon could not
+	# see was the fill — so ask the element what it is actually running.
+	running = reroll.evaluate(
+		"(button) => button.getAnimations().map((one) => one.animationName)")
+
+	assert running == ["pressed-in"], f"the press drew no mark: {running}"
+
+	# **And the mark is not the lit state beside it**, which is the rocker's own
+	# lesson one property along: the first version borrowed an action's amber
+	# fill, and inside a fitting whose other member is lit amber for *locked*
+	# that drew one solid lozenge — two ambers touching, reading as neither, and
+	# for a moment claiming the reroll was a state. Found in a screenshot with
+	# every assertion passing, which is why this one exists.
+	faces = panel.evaluate(
+		"""(part) => {
+			const look = (which) => {
+				const face = getComputedStyle(document.querySelector(
+					`${part} .part-foot .offer.${which}`));
+
+				return face.backgroundColor;
+			};
+
+			return { lock: look("lock"), reroll: look("reroll") };
+		}""", part)
+
+	assert faces["lock"] != faces["reroll"], (
+		"the press wears the same face as the state beside it, so the fitting "
+		f"reads as one lit control: {faces}")
+
+	panel.wait_for_timeout(700)
+
+	part_way = reroll.evaluate("(button) => button.getAnimations()[0].currentTime")
+
+	assert part_way is not None and part_way > 400, (
+		f"the flash was not running half a second in: {part_way}")
+
+	panel.locator(f"{part} .part-foot .offer.reroll").click()
+	panel.wait_for_timeout(150)
+
+	restarted = panel.locator(f"{part} .part-foot .offer.reroll").evaluate(
+		"(button) => button.getAnimations()[0].currentTime")
+
+	# Smaller than it was, rather than under a threshold: a flash that carried on
+	# from where it was reads as a tap that did nothing, whatever the numbers.
+	assert restarted is not None and restarted < part_way, (
+		"a second press did not restart the flash, so the second tap of a hunt "
+		f"answers with nothing: {restarted} against {part_way}")
+
+
+def test_a_reroll_and_the_lock_it_depends_on_are_drawn_as_one_fitting (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-12: *"The hold/another buttons are not clearly shown as
+	being related.  The "another" appears when "hold" is active, but it is not
+	obvious what it does, or that it is directly related… I suggest we need a
+	visual convention to show that controls are connected and interdependent."*
+
+	The convention is the rocker's own construction (#2107, #2403): **one frame,
+	one fitting** — the frame is the edge and the members are what sit in it,
+	divided by a hairline rather than by the gap that separates unrelated
+	controls.  So what is measured here is the *gap*: two controls standing beside
+	each other are a footer gap apart, and two members of one fitting are not.
+	"""
+
+	_open_the_stack(panel)
+
+	part = '.part[data-part="stack/one"]'
+
+	# **A gang of one is indistinguishable from an ordinary button**, because
+	# nothing is drawn around a control until something depends on it — and the
+	# frame taking a second member is then the announcement itself.
+	assert panel.locator(f"{part} .part-foot .gang > button").count() == 1, (
+		"a lock with nothing depending on it is already drawn as a group")
+
+	_lock_the_one_layer(fake_app)
+
+	playwright_api.expect(
+		panel.locator(f"{part} .part-foot .gang > button")).to_have_count(2, timeout=5_000)
+
+	# Inside the *same* fitting, rather than merely both in the footer: that is
+	# the whole claim, and a reroll in a gang of its own would satisfy every
+	# other assertion here.
+	gangs = panel.locator(f"{part} .part-foot .gang")
+
+	assert gangs.count() == 1, f"the pair was drawn as {gangs.count()} fittings"
+
+	for which in ("lock", "reroll"):
+		assert panel.locator(f"{part} .part-foot .gang > .offer.{which}").count() == 1, (
+			f"the {which} is not a member of the fitting")
+
+	edge = "(el) => getComputedStyle(el).borderTopWidth"
+
+	assert gangs.evaluate(edge) != "0px", "the fitting draws no frame of its own"
+
+	lock = panel.locator(f"{part} .part-foot .offer.lock")
+	reroll = panel.locator(f"{part} .part-foot .offer.reroll")
+
+	# The members give up their own frame to the one around them — otherwise it
+	# is a box inside a box, which is the fill-inside-a-fill the rocker's comment
+	# warns about, one property along.
+	for which, member in (("lock", lock), ("reroll", reroll)):
+		assert member.evaluate(edge) == "0px", (
+			f"the {which} draws a frame of its own inside the fitting's")
+
+	# A hairline between them, which is what says they are two things and not one
+	# wide button.
+	assert reroll.evaluate("(el) => getComputedStyle(el).borderLeftWidth") != "0px", (
+		"nothing divides the members, so the fitting reads as one control")
+
+	held = lock.bounding_box()
+	again = reroll.bounding_box()
+	mute = panel.locator(f"{part} .part-foot .switch").bounding_box()
+
+	assert held and again and mute, "the footer did not draw"
+
+	inside = again["x"] - (held["x"] + held["width"])
+	outside = held["x"] - (mute["x"] + mute["width"])
+
+	assert inside <= 2, (
+		f"the members of the fitting are {inside:.1f}px apart, which is a gap "
+		"rather than a hairline")
+
+	assert outside > inside + 1, (
+		f"the fitting sits {outside:.1f}px from the control beside it and its own "
+		f"members {inside:.1f}px apart — so belonging to it looks like standing "
+		"next to it")
 
 
 def test_a_menu_is_not_clipped_by_the_block_it_opens_in (panel: typing.Any) -> None:
