@@ -8532,6 +8532,63 @@ def test_a_height_outlives_a_reload (panel: typing.Any) -> None:
 		- shorter["height"]) < 2
 
 
+def test_the_fit_settles_without_waiting_for_a_resize_observer (panel: typing.Any) -> None:
+	"""#2512.  The test above failed CI once by exactly one gap, and this is why.
+
+	On load the fit takes more than one pass — this fixture goes 48px, 32px,
+	33px — because chrome is measured at the size drawn *now* and a block's snap
+	to whole cells moves that measurement when the size moves.  The second pass
+	used to wait for a ResizeObserver to fire, so on a loaded runner the page sat
+	between passes for as long as the observer took, `_settled` saw the cell
+	unchanged twice, and the block measured 4px short.
+
+	**A slow runner cannot be had on demand, so this makes one**: every
+	ResizeObserver on the page is held back two seconds, which is far longer than
+	`_settled` waits.  Against the fit that relied on one it failed three times out of
+	three with the same `4.0` CI saw; a fit that re-checks itself when it changes
+	the cell does not need the observer at all.
+	"""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	grip = panel.locator('.part[data-part="grid"] .part-grip').bounding_box()
+	middle = grip["x"] + grip["width"] / 2
+
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(middle, grip["y"] + grip["height"] / 2 - 90, steps=8)
+	panel.mouse.up()
+
+	_locked(panel)
+	_settled(panel)
+
+	shorter = panel.locator('.part[data-part="grid"]').bounding_box()
+
+	panel.add_init_script("""(() => {
+		const Real = window.ResizeObserver;
+
+		window.ResizeObserver = class {
+			constructor (callback) {
+				this.inner = new Real((...args) => setTimeout(() => callback(...args), 2000));
+			}
+
+			observe (...args) { return this.inner.observe(...args); }
+			unobserve (...args) { return this.inner.unobserve(...args); }
+			disconnect () { return this.inner.disconnect(); }
+		};
+	})();""")
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
+
+	assert abs(panel.locator('.part[data-part="grid"]').bounding_box()["height"]
+		- shorter["height"]) < 2, (
+		"the fit stopped between passes, waiting for a ResizeObserver to tell it to "
+		"check its own answer")
+
+
 def test_a_block_with_one_row_is_offered_no_grip (panel: typing.Any) -> None:
 	"""Height is not a question there, and a control that cannot do anything is
 	worse than one that is absent — this project's own rule, and the reason

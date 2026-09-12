@@ -4671,6 +4671,10 @@ function useCellSize (blocks, layout, dragging) {
 	 * which is exactly what #2072 asked for. */
 	const solving = useRef(layout);
 
+	/* What the last pass of the fit solved for, and the size it was drawn at, so a
+	   pass can tell a correction from an oscillation — see the end of `fit`. */
+	const lastFit = useRef(null);
+
 	if (!dragging) solving.current = layout;
 
 	const choose = useCallback((key) => {
@@ -4788,12 +4792,44 @@ function useCellSize (blocks, layout, dragging) {
 			let low = FIT_FLOOR;
 			let high = FIT_CEILING;
 
-			if (!fits(low)) { setCell(FIT_FLOOR); return; }
+			if (fits(low)) {
+				while (high - low > 1) {
+					const middle = Math.floor((low + high) / 2);
 
-			while (high - low > 1) {
-				const middle = Math.floor((low + high) / 2);
+					if (fits(middle)) low = middle; else high = middle;
+				}
+			}
 
-				if (fits(middle)) low = middle; else high = middle;
+			/* **A fit that changes the cell checks itself again at the new size**
+			 * (#2512).  Chrome is measured at the size drawn *now*, and a block's
+			 * snap to whole cells moves that measurement when the size moves — so
+			 * the first answer is often one cell off, and on load this rig goes
+			 * 48px, 32px, 33px.  The second pass used to come only if a
+			 * ResizeObserver happened to fire, which is a promise about the
+			 * wrapper's size rather than about the fit.  On a slow machine that
+			 * left a page painted between passes for as long as the observer took,
+			 * and CI measured a block one gap short.  The effect now depends on
+			 * `cell` as well, so every change is followed by a pass that confirms
+			 * it.
+			 *
+			 * **Which makes an oscillation possible, so one is caught.**  If the
+			 * snap residue at one size asks for the other and back again, a fit
+			 * that always re-checks would re-render for ever.  A pass that would go
+			 * straight back to the size the previous pass was drawn at, solving for
+			 * exactly the same thing, keeps the smaller of the two and stops —
+			 * smaller because it is the one that is known to fit. */
+			const solvingFor = [choice, JSON.stringify(blocks), JSON.stringify(solving.current),
+				Math.round(room.width), Math.round(room.height)].join("|");
+			const before = lastFit.current;
+
+			lastFit.current = { solvingFor, drawn };
+
+			if (low === drawn) return;
+
+			if (before && before.solvingFor === solvingFor && before.drawn === low) {
+				if (low < drawn) setCell(low);
+
+				return;
 			}
 
 			setCell(low);
@@ -4809,7 +4845,7 @@ function useCellSize (blocks, layout, dragging) {
 		if (wrap.current) watcher.observe(wrap.current);
 
 		return () => watcher.disconnect();
-	}, [choice, JSON.stringify(blocks)]);
+	}, [choice, JSON.stringify(blocks), cell]);
 
 	/* Both written from here, so the stylesheet never has to work out a row
 	   height of its own and then disagree with the fit about it.
