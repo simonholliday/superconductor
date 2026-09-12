@@ -306,6 +306,19 @@ const NOTE_CONTROL_CELLS = 2;
 const VARIANT_CELLS = 1;
 /* The row of tabs above a grid that declares variants (#2485), counted for the
    same reason: a row the count did not know about puts every block a cell out. */
+const VARIANT_COLS = 2;
+/* And the two cells across that same strip takes when it stands down the block's
+ * right-hand side instead — a letter and its ▶, which is the pair.
+ *
+ * **Simon, 2026-09-12**: a row of buttons does not say that a letter and an arrow
+ * belong together, and it is bounded by the width of the pattern — which is what
+ * would decide how many variants a grid may ever have. Down the side each pair is
+ * a row, and the bound becomes the block's height, where there is far more room:
+ * a sixteen-step grid has eight cells to spare across and ten or twelve rows down.
+ *
+ * Counted rather than measured, like every other number here: the fit solves for a
+ * cell size before anything is drawn, so a column it did not know about is a column
+ * that overflows its own block. */
 const BESIDE_A_LANE = 3;
 /* Room on a lane's own row for whatever else it carries — today the way back to
  * unset, which is four characters and a floor of one row (#2381).
@@ -721,12 +734,37 @@ function BeatStrip ({ steps, beats, tight }) {
  * would be guessing. Somebody who asked their system for less motion gets a
  * steady mark instead.
  *
- * **One row, whatever is shown**, so the block never changes height under a
- * finger (#2217): what "B — A is playing" and *start B from A* say sits in the
- * same row, after the tabs, laid on the grid's own columns so a tab lines up
- * with a step. A block too narrow for two targets a variant gets letters and one
- * PLAY for the one shown. */
-function Variants ({ ids, playing, cue, showing, steps, emptyShown, onShow, onCue, onStartFrom }) {
+ * **Down the block's right-hand edge, a pair to a row** (Simon, 2026-09-12), which
+ * is the shape this started in only for want of somewhere to put it. A row of
+ * eight targets does not say that a letter and an arrow belong together, and it is
+ * bounded by the width of the pattern — so the pattern would decide how many
+ * variants a grid may ever have. A pair on its own row says the pairing by being
+ * one, and the bound becomes the block's height, where there is room to spare.
+ *
+ * **The row survives as the short block's case**, laid on the grid's own columns
+ * so a tab lines up with a step, carrying its label and its sentence. A block with
+ * fewer rows than it has variants cannot hold a column — and a block too narrow for
+ * two targets a variant gets letters and one PLAY for the one shown.
+ *
+ * **The sentence is a cost of the row rather than a thing the column lost.** One
+ * row can say *which* variant it is showing or *which* is playing, not both, so it
+ * spells the other out; a column marks both at once in the faces every other
+ * control here uses. "B — A is playing" has nothing left to add, and the row it sat
+ * in goes back to the pattern. */
+function variantsBeside (count, rows) {
+	return count > 0 && count <= rows;
+}
+
+/* Whether a grid's variants stand in a column beside it or in a row above it: a
+ * column where the block's own contents are at least as tall as there are
+ * variants, and the row otherwise.
+ *
+ * **Asked once and read by both halves** — the fit, which solves for a cell size
+ * before anything is drawn, and the render, which draws it. Two copies of this
+ * rule is the fit sizing a block for one shape and the page drawing the other,
+ * which is a block a cell out with nothing failing (`188722c`). */
+function Variants ({ ids, playing, cue, showing, column, steps, emptyShown,
+                     onShow, onCue, onStartFrom }) {
 	const narrow = steps < ids.length * 2;
 	const used = narrow ? ids.length + 2 : ids.length * 2;
 	const left = steps - used;
@@ -735,27 +773,65 @@ function Variants ({ ids, playing, cue, showing, steps, emptyShown, onShow, onCu
 
 	const press = (act) => (event) => { event.preventDefault(); act(); };
 
+	/* A letter shows that variant and edits it. Lit is playing, a ring is shown,
+	   and when they are one letter it is both. */
+	const letter = (id) => html`
+		<button
+			key=${`show-${id}`}
+			class=${["letter", id === playing ? "playing" : "", id === showing ? "shown" : ""]
+				.filter(Boolean).join(" ")}
+			aria-pressed=${id === showing ? "true" : "false"}
+			data-variant=${id}
+			onPointerDown=${press(() => onShow(id))}
+		>${id}</button>`;
+
+	/* And its ▶ asks the app to play that one next. */
+	const play = (id) => html`
+		<button
+			key=${`play-${id}`}
+			class=${["play", id === playing ? "playing" : "", id === cue ? "cued" : ""]
+				.filter(Boolean).join(" ")}
+			aria-label=${`play ${id}`}
+			data-variant=${id}
+			onPointerDown=${press(() => onCue(id))}
+		>▶</button>`;
+
+	/* **In the ▶'s place on the empty variant being looked at**: the thing a person
+	   actually wants there, which is to fill it from the one playing (#2485 Q6).
+
+	   A column has no room for the row's spelt-out *start C from A*, and the swap
+	   costs less than it looks: an empty variant has nothing to play, so its ▶ cues
+	   silence, and the ▶ is back the moment the variant holds a step or somebody
+	   looks at another one. Cueing an empty variant is still reachable — from any
+	   row but the one you are editing. */
+	const fill = (id) => html`
+		<button
+			key=${`from-${id}`}
+			class="start-from"
+			title=${`start ${id} from ${playing}`}
+			aria-label=${`start ${id} from ${playing}`}
+			data-variant=${id}
+			onPointerDown=${press(() => onStartFrom(playing))}
+		>⧉</button>`;
+
+	/* Two cells across and a row per variant, which is exactly what the fit added
+	   to the block's width: the arithmetic and the drawing read one pair of
+	   numbers, so neither can be right about a block the other got wrong. */
+	if (column) {
+		return html`
+			<div class="variants down" role="group" aria-label="variants">
+				${ids.map((id) => html`
+					${letter(id)}
+					${emptyShown && id === showing ? fill(id) : play(id)}`)}
+			</div>`;
+	}
+
 	return html`
 		<div class="variants" style=${style}>
 			<span class="variants-label">variant</span>
 			${ids.map((id) => html`
-				<button
-					key=${`show-${id}`}
-					class=${["letter", id === playing ? "playing" : "", id === showing ? "shown" : ""]
-						.filter(Boolean).join(" ")}
-					aria-pressed=${id === showing ? "true" : "false"}
-					data-variant=${id}
-					onPointerDown=${press(() => onShow(id))}
-				>${id}</button>
-				${!narrow && html`
-					<button
-						key=${`play-${id}`}
-						class=${["play", id === playing ? "playing" : "", id === cue ? "cued" : ""]
-							.filter(Boolean).join(" ")}
-						aria-label=${`play ${id}`}
-						data-variant=${id}
-						onPointerDown=${press(() => onCue(id))}
-					>▶</button>`}`)}
+				${letter(id)}
+				${!narrow && play(id)}`)}
 			${narrow && html`
 				<button
 					class=${["play", "solo", showing === playing ? "playing" : "", showing === cue ? "cued" : ""]
@@ -2904,7 +2980,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, outlet, onSetting
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
  * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, pitchIn, rows, mostRows, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, pitchIn, rows, mostRows, leastRows, beside, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 	const stretching = useRef(null);
@@ -3021,7 +3097,13 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 
 		if (!from || from.pointer !== event.pointerId) return;
 
-		const wanted = Math.max(1, from.rows + Math.round((event.clientY - from.fromY) / from.perRow));
+		/* **Never shorter than what stands beside it**, which today is a block's
+		   own variants: dragged below them the last letter is clipped at the
+		   block's edge, and a variant nobody can see is a variant nobody can cue.
+		   One row is the floor otherwise, as it always was. */
+		const least = Math.max(1, leastRows || 1);
+
+		const wanted = Math.max(least, from.rows + Math.round((event.clientY - from.fromY) / from.perRow));
 		const capped = mostRows ? Math.min(mostRows, wanted) : wanted;
 
 		if (capped !== rows) {
@@ -3135,7 +3217,19 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 						}}
 					><${Icon} of="close" /></button>`}
 			</header>
-			<div class="part-body">${children}</div>
+				${/* The block's contents, and beside them whatever stands down its
+				     right-hand edge — today a column of variants (#2488).
+
+				     A flex item of its own rather than a child of the stack, which
+				     is what keeps it out of a windowed grid's scroller: a column is
+				     which version you are playing, and scrolling to a lower row does
+				     not change that. The stack is left unpositioned so the playhead
+				     goes on measuring its offset against the body, as it did when it
+				     was a child of one. */ ""}
+			<div class="part-body">
+				<div class="part-stack">${children}</div>
+				${beside || null}
+			</div>
 			${footer}
 			${/* Offered only where there is something to reveal. A block already
 			     showing everything it has is a block whose height is not a
@@ -4182,8 +4276,13 @@ function Doubled ({ duplicated }) {
  * legibility floor. A block one cell taller than it looks at the smallest size
  * is a rounding error; a title nobody can read is not. */
 function blockSize (block, cell, chrome) {
+	/* The label column, a cell per step, and — where the variants stand beside the
+	   grid rather than above it — their own columns on the end. `aside` is how many
+	   cells across those take: nothing for a grid without variants, and nothing for
+	   one too short to hold them in a column, which keeps its row instead. */
 	const width = LABEL_CELLS * cell + (LABEL_CELLS - 1) * GAP
-		+ GAP + block.steps * cell + (block.steps - 1) * GAP + chrome.x;
+		+ GAP + block.steps * cell + (block.steps - 1) * GAP
+		+ (block.aside ? block.aside * (cell + GAP) : 0) + chrome.x;
 
 	/* Every row is one cell, a control's included. The fit and the stylesheet
 	   read it from the same function so they cannot come to disagree. */
@@ -4220,7 +4319,7 @@ function autoPlace (blocks, across, frame) {
 		   is how a padding added for looks quietly ate a rule. A person who wants
 		   them touching can drag them together, and this stops being consulted
 		   for that block the moment they do. */
-		const wide = LABEL_CELLS + block.steps + frame + SEPARATION;
+		const wide = LABEL_CELLS + block.steps + (block.aside || 0) + frame + SEPARATION;
 		const high = 1 + block.rows + frame + SEPARATION;
 
 		if (x && x + wide > across) { x = 0; y += tallest; tallest = 0; }
@@ -5702,6 +5801,22 @@ function Panel () {
 		const sends = Object.keys(controls).filter(
 			(one) => kindOf(one) === "recipe" && (controls[one].sources || []).includes(name));
 
+		/* How tall the block's own contents are in rows — the pattern, plus a
+		   pitched grid's lane and its settings — and, from that, whether the
+		   variants stand in a column beside them or in a row above them.
+
+		   Worked out here and carried on the window, so the fit and the render
+		   read one answer. The fit solves for a cell size from `rows` and `aside`
+		   before anything is drawn; if the page then drew the other shape, every
+		   block on the lattice would be a cell out. */
+		const body = Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
+			+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
+			+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
+				? LANE_CELLS : 0);
+
+		const variants = Array.isArray(controls[name].variants) ? controls[name].variants.length : 0;
+		const beside = variantsBeside(variants, body);
+
 		windows.push({
 			key: name, control: name, title: named(name),
 			about: controls[name].about || [],
@@ -5711,12 +5826,16 @@ function Panel () {
 			/* Absent means on. A control the app has said nothing about is
 			   playing, which is what every grid did before there was a switch. */
 			live: ((state[appName] || {})[name] || {}).enabled !== false,
-			rows: Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
-				+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
-				+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
-					? LANE_CELLS : 0)
-				+ (Array.isArray(controls[name].variants) && controls[name].variants.length
-					? VARIANT_CELLS : 0) + 1
+			/* **Cells across for a column of variants**, and the fact itself for
+			   the render — nothing for a grid without variants, and nothing for
+			   one too short to hold them, which keeps its row above the pattern.
+
+			   Both live on the window because the fit and the page each need one
+			   of them and they have to be the same answer: `blockSize` widens the
+			   block by `aside`, and the render draws the shape `beside` names. */
+			aside: beside ? VARIANT_COLS : 0,
+			beside,
+			rows: body + (variants && !beside ? VARIANT_CELLS : 0) + 1
 				/* The title is the `+ 1` above and the grip is this one. A block
 				   measures a whole number of lattice cells and this arithmetic is
 				   what places it, so a fitting the count does not know about puts
@@ -6353,6 +6472,41 @@ function Panel () {
 		request(`${name}/cue`, id);
 	};
 
+	/* A grid's variants, drawn in whichever shape its block can hold — a column
+	 * down the right-hand edge, or the row above the pattern (#2488).
+	 *
+	 * **Built in one place and used from two**, because a block takes the column as
+	 * what stands beside its body while the row is one of its children. Two
+	 * constructions of the same strip is two sets of handlers to keep in step, and
+	 * the one nobody edits is the one that stops cueing.
+	 *
+	 * `key === control` is the block that *is* the grid. A generator block and a
+	 * settings block both name the pattern they belong to in `control` — that is how
+	 * they are drawn wherever it is (#2211) — so asking about the control alone would
+	 * put a second set of letters on a stack of knobs. */
+	const stripFor = (one) => {
+		const variant = one.key === one.control ? variantOf(one.control) : null;
+
+		if (!variant) return null;
+
+		const rows = variant.rowsOf(variant.showing);
+
+		return html`
+			<${Variants} ids=${variant.ids} playing=${variant.playing}
+				cue=${variant.cue} showing=${variant.showing}
+				column=${Boolean(one.beside)}
+				steps=${controls[one.control].steps}
+				${/* Whether the one being looked at is empty while something else is
+				     playing, which is the only state *start from* has anything to
+				     offer in — and, in a column, the only row where the ▶ gives way
+				     to it. */ ""}
+				emptyShown=${countOf(rows) === 0
+					&& countOf(variant.rowsOf(variant.playing)) > 0}
+				onShow=${(id) => view(variant.key, id)}
+				onCue=${(id) => cueFor(one.control, variant, id)}
+				onStartFrom=${(from) => request(variant.at, variant.rowsOf(from))} />`;
+	};
+
 	/* Only where height is a question at all. A one-row block has nothing to
 	   reveal and nothing to give back, so a grip on it would be a control that
 	   cannot do anything — and this codebase's own rule is that one of those is
@@ -6497,7 +6651,14 @@ function Panel () {
 					rows=${rowsShown(one)}
 					mostRows=${controls[one.control] && Array.isArray(controls[one.control].rows)
 						? controls[one.control].rows.length : null}
-					onResize=${stretchy(one) ? (who, rows) => rearrange(who, { rows }) : null}
+					${/* **What stands beside the block, and the floor that keeps it visible.**
+						     A column of variants is as tall as there are variants, so a
+						     block dragged below that would clip the last letter at its
+						     own edge — and a variant nobody can see is one nobody can
+						     cue. Both are null where the strip is a row instead. */ ""}
+						leastRows=${one.beside ? (controls[one.control].variants || []).length : null}
+						beside=${one.beside ? stripFor(one) : null}
+						onResize=${stretchy(one) ? (who, rows) => rearrange(who, { rows }) : null}
 					onTouch=${(name, pointer) => setTouched({ name, pointer })}
 					${/* A generator's close takes it out of the stack, which is a
 					     change to the music. A settings block's close only puts
@@ -6617,15 +6778,11 @@ function Panel () {
 								? realised[one.control] : null;
 							const rows = variant ? variant.rowsOf(variant.showing) : held;
 
-							const strip = variant && html`
-								<${Variants} ids=${variant.ids} playing=${variant.playing}
-									cue=${variant.cue} showing=${variant.showing}
-									steps=${controls[one.control].steps}
-									emptyShown=${countOf(rows) === 0
-										&& countOf(variant.rowsOf(variant.playing)) > 0}
-									onShow=${(id) => view(variant.key, id)}
-									onCue=${(id) => cueFor(one.control, variant, id)}
-									onStartFrom=${(from) => request(variant.at, variant.rowsOf(from))} />`;
+							/* **The row form only.** Where the variants stand in a
+							   column they are handed to the block itself, as what
+							   goes beside its body — one construction either way,
+							   in `stripFor`, so the two shapes cannot drift. */
+							const strip = one.beside ? null : stripFor(one);
 
 							return kindOf(one.control) === "note_grid"
 								? html`

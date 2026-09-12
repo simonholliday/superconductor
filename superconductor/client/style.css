@@ -1424,6 +1424,14 @@ html, body {
 	position: relative;
 	padding-top: var(--gap);
 
+	/* The block's contents, and beside them whatever stands down its right-hand
+	   edge — a column of variants (#2488). `flex-start` so the column begins at
+	   the top of the pattern rather than centring itself against it, and the gap
+	   is the lattice's own, which is the gap the fit counts. */
+	display: flex;
+	align-items: flex-start;
+	gap: var(--gap);
+
 	/* Clipped at the block's own edge. The playhead is drawn between beats and
 	   so passes 15.9 of 16 steps before it wraps, which puts it most of a cell
 	   past the last one — enough to widen the page and flash a scrollbar up
@@ -1687,12 +1695,39 @@ html, body {
  * here takes its size from the lattice's surface rule and says nothing of its
  * own — they are one row square because the surface says so (#2107).
  */
+/* Everything in the block that is not standing beside it. Sized by its contents
+   and left unpositioned, so the playhead's offset is still measured against the
+   body and a column added on the end moves nothing. */
+.part-stack { flex: none; }
+
 .variants {
 	display: grid;
 	gap: var(--gap);
 	align-items: center;
 	margin-bottom: var(--gap);
 	min-width: min-content;
+}
+
+/* **Down the right-hand edge, a pair to a row** (Simon, 2026-09-12).
+ *
+ * Two columns of a cell each — a letter and the ▶ that belongs to it — so the pair
+ * is a row and reads as one thing, and a block may carry as many variants as it
+ * has rows rather than as many as its pattern has steps.
+ *
+ * Across, that is two cells and the gap between them, which is exactly what the
+ * fit adds to the block's width (`VARIANT_COLS`). The two numbers are declared
+ * once each and read from both sides; a column the arithmetic did not know about
+ * would put every block on the lattice a cell out.
+ *
+ * No label and no sentence, and both are a gain rather than a loss — a column
+ * marks playing and shown at the same time, which is what the row needed words
+ * for. */
+.variants.down {
+	flex: none;
+	grid-template-columns: var(--cell) var(--cell);
+	grid-auto-rows: var(--cell);
+	align-content: start;
+	margin-bottom: 0;
 }
 
 .variants .variants-label {

@@ -276,10 +276,13 @@ CONTROLS: dict[str, typing.Any] = {
 
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 
-	# **Two grids with variants** (#2485, #2488).  Three letters over eight steps
-	# leaves two cells beside the tabs for what the row says there; five steps is
-	# too narrow for a ▶ each, so that one gets its letters and one PLAY.
-	"phrase": {"type": "step_grid", "title": "Phrase", "rows": ["kick", "snare"],
+	# **Two grids with variants, and each draws the strip the other cannot** (#2485,
+	# #2488).  Three rows hold three variants, so this one gets the column down its
+	# right-hand edge — at the exact boundary, where one row fewer would not.  Five
+	# steps over two rows is too short for a column *and* too narrow for a ▶ each,
+	# so that one falls back to the row and gets its letters and one PLAY.
+	"phrase": {"type": "step_grid", "title": "Phrase",
+	           "rows": ["kick", "snare", "hihat_1_closed"],
 	           "steps": 8, "beats": 2, "velocity_range": [1, 127],
 	           "variants": ["A", "B", "C"], "lands_every": 1},
 	"tiny": {"type": "step_grid", "title": "Tiny", "rows": ["kick", "snare"],

@@ -6589,9 +6589,12 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	_settled(panel)
 	note("the bass page")
 
-	# **A row of tabs above a grid with variants** (#2488), and then a variant
-	# shown that is not the one playing — which puts what the row says beside the
-	# tabs, and is a state of its own for the same reason two popovers are two.
+	# **Both shapes of the variants strip** (#2488): this page carries one grid tall
+	# enough for a column of pairs down its right-hand edge and one too short, which
+	# keeps the row above its pattern — so a rule broken in either is found here.
+	# Then a variant shown that is not the one playing, which is a state of its own
+	# for the same reason two popovers are: it swaps that row's ▶ for the way to
+	# fill it from the one sounding.
 	_go_to_the_variants(panel)
 	note("the drums page, with variants")
 
@@ -7585,7 +7588,11 @@ def test_every_block_measures_a_whole_number_of_lattice_cells (panel: typing.Any
 
 	adrift = []
 
-	for page in ("All", "Bass", "Generators"):
+	# **Drums is here because of the variants** (#2488): a column of them stands
+	# beside the grid and is two cells and a gap wide, counted by `blockSize` and
+	# drawn by the stylesheet.  Without this page the one block on the rig whose
+	# width is not simply label-plus-steps was never measured.
+	for page in ("All", "Bass", "Generators", "Drums"):
 		panel.locator(".pages button", has_text=page).click()
 		panel.wait_for_selector(".part", timeout=5_000)
 		_settled(panel)
@@ -8331,6 +8338,43 @@ def test_a_grid_with_variants_draws_a_letter_and_a_play_for_each (
 	                .get_attribute("class") or "")
 
 
+def test_variants_stand_in_a_column_of_pairs_beside_the_grid (
+	panel: typing.Any) -> None:
+	"""**A letter and its ▶ are a pair, and a pair is a row** (Simon, 2026-09-12).
+
+	A single row of targets said nothing about which arrow belonged to which letter,
+	and it was bounded by the width of the pattern — so the pattern decided how many
+	variants a grid could ever have.  Down the right-hand edge the bound is the
+	block's height instead, where there is far more room.
+
+	**Measured rather than read off the class**, because the class is what the code
+	says and the geometry is what a person sees: the letters share an x and descend,
+	each ▶ sits on its own letter's row, and the column is clear of the pattern.
+	"""
+
+	_go_to_the_variants(panel)
+
+	assert panel.locator(f"{PHRASE} .variants.down").count() == 1, "not drawn as a column"
+
+	letters = {which: panel.locator(_letter(which)).bounding_box() for which in ("A", "B", "C")}
+	plays = {which: panel.locator(_play(which)).bounding_box() for which in ("A", "B", "C")}
+
+	assert abs(letters["A"]["x"] - letters["B"]["x"]) < 1, f"not one column: {letters}"
+	assert abs(letters["B"]["x"] - letters["C"]["x"]) < 1, f"not one column: {letters}"
+	assert letters["A"]["y"] < letters["B"]["y"] < letters["C"]["y"], (
+		f"the letters do not descend: {letters}")
+
+	for which in ("A", "B", "C"):
+		assert abs(plays[which]["y"] - letters[which]["y"]) < 1, (
+			f"{which}'s ▶ is not on its own letter's row: {letters} {plays}")
+		assert plays[which]["x"] > letters[which]["x"], f"{which}'s ▶ is not beside it"
+
+	pattern = panel.locator(f"{PHRASE} .grid").bounding_box()
+
+	assert letters["A"]["x"] >= pattern["x"] + pattern["width"] - 1, (
+		"the column is drawn over the pattern rather than beside it")
+
+
 def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**Edit any variant while another plays** (#2485 Q1).  Which one this panel
@@ -8345,8 +8389,16 @@ def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (
 
 	assert "on" in (panel.locator(conftest.cell("phrase/variants/B/rows/snare/2"))
 	                .get_attribute("class") or "")
-	assert panel.locator(f"{PHRASE} .variants .elsewhere").inner_text().strip().lower() == \
-		"b — a is playing"
+	# **A column says both at once, which is what the row needed a sentence for**
+	# (#2488): A stays lit because it is still what the room hears, and B carries the
+	# ring because it is the one being written.  The sentence is gone with the row.
+	marks = {which: panel.locator(_letter(which)).get_attribute("class") or ""
+	         for which in ("A", "B")}
+
+	assert "playing" in marks["A"] and "shown" not in marks["A"], marks
+	assert "shown" in marks["B"] and "playing" not in marks["B"], marks
+	assert panel.locator(f"{PHRASE} .variants .elsewhere").count() == 0, (
+		"a column spelt out what its own marks already say")
 
 	panel.locator(conftest.cell("phrase/variants/B/rows/kick/1")).click()
 
@@ -8450,7 +8502,12 @@ def test_an_empty_variant_offers_to_start_from_the_one_playing (
 	panel.locator(_letter("C")).click()
 	button = panel.locator(f"{PHRASE} .variants .start-from")
 
-	assert button.inner_text().strip().lower() == "start c from a"
+	# **In the ▶'s place, on that row alone.**  A column has no room for the row's
+	# spelt-out sentence, and an empty variant's ▶ only ever cued silence — so the
+	# pair stays a pair and the target says what it does in its label.
+	assert button.get_attribute("aria-label") == "start C from A"
+	assert panel.locator(_play("C")).count() == 0, "C kept a ▶ as well as the way to fill it"
+	assert panel.locator(_play("B")).count() == 1, "another empty variant lost its ▶"
 
 	button.click()
 
@@ -8494,15 +8551,25 @@ def test_the_variant_shown_is_this_panel_s_and_survives_a_reload (
 	assert panel.locator(f"{PHRASE} .variants .letter.shown").inner_text().strip() == "B"
 
 
-def test_a_block_too_narrow_for_a_play_each_gets_letters_and_one_play (
+def test_a_block_too_short_for_a_column_keeps_the_row_above_its_pattern (
 	panel: typing.Any, fake_app: typing.Any) -> None:
-	"""Five steps cannot hold six targets, so the letters stay and one PLAY cues
-	whichever is shown — the draft design, kept as the narrow case (#2485 Q2)."""
+	"""**The row is the short block's case now** (#2488).
+
+	A column needs a row of block for every variant, and two rows cannot hold three
+	— so this one keeps the row above the pattern, with its label and its sentence.
+	And five steps cannot hold six targets either, so within that row the letters
+	stay and one PLAY cues whichever is shown, which is the draft design kept as the
+	narrow case (#2485 Q2).  Both fallbacks are true of this block at once, which is
+	why it is the one that proves the row still works at all.
+	"""
 
 	_go_to_the_variants(panel)
 
 	tiny = '.part[data-part="tiny"]'
 
+	assert panel.locator(f"{tiny} .variants").count() == 1
+	assert panel.locator(f"{tiny} .variants.down").count() == 0, "a column it has no room for"
+	assert panel.locator(f"{tiny} .variants .variants-label").count() == 1
 	assert panel.locator(f"{tiny} .variants .letter").count() == 3
 	assert panel.locator(f"{tiny} .variants .play").count() == 1
 

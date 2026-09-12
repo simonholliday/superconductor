@@ -336,21 +336,29 @@ beside it.
 ## Variants
 
 A pattern can hold several versions of its notes, and switch between them while
-it plays. A grid that has them shows a row of tabs above it — **A B C D**, each
-with a **▶** — and the two do different things:
+it plays. A grid that has them carries a column down its right-hand edge — a
+letter and a **▶** to a row, **A** to **D** — and each row is one variant, with
+two things you can do to it:
 
-- **Tap a letter** to show that variant and edit it. The music does not change:
+- **Tap the letter** to show that variant and edit it. The music does not change:
   you can write B while A carries the room.
 - **Tap its ▶** to play it next. It blinks until the switch happens, which is at
   the end of the pattern's current cycle, and is lit once it has. Tap the
   blinking ▶ again to change your mind.
 
-The lit letter is the one playing and the ringed one is the one you are looking
-at. When they differ the row says so — *B — A is playing* — and the grid shows
-B's notes without the dots A's generators are placing. An empty variant offers to
-**start from** the one playing, and **clear** works on the variant you are
-looking at. Which variant you are looking at belongs to your panel; which one
-plays belongs to the piece, and every panel sees it.
+The lit row is the one playing and the ringed letter is the one you are looking
+at; when they are the same row it is both. While you are looking at a variant
+that is not playing, the grid shows its notes without the dots the playing
+variant's generators are placing — and if it is empty, its ▶ gives way to a **⧉**
+that fills it from the one sounding, since an empty variant has nothing to play
+anyway. **Clear** works on the variant you are looking at. Which variant you are
+looking at belongs to your panel; which one plays belongs to the piece, and every
+panel sees it.
+
+A block with fewer rows than it has variants has nowhere to put a column, and
+keeps a row of tabs above the pattern instead. That row says *B — A is playing*
+in words, because one row can mark which variant is shown or which is playing but
+not both.
 
 Only the notes are a variant's. The mute, a pitched pattern's transposition and
 the generators that build the pattern stay the pattern's, so switching variant
