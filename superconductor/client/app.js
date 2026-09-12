@@ -898,14 +898,28 @@ function scenesFor (lists) {
  * rather than inside any one block — Simon's decision of 2026-09-11, and the
  * crowding it was made against is now measured: at 1920x1080 the bar already
  * wraps to two lines with the layout unlocked, and the last line has 221px spare
- * on the Band page. Four letters need about 204px of it.
+ * on the Band page, and four letters measured 190px of it.
  *
- * **Which is why there is no label on the group.** A word here would take it to
- * roughly 260px and cost a third line of chrome on the two pages that are the
- * only ones to carry a scene row at all. The letters say what they are by lighting
- * together with the grids they cue; the label lives in `aria-label`, where it
- * costs nothing. Worth revisiting if the bar is ever less full — and worth
- * knowing that a fifth letter is about 49px, so eight would not fit either.
+ * **Each letter carries the ▶, and that was found in a picture** (Simon,
+ * 2026-09-12). Drawn as bare letters the row sat immediately beside the page
+ * buttons — same size, same chrome face, same filled mark for the one you are on —
+ * so `A B C D` read as four more pages with mysterious names. Nothing on the glass
+ * said what they were, and no test here could have: every one of them passed.
+ *
+ * **The ▶ is borrowed from the variants column with its meaning** (#2403): there it
+ * means *play this one next*, which is exactly what this does, so `A ▶` reads as
+ * *play A* rather than *page A*. A word would have said it too, and Simon chose
+ * the mark over the label — it says what pressing it does where a label only names
+ * the group.
+ *
+ * **It costs a line of chrome on one page, knowingly.** Measured at 1920x1080: the
+ * row goes 190px to 217px against 207px of slack on the Band page, so the bar
+ * wraps to a third line there and nowhere else; Notes has 275px and is unaffected,
+ * and the other three pages carry no scene row at all. The alternative was a rule
+ * or a wider gap at +9px, which fits everywhere and says only *a different group*.
+ *
+ * **One text node rather than a letter and a mark**, because a button with more
+ * than one child must be an `.option` or a `.choice` (#2107), and this is neither.
  *
  * **It only cues.** There is nothing to show or edit — a scene has no notes of
  * its own — so it is one target per letter, acting on press like every ▶ (#2046).
@@ -924,7 +938,7 @@ function Scenes ({ states, onCue }) {
 					title=${`play ${id} on every pattern on this page`}
 					data-scene=${id}
 					onPointerDown=${(event) => { event.preventDefault(); onCue(id); }}
-				>${id}</button>`)}
+				>${id} ▶</button>`)}
 		</div>`;
 }
 

@@ -8338,8 +8338,16 @@ def test_a_page_with_two_variant_grids_offers_a_scene_for_each_shared_letter (
 
 	_go_to_the_variants(panel)
 
+	# **Identity by the id, and the mark by what is written on it.**  Drawn as bare
+	# letters the row sat beside the page buttons and read as four more of them —
+	# same size, same face, same filled mark for the one you are on.  Each carries
+	# the ▶ a grid's own variant column uses, borrowed with its meaning (#2403), so
+	# it reads as *play A* rather than *page A* (Simon, 2026-09-12).
+	assert [one.get_attribute("data-scene")
+	        for one in panel.locator(".bar .scenes button").all()] == ["A", "B", "C"]
+
 	assert [one.inner_text().strip() for one in panel.locator(".bar .scenes button").all()] \
-		== ["A", "B", "C"]
+		== ["A ▶", "B ▶", "C ▶"], "a scene letter no longer says that it plays"
 
 	# Lit only when *every* grid it covers plays that letter, so the row never
 	# claims a state the grids do not hold.
