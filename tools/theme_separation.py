@@ -19,7 +19,8 @@ Smith & Pokorny 1975 cone fundamentals behind its sRGB LMS model, and sRGB white
 as the neutral axis).  They were taken at full precision on 2026-09-12 and this
 file was checked against that implementation directly: across 20,024 colours
 and all three dichromacies the two differ by at most 2.1e-15 in linear RGB.
-Repeat that check before changing any number below.
+Repeat that check — `research/theme-separation/verify_brettel.py` — before
+changing any number below.
 
 **What it replaced, and why the old figures cannot be compared.**  The first
 harness was thrown away, and the numbers it published in #2190 cannot be

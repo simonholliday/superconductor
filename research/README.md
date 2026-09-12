@@ -32,6 +32,7 @@ mount.
 | `serving/` | Starlette, aiohttp and Quart under load, with the CPU figures behind #1929 | #2007 |
 | `subsample-substation/` | Subsample MIDI timing and Substation band-restart timing | #2012, #2014 |
 | `iana-ports.csv` | The registry evidence behind the port recommendation | #2020 |
+| `theme-separation/` | Added 2026-09-12: the search for the procedure behind #2190's published separation row, and the check that the tool's Brettel constants match DaltonLens | #2297 |
 
 ## Running any of it
 
