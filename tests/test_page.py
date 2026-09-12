@@ -8371,8 +8371,20 @@ def test_variants_stand_in_a_column_of_pairs_beside_the_grid (
 
 	pattern = panel.locator(f"{PHRASE} .grid").bounding_box()
 
-	assert letters["A"]["x"] >= pattern["x"] + pattern["width"] - 1, (
-		"the column is drawn over the pattern rather than beside it")
+	# **And a lane of a whole cell between the two** (Simon, 2026-09-12): set one
+	# `--gap` from the last step, the letters read as two more columns of the
+	# pattern, because a gap is the mortar between two step cells.  A whole cell is
+	# the only width the lane may be — anything else puts the block off the lattice
+	# (`188722c`) — and it is the same separation the lattice puts between blocks.
+	cell = panel.evaluate(
+		"() => parseFloat(getComputedStyle(document.documentElement)"
+		".getPropertyValue('--cell'))")
+
+	clear = letters["A"]["x"] - (pattern["x"] + pattern["width"])
+
+	assert clear >= cell - 0.5, (
+		f"the column stands {round(clear)}px from the pattern, not a lattice "
+		f"cell ({round(cell)}px) — it reads as part of the grid")
 
 
 def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (

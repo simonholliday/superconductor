@@ -319,6 +319,20 @@ const VARIANT_COLS = 2;
  * Counted rather than measured, like every other number here: the fit solves for a
  * cell size before anything is drawn, so a column it did not know about is a column
  * that overflows its own block. */
+const VARIANT_LANE = 1;
+/* And a lane of one cell between the pattern and that column (Simon, 2026-09-12).
+ *
+ * Set one `--gap` from the last step it read as part of the grid, because a gap is
+ * the lattice's own mortar — it is exactly the distance between two step cells, so
+ * the letters looked like a seventeenth and eighteenth column of the pattern.
+ *
+ * **A whole cell, because that is the only width it may be.** A block has to
+ * measure a whole number of lattice cells, so the separation can only grow in
+ * whole ones: half a cell puts the block a few pixels off the lattice and the lane
+ * between two blocks becomes the lane minus those pixels, which is the defect
+ * `188722c` exists to stop. It is also `SEPARATION`, the same cell the lattice
+ * puts between two blocks to say they are separate things — which is the thing
+ * being said here. */
 const BESIDE_A_LANE = 3;
 /* Room on a lane's own row for whatever else it carries — today the way back to
  * unset, which is four characters and a floor of one row (#2381).
@@ -5833,7 +5847,7 @@ function Panel () {
 			   Both live on the window because the fit and the page each need one
 			   of them and they have to be the same answer: `blockSize` widens the
 			   block by `aside`, and the render draws the shape `beside` names. */
-			aside: beside ? VARIANT_COLS : 0,
+			aside: beside ? VARIANT_COLS + VARIANT_LANE : 0,
 			beside,
 			rows: body + (variants && !beside ? VARIANT_CELLS : 0) + 1
 				/* The title is the `+ 1` above and the grip is this one. A block

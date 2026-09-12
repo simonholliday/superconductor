@@ -1728,6 +1728,14 @@ html, body {
 	grid-auto-rows: var(--cell);
 	align-content: start;
 	margin-bottom: 0;
+
+	/* **A lane between it and the pattern** (Simon, 2026-09-12).  The body's own
+	   flex gap is one `--gap`, which is the mortar between two step cells — so at
+	   that distance the letters read as two more columns of the grid.  A cell and
+	   a gap on top of it makes the separation one whole lattice cell, which is
+	   what `aside` counts (`VARIANT_COLS + VARIANT_LANE`) and the same lane the
+	   lattice puts between two blocks. */
+	margin-left: calc(var(--cell) + var(--gap));
 }
 
 .variants .variants-label {
