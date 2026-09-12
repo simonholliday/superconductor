@@ -2368,6 +2368,49 @@ def test_a_layers_controls_are_not_clipped_at_the_smallest_cell_size (
 	assert spilling == [], f"these reach past the block: {spilling}"
 
 
+def test_holding_a_layer_leaves_the_notes_its_algorithm_placed (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Simon, 2026-09-12**: tapping hold made the generated notes vanish and
+	return a cycle later — *"to the user, this looks momentarily as if they have
+	cleared the pattern, a panic moment, and conflicting with their belief that
+	they have held the pattern."*
+
+	A stack change blanked every dot on every grid.  The reasoning was bypass — a
+	dot from a generator you have just silenced describes a cycle that will not
+	happen — but it bought at most one bar of earlier truth and paid a blank grid
+	for it.  **A dot is always up to a cycle stale**, because it says what an
+	algorithm put down *last* cycle; and a held layer is the one case where it is
+	not stale at all, since the next build places the same notes.
+
+	The paused clear is a different thing and stays: no frame is coming there, so
+	a dot would outlive its cycle for ever.
+	"""
+
+	_open_the_stack(panel)
+
+	fake_app.realised("grid", {"kick": {"2": 100}})
+	playwright_api.expect(panel.locator('.part[data-part="grid"] .cell.ghost')).to_have_count(
+		1, timeout=5_000)
+
+	# Exactly the frame a hold causes: the whole stack, with `dealt` on a layer.
+	fake_app.confirm("stack/layers", [
+		{"id": "one", "generator": "euclidean", "bypassed": False,
+		 "params": {"pitch": "kick", "pulses": 3}, "dealt": 4242},
+	], by="app")
+
+	# **Waited for a consequence of that frame rather than for a moment**, so the
+	# assertion below cannot pass by reading the glass before it landed.
+	playwright_api.expect(
+		panel.locator('.part[data-part="stack/one"] .part-foot .offer.hold')
+	).to_have_class(re.compile(r"\bchosen\b"), timeout=5_000)
+
+	# Nothing will put them back — no further `realised` frame is sent — so this
+	# is not an expectation that retries until true (#2502): if the change had
+	# blanked them they would be gone for good.
+	assert panel.locator('.part[data-part="grid"] .cell.ghost').count() == 1, (
+		"holding a layer blanked the notes its algorithm had placed")
+
+
 def test_a_generator_keeps_its_mute_in_its_footer_like_the_other_blocks (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**Simon, 2026-09-12** (#2511): *"I see the header as being information not

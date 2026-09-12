@@ -5394,19 +5394,73 @@ function Panel () {
 					 * stayed on the glass, outliving the thing that put it
 					 * there and then outliving the generator itself.
 					 *
-					 * Cleared when the clock is held, and again whenever a stack
-					 * changes: bypassing a generator makes every dot it
-					 * contributed a statement about a cycle that will not
-					 * happen. Both heal themselves on the next cycle, which is
-					 * exactly what a thing nothing stores should do. */
+					 * **Cleared per layer when a stack changes, not wholesale.**  A cell
+					 * carries `from` — the id of the layer that placed it (1.13.0) — so
+					 * the dots of a layer that has been bypassed or taken away can go
+					 * while every other dot stays.  Only the grid this stack builds is
+					 * touched.
+					 *
+					 * This was one `setRealised({})` on any `/layers` change, and it was
+					 * two faults.  **It blanked every dot on every grid**, so a knob on
+					 * the bass emptied the drum grid.  And Simon reported the sharper
+					 * one: tapping *hold* blanked the pattern and it returned a cycle
+					 * later, reading as having cleared it at the exact moment you asked
+					 * to keep it.  A held layer is the one case where a dot is not stale
+					 * at all — the next build places the same notes.
+					 *
+					 * **What the blunt version was right about is kept**, and it is this
+					 * project's cardinal defect: a generator switched off has not played
+					 * the notes still drawn under it, so those must go at once rather
+					 * than at the next cycle.  Everything else is at most a bar stale,
+					 * which is what a per-cycle event means everywhere else.
+					 *
+					 * **A pause keeps its wholesale clear**: no frame is coming, so a dot
+					 * would outlive its cycle for ever.  `stalled` clears wholesale too,
+					 * on an asymmetry worth stating — a refusal is a claim about a
+					 * *configuration* that has just changed, where a dot is a claim about
+					 * a cycle that did happen. */
 					if (frame.path.endsWith("/paused") && frame.v === true) {
 						setRealised({});
 						setStalled({});
 					}
 
 					if (frame.path.endsWith("/layers")) {
-						setRealised({});
 						setStalled({});
+
+						const feeds = declared && declared.builds;
+
+						if (feeds && Array.isArray(frame.v)) {
+							const playing = new Set(frame.v
+								.filter((layer) => layer && !layer.bypassed)
+								.map((layer) => layer.id));
+
+							setRealised((was) => {
+								const had = was[feeds];
+
+								if (!had) return was;
+
+								const kept = {};
+
+								for (const row of Object.keys(had)) {
+									const live = {};
+
+									for (const step of Object.keys(had[row])) {
+										const cell = had[row][step];
+
+										/* Unattributable stays: a cell with no `from` cannot
+										   be shown to belong to a layer that has gone, and
+										   dropping it would blank the grid again. */
+										if (!cell || cell.from == null || playing.has(cell.from)) {
+											live[step] = cell;
+										}
+									}
+
+									if (Object.keys(live).length) kept[row] = live;
+								}
+
+								return { ...was, [feeds]: kept };
+							});
+						}
 					}
 
 					/* Answered in substance: the app now holds what was asked
