@@ -4177,6 +4177,96 @@ function Transport ({ control, name, fields, up, anchor, onSet }) {
 			Math.max(low === undefined ? wanted : low, wanted)));
 	};
 
+	/* **The space bar holds and releases the clock**, and it is the only key this
+	 * panel listens for (Simon, 2026-09-12: *"I instinctively hit the space bar
+	 * for pause/play since it's the default in all my other software"*).
+	 *
+	 * **A keyboard is a convenience here and never a requirement** (#2049).  The
+	 * panel host is a Pi with a touchscreen and no keyboard attached, so nothing
+	 * may depend on this: it is a second way to reach a control that is already
+	 * on the glass, which is also why it is not a defect under *touch
+	 * reachability* — the transport keys beside it do the same job with one
+	 * finger.  Simon asked for this one and explicitly not for a keyboard
+	 * interface, so this stays the only listener rather than becoming the first
+	 * of a set.
+	 *
+	 * **It lives in `Transport` so it cannot disagree with the buttons.**  Same
+	 * component, same `paused`, same `onSet`, same path — the scenes row's own
+	 * lesson (#2489), where cueing calls the function the grid's own ▶ calls
+	 * rather than reimplementing it.  It follows that the key is absent exactly
+	 * when the control is: no transport declared, no `paused` field, or the app
+	 * not connected, and there is no key either.  A shortcut that fires at an app
+	 * that is not there would flash a failure five seconds later
+	 * (`PENDING_EXPIRES`) and read as a broken keyboard.
+	 *
+	 * **Space flips where each button sets, and that asymmetry is right.**  The
+	 * two `.tkey` ends each *set* a value, so pressing PLAY twice is still
+	 * playing — the rocker convention this panel is built on, because a machine's
+	 * switch has two ends.  A keyboard has one key, and in every piece of
+	 * software Simon is comparing this with, space toggles.  So the key reads
+	 * `paused` and sends its opposite.
+	 *
+	 * **`preventDefault` is doing two jobs and the second one is the subtle
+	 * one.**  It stops the page scrolling by a screenful, which on a page that
+	 * scrolls when it no longer fits (#2072) would throw the arrangement out from
+	 * under a hand.  And it stops the browser *re-activating whatever button is
+	 * focused*: there are sixty of them here and a click focuses one on a desktop,
+	 * so without it a mouse click on LOCK followed by a space would un-lock that
+	 * layer as well as pausing — worst of all on the transport's own keys, where
+	 * the focused button and the shortcut would both fire and disagree.  Measured
+	 * in Firefox rather than taken from the spec, because the activation happens
+	 * on `keyup` and it is not obvious that preventing the `keydown` reaches it.
+	 *
+	 * **The cost, stated rather than discovered: space no longer activates a
+	 * focused control anywhere on the panel.**  Enter still does, so keyboard
+	 * operation is not lost — and most of this surface is drag anyway (a cable, a
+	 * block, a rhythm across cells), which no key reaches.  On a touch panel with
+	 * no keyboard, none of it is reachable in the first place.
+	 *
+	 * **`event.repeat` is refused**, or a held key would flip the transport many
+	 * times a second; and any modifier is left alone, because Ctrl- and
+	 * Alt-space belong to the window manager and an IME.
+	 *
+	 * **What the key reads is a ref rather than a closure, and that is not
+	 * tidiness.**  With `paused` among the dependencies the listener is rebuilt
+	 * whenever the transport moves — and an effect runs *after* paint, so there
+	 * is a window in which the glass already shows *paused* while the listener
+	 * still closes over *playing*, and the next space asks for the state it is
+	 * already in.  A test caught exactly that: two presses, two `true`s.  A ref
+	 * is read at the instant the key is struck, which is the only instant that
+	 * matters, and the listener is then bound once. */
+	const clockHeld = useRef(paused);
+
+	clockHeld.current = paused;
+
+	useEffect(() => {
+		if (!canPause || !up) return undefined;
+
+		const onKey = (event) => {
+			if (event.code !== "Space" || event.repeat) return;
+			if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+
+			/* **Nothing on this panel takes typing today** — no input, no
+			   textarea, nothing contenteditable, measured — so this guard is
+			   for the day something does, because a global handler eating every
+			   space in a text field is a maddening thing to attribute later. */
+			const into = event.target;
+
+			if (into && (into.isContentEditable
+				|| ["INPUT", "TEXTAREA", "SELECT"].includes(into.tagName))) {
+				return;
+			}
+
+			event.preventDefault();
+			onSet(`${name}/paused`, !clockHeld.current);
+		};
+
+		document.addEventListener("keydown", onKey);
+
+		return () => document.removeEventListener("keydown", onKey);
+	}, [canPause, up, name, onSet]);
+
+
 	/* **The counter is the largest thing here**, because on every machine these
 	 * users own it is: an 808, an MPC, a tape remote, Logic's bar. Ours had a
 	 * big word reading PAUSE and no position at all, which is the arrangement

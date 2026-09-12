@@ -132,6 +132,138 @@ def test_a_transport_field_moves_the_transport_not_the_grid (
 	panel.wait_for_selector('.transport .tkey.engaged[title^="play"]', timeout=5_000)
 
 
+def test_the_space_bar_holds_and_releases_the_clock (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Simon, 2026-09-12: *"I instinctively hit the space bar for pause/play
+	since it's the default in all my other software."*
+
+	**A keyboard is a convenience and never a requirement here** (#2049) — the
+	panel host has none attached — so this is a second way to reach a control
+	already on the glass, which is what keeps it clear of *touch reachability*.
+
+	**And it flips where the buttons set.**  The two transport keys each set a
+	value, so pressing PLAY twice is still playing, which is the rocker
+	convention a machine's two-ended switch earns.  A keyboard has one key and
+	every piece of software this is being compared with toggles, so the key reads
+	the state and sends its opposite.
+	"""
+
+	before = len(fake_app.sets)
+
+	panel.keyboard.press(" ")
+
+	sent = fake_app.settled("transport/paused", since=before)
+
+	assert sent, "the space bar asked the app for nothing at all"
+	assert sent[-1]["v"] is True, f"space did not hold the clock: {sent[-1]}"
+
+	# As the app answers it, so the panel is holding the state the key reads.
+	fake_app.confirm("transport/paused", True, by="app")
+	panel.wait_for_selector('.transport .tkey.engaged[title^="pause"]', timeout=5_000)
+
+	again = len(fake_app.sets)
+
+	panel.keyboard.press(" ")
+
+	back = fake_app.settled("transport/paused", since=again)
+
+	assert back, "the space bar asked for nothing the second time"
+	assert back[-1]["v"] is False, (
+		f"space held the clock twice rather than letting it go: {back[-1]}")
+
+
+def test_the_space_bar_does_not_also_press_whatever_button_has_focus (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""**The trap this shortcut had to clear, and it only exists on a desktop.**
+	A browser activates a focused button on space, so without `preventDefault` the
+	shortcut would fire *as well as* re-pressing whatever a mouse last clicked.
+	Simon runs one touchscreen and one desktop panel, so this is his case rather
+	than a hypothetical.
+
+	**Which buttons can be focused was measured rather than assumed, and the
+	answer is a short list.**  Almost everything here calls `preventDefault` on
+	`pointerdown` — the act-on-press convention (#2046) — and that suppresses
+	focus as a side effect, so the latch, the page buttons and every `.offer`
+	leave focus on the body.  The ones wired with `onClick` do take it: **add**,
+	**send to…** and **clear**.
+
+	So the case is tested on `clear`, which is the worst of them: a focused CLEAR
+	re-pressed by a space bar empties the pattern, and the person was reaching for
+	the transport.
+
+	Measured in Firefox rather than reasoned from the spec, because a button
+	activates on `keyup` and it is not obvious that preventing the `keydown`
+	reaches it.  The stated cost: space no longer activates a focused control
+	anywhere here.  Enter still does.
+	"""
+
+	wipe = panel.locator('.part[data-part="grid"] .part-foot .clear')
+
+	# **Count activations on the button, not what its handler achieves.**  The
+	# first version of this test watched for a second clear reaching the app and
+	# passed against a build with no `preventDefault` at all — because clearing
+	# an already-empty grid writes nothing, so the re-press was invisible exactly
+	# where it matters most.  A `click` is the thing being prevented, so a `click`
+	# is the thing to count.
+	wipe.evaluate('''(button) => {
+		window.__pressed = 0;
+		button.addEventListener("click", () => { window.__pressed += 1; });
+	}''')
+
+	wipe.click()
+
+	assert wipe.evaluate("(button) => document.activeElement === button"), (
+		"the click did not leave clear focused, so this test proves nothing "
+		"about a focused button")
+
+	assert panel.evaluate("() => window.__pressed") == 1, (
+		"the mouse click did not register, so the count means nothing")
+
+	# Let the clear itself finish crossing, so what follows is only the key's.
+	panel.wait_for_timeout(500)
+
+	before = len(fake_app.sets)
+
+	panel.keyboard.press(" ")
+
+	sent = fake_app.settled("transport/paused", since=before)
+
+	assert sent and sent[-1]["v"] is True, (
+		f"space did not reach the transport with a button focused: {sent}")
+
+	panel.wait_for_timeout(300)
+
+	assert panel.evaluate("() => window.__pressed") == 1, (
+		"the space bar also pressed the focused button, so reaching for the "
+		"transport emptied the pattern")
+
+
+def test_a_held_space_bar_flips_the_transport_once (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A key held down repeats, and a transport flipped thirty times a second is
+	not a transport.  The repeats are dispatched rather than held for real, since
+	nothing here can hold a key long enough to make the operating system repeat
+	it — `event.repeat` is the fact being tested, not the hardware.
+	"""
+
+	before = len(fake_app.sets)
+
+	panel.evaluate("""() => {
+		for (let each = 0; each < 5; each += 1) {
+			document.dispatchEvent(new KeyboardEvent("keydown", {
+				code: "Space", key: " ", repeat: true, bubbles: true, cancelable: true,
+			}));
+		}
+	}""")
+
+	panel.wait_for_timeout(400)
+
+	asked = [one for one in fake_app.sets[before:]
+		if one.get("path") == "transport/paused"]
+
+	assert asked == [], f"a held key flipped the transport {len(asked)} times"
+
+
 def test_the_counter_says_which_bar_beat_and_step (
 	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
 	"""The largest thing in the transport, because on every machine these users
