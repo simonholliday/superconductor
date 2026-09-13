@@ -688,8 +688,8 @@ class _Length:
 	mid-song, would put the sum out, and a re-sync would then land off the bar.
 
 	**How a pattern is made a number of steps long is the composition's**
-	(``resize``), because Subsequence's words for it are not settled (#2546) and
-	this package calls no sequencer's API it cannot see.
+	(``resize``), because this package calls no sequencer's API it cannot see.  In
+	Subsequence it is ``p.set_length(steps=…)`` (#2546).
 	"""
 
 	name: str
@@ -888,6 +888,13 @@ class _Length:
 		On the clock loop once a build: some fraction arithmetic, one call the
 		composition supplied and one event, which is nothing beside the notes the
 		build then places.
+
+		**Nothing is kept until the pattern has been made that long.**  A sequencer
+		may refuse a length — Subsequence refuses one shorter than the pattern's
+		reschedule lookahead (#2546) — and then the build raises, the cycle is
+		silent, and the pattern plays on at the length it had.  A count that had
+		already moved on would put every later cycle in the wrong place, and a
+		re-sync asked on the bar would then take the pattern off it.
 		"""
 
 		cycle = int(getattr(pattern, "cycle", 0) or 0)
@@ -895,23 +902,30 @@ class _Length:
 
 		# Every cycle between the last one built here and this one ran at the
 		# length that build set, because a length holds until it is set again —
-		# which is also what a muted pattern does through the builds it skips.
+		# which is also what a muted pattern does through the builds it skips, and
+		# what any pattern does through a build that was refused a length.
 		start = began + (cycle - counted) * lasted
 
 		first, played = 0, self.end
+		gap = self._gap(pattern, start) if self.resync else 0
 
-		if self._landing:
-			self._landing = False
-			self._say_resync(False)
-
-		elif self.resync:
-			first, played = self._resynced(pattern, start)
-
-		self._counted = (cycle, start, played)
-		self.this_cycle = (cycle, first, played)
+		if gap:
+			# The end of the pattern, so the short cycle leads into the downbeat.
+			first, played = (self.end - gap) % self.end, gap
 
 		if self.resize is not None:
 			self.resize(pattern, played)
+
+		# **A re-sync has landed when a build finds no gap left to the bar**, which is
+		# the build after its short cycle, or the first if it was asked on the bar.
+		# The short cycle is queued from here on, so it can no longer be taken back.
+		self._landing = gap > 0
+
+		if self.resync and not gap:
+			self._say_resync(False)
+
+		self._counted = (cycle, start, played)
+		self.this_cycle = (cycle, first, played)
 
 		# **Where this cycle starts and what it plays**, so a playhead follows the
 		# music rather than the page's one beat count, which stops describing a
@@ -933,36 +947,27 @@ class _Length:
 
 		return first, played
 
-	def _resynced (self, pattern: typing.Any, start: int) -> tuple[int, int]:
-		"""Where the cycle a re-sync makes starts, and how many steps it runs for.
+	def _gap (self, pattern: typing.Any, start: int) -> int:
+		"""How many steps a re-sync's short cycle runs for, to the next bar line.
 
 		*start* is where this cycle begins, in steps from the first; a bar is as many
 		beats as the builder's time signature says, which is Subsequence's own count.
+		None left is a pattern already on the bar, where nothing audible changes — or
+		one that can never be.
 		"""
 
 		signature = getattr(pattern, "time_signature", None) or (4, 4)
 		bar = fractions.Fraction(int(signature[0])) / self._step
 		gap = (-start) % bar
 
-		# Already on the bar: nothing audible changes, and the re-sync has landed.
-		if gap == 0:
-			self._say_resync(False)
-
-			return 0, self.end
-
 		# **A step that does not divide the bar cannot land on it**, and a cycle of
 		# part of a step is not something to guess.  Said, not dropped in silence.
 		if gap.denominator != 1:
 			LOG.warning("%s cannot come back onto the bar, because its steps do not divide it", self.name)
-			self._say_resync(False)
 
-			return 0, self.end
+			return 0
 
-		played = int(gap)
-		self._landing = True
-
-		# The end of the pattern, so the short cycle leads into the downbeat.
-		return (self.end - played) % self.end, played
+		return int(gap)
 
 	def _say_resync (self, value: bool) -> None:
 		"""Record where a re-sync stands and say so, which only the app decides once asked."""

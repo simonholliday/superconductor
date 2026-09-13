@@ -8,6 +8,7 @@ asking for the pattern to come back onto the bar.  A grid declaring none of it i
 the grid it always was.
 """
 
+import collections.abc
 import fractions
 import importlib.util
 import types
@@ -463,6 +464,68 @@ def test_a_bar_counts_the_beats_its_time_signature_says () -> None:
 	grid.now(builder)
 
 	assert builder.lengths == [12]
+
+
+# --- a length the sequencer refuses ----------------------------------------------------
+
+def _refusing (shortest: int) -> collections.abc.Callable[[typing.Any, int], None]:
+	"""A resize that refuses too short a length by raising, as Subsequence does under a lookahead (#2546)."""
+
+	def resize (pattern: typing.Any, steps: int) -> None:
+		if steps < shortest:
+			raise ValueError(f"{steps} steps is shorter than this pattern's reschedule lookahead")
+
+		pattern.lengths.append(steps)
+
+	return resize
+
+
+def test_a_refused_length_leaves_the_count_where_the_music_is () -> None:
+	"""Refused, the build is silent and the pattern plays on at the length it had, so nothing is kept.
+
+	**Kept, two refused cycles of two steps put the count twenty-eight steps behind the
+	music**: the page drew the pattern off the bar, and a re-sync asked of a pattern on
+	it made a short cycle and took it off (`test_length_sequencer.py`, #2546).
+	"""
+
+	grid, link = _drums(seed={"kick": [0]})
+	grid.resize = _refusing(4)
+
+	grid.now(Builder(cycle=0))
+	grid.apply(["end"], 2)
+
+	for cycle in (1, 2):
+		with pytest.raises(ValueError):
+			grid.now(Builder(cycle=cycle))
+
+	grid.apply(["end"], 16)
+	grid.now(Builder(cycle=3))
+	grid.apply(["resync"], True)
+
+	on_the_bar = Builder(cycle=4)
+
+	assert grid.now(on_the_bar) == {"kick": _steps(0)}
+	assert on_the_bar.lengths == [16], "a re-sync asked on the bar made a short cycle"
+	assert grid.snapshot()["resync"] is False
+	assert _cycles(link) == [], "the page was told the pattern had left the bar"
+
+
+def test_a_resync_whose_short_cycle_is_refused_can_still_be_taken_back () -> None:
+	"""Nothing was queued, so a panel is not told it is already coming back onto the bar."""
+
+	grid, _ = _drums()
+	grid.resize = _refusing(4)
+
+	grid.now(Builder(cycle=0))
+	grid.apply(["end"], 14)
+	grid.now(Builder(cycle=1))
+	grid.apply(["resync"], True)
+
+	# Cycle 2 starts on beat 7.5: two steps to the bar, which is too short to take.
+	with pytest.raises(ValueError):
+		grid.now(Builder(cycle=2))
+
+	assert grid.apply(["resync"], False), "a short cycle that never played could not be taken back"
 
 
 # --- a note grid ----------------------------------------------------------------------

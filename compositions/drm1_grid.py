@@ -120,8 +120,8 @@ KEEPS_A_STEP = "steps" in inspect.signature(subsequence.pattern_builder.PatternB
 **A length is offered on the glass only where it can** (#2548), because the
 alternative is worse than no control at all: `set_length` in beats spreads a
 pattern's steps over the new length, so a euclidean on a hi-hat shortened to
-twelve steps would be squeezed into three beats instead of losing four.  The words
-are Subsequence's to choose, and this line and `_resize` change with them.
+twelve steps would be squeezed into three beats instead of losing four.  The word
+is Subsequence's, `steps`, and a test there pins its name and kind (#2546).
 """
 
 
@@ -135,7 +135,7 @@ MIN_STEPS = 1 if KEEPS_A_STEP else None
 """The fewest steps a pattern here may play, where its length can change at all.
 
 One: a pattern must be at least as long as its rebuild lookahead, which is one
-pulse here, and a sixteenth is six."""
+pulse here, and a sixteenth is six.  Subsequence refuses anything shorter (#2546)."""
 
 RESIZE = _resize if KEEPS_A_STEP else None
 """How a grid that drives a pattern makes it as long as it plays, where it can."""

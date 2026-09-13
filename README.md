@@ -456,9 +456,12 @@ A composition says which grids may change length and how short they may get, and
 gives the grid its own way of making the pattern that long:
 
 ```python
+def make_it_this_long (p, steps):
+    p.set_length(steps=steps)
+
 drum_grid = superconductor.subsequence_adapter.StepGrid(
     composition, rows=ROWS, steps=16, pattern="drums",
-    min_steps=1, resize=make_it_this_long)
+    min_steps=4, resize=make_it_this_long)
 ```
 
 `resize` is called at each build with the pattern builder and a number of the
@@ -467,10 +470,18 @@ step the size it was**. The play function asks the grid what to play with
 `now(p)`, as it does for variants, and is handed only what the cycle plays. A
 grid given no `min_steps` is exactly the grid it always was.
 
-Subsequence's `set_length` takes a length in beats and leaves a pattern's count of
-steps as it was, which spreads a generator's steps across the new length rather
-than dropping some of them. So `compositions/drm1_grid.py` offers a length only
-where `set_length` can be given a count of steps.
+In Subsequence, making a pattern a number of its steps long is
+`set_length(steps=…)`, as above. Given a length in beats instead, `set_length`
+keeps a pattern's count of steps, which spreads a generator's steps across the
+new length rather than dropping some of them. So `compositions/drm1_grid.py`
+offers a length only where `set_length` can be given a count of steps.
+
+**A pattern cannot be shorter than its `reschedule_lookahead`**, which is a beat
+unless the pattern says otherwise. Subsequence refuses the length: the build that
+asked for it is silent, and the pattern plays on at the length it had until it is
+given one it will take. So a sixteen-step grid rebuilt a beat ahead offers four
+steps at the fewest, as above. `compositions/drm1_grid.py` rebuilds its patterns
+a pulse ahead, and offers one.
 
 ## Connecting an application
 
