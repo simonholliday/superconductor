@@ -19,6 +19,7 @@ None of them change a file in either repository. Subsequence's `Sequencer` is pa
 | `sleep_probe.py` | Times the `asyncio.sleep` before each pulse against what was asked, which is what showed the oversleep. |
 | `measure_transport.py` | Reads the rig's transport, optionally sets tempo and pause, and counts beats for 3 s. A pause is confirmed by counting beats, never by reading the field (#2446). |
 | `dryrun_composition.py` | A throwaway composition for proving the launcher before touching a rig. |
+| `play_cost.py` | Added for #2525: what placing a drum grid on a pattern costs with Subsequence's own builder, for `hit_steps` once a row, grouped by velocity, and one `note` a step — the last is what the rig's `_play` does, and costs what the first did. Runs on its own, off any rig. |
 
 ## Running them
 
