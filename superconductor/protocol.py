@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.36.0"
+CONTRACT_VERSION = "1.37.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -344,6 +344,21 @@ this, and a whole-grid write from something older, comes back at the default.
 **Not additive in the direction that matters**: a panel too old reads a row of
 objects as nothing and draws every step grid empty, which the contract check on
 its bar is there to say (#2164).
+
+1.37.0 lets a pattern **play fewer of its grid's steps**, changed from the glass
+while it plays (#2526, design #2548).  A grid that allows it declares
+``min_steps``, and its ``steps`` — its columns, as ever — is also the longest it
+may be.  Its state carries ``end``, how many steps play from step 0, and
+``resync``, a request: a panel sets it true to ask for the pattern to come back
+onto the bar, false to take the asking back, and the app clears it when the
+pattern is on the bar again.  **``end`` is kept at once and heard from the
+pattern's next cycle**; a cell at or past it is still a cell, and still placed.
+Each build of such a grid sends an event, ``cycle``, naming the grid as
+``control`` and carrying ``at`` — the beat that cycle starts on — ``from``, the
+step it starts from, and ``end``, so a playhead follows what is sounding instead
+of the page's one beat count.  **Additive**: a panel too old draws every column
+and a playhead that drifts once a length has changed, and an app too old
+declares no ``min_steps``.
 """
 
 UNIT = "unit"

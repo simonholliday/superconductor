@@ -292,6 +292,9 @@ def _apply_cell (
 		grid["enabled"] = bool(value)
 		return
 
+	if _apply_length(grid, declaration, rest, value, path):
+		return
+
 	if declaration.get("variants"):
 		landed = _in_variant(grid, declaration, rest, value, path)
 
@@ -330,6 +333,50 @@ def _apply_cell (
 		return
 
 	_step(grid, declaration, rest, value, path)
+
+
+def _apply_length (
+	grid: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> bool:
+	"""Keep how many steps play, or where a re-sync stands, and say whether the path was either (#2548).
+
+	Both belong to the pattern rather than to a variant, so they are answered
+	before a variant's rows are looked for, as the mute is.  ``end`` is checked
+	against the bounds the grid declared, because a copy outside them could not
+	have come from the app; ``resync`` is a flag, set by a panel asking and
+	cleared by the app when the pattern is back on the bar.  A grid that declared
+	no ``min_steps`` has neither, and is refused, as a transposition is on a grid
+	that declared no range to do it in.
+	"""
+
+	if rest not in (["end"], ["resync"]):
+		return False
+
+	low = declaration.get("min_steps")
+
+	if low is None:
+		raise ControlError(f"{path!r} names a length this grid did not declare it can change")
+
+	if rest == ["resync"]:
+		if not isinstance(value, bool):
+			raise ControlError(f"a re-sync is true or false, not {value!r}")
+
+		grid["resync"] = value
+
+		return True
+
+	steps = declaration.get("steps", 0)
+
+	if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= steps:
+		raise ControlError(f"this grid plays from {low} to {steps} steps, not {value!r}")
+
+	grid["end"] = value
+
+	return True
 
 
 def _in_variant (
@@ -1070,6 +1117,9 @@ def _apply_note (
 			raise ControlError(f"a transposition is between {low} and {high} semitones")
 
 		grid["transpose"] = value
+		return
+
+	if _apply_length(grid, declaration, rest, value, path):
 		return
 
 	if rest in (["labels"], ["unreachable"]):

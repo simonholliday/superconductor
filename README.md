@@ -429,6 +429,49 @@ def drums (p):
 `lands_every=2` holds each switch for the end of a two-bar phrase over a one-bar
 pattern. A grid given no variants is exactly the grid it always was.
 
+## Pattern length
+
+A pattern can play fewer of its steps than its grid has, changed while it plays.
+A grid that allows it has a **length** row in its settings: **-1** and **+1**
+either side of how many steps play. The change is heard from the pattern's next
+cycle, so a twelve-step hi-hat against a sixteen-step kick is a few presses away,
+and the two meet again every three bars.
+
+The grid stays the width it was. Steps past the end are hatched, and they are
+still there: you can tap them, they are kept with everything else, and they play
+again when the pattern is lengthened. A step that is set but past the end is
+hatched in its lit colour rather than filled. The longest a pattern can be is the
+width of its grid. A pattern's length is its own rather than a variant's, so
+every variant plays at the one length.
+
+**A pattern that has been shortened drifts against the bar, and stays drifted.**
+A hi-hat played at twelve steps for three cycles and set back to sixteen is three
+steps late, and nothing puts it back by itself, because sometimes that is exactly
+what you wanted. **re-sync** puts it back: the pattern starts again from its first
+step on the first bar line after its current cycle ends, playing the end of the
+pattern into that bar line so that it arrives on the downbeat. It blinks until it
+lands, and pressing it again before then changes your mind.
+
+A composition says which grids may change length and how short they may get, and
+gives the grid its own way of making the pattern that long:
+
+```python
+drum_grid = superconductor.subsequence_adapter.StepGrid(
+    composition, rows=ROWS, steps=16, pattern="drums",
+    min_steps=1, resize=make_it_this_long)
+```
+
+`resize` is called at each build with the pattern builder and a number of the
+grid's steps, and makes the pattern being built that many steps long **with each
+step the size it was**. The play function asks the grid what to play with
+`now(p)`, as it does for variants, and is handed only what the cycle plays. A
+grid given no `min_steps` is exactly the grid it always was.
+
+Subsequence's `set_length` takes a length in beats and leaves a pattern's count of
+steps as it was, which spreads a generator's steps across the new length rather
+than dropping some of them. So `compositions/drm1_grid.py` offers a length only
+where `set_length` can be given a count of steps.
+
 ## Connecting an application
 
 `superconductor/subsequence_adapter.py` is the worked example. A composition

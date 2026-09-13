@@ -65,7 +65,10 @@ CONTROLS: dict[str, typing.Any] = {
 	         "transpose_range": [-3, 3]},
 	"fine": {"type": "note_grid", "rows": ["D2", "C2"], "steps": 4, "beats": 1,
 	         "voices": None, "divisions": 4, "default_length": 4, "default_velocity": 100,
-	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine"},
+	         "max_length": 16, "velocity_range": [1, 127], "title": "Fine",
+	         # **A pitched pattern whose length changes** (#2548), and one with no
+	         # variants, so a whole-grid write lands beside its length.
+	         "min_steps": 2},
 	"moog": {"type": "params", "title": "Moog",
 	         # **Belongs to the bass grid** (#2201), so it is put away wherever
 	         # that grid is drawn and stands on its own wherever it is not —
@@ -284,7 +287,9 @@ CONTROLS: dict[str, typing.Any] = {
 	"phrase": {"type": "step_grid", "title": "Phrase",
 	           "rows": ["kick", "snare", "hihat_1_closed"],
 	           "steps": 8, "beats": 2, "velocity_range": [1, 127], "default_velocity": 100,
-	           "variants": ["A", "B", "C"], "lands_every": 1},
+	           "variants": ["A", "B", "C"], "lands_every": 1,
+	           # And a step grid whose length changes, with variants sharing it (#2548).
+	           "min_steps": 1},
 	# **And the one grid here that says nothing about velocity** (#2525), which is an
 	# app other than Subsequence's adapter — so it draws no lane and no slider, its
 	# row names stay marks, and it is short enough to keep its variants in a row.
@@ -351,7 +356,8 @@ STATE: dict[str, typing.Any] = {
 	# next step. Geometry measured in whole cells cannot tell either of them
 	# from a note on the step, which is exactly what went wrong.
 	"fine": {"C2": {"0": {"length": 1, "velocity": 100},
-	                "6": {"length": 2, "velocity": 100}}},
+	                "6": {"length": 2, "velocity": 100}},
+	         "end": 4, "resync": False},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
 	"rack": {"grids": []},
 	"notes": {"chosen": ["C4", "D#4"], "enabled": True},
@@ -371,7 +377,7 @@ STATE: dict[str, typing.Any] = {
 	"phrase": {"variants": {"A": {"rows": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 100}}}},
 	                        "B": {"rows": {"snare": {"2": {"velocity": 100}}}},
 	                        "C": {"rows": {}}},
-	           "playing": "A", "cue": None, "enabled": True},
+	           "playing": "A", "cue": None, "enabled": True, "end": 8, "resync": False},
 	"tiny": {"variants": {"A": {"rows": {"kick": {"0": {"velocity": 100}}}},
 	                      "B": {"rows": {}},
 	                      "C": {"rows": {}}},
@@ -553,6 +559,16 @@ class FakeApp:
 		self.send(superconductor.protocol.event(
 			"subsequence", "beat", beat=beat, ts=0.0, interval=interval,
 			steps=steps, beats=beats))
+
+	def cycle (self, control: str, at: float, start: int = 0, end: int = 8) -> None:
+		"""Say where a pattern's cycle begins, from which step, and where it wraps (#2548).
+
+		An event, as a beat is: what the music did, which the playhead follows and
+		nothing keeps.  *start* is the wire's ``from``, which is a word Python keeps.
+		"""
+
+		self.send(superconductor.protocol.event(
+			"subsequence", "cycle", control=control, at=at, end=end, **{"from": start}))
 
 	def realised (self, control: str, cells: dict, source: str = "one",
 	              sources: dict[str, str] | None = None) -> None:

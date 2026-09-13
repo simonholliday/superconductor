@@ -9880,3 +9880,268 @@ def test_a_press_answered_with_nothing_to_change_never_flashes_as_refused (
 		assert failed.count() == 0, "a press the app accepted flashed as refused"
 
 		panel.wait_for_timeout(100)
+
+
+# --- a pattern's length (#2526, #2548) ----------------------------------------
+
+FINE = '.part[data-part="fine"]'
+"""A pitched grid of four steps whose length changes, with no variants."""
+
+
+def _phrase_cell (row: str, step: int) -> str:
+	"""A cell of the phrase's variant A, which is the one shown and playing."""
+
+	return conftest.cell(f"phrase/variants/A/rows/{row}/{step}")
+
+
+def test_a_length_is_offered_only_where_the_app_declared_one_can_change (
+	panel: typing.Any) -> None:
+	"""Simon's design (#2548): a pattern whose composition allows it, and no other."""
+
+	_go_to_the_variants(panel)
+
+	assert panel.locator(f'{PHRASE} [data-end="now"]').inner_text().strip() == "8"
+	assert panel.locator('.part[data-part="grid"] [data-end]').count() == 0
+	assert panel.locator('.part[data-part="tiny"] [data-end]').count() == 0
+
+	_open_the_fine_grid(panel)
+
+	assert panel.locator(f'{FINE} [data-end="now"]').inner_text().strip() == "4"
+	assert panel.locator('.part[data-part="bass"] [data-end]').count() == 0
+
+
+def test_a_step_either_way_asks_for_a_length_and_the_face_follows_the_app (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Asked on press; the readout and the tail move when the app says, as a transposition's do."""
+
+	_go_to_the_variants(panel)
+
+	panel.locator(f'{PHRASE} [data-end="-1"]').click()
+
+	sent = fake_app.settled("phrase/end")
+
+	assert sent and sent[-1]["v"] == 7
+	assert panel.locator(f'{PHRASE} [data-end="now"]').inner_text().strip() == "8", \
+		"the readout moved before the app said so"
+	assert "past" not in (panel.locator(_phrase_cell("kick", 7)).get_attribute("class") or "")
+
+	fake_app.confirm("phrase/end", 7, by="panel")
+
+	playwright_api.expect(panel.locator(f'{PHRASE} [data-end="now"]')).to_have_text("7", timeout=5_000)
+	playwright_api.expect(panel.locator(_phrase_cell("kick", 7))).to_have_class(re.compile(r"\bpast\b"))
+
+	assert "past" not in (panel.locator(_phrase_cell("kick", 6)).get_attribute("class") or "")
+	assert "past" in (panel.locator(f"{PHRASE} .lane .weight").nth(7).get_attribute("class") or "")
+	assert "past" in (panel.locator(f"{PHRASE} .beats .beat").nth(7).get_attribute("class") or "")
+
+
+def test_a_length_stops_at_the_bounds_the_app_declared (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Drawn and not pressable at either end, so nothing along the row moves under a finger."""
+
+	_go_to_the_variants(panel)
+
+	assert panel.locator(f'{PHRASE} [data-end="+1"]').is_disabled(), "a pattern grew past its window"
+
+	fake_app.confirm("phrase/end", 1, by="panel")
+
+	playwright_api.expect(panel.locator(f'{PHRASE} [data-end="-1"]')).to_be_disabled(timeout=5_000)
+
+	since = len(fake_app.sets)
+	panel.locator(f'{PHRASE} [data-end="-1"]').click(force=True)
+
+	assert not fake_app.settled("phrase/end", since=since, limit=1.0), \
+		"a length below the shortest was asked for"
+
+
+def test_a_step_past_the_end_is_hatched_in_its_own_colour_and_still_takes_a_tap (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Set and playing are two readings: hatched in the lit colour, never filled (#2548)."""
+
+	_go_to_the_variants(panel)
+
+	fake_app.confirm("phrase/end", 4, by="panel")
+
+	past = panel.locator(_phrase_cell("kick", 4))
+
+	playwright_api.expect(past).to_have_class(re.compile(r"\bon\b.*\bpast\b|\bpast\b.*\bon\b"), timeout=5_000)
+
+	looks = past.evaluate(
+		"(el) => ({ image: getComputedStyle(el).backgroundImage, shadow: getComputedStyle(el).boxShadow })")
+
+	assert "repeating-linear-gradient" in looks["image"], f"a set step past the end was not hatched: {looks}"
+	assert looks["shadow"] == "none", f"a set step past the end still reads as sounding: {looks}"
+
+	empty = panel.locator(_phrase_cell("snare", 6))
+
+	assert "repeating-linear-gradient" in empty.evaluate("(el) => getComputedStyle(el).backgroundImage")
+
+	playing = panel.locator(_phrase_cell("kick", 0))
+
+	assert "repeating-linear-gradient" not in playing.evaluate("(el) => getComputedStyle(el).backgroundImage"), \
+		"a step that plays was hatched"
+
+	since = len(fake_app.sets)
+	empty.click()
+
+	assert fake_app.settled("phrase/variants/A/rows/snare/6", since=since), \
+		"a step past the end could not be placed"
+
+
+def test_resync_blinks_until_the_app_says_the_pattern_is_on_the_bar (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The performer asks; the app decides when it lands, as with a cue (#2548 decision 4)."""
+
+	_go_to_the_variants(panel)
+
+	resync = panel.locator(f'{PHRASE} [data-resync]')
+
+	assert "cued" not in (resync.get_attribute("class") or "")
+
+	resync.click()
+
+	sent = fake_app.settled("phrase/resync")
+
+	assert sent and sent[-1]["v"] is True
+
+	fake_app.confirm("phrase/resync", True, by="panel")
+
+	playwright_api.expect(resync).to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+
+	since = len(fake_app.sets)
+	resync.click()
+
+	taken_back = fake_app.settled("phrase/resync", since=since)
+
+	assert taken_back and taken_back[-1]["v"] is False, "pressing it again did not take the asking back"
+
+	fake_app.confirm("phrase/resync", False, by="app")
+
+	playwright_api.expect(resync).not_to_have_class(re.compile(r"\bcued\b"), timeout=5_000)
+
+
+def test_a_note_past_the_end_of_a_pitched_pattern_is_hatched (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The same rule in a piano roll: a note starting past the end is kept and not played."""
+
+	_open_the_fine_grid(panel)
+
+	fake_app.confirm("fine/D2/8", {"length": 2, "velocity": 100}, by="panel")
+	fake_app.confirm("fine/end", 2, by="panel")
+
+	playwright_api.expect(panel.locator(f'{FINE} [data-end="now"]')).to_have_text("2", timeout=5_000)
+
+	# The note at position 6 starts in step 1, which still plays; the one at 8 starts
+	# in step 2, which does not, and so do the cells from step 2 on.
+	assert "past" not in (panel.locator(conftest.cell("fine/C2/4")).get_attribute("class") or "")
+	assert "past" in (panel.locator(conftest.cell("fine/C2/8")).get_attribute("class") or "")
+
+	playwright_api.expect(panel.locator(f"{FINE} .grid.notes .note.past")).to_have_count(1, timeout=5_000)
+	assert panel.locator(f"{FINE} .grid.notes .note").count() == 3
+
+
+def test_clearing_a_grid_keeps_its_length (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A whole-grid write replaces the rows and nothing beside them, as the service keeps it."""
+
+	_open_the_fine_grid(panel)
+
+	fake_app.confirm("fine/end", 3, by="panel")
+	playwright_api.expect(panel.locator(f'{FINE} [data-end="now"]')).to_have_text("3", timeout=5_000)
+
+	fake_app.confirm("fine/rows", {}, by="panel")
+	playwright_api.expect(panel.locator(f"{FINE} .grid.notes .note")).to_have_count(0, timeout=5_000)
+
+	assert panel.locator(f'{FINE} [data-end="now"]').inner_text().strip() == "3", \
+		"clearing the notes took the length with them"
+	assert "past" in (panel.locator(conftest.cell("fine/D2/12")).get_attribute("class") or "")
+
+
+def _playhead_step (panel: typing.Any, part: str) -> float:
+	"""Which step a block's playhead stands on, measured against its own cells."""
+
+	return float(panel.locator(part).evaluate("""(part) => {
+		const bar = part.querySelector('.playhead');
+		const grid = part.querySelector('.grid');
+		const first = grid.children[1];
+		const pitch = grid.children[2].offsetLeft - first.offsetLeft;
+		const moved = new DOMMatrixReadOnly(getComputedStyle(bar).transform).m41;
+
+		return (moved - grid.offsetLeft - first.offsetLeft) / pitch;
+	}"""))
+
+
+def test_the_playhead_follows_a_pattern_s_own_cycle (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A pattern whose length changed no longer starts its cycles on the page's beat count.
+
+	Eight steps over two beats, so four to a beat.  At beat 2 the page's count puts
+	every eight-step pattern on step 0; a cycle that began on beat 1.5 from step 5,
+	wrapping at 8, has it on step 7.  A cycle the app reported for a later beat has
+	not begun, and changes nothing yet.
+	"""
+
+	_go_to_the_variants(panel)
+
+	fake_app.beat(1, interval=0.2)
+	panel.wait_for_timeout(500)
+
+	assert round(_playhead_step(panel, PHRASE)) == 0
+
+	fake_app.cycle("phrase", at=1.5, start=5, end=8)
+	fake_app.cycle("phrase", at=9.0, start=0, end=6)
+	fake_app.beat(1, interval=0.2)
+	panel.wait_for_timeout(500)
+
+	assert round(_playhead_step(panel, PHRASE)) == 7, "the playhead ignored where this pattern's cycle began"
+	assert round(_playhead_step(panel, '.part[data-part="grid"]')) == 0, \
+		"one pattern's cycle moved another pattern's playhead"
+
+
+def test_the_length_s_row_is_counted_in_its_block (panel: typing.Any) -> None:
+	"""A block measures a whole number of cells, and a row the count did not know about overflows it."""
+
+	_go_to_the_variants(panel)
+
+	for part in (PHRASE,):
+		inside = panel.locator(part).evaluate("""(part) => {
+			const row = part.querySelector('[data-end="now"]').closest('.note-row');
+			return row.getBoundingClientRect().bottom <= part.getBoundingClientRect().bottom + 0.5;
+		}""")
+
+		assert inside, f"the length's row hangs out of {part}"
+
+	_open_the_fine_grid(panel)
+
+	assert panel.locator(FINE).evaluate("""(part) => {
+		const row = part.querySelector('[data-end="now"]').closest('.note-row');
+		return row.getBoundingClientRect().bottom <= part.getBoundingClientRect().bottom + 0.5;
+	}"""), "the length's row hangs out of the pitched block"
+
+
+def test_a_block_placed_below_one_whose_length_changes_clears_its_length_row (
+	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
+	"""A page with no arrangement stacks its blocks, and a row the count leaves out is a
+	row the next block is laid over (#2548).  Narrow enough that each block wraps onto a
+	row of its own, which is where the count decides where the next one starts."""
+
+	page.set_viewport_size({"width": 520, "height": 1400})
+	page.goto(service_url)
+	page.wait_for_selector(".cell", timeout=10_000)
+
+	_go_to_the_variants(page)
+
+	boxes = page.evaluate("""() => Object.fromEntries(
+		['grid', 'phrase', 'tiny'].map((name) => {
+			const box = document.querySelector(`.part[data-part="${name}"]`).getBoundingClientRect();
+			return [name, { top: box.top, bottom: box.bottom, left: box.left, right: box.right }];
+		}))""")
+
+	def overlap (one: dict[str, float], other: dict[str, float]) -> bool:
+		return (one["left"] < other["right"] - 1 and other["left"] < one["right"] - 1
+		        and one["top"] < other["bottom"] - 1 and other["top"] < one["bottom"] - 1)
+
+	names = list(boxes)
+
+	assert not [(a, b) for index, a in enumerate(names) for b in names[index + 1:]
+	            if overlap(boxes[a], boxes[b])], f"blocks were placed over one another: {boxes}"

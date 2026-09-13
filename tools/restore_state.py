@@ -56,8 +56,15 @@ and is not worth inventing for two.
 GRIDS: tuple[str, ...] = ("step_grid", "note_grid")
 """The kinds whose state is rows, which go back whole — the pair the client calls GRIDS."""
 
-BESIDE_THE_ROWS: frozenset[str] = frozenset({"enabled", "transpose"}) | DERIVED
+BESIDE_THE_ROWS: frozenset[str] = frozenset({"enabled", "transpose", "end", "resync"}) | DERIVED
 """What a grid's snapshot holds beside its rows, which a whole-grid write does not carry."""
+
+REPLAYED: tuple[str, ...] = ("enabled", "transpose", "end")
+"""What goes back beside a grid's rows, each as a set of its own.
+
+**How many steps play goes back (#2548); a re-sync does not.**  A re-sync is a
+request in flight rather than something anybody made, as a cue is, and replaying
+one would move a pattern against the bar that nobody at the panel asked to move."""
 
 
 def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object]]:
@@ -67,7 +74,7 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 	which controls are grids.
 
 	- **A grid is one write of all its rows**, which replaces what it holds —
-	  seeded steps included — and then its mute and transposition on their own.
+	  seeded steps included — and then its mute, transposition and length on their own.
 	- **A rack goes first**: the grids it made exist only once it has made them,
 	  and a stack may route from one.
 	- **Anything else is walked a value at a time**, as every control used to be.
@@ -94,7 +101,7 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 			asks.append((app, f"{control}/rows",
 			             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))
 			asks.extend((app, f"{control}/{field}", held[field])
-			            for field in ("enabled", "transpose") if field in held)
+			            for field in REPLAYED if field in held)
 
 		else:
 			asks.extend(_walked(app, control, held))
@@ -130,7 +137,7 @@ def _variant_sets (app: str, control: str, held: dict, declared: dict) -> list[t
 		             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))
 
 	asks.extend((app, f"{control}/{field}", held[field])
-	            for field in ("enabled", "transpose") if field in held)
+	            for field in REPLAYED if field in held)
 
 	return asks
 

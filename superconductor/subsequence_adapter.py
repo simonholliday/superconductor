@@ -24,6 +24,7 @@ import collections
 import collections.abc
 import contextlib
 import datetime
+import fractions
 import inspect
 import json
 import logging
@@ -543,10 +544,14 @@ class _Variants:
 		once, which is what a test or a composition with no cycle to wait for
 		wants.  A grid without variants hands back its rows as they have always
 		been read.
+
+		**Only as many steps as the pattern plays** (#2548): a grid whose length
+		changes hands back what this cycle plays, and one whose length does not
+		hands back its rows exactly as before.
 		"""
 
 		if not self.variants:
-			return self._rows_of(None)
+			return self._shortened(self._rows_of(None), pattern)
 
 		if self.cue is not None and self._lands(pattern):
 			self.playing, self.cue = self.cue, None
@@ -556,7 +561,12 @@ class _Variants:
 				self.link.report(f"{self.name}/cue", None)
 				self.link.kept_changed()
 
-		return self._rows_of(self.playing)
+		return self._shortened(self._rows_of(self.playing), pattern)
+
+	def _shortened (self, rows: dict[str, typing.Any], pattern: typing.Any) -> dict[str, typing.Any]:
+		"""The rows as long as the pattern plays them, which is all of them here; `_Length` says otherwise."""
+
+		return rows
 
 	def _lands (self, pattern: typing.Any) -> bool:
 		"""Whether a cue may land at this build."""
@@ -639,7 +649,427 @@ def _restore_variants (
 	return None
 
 
-class StepGrid (_Variants, Control):
+LENGTH_FIELDS: frozenset[str] = frozenset({"end", "resync"})
+"""What a grid whose length changes keeps beside its rows, so no row of one may be called either."""
+
+
+class _Length:
+	"""What lets a pattern play fewer of its grid's steps, and come back onto the bar (#2526, #2548).
+
+	**Declared by the composition, and a grid declaring no ``min_steps`` is the
+	grid it always was**: the same declaration, the same state, the same build.
+	One declaring it offers a length from ``min_steps`` up to ``steps``, which
+	stays the width of its window and so the longest it may be — Simon's first
+	two decisions on #2548.
+
+	**``end`` is how many of the steps play**, from step 0: a pattern of twelve
+	has ``end`` 12.  It is kept the moment a panel sets it and heard from the
+	pattern's next cycle, as a transposition is, and it is the pattern's rather
+	than a variant's (#2548 decision 3).  Steps past it are kept and are never
+	handed to the build, so lengthening brings them back.  It is not called
+	``length``, which a note already means in positions and Subsequence means in
+	beats (#2403).
+
+	**A change starts where the current cycle ends, and nothing here moves a
+	pattern back onto the bar of its own accord.**  Simon, #2548 decision 4:
+	*"a decision for the performer, not the product"*.  ``resync`` is the
+	performer asking: at the first bar line after the current cycle ends the
+	pattern starts again from its first step, and the gap before that line plays
+	the end of the pattern, so it leads into the downbeat rather than falling
+	silent.
+
+	**Where a cycle starts is worked out here rather than read**, from the
+	builder's own cycle count and the lengths this grid gave each cycle.  Every
+	pattern is scheduled from pulse 0 and a length holds until it is set again,
+	so a cycle starts where the sum of those before it ends.  Subsequence's
+	``pattern_reschedule`` event says the same thing in pulses, but names its
+	pattern by an object this package cannot match without a private name.  A
+	composition setting lengths behind this grid's back, or a pattern added
+	mid-song, would put the sum out, and a re-sync would then land off the bar.
+
+	**How a pattern is made a number of steps long is the composition's**
+	(``resize``), because Subsequence's words for it are not settled (#2546) and
+	this package calls no sequencer's API it cannot see.
+	"""
+
+	name: str
+	rows: list[str]
+	steps: int
+	beats: float
+	pattern: str | None
+	link: "AppLink | None" = None
+
+	min_steps: int | None = None
+	"""The fewest steps the pattern may play, or None where its length does not change."""
+
+	end: int
+	"""How many of the grid's steps play, from `min_steps` to `steps`."""
+
+	resync: bool = False
+	"""Whether a panel has asked for the pattern to come back onto the bar, until it has."""
+
+	resize: collections.abc.Callable[[typing.Any, int], None] | None = None
+	"""The composition's way of making the pattern being built a number of this grid's steps long."""
+
+	this_cycle: tuple[int, int, int] | None = None
+	"""What the latest build plays: its cycle, the step it starts from, and how many steps.
+
+	Read by a stack building onto this grid's pattern in the same build, so a place
+	a generator was given moves exactly as a tapped step does (#2548).
+	"""
+
+	_counted: tuple[int, int, int]
+	"""The last cycle built: its number, the step it starts on counted from the first, and how many it plays.
+
+	**In whole steps rather than beats**, because every cycle is a whole number of
+	steps and integer arithmetic is what a build can afford on every cycle; a beat is
+	worked out only when one is said.
+	"""
+
+	_step: fractions.Fraction
+	"""How long one of this grid's steps is, in beats."""
+
+	_landing: bool = False
+	"""Whether the short cycle a re-sync makes has been built, so the next starts on the bar."""
+
+	_aligned: bool = True
+	"""Whether the last cycle built is where the page's own beat count would draw it."""
+
+	def _take_length (
+		self,
+		min_steps: int | None,
+		end: int | None,
+		resize: collections.abc.Callable[[typing.Any, int], None] | None,
+	) -> None:
+		"""Hold the bounds the composition declared, refusing any it cannot mean."""
+
+		self.end = self.steps
+		self.resync = False
+		self.this_cycle = None
+		self._counted = (0, 0, self.steps)
+		self._step = fractions.Fraction(self.beats) / self.steps
+		self._landing = False
+		self._aligned = True
+
+		if min_steps is None:
+			if end is not None or resize is not None:
+				raise ValueError(f"{self.name} is given a length and no min_steps to bound it")
+
+			self.min_steps = None
+			self.resize = None
+
+			return
+
+		if isinstance(min_steps, bool) or not isinstance(min_steps, int) or not 1 <= min_steps <= self.steps:
+			raise ValueError(f"{self.name} may play 1 to {self.steps} steps, not min_steps={min_steps!r}")
+
+		opening = self.steps if end is None else end
+
+		if isinstance(opening, bool) or not isinstance(opening, int) or not min_steps <= opening <= self.steps:
+			raise ValueError(f"{self.name} opens at {min_steps} to {self.steps} steps, not end={end!r}")
+
+		# **A length is a pattern's, and a grid with no pattern has none** (#2548):
+		# it plays at the length of whatever it is routed into.
+		if self.pattern is None:
+			raise ValueError(f"{self.name} drives no pattern, so it has no length of its own to change")
+
+		if resize is None:
+			raise ValueError(f"{self.name} needs the composition's resize to change its pattern's length")
+
+		taken = sorted(LENGTH_FIELDS.intersection(self.rows))
+
+		if taken:
+			raise ValueError(f"{self.name} keeps {taken} beside its rows, so no row may be called that")
+
+		self.min_steps = min_steps
+		self.end = opening
+		self.resize = resize
+
+	def _length_fields (self) -> dict[str, typing.Any]:
+		"""What a declaration says about the length, which is nothing where it does not change."""
+
+		return {} if self.min_steps is None else {"min_steps": self.min_steps}
+
+	def _length_state (self) -> dict[str, typing.Any]:
+		"""How many steps play and whether a re-sync is asked for, for a snapshot."""
+
+		return {} if self.min_steps is None else {"end": self.end, "resync": self.resync}
+
+	def _length_kept (self) -> dict[str, typing.Any]:
+		"""How many steps play, for the store — never a re-sync, which is a request in flight."""
+
+		return {} if self.min_steps is None else {"end": self.end}
+
+	def _restore_length (self, kept: dict[str, typing.Any]) -> list[str]:
+		"""Put a kept length back, or say why it could not be."""
+
+		if self.min_steps is None or "end" not in kept:
+			return []
+
+		try:
+			self._keep_end(kept["end"])
+
+		except Refused as refusal:
+			return [f"{self.name}: {refusal}"]
+
+		return []
+
+	def _keeps_length (self, rest: list[str]) -> bool:
+		"""Whether a path names the length or a re-sync, refused where neither can change."""
+
+		if rest not in (["end"], ["resync"]):
+			return False
+
+		if self.min_steps is None:
+			raise Refused(f"{self.name}'s length does not change")
+
+		return True
+
+	def _keep_length (self, rest: list[str], value: typing.Any) -> bool:
+		"""Set how many steps play, or ask for a re-sync or take the asking back."""
+
+		return self._keep_end(value) if rest == ["end"] else self._keep_resync(value)
+
+	def _keep_end (self, value: typing.Any) -> bool:
+		"""Keep how many steps play, which is heard from the pattern's next cycle."""
+
+		low = self.min_steps or self.steps
+
+		if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= self.steps:
+			raise Refused(f"this pattern plays from {low} to {self.steps} steps")
+
+		if value == self.end:
+			return False
+
+		self.end = value
+
+		return True
+
+	def _keep_resync (self, value: typing.Any) -> bool:
+		"""Ask for the pattern to come back onto the bar, or take the asking back."""
+
+		if not isinstance(value, bool):
+			raise Refused("a re-sync is asked for with true and taken back with false")
+
+		# **Too late to take back once the short cycle is built**: the sequencer has
+		# queued it already, and a panel told the re-sync was off would be told
+		# something the music then contradicts.
+		if self._landing and not value:
+			raise Refused("it is already coming back onto the bar")
+
+		if value == self.resync:
+			return False
+
+		self.resync = value
+
+		return True
+
+	def _shortened (self, rows: dict[str, typing.Any], pattern: typing.Any) -> dict[str, typing.Any]:
+		"""The rows this build plays: those before the end, or the end of the pattern leading into the bar."""
+
+		if self.min_steps is None or pattern is None:
+			return rows
+
+		first, played = self._built(pattern)
+
+		if first == 0 and played == self.steps:
+			return rows
+
+		return self._cut(rows, first, played)
+
+	def _cut (self, rows: dict[str, typing.Any], first: int, played: int) -> dict[str, typing.Any]:
+		"""The rows moved and cut to this cycle, which each kind of grid does for its own cells."""
+
+		raise NotImplementedError
+
+	def _built (self, pattern: typing.Any) -> tuple[int, int]:
+		"""Make the pattern being built as long as this cycle is, and say what it plays.
+
+		On the clock loop once a build: some fraction arithmetic, one call the
+		composition supplied and one event, which is nothing beside the notes the
+		build then places.
+		"""
+
+		cycle = int(getattr(pattern, "cycle", 0) or 0)
+		counted, began, lasted = self._counted
+
+		# Every cycle between the last one built here and this one ran at the
+		# length that build set, because a length holds until it is set again —
+		# which is also what a muted pattern does through the builds it skips.
+		start = began + (cycle - counted) * lasted
+
+		first, played = 0, self.end
+
+		if self._landing:
+			self._landing = False
+			self._say_resync(False)
+
+		elif self.resync:
+			first, played = self._resynced(pattern, start)
+
+		self._counted = (cycle, start, played)
+		self.this_cycle = (cycle, first, played)
+
+		if self.resize is not None:
+			self.resize(pattern, played)
+
+		# **Where this cycle starts and what it plays**, so a playhead follows the
+		# music rather than the page's one beat count, which stops describing a
+		# pattern the first time its length changes.  An event, because it is what
+		# the music did this cycle and nothing keeps it (#1965).
+		#
+		# **Only while the page's count would draw it wrongly, and once more on the
+		# way back.**  A pattern playing its whole window from a start the window
+		# divides is exactly where that count puts it, which is every pattern that
+		# never changed length; a frame a cycle handed across to the link thread
+		# for each of them would be a cost on this loop that nobody reads (#2516).
+		aligned = first == 0 and played == self.steps and start % self.steps == 0
+
+		if self.link is not None and not (aligned and self._aligned):
+			self.link.happened(
+				"cycle", control=self.name, at=float(start * self._step), end=self.end, **{"from": first})
+
+		self._aligned = aligned
+
+		return first, played
+
+	def _resynced (self, pattern: typing.Any, start: int) -> tuple[int, int]:
+		"""Where the cycle a re-sync makes starts, and how many steps it runs for.
+
+		*start* is where this cycle begins, in steps from the first; a bar is as many
+		beats as the builder's time signature says, which is Subsequence's own count.
+		"""
+
+		signature = getattr(pattern, "time_signature", None) or (4, 4)
+		bar = fractions.Fraction(int(signature[0])) / self._step
+		gap = (-start) % bar
+
+		# Already on the bar: nothing audible changes, and the re-sync has landed.
+		if gap == 0:
+			self._say_resync(False)
+
+			return 0, self.end
+
+		# **A step that does not divide the bar cannot land on it**, and a cycle of
+		# part of a step is not something to guess.  Said, not dropped in silence.
+		if gap.denominator != 1:
+			LOG.warning("%s cannot come back onto the bar, because its steps do not divide it", self.name)
+			self._say_resync(False)
+
+			return 0, self.end
+
+		played = int(gap)
+		self._landing = True
+
+		# The end of the pattern, so the short cycle leads into the downbeat.
+		return (self.end - played) % self.end, played
+
+	def _say_resync (self, value: bool) -> None:
+		"""Record where a re-sync stands and say so, which only the app decides once asked."""
+
+		self.resync = value
+
+		if self.link is not None:
+			self.link.report(f"{self.name}/resync", value)
+
+
+class _Unplaced (Exception):
+	"""A layer given one place in its pattern, which the cycle being built does not play (#2548)."""
+
+
+class _Moves (typing.NamedTuple):
+	"""How the cycle being built moves a place in its pattern (#2548).
+
+	The same rule a grid's own steps follow in `_Length`: a place past the end is
+	not played, and in the short cycle a re-sync makes the places run from *first*
+	and wrap at *end*, for *played* steps.  *step* is how long a step is, in beats,
+	so a place a generator counts in beats moves by the same amount.
+	"""
+
+	first: int
+	played: int
+	end: int
+	step: fractions.Fraction
+
+	def arguments (
+		self,
+		offered: collections.abc.Mapping[str, "Parameter"],
+		wanted: dict[str, typing.Any],
+	) -> dict[str, typing.Any]:
+		"""A layer's arguments with every place moved to this cycle, and what goes with each place.
+
+		**A list given beside a list of places goes with them, one to one** — which is
+		Subsequence's own rule for ``sequence``, whose velocities are *"matched to the
+		steps one-to-one"*.  So a place that does not play takes its pitch and its
+		velocity with it, and one played twice carries them twice.  A list of any
+		other length is not paired with anything and is left alone.
+
+		**One place, where a generator asks for one, that this cycle does not play
+		raises** `_Unplaced`: a generator cannot be called with none, and the layer
+		places nothing this cycle rather than something somewhere else.
+		"""
+
+		moved = dict(wanted)
+
+		for name, value in wanted.items():
+			parameter = offered.get(name)
+
+			if parameter is None or parameter.role != "position":
+				continue
+
+			if not isinstance(value, (list, tuple)):
+				picked = self._picks([value], parameter.unit)
+
+				if not picked:
+					raise _Unplaced()
+
+				moved[name] = picked[0][1]
+
+				continue
+
+			picked = self._picks(list(value), parameter.unit)
+			moved[name] = [place for _, place in picked]
+
+			for other, held in wanted.items():
+				beside = offered.get(other)
+
+				if other == name or not isinstance(held, list) or len(held) != len(value):
+					continue
+
+				if beside is not None and beside.role == "position":
+					continue
+
+				moved[other] = [held[index] for index, _ in picked]
+
+		return moved
+
+	def _picks (self, places: list[typing.Any], unit: str | None) -> list[tuple[int, typing.Any]]:
+		"""Each place this cycle plays, with the index it came from, in the unit it came in."""
+
+		picked: list[tuple[int, typing.Any]] = []
+
+		for index, value in enumerate(places):
+			if unit not in ("steps", "beats") or isinstance(value, bool) or not isinstance(value, (int, float)):
+				picked.append((index, value))
+				continue
+
+			counted = fractions.Fraction(value)
+			step = counted if unit == "steps" else counted / self.step
+
+			if not 0 <= step < self.end:
+				continue
+
+			place = (step - self.first) % self.end
+
+			while place < self.played:
+				said = place if unit == "steps" else place * self.step
+				picked.append((index, int(said) if said.denominator == 1 and isinstance(value, int) else float(said)))
+				place += self.end
+
+		return picked
+
+
+class StepGrid (_Length, _Variants, Control):
 	"""A grid of rows against steps, kept as a plain dict on ``composition.data``.
 
 	The dict is the composition's: the pattern builder reads it and this writes
@@ -685,6 +1115,9 @@ class StepGrid (_Variants, Control):
 		variants: collections.abc.Sequence[str] = (),
 		lands_every: int = 1,
 		default_velocity: int = 100,
+		min_steps: int | None = None,
+		end: int | None = None,
+		resize: collections.abc.Callable[[typing.Any, int], None] | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps.
 
@@ -693,6 +1126,10 @@ class StepGrid (_Variants, Control):
 		for; see `_Variants`.  *default_velocity* is how hard a step is struck
 		when nobody said otherwise — a step placed with ``true``, and every step a
 		list-shaped seed or store brings in.
+
+		*min_steps* offers a length from that many steps up to *steps*, opening at
+		*end*, and *resize* is how the composition makes its pattern that long;
+		see `_Length`.  A grid given none of the three has the length it always had.
 		"""
 
 		self.composition = composition
@@ -736,6 +1173,8 @@ class StepGrid (_Variants, Control):
 		it to behave a certain way.
 		"""
 
+		self._take_length(min_steps, end, resize)
+
 	def _take_seed (self) -> None:
 		"""Read whatever the composition seeded into the shape a step has now.
 
@@ -769,7 +1208,8 @@ class StepGrid (_Variants, Control):
 			# in a package that carries no MIDI (#2140).
 			"velocity_range": list(VELOCITY_RANGE),
 			"default_velocity": self.default_velocity,
-			**self._variant_fields()}
+			**self._variant_fields(),
+			**self._length_fields()}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -894,14 +1334,15 @@ class StepGrid (_Variants, Control):
 		"""The steps somebody put down, how hard, and whether they are heard (#2487).
 
 		Every variant, and which one plays; never the cue, which is a request in
-		flight rather than something anybody made.
+		flight rather than something anybody made.  How many steps play, where
+		that changes (#2548).
 		"""
 
 		if not self.variants:
-			return {"rows": self.rows_now(), "enabled": self.enabled}
+			return {"rows": self.rows_now(), "enabled": self.enabled, **self._length_kept()}
 
 		return {"variants": {one: {"rows": self.rows_now(one)} for one in self.variants},
-		        "playing": self.playing, "enabled": self.enabled}
+		        "playing": self.playing, "enabled": self.enabled, **self._length_kept()}
 
 	def restore (self, kept: typing.Any) -> list[str]:
 		"""Put the grid back exactly, taking out whatever the composition seeded.
@@ -926,7 +1367,7 @@ class StepGrid (_Variants, Control):
 		if refused is None:
 			return [f"{self.name} was kept as something other than a grid"]
 
-		return refused + self._restore_enabled(kept.get("enabled", True))
+		return refused + self._restore_length(kept) + self._restore_enabled(kept.get("enabled", True))
 
 	def _restored_rows (self, rows: dict[str, typing.Any], variant: str | None) -> list[str]:
 		"""One set of kept rows put back exactly, a refused row at a time."""
@@ -963,6 +1404,9 @@ class StepGrid (_Variants, Control):
 
 		if rest == ["cue"]:
 			return self.cue
+
+		if rest in (["end"], ["resync"]):
+			return self.end if rest == ["end"] else self.resync
 
 		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
 			return self.rows_now(rest[1])
@@ -1028,9 +1472,44 @@ class StepGrid (_Variants, Control):
 		# reserved here for the whole-grid write, so a row cannot be called that
 		# either; this is the second word spent and it buys a mute.
 		if not self.variants:
-			return {**self.rows_now(), "enabled": self.enabled}
+			return {**self.rows_now(), "enabled": self.enabled, **self._length_state()}
 
-		return {**self._variants_state(self.rows_now), "enabled": self.enabled}
+		return {**self._variants_state(self.rows_now), "enabled": self.enabled, **self._length_state()}
+
+	def _cut (self, rows: dict[str, typing.Any], first: int, played: int) -> dict[str, typing.Any]:
+		"""The steps this cycle plays, each at its place in the cycle (#2548).
+
+		A step past the end is not played and not touched.  In the short cycle a
+		re-sync makes, the steps play from *first*, wrapping at the end, so a gap
+		longer than the pattern plays it round again.  Walked by the steps somebody
+		placed rather than by the cycle's places, so a sparse row costs little.
+		"""
+
+		cut: dict[str, typing.Any] = {}
+
+		for row, held in rows.items():
+			if not held:
+				continue
+
+			placed: dict[str, typing.Any] = {}
+			steps = self._copied(held) if isinstance(held, list) else held
+
+			for at, shape in steps.items():
+				step = int(at)
+
+				if step >= self.end:
+					continue
+
+				place = (step - first) % self.end
+
+				while place < played:
+					placed[str(place)] = shape
+					place += self.end
+
+			if placed:
+				cut[row] = placed
+
+		return cut
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one step, absolutely rather than by toggling.
@@ -1045,6 +1524,9 @@ class StepGrid (_Variants, Control):
 
 		if rest == ["enabled"]:
 			return self._keep_enabled(value)
+
+		if self._keeps_length(rest):
+			return self._keep_length(rest, value)
 
 		if self.variants and rest == ["cue"]:
 			return self._keep_cue(value)
@@ -1137,7 +1619,7 @@ def _overlaps (at: int, span: int, other_at: int, other: dict[str, typing.Any]) 
 	return at < other_at + other_span and other_at < at + span
 
 
-class NoteGrid (_Variants, Control):
+class NoteGrid (_Length, _Variants, Control):
 	"""A pitched pattern: one row per note, and a cell that is a note.
 
 	The same plain dict on ``composition.data`` that a step grid uses, one level
@@ -1208,12 +1690,17 @@ class NoteGrid (_Variants, Control):
 		visible_rows: int | None = None,
 		variants: collections.abc.Sequence[str] = (),
 		lands_every: int = 1,
+		min_steps: int | None = None,
+		end: int | None = None,
+		resize: collections.abc.Callable[[typing.Any, int], None] | None = None,
 	) -> None:
 		"""Describe the pattern to offer over a dict the composition keeps.
 
 		*variants* and *lands_every* are a step grid's, and mean the same (#2485):
 		the notes are a variant's, and the transposition and the mute stay the
 		pattern's, because switching variant should not change the key you are in.
+		*min_steps*, *end* and *resize* are a step grid's too, and so is the length
+		they offer: counted in steps, not in this grid's positions (#2548).
 		"""
 
 		self.composition = composition
@@ -1292,6 +1779,7 @@ class NoteGrid (_Variants, Control):
 		self.link: "AppLink | None" = None
 
 		self._take_variants(variants, lands_every)
+		self._take_length(min_steps, end, resize)
 
 	def attach (self, link: "AppLink") -> None:
 		"""Keep the link, so clearing a note the panel did not name can be said."""
@@ -1314,7 +1802,8 @@ class NoteGrid (_Variants, Control):
 			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
 			"max_length": self.positions, "velocity_range": list(VELOCITY_RANGE),
-			**self._variant_fields()}
+			**self._variant_fields(),
+			**self._length_fields()}
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
@@ -1355,7 +1844,46 @@ class NoteGrid (_Variants, Control):
 
 		return {**notes, "enabled": self.enabled,
 		        "transpose": self.transpose,
-		        "labels": labels, "unreachable": unreachable}
+		        "labels": labels, "unreachable": unreachable,
+		        **self._length_state()}
+
+	def _cut (self, rows: dict[str, typing.Any], first: int, played: int) -> dict[str, typing.Any]:
+		"""The notes this cycle plays, each at its place in the cycle and cut where it ends (#2548).
+
+		The step grid's rule in this grid's positions.  **A note is cut, never
+		shortened**: what is kept goes on holding the length somebody gave it, so
+		the note is whole again when the pattern grows, and only the copy handed to
+		the build stops at the pattern's end — or at the cycle's, in the short cycle
+		a re-sync makes.
+		"""
+
+		pattern_places = self.end * self.divisions
+		cycle_places = played * self.divisions
+		offset = first * self.divisions
+		cut: dict[str, typing.Any] = {}
+
+		for row, notes in rows.items():
+			placed: dict[str, typing.Any] = {}
+
+			for at, note in notes.items():
+				begins = int(at)
+
+				if begins >= pattern_places:
+					continue
+
+				written = int(note.get("length", 1))
+				whole = min(written, pattern_places - begins)
+				place = (begins - offset) % pattern_places
+
+				while place < cycle_places:
+					sounds = min(whole, cycle_places - place)
+					placed[str(place)] = note if sounds == written else {**note, "length": sounds}
+					place += pattern_places
+
+			if placed:
+				cut[row] = placed
+
+		return cut
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Place, remove or reshape one note, absolutely rather than by toggling."""
@@ -1372,6 +1900,9 @@ class NoteGrid (_Variants, Control):
 
 		if rest == ["transpose"]:
 			return self._keep_transpose(value)
+
+		if self._keeps_length(rest):
+			return self._keep_length(rest, value)
 
 		if self.variants and rest == ["cue"]:
 			return self._keep_cue(value)
@@ -1640,7 +2171,7 @@ class NoteGrid (_Variants, Control):
 		variant, and which one plays; never the cue.
 		"""
 
-		beside = {"enabled": self.enabled, "transpose": self.transpose}
+		beside = {"enabled": self.enabled, "transpose": self.transpose, **self._length_kept()}
 
 		if not self.variants:
 			return {"rows": self.rows_now(), **beside}
@@ -1668,7 +2199,7 @@ class NoteGrid (_Variants, Control):
 		except (Refused, TypeError, ValueError) as refusal:
 			refused.append(f"{self.name}: {refusal}")
 
-		return refused + self._restore_enabled(kept.get("enabled", True))
+		return refused + self._restore_length(kept) + self._restore_enabled(kept.get("enabled", True))
 
 	def _restored_rows (self, rows: dict[str, typing.Any], variant: str | None) -> list[str]:
 		"""One set of kept notes put back exactly, a refused row at a time."""
@@ -1705,6 +2236,9 @@ class NoteGrid (_Variants, Control):
 
 		if rest == ["cue"]:
 			return self.cue
+
+		if rest in (["end"], ["resync"]):
+			return self.end if rest == ["end"] else self.resync
 
 		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
 			return self.rows_now(rest[1])
@@ -3662,6 +4196,11 @@ class Recipe (Control):
 		# per layer instead of two per cycle, on a stack that is four deep.
 		landed: list[tuple[str, list[typing.Any]]] = []
 
+		# **What this cycle plays, asked once** (#2548): a place a generator was
+		# given moves exactly as a tapped step does, so a step past a shortened end
+		# is not placed by a layer either.  Nothing where the length is the window.
+		moved = self._this_cycle(pattern)
+
 		for layer in self.layers():
 			if layer["bypassed"]:
 				continue
@@ -3738,7 +4277,14 @@ class Recipe (Control):
 					layer=str(layer["id"]))
 				continue
 
-			arguments = self._arguments(generator, layer["params"])
+			try:
+				arguments = self._arguments(generator, layer["params"], moved)
+
+			# A layer given one place, which this cycle does not play, places
+			# nothing this cycle and is not failing: it is kept, as a step is.
+			except _Unplaced:
+				continue
+
 			seed = self._seed_for(method, generator, str(layer["id"]), base,
 			                      dealt=layer.get("dealt"))
 
@@ -4036,7 +4582,34 @@ class Recipe (Control):
 
 		return held
 
-	def _arguments (self, generator: str, params: dict[str, typing.Any]) -> dict[str, typing.Any]:
+	def _this_cycle (self, pattern: typing.Any) -> "_Moves | None":
+		"""How this build moves a place in the pattern, or None where it plays the whole window.
+
+		Read off the grid this stack builds, which its pattern function asked what to
+		play a moment ago.  Only a record of *this* build counts: a stack built by a
+		pattern that never asked its grid is left exactly as it was.
+		"""
+
+		grid = self._target()
+		held = getattr(grid, "this_cycle", None)
+
+		if grid is None or held is None or held[0] != int(getattr(pattern, "cycle", 0) or 0):
+			return None
+
+		_, first, played = held
+
+		if first == 0 and played == grid.steps:
+			return None
+
+		return _Moves(first=first, played=played, end=grid.end,
+		              step=fractions.Fraction(grid.beats) / grid.steps)
+
+	def _arguments (
+		self,
+		generator: str,
+		params: dict[str, typing.Any],
+		moved: "_Moves | None" = None,
+	) -> dict[str, typing.Any]:
 		"""A layer's parameters as the generator's own call expects them.
 
 		A range crosses the wire as a two-item list because JSON has no tuple,
@@ -4069,7 +4642,7 @@ class Recipe (Control):
 
 			wanted[name] = value
 
-		return wanted
+		return wanted if moved is None else moved.arguments(offered, wanted)
 
 	def _sourced (self, patch: dict[str, typing.Any]) -> typing.Any:
 		"""What a patched parameter is worth this cycle.

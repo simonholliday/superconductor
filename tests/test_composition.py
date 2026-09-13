@@ -12,6 +12,7 @@ run, and anything after it that wants a loop of its own fails.
 """
 
 import importlib.util
+import inspect
 import logging
 import pathlib
 import random
@@ -956,3 +957,54 @@ def test_a_generated_note_moves_with_the_pattern_s_transposition (
 	assert set(cells) == {"C2"}, f"and nothing else was reported: {cells}"
 	assert rig._relabel(rig.BASS_NOTE_MAP, rig.MINITAUR)("C2", 2) == \
 		rig.midi_notes.note_to_name(38), "and the row it is drawn on names what it sounds"
+
+
+# --- a pattern's length (#2526, #2548) ----------------------------------------------
+
+def test_a_routed_grid_places_nothing_past_the_end_of_the_pattern_it_plays_into (
+	rig: typing.Any) -> None:
+	"""**Found by reading, not heard** (#2548).  Subsequence plays a note placed past a
+	pattern's length at its absolute time inside the next cycle rather than dropping
+	it, so the sixteen-step shared grid routed into the nine played its last seven
+	steps into the cycles after.  A route stops at its destination's own count of
+	steps, which is `grid`."""
+
+	pattern = subsequence.pattern.Pattern(channel=rig.DRUM_CHANNEL, length=rig.NINE_BEATS)
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1),
+		drum_note_map=rig.drm1.VERMONA_DRM1_DRUM_MAP, default_grid=rig.NINE_STEPS)
+
+	rig._play(builder, {"kick": {str(step): {"velocity": 100} for step in range(rig.STEPS)}})
+
+	pulses = 24 * rig.STEP_DURATION
+
+	assert sorted(round(note.position / pulses) for note in builder.placed()) == list(range(rig.NINE_STEPS))
+
+
+def test_a_length_is_offered_only_where_the_sequencer_keeps_a_step_its_size (
+	rig: typing.Any) -> None:
+	"""A pattern made a number of its own steps long is #2546, in Subsequence.
+
+	Until this Subsequence has it no grid here offers a length, because the length
+	call it does have spreads a pattern's steps over the new length instead — a
+	euclidean on a shortened hi-hat squeezed rather than four steps shorter.  And a
+	grid driving no pattern never offers one: it plays at whatever it is routed into.
+	"""
+
+	takes_steps = "steps" in inspect.signature(
+		subsequence.pattern_builder.PatternBuilder.set_length).parameters
+
+	assert rig.KEEPS_A_STEP == takes_steps
+
+	for name in ("grid", "nine", "bass", "chords"):
+		assert ("min_steps" in rig.link.controls[name].declaration()) == takes_steps, name
+
+	for name in ("shared", "snare_lane"):
+		assert "min_steps" not in rig.link.controls[name].declaration(), name
+
+
+def test_the_nine_asks_its_grid_what_to_play (rig: typing.Any) -> None:
+	"""Rather than reading its dict, so it plays only as many steps as its grid says."""
+
+	assert rig.link.controls["nine"] is rig.nine_grid
+	assert "nine_grid.now(p)" in inspect.getsource(rig.nine)

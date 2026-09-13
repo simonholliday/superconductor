@@ -15,6 +15,7 @@ writes it.  Nothing in the Subsequence package is changed to make this work.
 """
 
 import collections.abc
+import inspect
 import pathlib
 import typing
 
@@ -25,6 +26,7 @@ import subsequence
 import subsequence.constants.durations
 import subsequence.constants.instruments.vermona_drm1_drums as drm1
 import subsequence.constants.midi_notes as midi_notes
+import subsequence.pattern_builder
 
 import superconductor.subsequence_adapter
 
@@ -111,6 +113,32 @@ between the two mechanisms this pair exists to show side by side.
 this rig had been sixteen sixteenths, and `int(16 * 0.25)` is 4 without
 complaining; the first cycle that is not a whole number of beats is this one.
 """
+
+KEEPS_A_STEP = "steps" in inspect.signature(subsequence.pattern_builder.PatternBuilder.set_length).parameters
+"""Whether this Subsequence can make a pattern a number of its steps long and keep each step its size (#2546).
+
+**A length is offered on the glass only where it can** (#2548), because the
+alternative is worse than no control at all: `set_length` in beats spreads a
+pattern's steps over the new length, so a euclidean on a hi-hat shortened to
+twelve steps would be squeezed into three beats instead of losing four.  The words
+are Subsequence's to choose, and this line and `_resize` change with them.
+"""
+
+
+def _resize (p: typing.Any, steps: int) -> None:
+	"""Make the pattern being built *steps* of its own steps long (#2548)."""
+
+	p.set_length(steps=steps)
+
+
+MIN_STEPS = 1 if KEEPS_A_STEP else None
+"""The fewest steps a pattern here may play, where its length can change at all.
+
+One: a pattern must be at least as long as its rebuild lookahead, which is one
+pulse here, and a sixteenth is six."""
+
+RESIZE = _resize if KEEPS_A_STEP else None
+"""How a grid that drives a pattern makes it as long as it plays, where it can."""
 
 
 # --- The Minitaur -----------------------------------------------------------
@@ -743,7 +771,9 @@ def nine (p: typing.Any) -> None:
 	be making for whoever is standing at the panel.
 	"""
 
-	_play(p, composition.data["nine"])
+	# Asked of the grid rather than read off `composition.data`, because the grid
+	# says how many of its steps play this cycle (#2548).
+	_play(p, nine_grid.now(p))
 	nine_recipe.build(p)
 
 
@@ -891,7 +921,16 @@ def _play (p: typing.Any, grid: dict[str, dict[str, dict[str, int]]]) -> None:
 	pattern being built.  A grid routed into another pattern plays at that
 	pattern's step, and both the drums and the nine step in `STEP_DURATION`; a
 	destination stepping any other way is the day this reads the step from it.
+
+	**Nothing past the end of the pattern it plays into** (#2548).  Subsequence plays
+	a note placed past a pattern's length at its absolute time inside the next
+	cycle rather than dropping it, so the sixteen-step shared grid routed into the
+	nine played its last seven steps into the cycles after — found by reading, not
+	heard.  `grid` is that pattern's own count of steps, which follows its length
+	where the length can change.
 	"""
+
+	ends = getattr(p, "grid", None)
 
 	for row in ROWS:
 		steps = grid.get(row)
@@ -900,7 +939,12 @@ def _play (p: typing.Any, grid: dict[str, dict[str, dict[str, int]]]) -> None:
 			continue
 
 		for step, shape in steps.items():
-			p.note(pitch=row, beat=int(step) * STEP_DURATION,
+			at = int(step)
+
+			if ends is not None and at >= ends:
+				continue
+
+			p.note(pitch=row, beat=at * STEP_DURATION,
 			       velocity=shape.get("velocity", VELOCITY), duration=HIT_DURATION)
 
 
@@ -1301,7 +1345,7 @@ drum_grid = superconductor.subsequence_adapter.StepGrid(
 	data_key="grid", name="grid", title="DRM1 — pattern 1",
 	about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
 	pattern="drums", variants=VARIANTS, lands_every=LANDS_EVERY,
-	default_velocity=VELOCITY)
+	default_velocity=VELOCITY, min_steps=MIN_STEPS, resize=RESIZE)
 
 
 bass_grid = superconductor.subsequence_adapter.NoteGrid(
@@ -1312,7 +1356,8 @@ bass_grid = superconductor.subsequence_adapter.NoteGrid(
 	pattern="bass", divisions=BASS_DIVISIONS,
 	about=[("ch", BASS_CHANNEL), ("", "Moog Minitaur")],
 	default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
-	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY)
+	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY,
+	min_steps=MIN_STEPS, resize=RESIZE)
 
 
 chord_grid = superconductor.subsequence_adapter.NoteGrid(
@@ -1325,7 +1370,9 @@ chord_grid = superconductor.subsequence_adapter.NoteGrid(
 	pattern="chords",
 	about=[("ch", CHORD_CHANNEL), ("", "Moog Matriarch")],
 	default_length=CHORD_LENGTH, default_velocity=CHORD_VELOCITY,
-	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY)
+	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY,
+	min_steps=MIN_STEPS, resize=RESIZE)
+
 """The three patterns that take variants, named rather than built in place.
 
 A pattern function asks its grid what to play when it builds — which variant is
@@ -1333,6 +1380,17 @@ live, and whether a cued one lands now (#2485) — and reads a pitched grid's
 transposition then too (#2144), so each grid has to be a thing this file can
 refer to.
 """
+
+
+nine_grid = superconductor.subsequence_adapter.StepGrid(
+	composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
+	data_key="nine", name="nine", title="DRM1 — nine",
+	about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
+	pattern="nine", default_velocity=VELOCITY, min_steps=MIN_STEPS, resize=RESIZE)
+"""And the other mechanism beside `shared`: not a routed grid but a pattern of its
+own, nine steps against the sixteen.  Drawn narrower than its neighbours because
+its window *is* narrower, which is the thing that makes a polyrhythm legible on a
+page rather than only audible in a room."""
 
 
 link = superconductor.subsequence_adapter.AppLink(
@@ -1355,15 +1413,7 @@ link = superconductor.subsequence_adapter.AppLink(
 			data_key="snare_lane", name="snare_lane", title="Snare lane",
 			about=[("", "no instrument")], default_velocity=VELOCITY),
 
-		# And the other mechanism, beside it: not a routed grid but a pattern of
-		# its own, nine steps against the sixteen. Drawn narrower than its
-		# neighbours because it *is* narrower, which is the thing that makes a
-		# polyrhythm legible on a page rather than only audible in a room.
-		superconductor.subsequence_adapter.StepGrid(
-			composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
-			data_key="nine", name="nine", title="DRM1 — nine",
-			about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
-			pattern="nine", default_velocity=VELOCITY),
+		nine_grid,
 		bass_grid,
 		chord_grid,
 		superconductor.subsequence_adapter.Params(

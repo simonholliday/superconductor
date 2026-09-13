@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.36.0";
+const CONTRACT = "1.37.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -306,6 +306,10 @@ const NOTE_CONTROL_CELLS = 2;
 const STEP_CONTROL_CELLS = 1;
 /* And the one row a step grid's settings take under its lane: how hard new taps
    are struck (#2525). Counted for the same reason. */
+const LENGTH_CELLS = 1;
+/* And the row either strip gains where a pattern's length can change: how many of
+   its steps play, and the press that brings it back onto the bar (#2548). Counted
+   for the same reason, and only where the app declared a length that changes. */
 const VARIANT_CELLS = 1;
 /* The row of tabs above a grid that declares variants (#2485), counted for the
    same reason: a row the count did not know about puts every block a cell out. */
@@ -716,7 +720,7 @@ const beatEvery = (steps, beats) => Math.max(1, Math.round(steps / Math.max(1, b
  * A beat's width is `steps / beats` cells, whatever those numbers are — a grid
  * of twelve over three beats groups in fours as readily as sixteen over four,
  * and neither is written down here. */
-function BeatStrip ({ steps, beats, tight }) {
+function BeatStrip ({ steps, beats, tight, end = steps }) {
 	const per = beatEvery(steps, beats);
 
 	return html`
@@ -729,7 +733,8 @@ function BeatStrip ({ steps, beats, tight }) {
 			${Array.from({ length: steps }, (_, step) => html`
 				<i key=${`beat-${step}`} class=${["beat",
 					Math.floor(step / per) % 2 ? "off" : "",
-					step % (per * 4) === 0 ? "barline" : ""].filter(Boolean).join(" ")}></i>`)}
+					step % (per * 4) === 0 ? "barline" : "",
+					step >= end ? "past" : ""].filter(Boolean).join(" ")}></i>`)}
 		</div>`;
 }
 
@@ -966,6 +971,17 @@ function stepsOf (held, velocity) {
 	return Object.fromEntries(held.map((step) => [String(step), { velocity }]));
 }
 
+/* How many of a grid's steps play: the app's `end` where it declared a length that
+ * changes, and every column otherwise (#2548). A step at or past it is still a step
+ * — kept, drawn where it was put and placeable — and simply is not played. */
+function endOf (control, held) {
+	if (typeof control.min_steps !== "number" || !held || typeof held.end !== "number") {
+		return control.steps;
+	}
+
+	return Math.max(0, Math.min(control.steps, held.end));
+}
+
 /* How far up its cell a step is lit, 0 to 1: the velocity against the range the
  * app declared (#2525). Simon's design, from #2140 item 10: **full at 127, half at
  * 64, filling from the bottom like a glass** — and not by size, because size is
@@ -994,7 +1010,7 @@ function fillOf (shape, range, opening) {
    grid did. `chosen` and `onChoose` are the row the velocity lane shows, and are
    absent on a grid with no lane: its row labels are then marks, as they always
    were. */
-function Grid ({ control, cellsAt = control, rows, steps, beats, weights, opening, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
+function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, weights, opening, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -1004,7 +1020,7 @@ function Grid ({ control, cellsAt = control, rows, steps, beats, weights, openin
 	};
 
 	return html`
-		<${BeatStrip} steps=${steps} beats=${beats} />
+		<${BeatStrip} steps=${steps} beats=${beats} end=${end} />
 		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
 			${rows.map((row, band) => html`
@@ -1070,7 +1086,9 @@ function Grid ({ control, cellsAt = control, rows, steps, beats, weights, openin
 								routed ? "routed" : "", reshaped ? "reshaped" : "",
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
-								step % beatEvery(steps, beats) === 0 ? "downbeat" : ""]
+								step % beatEvery(steps, beats) === 0 ? "downbeat" : "",
+								/* Past the pattern's end: kept and placeable, not played (#2548). */
+								step >= end ? "past" : ""]
 								.filter(Boolean).join(" ")}
 							${/* **Where this row sits in its grid, 0 to 1** — a
 							     position rather than a colour, so it means the
@@ -1222,7 +1240,7 @@ const DRAG_SLOP = 8;
  * goes on showing what the sequencer actually holds until the release is
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
-function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes, drawn, kinds, weights,
+function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divisions, notes, drawn, kinds, weights,
                     cell, window: windowRows,
                     labels, unreachable, snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
@@ -1445,7 +1463,7 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 	const per = beatEvery(steps, beats);
 
 	return html`
-		<${BeatStrip} steps=${steps} beats=${beats} tight />
+		<${BeatStrip} steps=${steps} beats=${beats} end=${end} tight />
 		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight>
 		<div class="grid notes" style=${style}>
 			${rows.map((row, band) => html`
@@ -1512,7 +1530,8 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 								routed ? "routed" : "", reshaped ? "reshaped" : "",
 								pending.has(owner) && !asked ? "pending" : "",
 								failed.has(owner) && !asked ? "failed" : "",
-								step % per === 0 ? "downbeat" : ""].filter(Boolean).join(" ")}
+								step % per === 0 ? "downbeat" : "",
+								step >= end ? "past" : ""].filter(Boolean).join(" ")}
 							style=${{ "--band": rows.length > 1 ? band / (rows.length - 1) : 0,
 								...(struck ? { "--struck": weightOf(struck.v, weights) } : {}) }}
 							onPointerDown=${(event) => begin(event, row, step)}
@@ -1533,7 +1552,9 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 											? "chosen" : "",
 										pending.has(`${cellsAt}/${row}/${one.at}`) ? "pending" : "",
 										failed.has(`${cellsAt}/${row}/${one.at}`) ? "failed" : "",
-										one.note.length >= 3 * divisions ? "gripped" : ""]
+										one.note.length >= 3 * divisions ? "gripped" : "",
+										/* A note starting past the end is kept and not played (#2548). */
+										Math.floor(one.at / divisions) >= end ? "past" : ""]
 										.filter(Boolean).join(" ")}
 									style=${barStyle(one.at, Math.max(1, one.note.length || 1), step)}
 								></div>`)}
@@ -1558,7 +1579,7 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
 /* `label` is what the lane is called: *velocity* beside a pitched grid, whose lane
    takes the first note in each column, and the row it shows beside a step grid,
    whose lane shows one row at a time and has to say which (#2525). */
-function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, notes, range, cell, tight, label = "velocity", onSet }) {
+function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, divisions, notes, range, cell, tight, label = "velocity", onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -1613,7 +1634,8 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, no
 					<div
 						key=${`vel-${step}`}
 						data-velocity=${step}
-						class=${`weight ${step % beatEvery(steps, beats) === 0 ? "downbeat" : ""}`}
+						class=${["weight", step % beatEvery(steps, beats) === 0 ? "downbeat" : "",
+							step >= end ? "past" : ""].filter(Boolean).join(" ")}
 						onPointerDown=${(event) => {
 							event.preventDefault();
 							event.currentTarget.setPointerCapture(event.pointerId);
@@ -1625,6 +1647,47 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, no
 						onPointerCancel=${() => { holding.current = null; }}
 					>${found && html`<i style=${{ height: `${height}%` }}></i>`}</div>`;
 			})}
+		</div>`;
+}
+
+/* How many of a pattern's steps play, and the press that brings it back onto the bar.
+ *
+ * **Simon's design, agreed on 2026-09-13 (#2548).** The window stays put and a step past
+ * the end is drawn out of play rather than hidden; a pattern goes up to its window; its
+ * variants share one length; and nothing moves a pattern back onto the bar but the
+ * performer — *"a decision for the performer, not the product"*.
+ *
+ * **A step either way and a readout**, the shape transposing already has, because a
+ * performer walks to a polyrhythm a step at a time. At a bound the button is drawn and
+ * cannot be pressed, so nothing along the row shifts under a finger (#2503's rule for a
+ * note's length), and the readout is a mark rather than a target (#2107).
+ *
+ * **Re-sync blinks until the app says the pattern is on the bar**, as a cued ▶ does,
+ * because the app decides when it lands. Pressed again before then it takes the asking
+ * back — until the short cycle leading into the bar is queued, when the app refuses and
+ * says why. Both act on press, as everything a performer plays does (#1970). */
+function LengthRow ({ end, lowest, highest, resync, onEnd, onResync }) {
+	const walk = (by) => {
+		const wanted = end + by;
+
+		if (wanted >= lowest && wanted <= highest) onEnd(wanted);
+	};
+
+	return html`
+		<div class="note-row">
+			<span class="row-label">length</span>
+			<button key="end-1" class="offer" data-end="-1" disabled=${end <= lowest}
+				onPointerDown=${(event) => { event.preventDefault(); walk(-1); }}
+			>-1</button>
+			<span class="reading" data-end="now" title=${`${end} of ${highest} steps play`}>${end}</span>
+			<button key="end+1" class="offer" data-end="+1" disabled=${end >= highest}
+				onPointerDown=${(event) => { event.preventDefault(); walk(1); }}
+			>+1</button>
+			<span class="spacer"></span>
+			<button key="resync" class=${`offer resync ${resync ? "cued" : ""}`} data-resync="press"
+				aria-pressed=${resync ? "true" : "false"}
+				onPointerDown=${(event) => { event.preventDefault(); onResync(!resync); }}
+			>re-sync</button>
 		</div>`;
 }
 
@@ -1650,7 +1713,8 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, no
  * arrows are at its ends, so nothing along the row shifts under a finger as the
  * selection moves from one note to another. */
 function NoteControls ({ values, snaps, snap, onSnap, selected, note, room, onLength, onRemove,
-                        transpose, transposeRange, onTranspose }) {
+                        transpose, transposeRange, onTranspose,
+                        end, lowest, highest, resync, onEnd, onResync }) {
 	/* **Two buttons and a readout, not a picker** — which is what every piece of
 	 * hardware that transposes offers, because a performer's hand does not choose
 	 * from a list. The octave pair is there because walking an octave one
@@ -1678,6 +1742,9 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, room, onLe
 							onPointerDown=${(event) => { event.preventDefault(); shift(by); }}
 						>+${by}</button>`)}
 				</div>`}
+			${onEnd && html`
+				<${LengthRow} end=${end} lowest=${lowest} highest=${highest} resync=${resync}
+					onEnd=${onEnd} onResync=${onResync} />`}
 			<div class="note-row">
 				<span class="row-label">snap</span>
 				${snaps.map((value) => html`
@@ -1726,10 +1793,15 @@ function NoteControls ({ values, snaps, snap, onSnap, selected, note, room, onLe
    or — on a grid with variants — the variant shown, `bass/variants/B/rows`
    (#2485).  A note's path is always `${cellsAt}/${row}/${position}`; what is the
    pattern's, like its transposition, stays under `name` whichever is shown. */
-function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds, cell, pending, failed, onSet }) {
+function NoteBlock ({ name, cellsAt = name, control, shows, notes, end, resync, drawn, kinds, cell, pending, failed, onSet }) {
 	const divisions = Math.max(1, control.divisions || 1);
 	const steps = control.steps;
 	const beats = control.beats || 4;
+
+	/* How many steps play, and whether the length can change at all (#2548). The
+	   pattern's rather than a variant's, so it is handed in beside the notes. */
+	const lengthens = typeof control.min_steps === "number";
+	const playing = endOf(control, { end });
 
 	/* Positions to a beat, which is what names a note value. Derived rather
 	   than declared: the app already says how many steps it has, how many beats
@@ -1754,7 +1826,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 	const room = note ? steps * divisions - selected.at : 0;
 
 	return html`
-		<${NoteGrid} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} beats=${beats}
+		<${NoteGrid} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} end=${playing} beats=${beats}
 			divisions=${divisions}
 			${/* What a stack put here this cycle, and what a weight is measured
 			     against — the same two facts the drum grid is given (#2218). */ ""}
@@ -1770,7 +1842,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 		     that says nothing gets no lane, the same way one that declares no
 		     divisions is honestly offered sixteenths and nothing finer. */ ""}
 		${hasWeights && html`
-			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} beats=${beats}
+			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} end=${playing} beats=${beats}
 				divisions=${divisions} tight
 				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
@@ -1779,6 +1851,9 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 			onTranspose=${control.transpose_range
 				? (semitones) => onSet(`${name}/transpose`, semitones)
 				: null}
+			end=${playing} lowest=${control.min_steps} highest=${steps} resync=${resync === true}
+			onEnd=${lengthens ? (value) => onSet(`${name}/end`, value) : null}
+			onResync=${lengthens ? (value) => onSet(`${name}/resync`, value) : null}
 			onLength=${(length) => onSet(`${cellsAt}/${selected.row}/${selected.at}/length`, length)}
 			onRemove=${() => {
 				onSet(`${cellsAt}/${selected.row}/${selected.at}`, false);
@@ -1806,9 +1881,13 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
  * **Drawn only where the app said what a velocity is** — its range and default — as
  * a note grid's lane is. A grid that says nothing gets no lane, no slider, row names
  * that stay marks, and taps that place with `true`, which is every grid before this. */
-function StepBlock ({ name, cellsAt = name, control, cells, drawn, kinds, visible, cell, pending, failed, onSet }) {
+function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, kinds, visible, cell, pending, failed, onSet }) {
 	const range = Array.isArray(control.velocity_range) && control.velocity_range.length === 2
 		? control.velocity_range : null;
+
+	/* How many steps play, and whether the length can change at all (#2548). */
+	const lengthens = typeof control.min_steps === "number";
+	const playing = endOf(control, { end });
 	const opening = range && typeof control.default_velocity === "number"
 		? control.default_velocity : range ? range[1] : null;
 
@@ -1822,7 +1901,7 @@ function StepBlock ({ name, cellsAt = name, control, cells, drawn, kinds, visibl
 
 	return html`
 		<${Grid} control=${name} cellsAt=${cellsAt}
-			rows=${control.rows} steps=${control.steps} beats=${control.beats || 4}
+			rows=${control.rows} steps=${control.steps} end=${playing} beats=${control.beats || 4}
 			weights=${control.velocity_range} opening=${opening}
 			cells=${cells} drawn=${drawn} kinds=${kinds}
 			visible=${visible} cell=${cell}
@@ -1832,19 +1911,26 @@ function StepBlock ({ name, cellsAt = name, control, cells, drawn, kinds, visibl
 			onTap=${onSet} />
 		${range && html`
 			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${[chosen]}
-				steps=${control.steps} beats=${control.beats || 4} divisions=${1}
+				steps=${control.steps} end=${playing} beats=${control.beats || 4} divisions=${1}
 				label=${chosen.replace(/_/g, " ")}
 				cell=${cell} notes=${{ [chosen]: stepsOf(cells[chosen], opening) }}
-				range=${range} onSet=${onSet} />
+				range=${range} onSet=${onSet} />`}
+		${(range || lengthens) && html`
 			<div class="note-controls step-controls">
-				<div class="note-row">
-					<span class="row-label">velocity</span>
-					${/* **The same slider every bounded number on this panel is**, and
-					     never a request: it says what the next tap carries. */ ""}
-					<${Setting}
-						field=${{ kind: "number", name: "velocity", min: range[0], max: range[1], step: 1 }}
-						held=${tap} onSet=${setTap} />
-				</div>
+				${range && html`
+					<div class="note-row">
+						<span class="row-label">velocity</span>
+						${/* **The same slider every bounded number on this panel is**, and
+						     never a request: it says what the next tap carries. */ ""}
+						<${Setting}
+							field=${{ kind: "number", name: "velocity", min: range[0], max: range[1], step: 1 }}
+							held=${tap} onSet=${setTap} />
+					</div>`}
+				${lengthens && html`
+					<${LengthRow} end=${playing} lowest=${control.min_steps} highest=${control.steps}
+						resync=${resync === true}
+						onEnd=${(value) => onSet(`${name}/end`, value)}
+						onResync=${(value) => onSet(`${name}/resync`, value)} />`}
 			</div>`}`;
 }
 
@@ -4246,8 +4332,14 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
  * worked out here, so the highlight moves smoothly instead of hopping four
  * times a bar. It is moved by transform alone, which keeps it off the layout
  * path — the grid itself is never re-laid-out to animate it. */
-function Playhead ({ anchor, steps, beats, paused }) {
+function Playhead ({ anchor, cycles, steps, beats, paused }) {
 	const bar = useRef(null);
+
+	/* Where this pattern's own cycles start, held rather than depended on for the
+	   reason the anchor is (#2548). */
+	const began = useRef(cycles);
+
+	useEffect(() => { began.current = cycles; }, [cycles]);
 
 	/* The latest beat, held rather than depended on. Listing the anchor among
 	   the effect's dependencies cancelled the animation and started another
@@ -4300,7 +4392,17 @@ function Playhead ({ anchor, steps, beats, paused }) {
 				const reading = heldSince.current === null ? performance.now() : heldSince.current;
 				const elapsed = Math.max(0, reading - anchor.at - held.current) / 1000;
 				const beatNow = anchor.beat + Math.min(elapsed / anchor.interval, 1);
-				const step = (beatNow * (steps / beats)) % steps;
+
+				/* **From where this pattern's cycle began, where the app has said**
+				   (#2548). The newest cycle that has begun wins — the app reports one a
+				   pulse before it starts — and with none the page's beat count is the
+				   answer it always was, which is exact for a pattern whose length has
+				   never changed. */
+				const begun = (began.current || []).filter((one) => one.at <= beatNow + 1e-6);
+				const cycle = begun[begun.length - 1];
+				const step = cycle && cycle.end > 0
+					? (cycle.from + (beatNow - cycle.at) * (steps / beats)) % cycle.end
+					: (beatNow * (steps / beats)) % steps;
 
 				/* Both numbers are read off the grid rather than assumed. The
 				   pitch is the distance between two cells, which is a cell and
@@ -5543,6 +5645,12 @@ function Panel () {
 	const [touched, setTouched] = useState(null);
 	const [realised, setRealised] = useState({});
 
+	/* Where each pattern's cycles start and what they play, by grid (#2548): the last
+	   two the app reported, because it builds a cycle a pulse before that cycle
+	   begins and until then the one before is what is sounding. A report about the
+	   music, held apart from every control's state as `realised` is. */
+	const [cycles, setCycles] = useState({});
+
 	/* Which layers did not run last cycle, by stack, and the app's own words for
 	   why (#2368). Held apart from every control's state for the same reason
 	   `realised` is: this is a report about a cycle, not a value anybody set.
@@ -5747,11 +5855,18 @@ function Panel () {
 							   service, and it has to be the same in both or a
 							   panel that reloads disagrees with one that did
 							   not. */
+							/* **Everything that is not a row survives**, not the mute
+							   alone: a length and a re-sync sit beside the rows now
+							   (#2548) as the transposition did before them, and a
+							   list of what to keep is the whitelist the service
+							   stopped keeping after it had been bitten twice. */
 							const held = app[control] || {};
+							const named = new Set(declared.rows || []);
 
-							app[control] = "enabled" in held
-								? { ...frame.v, enabled: held.enabled }
-								: { ...frame.v };
+							app[control] = {
+								...frame.v,
+								...Object.fromEntries(Object.entries(held).filter(([key]) => !named.has(key))),
+							};
 						} else if (rest.length === 1) {
 							app[control] = { ...(app[control] || {}), [rest[0]]: frame.v };
 						} else if (rest.length === 2 && declared && declared.type === "recipe") {
@@ -5925,6 +6040,18 @@ function Panel () {
 					   person's taps stay the only thing anything stores. */
 					if (frame.name === "realised" && typeof frame.control === "string") {
 						setRealised((was) => ({ ...was, [frame.control]: frame.cells || {} }));
+					}
+
+					/* **Where a pattern's cycle starts, from which step, and where it wraps**
+					   (#2548), so its playhead follows what is sounding. A pattern whose
+					   length has changed no longer starts its cycles on the page's beat
+					   count, and stays off it until the performer re-syncs it. */
+					if (frame.name === "cycle" && typeof frame.control === "string"
+						&& typeof frame.at === "number" && typeof frame.end === "number") {
+						const one = { at: frame.at, from: Number(frame.from) || 0, end: frame.end };
+
+						setCycles((was) => ({
+							...was, [frame.control]: [...(was[frame.control] || []).slice(-1), one] }));
 					}
 
 					/* **Which layers were skipped this cycle, and why** (#2368).
@@ -6416,7 +6543,9 @@ function Panel () {
 		const body = Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 			+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
 			+ (kindOf(name) === "note_grid" && weighed ? LANE_CELLS : 0)
-			+ (kindOf(name) === "step_grid" && weighed ? LANE_CELLS + STEP_CONTROL_CELLS : 0);
+			+ (kindOf(name) === "step_grid" && weighed ? LANE_CELLS + STEP_CONTROL_CELLS : 0)
+			/* And the length's row, on either kind, where the length can change (#2548). */
+			+ (typeof controls[name].min_steps === "number" ? LENGTH_CELLS : 0);
 
 		const variants = Array.isArray(controls[name].variants) ? controls[name].variants.length : 0;
 		const beside = variantsBeside(variants, body);
@@ -7527,6 +7656,7 @@ function Panel () {
 										     pattern's beside them whichever is shown. */ ""}
 										notes=${variant ? { ...rows, transpose: held.transpose,
 											labels: held.labels, unreachable: held.unreachable } : held}
+										end=${held.end} resync=${held.resync}
 										cell=${size.cell}
 										drawn=${drawn}
 										kinds=${layerKinds(one.control)}
@@ -7542,6 +7672,7 @@ function Panel () {
 									<${StepBlock} name=${one.control} cellsAt=${variant ? variant.at : one.control}
 										control=${controls[one.control]}
 										cells=${rows}
+										end=${held.end} resync=${held.resync}
 										drawn=${drawn}
 										kinds=${layerKinds(one.control)}
 										visible=${rowsShown(one)} cell=${size.cell}
@@ -7551,6 +7682,7 @@ function Panel () {
 					${up && one.clear && html`
 						<${Playhead} anchor=${anchor} steps=${controls[one.control].steps}
 							beats=${controls[one.control].beats || 4}
+							cycles=${cycles[one.control]}
 							paused=${transportFields.paused === true} />`}
 				<//>`)}
 
