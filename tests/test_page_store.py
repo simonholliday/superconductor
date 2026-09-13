@@ -1,7 +1,8 @@
 """Keeping a page's arrangement beside the composition that owns the page.
 
-An arrangement is where the blocks sit and how tall they have been pulled — the
-same kind of fact, travelling the same path, checked at the same door (#2227).
+An arrangement is where the blocks sit, how tall they have been pulled and which
+are collapsed — the same kind of fact, travelling the same path, checked at the
+same door (#2227, #2536).
 """
 
 import json
@@ -125,6 +126,52 @@ def test_a_page_hands_back_the_height_with_the_position () -> None:
 
 	page = adapter.Page("bass", parts=["bass"], title="Bass")
 	placed = [{"name": "bass", "x": 2, "y": 0, "rows": 18}]
+
+	assert page.declaration(placed)["layout"] == placed
+
+
+# --- a collapse is part of an arrangement (#2536) -----------------------------
+
+def test_a_collapsed_block_is_kept_as_collapsed () -> None:
+	"""Kept with the page layout, as a position and a height are — Simon's choice
+	on 2026-09-13 — so it survives a reload and a restart, and every panel on the
+	page sees it."""
+
+	kept = adapter._readable_arrangement(
+		[{"name": "bass", "x": 3, "y": 1, "rows": 18, "collapsed": True}])
+
+	assert kept == [{"name": "bass", "x": 3, "y": 1, "rows": 18, "collapsed": True}]
+
+
+def test_an_open_block_is_kept_with_no_collapsed_at_all () -> None:
+	"""An open block is the absent key, never a stored false (#2518) — which is
+	also what every layout kept before a block could collapse says, so those read
+	as they always did."""
+
+	for open_ in ({}, {"collapsed": False}, {"collapsed": None}):
+		kept = adapter._readable_arrangement([{"name": "bass", "x": 0, "y": 0, **open_}])
+
+		assert kept == [{"name": "bass", "x": 0, "y": 0}], f"{open_} was kept as {kept}"
+
+
+def test_a_collapsed_that_is_not_true_or_false_costs_the_whole_arrangement () -> None:
+	"""The answer a height that is not a number gets, for the same reason: this is
+	written to disk and handed to every panel, and a flag whose meaning this end
+	guessed would come back as though somebody had set it."""
+
+	odds: list[object] = ["yes", 1, 0, [], {}]
+
+	for odd in odds:
+		assert adapter._readable_arrangement(
+			[{"name": "bass", "x": 0, "y": 0, "collapsed": odd}]) is None, f"{odd!r} was read"
+
+
+def test_a_page_hands_back_a_collapse_with_the_position () -> None:
+	"""A panel that got the position and not the collapse would open a block
+	somebody had put away."""
+
+	page = adapter.Page("bass", parts=["bass"], title="Bass")
+	placed = [{"name": "bass", "x": 2, "y": 0, "collapsed": True}]
 
 	assert page.declaration(placed)["layout"] == placed
 

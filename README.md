@@ -256,21 +256,30 @@ step for step rather than nearly. A grid's bottom edge is a handle too: drag it
 to show more of its rows or fewer. The grids go on playing throughout; only a
 title bar or an edge moves anything.
 
+The chevron at the right of a title bar collapses the block to that bar, where
+it stands. It keeps its place and its width, and its cables go on reaching it:
+they meet the title bar rather than the rows they write. Tap the chevron again
+to expand the block to the height it had. Collapsing never changes the size of
+the cells on the page. A collapsed block that is switched off says **LIVE OFF**
+on its bar, since the switch itself is out of sight.
+
 Any position is allowed, including on top of another block. The last block you
 moved is the one on top, which is what makes a busy page workable. Nothing is
 ever pushed aside to make room: a block you did not touch does not move.
 
 Because a block can be covered completely, and a title bar is the only handle
 it has, the bar lists every block on the page. Tapping a name brings that block
-back to the top.
+back to the top. Collapsing the block on top uncovers it as well.
 
 Tap **LAYOUT** in the bar to hold the arrangement still — the padlock closes,
 title bars and edges stop moving anything, and the list goes away. That is what
 stops a stray finger rearranging a page mid-performance. The browser remembers
-which way you left it.
+which way you left it. A block still collapses and expands while the arrangement
+is held, because doing so moves nothing.
 
-An arrangement is saved when you lift your finger from a block that moved, and
-it is saved to the application that declared the page, not to your browser. For a composition using `PageStore` that means a file beside the
+An arrangement is saved when you lift your finger from a block that moved, or
+when you collapse or expand one, and it is saved to the application that declared
+the page, not to your browser. For a composition using `PageStore` that means a file beside the
 composition itself, so a piece and the way you look at it travel together:
 
 ```python

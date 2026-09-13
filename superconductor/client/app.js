@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.34.0";
+const CONTRACT = "1.35.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -2923,6 +2923,10 @@ const ICONS = {
 	settings: "M6 4v16M12 4v16M18 4v16M3 9h6M9 15h6M15 7h6",
 	play: "m7 4 13 8-13 8z",
 	pause: "M7 4h3.5v16H7zM13.5 4H17v16h-3.5z",
+	/* Lucide's chevron-up and chevron-down: the chevron points the way the
+	   window's lower edge will move (#2536). */
+	collapse: "m18 15-6-6-6 6",
+	expand: "m6 9 6 6 6-6",
 };
 
 /* One glyph, sized by the surface it sits on rather than by itself — the size
@@ -3168,8 +3172,15 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onL
  *
  * The bar is also the handle. A step grid is tappable over its whole face, so
  * there is nowhere on it to take hold of that is not a control; the title is
- * the surface that is not one. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, offers, pitchIn, rows, mostRows, leastRows, beside, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, footer, children }) {
+ * the surface that is not one.
+ *
+ * **And it is all of a block that stays when the block is collapsed** (#2536).
+ * Simon, planning for a page with every instrument on it: the window does not
+ * move, because its routing must stay visible, but its panel only needs to be
+ * there when he needs it. So a collapse hides the pane — the body, the footer
+ * and the grip — and nothing else changes: not the position, not the width, not
+ * the height it opens back to. */
+function Part ({ title, about, name, flavour, at, cell, depth, locked, collapsed, silent, takes, offers, pitchIn, rows, mostRows, leastRows, beside, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, onCollapse, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 	const stretching = useRef(null);
@@ -3314,8 +3325,10 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 
 	return html`
 		<section
-			class=${`part ${flavour || ""}`} data-part=${name} data-takes=${takes || null}
+			class=${`part ${flavour || ""}${collapsed ? " collapsed" : ""}`}
+			data-part=${name} data-takes=${takes || null}
 			data-offers=${offers || null} data-pitch-in=${pitchIn || null}
+			data-collapsed=${collapsed ? "true" : null}
 			style=${place}
 			${/* **Anywhere on the block raises the lines it joins, except the
 			     surface you play on** (#2109, qualified by Simon on #2426).
@@ -3389,6 +3402,44 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 								<em>${fact.value}</em>
 							</span>`)}
 					</span>`}
+				${/* **A collapsed block that is switched off says so** (#2536). Its
+				     switch is in the footer, which the collapse hid, and a silent
+				     instrument with nothing on it saying why reads as a broken one.
+				     A mark in the footer's own words, legend then state, and never a
+				     control: expanding the block is how you reach the switch, and a
+				     second switch would say the one fact twice (#2107). Not drawn on
+				     an open block, whose footer is already saying it.
+
+				     The two words share a line so the space between them survives
+				     the template, and a screen reader says two words, not one. */ ""}
+				${collapsed && silent && html`
+					<span class="silenced" title="switched off — expand to bring it back">
+						<i>live</i> <em>off</em>
+					</span>`}
+				${/* **Collapse and expand are one button**, left of the close, and
+				     the chevron points the way the window's lower edge will go.
+				     Offered while the layout is held as well, because a collapse
+				     moves nothing and an instrument may need opening mid-set.
+
+				     On press, as the close is, and for the same reason the close
+				     stops propagation: without it the title bar's drag begins under
+				     the same finger. Stopping it also stops the press reaching the
+				     block, so the raise and the lines coming forward are asked for
+				     here instead, as the grip asks for them. */ ""}
+				${onCollapse && html`
+					<button
+						class="collapse"
+						aria-expanded=${collapsed ? "false" : "true"}
+						aria-label=${collapsed ? "expand" : "collapse"}
+						title=${collapsed ? "expand this window" : "collapse this window to its title bar"}
+						onPointerDown=${(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onRaise(name);
+							onTouch(name, event.pointerId);
+							onCollapse(name);
+						}}
+					><${Icon} of=${collapsed ? "expand" : "collapse"} /></button>`}
 				${/* Top right, where every windowed system has put it for forty
 				     years — Simon's point, and it costs nothing to be where a
 				     hand already goes. It was among the controls, which put
@@ -3415,26 +3466,41 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, takes, of
 				     not change that. The stack is left unpositioned so the playhead
 				     goes on measuring its offset against the body, as it did when it
 				     was a child of one. */ ""}
-			<div class="part-body">
-				<div class="part-stack">${children}</div>
-				${beside || null}
+			${/* **The pane: everything a collapse hides, in one element** (#2536).
+
+			     Clipped to nothing rather than taken off the page, and that is
+			     what keeps the cell size still. Under "fit the glass" every block's
+			     height is an input to the size of every cell, and a collapse must
+			     not be one (#2072, #2217) — so the fit has to go on reading the
+			     height this block opens to, and only a pane still laid out at full
+			     size can say what that is, on a reload as well as after a tap. It
+			     also keeps what is inside exactly as it was: a windowed grid comes
+			     back scrolled where it was left.
+
+			     `inert` so nothing clipped away can be reached by focus or by a
+			     screen reader, and nothing in it can be pressed. */ ""}
+			<div class="part-pane" inert=${Boolean(collapsed)}>
+				<div class="part-body">
+					<div class="part-stack">${children}</div>
+					${beside || null}
+				</div>
+				${footer}
+				${/* Offered only where there is something to reveal. A block already
+				     showing everything it has is a block whose height is not a
+				     question, and a grip that can only ever shrink is a control that
+				     lies about what it is for. */ ""}
+				${onResize && html`
+					<div
+						class="part-grip" data-grip=${name}
+						role="separator" aria-orientation="horizontal"
+						aria-label=${`rows shown in ${title || name.replace(/_/g, " ")}`}
+						title="how many rows to show"
+						onPointerDown=${takeGrip}
+						onPointerMove=${stretch}
+						onPointerUp=${letGo}
+						onPointerCancel=${letGo}
+					></div>`}
 			</div>
-			${footer}
-			${/* Offered only where there is something to reveal. A block already
-			     showing everything it has is a block whose height is not a
-			     question, and a grip that can only ever shrink is a control that
-			     lies about what it is for. */ ""}
-			${onResize && html`
-				<div
-					class="part-grip" data-grip=${name}
-					role="separator" aria-orientation="horizontal"
-					aria-label=${`rows shown in ${title || name.replace(/_/g, " ")}`}
-					title="how many rows to show"
-					onPointerDown=${takeGrip}
-					onPointerMove=${stretch}
-					onPointerUp=${letGo}
-					onPointerCancel=${letGo}
-				></div>`}
 		</section>`;
 }
 
@@ -3710,6 +3776,14 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 			   been scrolled, and the rendering is the only thing that knows all
 			   three. */
 			const levelOf = (part, row) => {
+				/* **A collapsed block has no rows to be level with** (#2536). They
+				   are still laid out, clipped under its title bar, so asking for
+				   one would point a line at a place on the glass where nothing is
+				   drawn. Its lines meet the title bar's sides instead, and which
+				   lane a generator writes is not said until it is expanded: Simon
+				   accepted that as what a collapsed view is. */
+				if (wrap.querySelector(`[data-part="${CSS.escape(part)}"][data-collapsed]`)) return null;
+
 				const label = wrap.querySelector(
 					`[data-part="${CSS.escape(part)}"] [data-row="${CSS.escape(row)}"]`);
 
@@ -4573,6 +4647,41 @@ function blockSize (block, cell, chrome) {
 	return { width, height };
 }
 
+/* How much taller a block would be drawn if it were not collapsed, in pixels —
+ * nothing for a block that is open.
+ *
+ * **The fit sizes cells as though every window were open** (#2536). Otherwise
+ * collapsing one block would make the arrangement smaller, and under "fit the
+ * glass" every cell on the page would grow to fill the room it gave back: a page
+ * resizing itself because of what somebody did to its arrangement, which is what
+ * #2072 and #2217 refused for a drag.
+ *
+ * **Measured, and from the pane rather than remembered.** A collapsed pane is
+ * clipped to nothing and still laid out at full size, so where its last child
+ * ends is where the block would end — on a reload that opens with the block
+ * collapsed as well as after a tap, which a height remembered from the last time
+ * the block was open could not answer. */
+function collapsedAway (part) {
+	if (!part.dataset.collapsed) return 0;
+
+	const pane = part.querySelector(":scope > .part-pane");
+
+	if (!pane) return 0;
+
+	const top = pane.getBoundingClientRect().top;
+	let bottom = top;
+
+	for (const child of pane.children) {
+		const shape = getComputedStyle(child);
+
+		if (shape.display === "none" || shape.position === "absolute" || shape.position === "fixed") continue;
+
+		bottom = Math.max(bottom, child.getBoundingClientRect().bottom + parseFloat(shape.marginBottom || 0));
+	}
+
+	return bottom - top;
+}
+
 /* Where a part goes when nobody has placed it yet.
  *
  * Left to right and then down, which is the arrangement a person is least
@@ -4762,7 +4871,7 @@ function useCellSize (blocks, layout, dragging) {
 
 				chromeOf.set(named.name, {
 					x: whole.width - modelled.width,
-					y: whole.height - modelled.height,
+					y: whole.height + collapsedAway(part) - modelled.height,
 				});
 			}
 
@@ -6369,7 +6478,9 @@ function Panel () {
 	/* Move and raise are the same write with one difference, so they are one
 	   function: a drag says where, a tap from the inventory says only that this
 	   block should be on top. Either way the block goes to the end of the
-	   order, which is what "the last one moved is on top" means. */
+	   order, which is what "the last one moved is on top" means. A resize and a
+	   collapse say something else about the block and are the same write again,
+	   merged into what is already there, so none of them erases another. */
 	const rearrange = useCallback((name, at) => {
 		setMoved((was) => {
 			const forPage = was[pageId] || {};
@@ -6404,8 +6515,11 @@ function Panel () {
 	   which is the shared one every panel sees; then anything moved here since,
 	   which is what the finger is doing right now. */
 	const kept = (page && page.layout) || [];
-	const keptPlaces = Object.fromEntries(kept.map(
-		(one) => [one.name, one.rows ? { x: one.x, y: one.y, rows: one.rows } : { x: one.x, y: one.y }]));
+	const keptPlaces = Object.fromEntries(kept.map((one) => [one.name, {
+		x: one.x, y: one.y,
+		...(one.rows ? { rows: one.rows } : {}),
+		...(one.collapsed === true ? { collapsed: true } : {}),
+	}]));
 
 	/* **Merged field by field rather than entry by entry**, because the three
 	   layers no longer carry the same fields: where a block sits and how tall it
@@ -6911,11 +7025,33 @@ function Panel () {
 	const keep = () => {
 		if (!appName || !link.current) return;
 
+		/* **Collapsed is written only when it is true** (#2536): an open block is
+		   the absent key, never a stored false (#2518), and it is what every block
+		   was before a block could collapse. */
 		link.current.layout(appName, pageId, stacked
 			.filter((name) => layout[name])
-			.map((name) => (layout[name].rows
-				? { name, x: layout[name].x, y: layout[name].y, rows: layout[name].rows }
-				: { name, x: layout[name].x, y: layout[name].y })));
+			.map((name) => ({
+				name, x: layout[name].x, y: layout[name].y,
+				...(layout[name].rows ? { rows: layout[name].rows } : {}),
+				...(layout[name].collapsed ? { collapsed: true } : {}),
+			})));
+	};
+
+	/* **A collapse is kept the moment it happens** (#2536), with the page layout
+	   and on the same path as a position (Simon's choice, 2026-09-13), so it
+	   survives a reload and a restart and every panel on the page sees it.
+
+	   A drag is kept when the finger lifts and a collapse has no lift to wait
+	   for — but the layout `keep` reads is this render's, and the collapse is
+	   only in the next one. So the press counts, and the count is kept after
+	   the render that draws it. */
+	const [collapses, setCollapses] = useState(0);
+
+	useEffect(() => { if (collapses) keep(); }, [collapses]);
+
+	const collapse = (name) => {
+		rearrange(name, { collapsed: !(layout[name] && layout[name].collapsed) });
+		setCollapses((count) => count + 1);
 	};
 
 	/* Both halves have to be known before they can disagree: a page served
@@ -7030,6 +7166,9 @@ function Panel () {
 						one.reshaping ? "reshaping" : ""].filter(Boolean).join(" ")}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
 					locked=${locked}
+					collapsed=${Boolean(layout[one.key] && layout[one.key].collapsed)}
+					silent=${one.live === false}
+					onCollapse=${collapse}
 					${/* Which stack a cable dropped on this block would go into.
 					     The whole block is the target, not a fitting on it: on
 					     glass a big one beats a precise one, and a person

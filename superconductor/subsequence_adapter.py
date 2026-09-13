@@ -4681,6 +4681,18 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 	function exists to stop.  There is no ceiling here: how many rows a control
 	*has* is the panel's to know, and clamping to a number this end cannot see
 	would be a guess written to disk.
+
+	``collapsed`` says the block is drawn as its title bar (#2536), and it is
+	**kept only as ``true``**.  An open block is the absent key and never a stored
+	``false`` (#2518), so ``false`` and a null are read as open and written as
+	nothing, which is also what every layout kept before a block could collapse
+	says.  Anything else costs the whole arrangement, as a height that is not a
+	number does: a flag this end guessed the meaning of would be handed back to
+	every panel as though somebody had set it.
+
+	**Each field is named here or it is dropped without a word**, because the part
+	is rebuilt rather than copied — the trap `LAYER_FIELDS` has, and the reason
+	a seam test sends a layout the page actually built through this function.
 	"""
 
 	if not isinstance(parts, list):
@@ -4706,6 +4718,14 @@ def _readable_arrangement (parts: typing.Any) -> list[dict[str, typing.Any]] | N
 
 			except (TypeError, ValueError):
 				return None
+
+		collapsed = part.get("collapsed")
+
+		if collapsed is True:
+			placed["collapsed"] = True
+
+		elif collapsed is not None and collapsed is not False:
+			return None
 
 		kept.append(placed)
 

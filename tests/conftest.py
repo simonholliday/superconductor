@@ -460,7 +460,17 @@ class FakeApp:
 					self.sets.append(frame)
 
 				elif frame["t"] == "layout":
-					self.arrangements[str(frame.get("page"))] = list(frame.get("parts") or [])
+					# **Kept through the adapter's own door**, so what a page test
+					# reloads into is what a composition would have kept rather
+					# than what the panel sent (#2536).  The door rebuilds a part
+					# field by field, and a field it does not name vanishes with
+					# nothing said — a panel test that kept the frame verbatim
+					# would pass against exactly that.
+					kept = superconductor.subsequence_adapter._readable_arrangement(
+						frame.get("parts"))
+
+					if kept is not None:
+						self.arrangements[str(frame.get("page"))] = kept
 
 					await socket_.send(superconductor.protocol.encode(self._declaration()))
 

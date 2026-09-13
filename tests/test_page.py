@@ -8155,7 +8155,7 @@ def test_an_instruments_settings_are_put_away_until_the_pattern_asks (
 	# And its own close does the same, without touching the settings themselves.
 	latch.click()
 	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
-	panel.locator('.part[data-part="moog"] .part-title button').click()
+	panel.locator('.part[data-part="moog"] .part-title .close').click()
 	playwright_api.expect(settings).to_have_count(0, timeout=5_000)
 
 
@@ -8745,6 +8745,378 @@ def test_a_rack_is_offered_no_resize_grip (panel: typing.Any) -> None:
 	_unlocked(panel)
 
 	assert panel.locator('.part[data-part="rack"] .part-grip').count() == 0
+
+
+# --- a window collapses to its title bar (#2536) ------------------------------
+
+def _collapse (panel: typing.Any, part: str) -> None:
+	"""Press a block's collapse, or its expand, and wait until it has become the other."""
+
+	block = f'.part[data-part="{part}"]'
+	was = panel.locator(f"{block}[data-collapsed]").count() == 1
+
+	panel.locator(f"{block} .part-title .collapse").click()
+	panel.wait_for_selector(
+		f"{block}:not([data-collapsed])" if was else f"{block}[data-collapsed]", timeout=5_000)
+
+
+def _kept (fake_app: typing.Any, page: str, part: str, collapsed: bool) -> dict[str, typing.Any]:
+	"""One part as the app last kept it, once that says it is collapsed or not.
+
+	The frame crosses two sockets and lands on the app's own thread, so this waits
+	for the answer asked about rather than reading whatever had arrived.  What it
+	returns has been through the adapter's own door (`FakeApp` keeps a layout that
+	way), so a field that door drops is a field this cannot find.
+	"""
+
+	deadline = time.monotonic() + 5
+	held: dict[str, typing.Any] = {}
+
+	while time.monotonic() < deadline:
+		held = {one["name"]: one for one in fake_app.arrangements.get(page) or []}.get(part, {})
+
+		if held and held.get("collapsed", False) is collapsed:
+			break
+
+		time.sleep(0.05)
+
+	return held
+
+
+def _reached (panel: typing.Any, selector: str) -> bool:
+	"""Whether a press at the middle of an element would land on it."""
+
+	return bool(panel.eval_on_selector(selector, """(one) => {
+		const at = one.getBoundingClientRect();
+		const top = document.elementFromPoint(at.left + at.width / 2, at.top + at.height / 2);
+
+		return Boolean(top) && (top === one || one.contains(top));
+	}"""))
+
+
+def test_a_window_collapses_to_its_title_bar_where_it_stands (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-13, planning for a page with every instrument on it: *"The
+	window should not change position, since its routing must stay visible, but its
+	panel only needs to be visible when the user needs it to be."*
+
+	So a collapse keeps the corner and the width, draws the title bar alone inside
+	the frame every block has, and swaps the button for the one that undoes it —
+	and expanding brings back the height the block had.  It is kept with the page
+	layout the moment it happens (Simon's choice), and an open block is kept with
+	no `collapsed` at all (#2518).
+	"""
+
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="grid"]')
+	button = panel.locator('.part[data-part="grid"] .part-title .collapse')
+	cell = conftest.cell("grid/kick/0")
+	opened = block.bounding_box()
+
+	assert button.get_attribute("aria-expanded") == "true", "a window opened collapsed"
+	assert _reached(panel, cell), "the cell cannot be pressed even with the window open"
+
+	_collapse(panel, "grid")
+
+	shut = block.bounding_box()
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+	pad = float(block.evaluate("el => parseFloat(getComputedStyle(el).paddingTop)"))
+
+	assert abs(shut["x"] - opened["x"]) < 1 and abs(shut["y"] - opened["y"]) < 1, (
+		f"the window moved when it collapsed: {opened} to {shut}")
+	assert abs(shut["width"] - opened["width"]) < 1, "the window did not hold its width"
+	assert abs(shut["height"] - (title["height"] + 2 * pad)) < 1.5, (
+		f"collapsed, the window is {shut['height']}px, not its title bar and frame")
+
+	assert not _reached(panel, cell), "a cell of the collapsed window can still be pressed"
+	assert not _reached(panel, '.part[data-part="grid"] .part-grip'), (
+		"the collapsed window's grip can still be taken hold of")
+
+	assert button.get_attribute("aria-expanded") == "false"
+	assert button.get_attribute("aria-label") == "expand", "the button did not become expand"
+
+	assert _kept(fake_app, "all", "grid", True).get("collapsed") is True, (
+		"the collapse was not kept with the page layout")
+
+	_collapse(panel, "grid")
+
+	assert abs(block.bounding_box()["height"] - opened["height"]) < 1, (
+		"expanding did not bring back the height the window had")
+	assert _reached(panel, cell), "the cell cannot be pressed after expanding"
+
+	kept = _kept(fake_app, "all", "grid", False)
+
+	assert kept and "collapsed" not in kept, f"an open window was kept as {kept}"
+
+
+def test_a_window_collapses_and_expands_while_the_layout_is_held (panel: typing.Any) -> None:
+	"""A collapse moves nothing, and an instrument may need opening mid-set — which
+	is exactly when the layout is held still."""
+
+	_locked(panel)
+	_settled(panel)
+
+	block = panel.locator('.part[data-part="grid"]')
+	before = block.bounding_box()
+
+	_collapse(panel, "grid")
+
+	shut = block.bounding_box()
+
+	assert shut["height"] < before["height"], "the held layout refused the collapse"
+	assert (shut["x"], shut["y"]) == (before["x"], before["y"])
+
+	_collapse(panel, "grid")
+
+	assert abs(block.bounding_box()["height"] - before["height"]) < 1, (
+		"the held layout refused the expand")
+
+
+def test_a_collapsed_window_s_cables_meet_its_title_bar (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The routing is why the window stays where it is, so its lines have to go on
+	reaching it — and they can only reach what is drawn.
+
+	A generator's line arrives level with the lane it writes (#2109).  Collapsed,
+	that lane is not on the glass, so the line meets the title bar at the middle of
+	a side, as a line naming no row always has: which lane it writes is not said
+	until the window is opened, and Simon accepted that as what a collapsed view is.
+	A line still aimed at the lane would be held just inside the bar's top edge.
+
+	**The kick and not the snare**, because the snare's row is the middle of this
+	block when it is open, and a line arriving there is at a side's middle already.
+	"""
+
+	_open_the_stack(panel)
+	_one_euclidean(panel, fake_app, {})
+
+	def middles (box: dict[str, float]) -> list[dict[str, float]]:
+		return [
+			{"x": box["x"] + box["w"] / 2, "y": box["y"]},
+			{"x": box["x"] + box["w"], "y": box["y"] + box["h"] / 2},
+			{"x": box["x"] + box["w"] / 2, "y": box["y"] + box["h"]},
+			{"x": box["x"], "y": box["y"] + box["h"] / 2},
+		]
+
+	def at_a_middle (point: dict[str, float], box: dict[str, float]) -> bool:
+		return any(abs(point["x"] - one["x"]) < 1.5 and abs(point["y"] - one["y"]) < 1.5
+		           for one in middles(box))
+
+	def cable () -> str:
+		return str(panel.eval_on_selector(
+			'[data-join^="stack/one>grid#"] .cable', "el => el.getAttribute('d')"))
+
+	opened = _edges(panel, "stack/one>grid")
+
+	assert not at_a_middle(opened["b"], opened["to"]), (
+		"the line was at a side's middle before anything collapsed, so this proves nothing")
+
+	was = cable()
+
+	_collapse(panel, "grid")
+
+	# The end at the pattern has to move, so the line is waited for until it has
+	# rather than read at whatever frame came first.
+	panel.wait_for_function(
+		"""(was) => {
+			const one = document.querySelector('[data-join^="stack/one>grid#"] .cable');
+			return Boolean(one) && one.getAttribute('d') !== was;
+		}""", arg=was, timeout=5_000)
+
+	_collapse(panel, "stack/one")
+
+	line = _edges(panel, "stack/one>grid")
+
+	assert line["to"]["h"] < opened["to"]["h"] and line["from"]["h"] < opened["from"]["h"], (
+		"a window did not collapse")
+	assert at_a_middle(line["b"], line["to"]), (
+		f"the line does not meet the collapsed pattern's title bar: {line}")
+	assert at_a_middle(line["a"], line["from"]), (
+		f"the line does not leave the collapsed generator's title bar: {line}")
+
+
+def test_the_cells_never_change_size_as_windows_collapse_and_the_page_reloads (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Collapsing never changes the cell size**, stated to Simon as a default.
+
+	Under "fit the glass", the default, every block's height decides how large the
+	cells are — so a collapse that fed the fit would enlarge every cell on the page,
+	which is a page resizing itself because of what somebody did to its arrangement
+	(#2072, #2217).  Cells are sized as though every window were open.
+
+	**The reload is the half that can fail.**  The fit does not run on a collapse
+	at all; it runs when the glass or the page changes, and a reload that opens
+	with a window already collapsed is that, with nothing on the glass to say how
+	tall the window opens.  A glass wide and short makes the height the constraint,
+	so a fit that read the collapsed height would choose a larger cell.
+
+	**On the Moog page, because it holds one block.**  Every page carrying the
+	drums grid carries its generators too (#2211), and they stack deep enough that
+	the fit sits at its floor on a short glass, where no reading of any height can
+	move it: the first version of this test passed against a fit that read the
+	collapsed height, for exactly that reason.  Measured with that fit, this page
+	went from 79px to 95px on the reload.
+	"""
+
+	panel.set_viewport_size({"width": 1900, "height": 600})
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector('.part[data-part="moog"]', timeout=5_000)
+	_settled(panel)
+
+	def size () -> float:
+		return float(panel.evaluate(
+			"() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))"))
+
+	before = size()
+
+	# **The height has to be what the fit is held by**, or a fit that ignored the
+	# collapse and one that read it would choose the same cell and this would
+	# prove nothing.
+	spare = panel.evaluate("""() => {
+		const wrap = document.querySelector('.grid-wrap');
+		const shape = getComputedStyle(wrap);
+		const inner = wrap.getBoundingClientRect();
+		const blocks = [...wrap.querySelectorAll('.part')].map((one) => one.getBoundingClientRect());
+
+		return {
+			down: inner.bottom - parseFloat(shape.paddingBottom) - Math.max(...blocks.map((one) => one.bottom)),
+			across: inner.right - parseFloat(shape.paddingRight) - Math.max(...blocks.map((one) => one.right)),
+		};
+	}""")
+	pitch = before + 4
+
+	assert spare["down"] < pitch < spare["across"], (
+		f"the glass is not what holds this fit, so a collapse could not move it: {spare}")
+
+	_collapse(panel, "moog")
+	_settled(panel)
+
+	assert size() == before, f"collapsing a window resized the cells: {before} to {size()}"
+
+	_kept(fake_app, "moog", "moog", True)
+
+	panel.reload()
+	panel.wait_for_selector('.part[data-part="moog"][data-collapsed]', timeout=10_000)
+	_settled(panel)
+
+	assert size() == before, (
+		f"a page reloaded with a window collapsed chose a different cell: {before} to {size()}")
+
+	_collapse(panel, "moog")
+	_settled(panel)
+
+	assert size() == before, f"expanding the window resized the cells: {before} to {size()}"
+
+
+def test_a_collapsed_window_that_is_switched_off_says_so_on_its_title_bar (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The switch is in the footer, which a collapse hides, and a silent instrument
+	with nothing on it saying so reads as a broken one.  So the title bar says it —
+	in the footer's own words, as a mark and never a second switch (#2107) — and
+	only while collapsed, when the footer is not saying it already."""
+
+	_settled(panel)
+
+	fake_app.confirm("grid/enabled", False, by="app")
+	panel.wait_for_selector('.part[data-part="grid"].silent', timeout=5_000)
+
+	mark = panel.locator('.part[data-part="grid"] .part-title .silenced')
+
+	assert mark.count() == 0, "an open window says it is off in two places"
+
+	_collapse(panel, "grid")
+
+	playwright_api.expect(mark).to_be_visible(timeout=5_000)
+
+	assert " ".join((mark.text_content() or "").split()) == "live off"
+	assert mark.locator("button").count() == 0, "the mark is a control"
+	assert mark.evaluate("el => getComputedStyle(el).touchAction") != "none", (
+		"the mark declares itself a target")
+
+	# And a window that is playing says nothing when it collapses.
+	_collapse(panel, "second")
+
+	assert panel.locator('.part[data-part="second"] .part-title .silenced').count() == 0
+
+
+def test_a_buried_window_is_reached_by_collapsing_the_one_above (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The one hazard overlap brings: a block covered completely cannot be taken
+	hold of.  Collapsing the block on top uncovers it without moving anything,
+	which is what lets the inventory go (#2537)."""
+
+	_unlocked(panel)
+	_settled(panel)
+
+	under = panel.locator('.part[data-part="second"]').bounding_box()
+	over = panel.locator('.part[data-part="grid"]').bounding_box()
+	title = panel.locator('.part[data-part="grid"] .part-title').bounding_box()
+
+	# The drums grid is the larger of the two, so laid on the other's corner it
+	# covers all of it.
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(title["x"] + 20 + under["x"] - over["x"],
+	                 title["y"] + 5 + under["y"] - over["y"], steps=10)
+	panel.mouse.up()
+	_settled(panel)
+
+	buried = conftest.cell("second/kick/2")
+
+	assert not _reached(panel, buried), "the window underneath is not buried, so this proves nothing"
+
+	_collapse(panel, "grid")
+
+	assert _reached(panel, buried), "collapsing the window on top did not uncover the one beneath"
+
+	panel.locator(buried).click()
+	fake_app.await_set("second/kick/2")
+
+
+def test_a_cable_dropped_on_a_collapsed_window_still_lands (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The whole block is the target for a cable (#2119), and a collapsed block is
+	its title bar — so a lead dropped there lands as it would on the open block.
+
+	A note cable lands on the generator's first input, because a collapsed block
+	shows no rows for the finger to choose between.  `duet` has two, which is the
+	only shape that can tell the first from the one under the finger (#2425).
+	"""
+
+	_open_the_stack(panel)
+
+	def drag (outlet: str, onto: str) -> None:
+		take = panel.locator(outlet)
+		take.scroll_into_view_if_needed()
+		start = take.bounding_box()
+		drop = panel.locator(onto).bounding_box()
+
+		panel.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+		panel.mouse.down()
+		panel.mouse.move(drop["x"] + drop["width"] / 2, drop["y"] + drop["height"] / 2, steps=12)
+		panel.mouse.up()
+
+	_collapse(panel, "grid")
+	drag('.part[data-part="second"] .outlet', '.part[data-part="grid"] .part-title > b')
+
+	asked = fake_app.await_set("stack/layers")
+	routes = [layer for layer in asked["v"] if layer.get("kind") == "route"]
+
+	assert [one["source"] for one in routes] == ["second"], f"the drop asked for {asked['v']}"
+
+	fake_app.confirm("stack/layers", [
+		{"id": "duo", "generator": "duet", "index": 1, "bypassed": False, "params": {}},
+	], by="app")
+	panel.wait_for_selector('.part[data-part="stack/duo"]', timeout=5_000)
+	_settled(panel)
+
+	_collapse(panel, "stack/duo")
+	drag('.part[data-part="notes"] .outlet', '.part[data-part="stack/duo"] .part-title > b')
+
+	asked = fake_app.await_set("stack/duo/lead")
+
+	assert asked["v"] == {"from": "control", "id": "notes"}, f"the drop asked for {asked['v']}"
 
 
 # --- the store, in the bar (#2487) -------------------------------------------

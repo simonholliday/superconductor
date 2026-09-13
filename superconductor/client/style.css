@@ -1099,6 +1099,26 @@ html, body {
 	box-shadow: 0 0 0 1px var(--edge), 0 6px 18px var(--shadow-near);
 }
 
+/* **Everything below the title bar, which is what a collapse hides** (#2536).
+ *
+ * A formatting context of its own, open or collapsed, so that clipping it cannot
+ * change how anything inside it is laid out — a margin that collapsed through the
+ * pane in one state and not the other would make the block open to a different
+ * height from the one the fit read while it was shut.
+ *
+ * **Collapsed, it is clipped to nothing and stays laid out at full size.** The
+ * block is then its title bar — one cell tall, as it always is — inside the inset
+ * every block has, at the same corner and the same width. The fit reads the full
+ * height off the pane (`collapsedAway`), so a collapse never resizes the cells on
+ * the page. `clip` rather than `hidden`, because `hidden` makes a scroll container
+ * that a script can scroll, and the pane must open back exactly as it closed. */
+.part-pane { display: flow-root; }
+
+.part.collapsed > .part-pane {
+	height: 0;
+	overflow: clip;
+}
+
 .part-title {
 	display: flex;
 	align-items: center;
@@ -1216,8 +1236,13 @@ html, body {
  * panel-filled, 8px-radiused square exactly one cell across — which is the
  * description of a grid cell. Simon read it as one, correctly. The size stays,
  * because the target rule wants it; the *shape* becomes chrome's, and a round
- * disc on a bar that now has its own ground can be mistaken for nothing else. */
-.part-title .close {
+ * disc on a bar that now has its own ground can be mistaken for nothing else.
+ *
+ * **Collapse and expand are the same disc, beside it** (#2536), for the same
+ * reason: a square one cell across on a title bar is a grid cell. Only the close
+ * turns to the danger colour, because only the close takes anything away. */
+.part-title .close,
+.part-title .collapse {
 	flex: none;
 	width: max(24px, var(--cell));
 	min-width: max(24px, var(--cell));
@@ -1232,7 +1257,30 @@ html, body {
 	border-color: var(--danger);
 }
 
-.part-title .close svg { width: 42%; height: 42%; }
+.part-title .close svg,
+.part-title .collapse svg { width: 42%; height: 42%; }
+
+/* **What a collapsed block that is switched off says instead of its switch**
+ * (#2536): the footer's own words, legend and state, drawn the way a fact beside
+ * a title is. A mark — no surface, no edge — and it keeps its width where the
+ * facts give theirs up, because it is the one thing on a collapsed bar that says
+ * why an instrument is silent. */
+.part-title .silenced {
+	flex: none;
+	display: flex;
+	align-items: baseline;
+	gap: 0.25rem;
+}
+
+.part-title .silenced i {
+	font-style: normal;
+	opacity: 0.65;
+}
+
+.part-title .silenced em {
+	font-style: normal;
+	color: var(--ink);
+}
 
 .part-title .about > span { flex: none; }
 

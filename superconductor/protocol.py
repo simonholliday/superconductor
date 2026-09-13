@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.34.0"
+CONTRACT_VERSION = "1.35.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -325,6 +325,13 @@ built with and answers with the integer.  Asking again rerolls it.  A routed gri
 is refused one, having no stream of its own to lock.  Additive in
 both directions: a stack stored before this reads exactly as it did, an app too
 old never sends the field, and a panel too old neither sends it nor draws it.
+
+1.35.0 lets a part of a ``layout`` carry ``collapsed``: that block is drawn as its
+title bar alone, where it stands (#2536).  **Present only as ``true``** — an open
+block is the absent key, never a stored ``false`` — so a layout kept before this
+reads as every block open, which is what it was.  Additive in both directions: an
+app too old drops the field when it keeps a layout, and the block opens again on
+the next reload; a panel too old draws the block open.
 """
 
 UNIT = "unit"
@@ -764,6 +771,11 @@ def layout (app: str, page: str, parts: list[Frame], client: str, seq: int) -> F
 	follows its contents at whatever size the panel is drawn at, and a layout
 	that carried pixels would be one person's screen imposed on another's
 	(#2078).
+
+	Two fields may join those three, and each is absent until somebody changes
+	it: ``rows``, how tall the block has been pulled, in rows (1.21.0, #2227); and
+	``collapsed``, which is only ever ``true`` and draws the block as its title
+	bar (1.35.0, #2536).
 
 	Sent when a drag ends rather than while it is going on, so a layout in
 	motion is never half-saved (#2075).  It used to be sent on leaving a mode,
