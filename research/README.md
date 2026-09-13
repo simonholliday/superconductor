@@ -33,6 +33,7 @@ mount.
 | `subsample-substation/` | Subsample MIDI timing and Substation band-restart timing | #2012, #2014 |
 | `iana-ports.csv` | The registry evidence behind the port recommendation | #2020 |
 | `theme-separation/` | Added 2026-09-12: the search for the procedure behind #2190's published separation row, and the check that the tool's Brettel constants match DaltonLens | #2297 |
+| `rig-clock/` | Added 2026-09-13: timing the rig's real rebuilds and Subsequence's stock clock across tempos, and the two levers that removed the clock's lateness | #2532, #2533, #2534 |
 
 ## Running any of it
 
