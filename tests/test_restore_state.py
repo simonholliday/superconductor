@@ -97,7 +97,38 @@ def test_a_restore_takes_out_what_the_composition_seeded () -> None:
 	for _, path, value in _tool()._sets("app", captured, {"grid": grid.declaration()}):
 		grid.apply(path.split("/")[1:], value)
 
-	assert grid.rows_now() == {"kick": [0, 4], "clap": [], "snare": []}
+	assert grid.rows_now() == {"kick": {"0": {"velocity": 100}, "4": {"velocity": 100}}}
+
+
+def test_a_capture_carrying_velocities_puts_each_back_as_it_was_struck () -> None:
+	"""**A capture taken since a step carried a velocity** (#2525) goes back the same
+	way — one whole-grid write — and every step at its own velocity rather than at
+	the default, which is what a restore that only placed steps would do."""
+
+	composition = types.SimpleNamespace(data={"grid": {"kick": [0]}})
+	grid = adapter.StepGrid(composition, rows=["kick", "snare"], steps=16,
+	                        data_key="grid", name="grid")
+
+	captured = {"grid": {"kick": {"4": {"velocity": 38}}, "snare": {"12": {"velocity": 127}},
+	                     "enabled": True}}
+
+	for _, path, value in _tool()._sets("app", captured, {"grid": grid.declaration()}):
+		grid.apply(path.split("/")[1:], value)
+
+	assert grid.rows_now() == {"kick": {"4": {"velocity": 38}}, "snare": {"12": {"velocity": 127}}}
+
+
+def test_a_capture_from_before_velocities_is_compared_by_step_with_a_grid_from_after () -> None:
+	"""A capture holds ``[0, 4]`` and the grid now holds ``{"0": ..., "8": ...}``: what
+	a restore takes out is still only the step the capture did not hold, rather than
+	every step, which is what comparing ``"0"`` with ``0`` says (#2525)."""
+
+	gone = _tool()._taken_out(
+		{"grid": {"kick": [0, 4], "enabled": True}},
+		{"grid": {"kick": {"0": {"velocity": 100}, "8": {"velocity": 64}}, "enabled": True}},
+		{"grid": {"type": "step_grid"}})
+
+	assert gone == ["grid/kick/8"]
 
 
 def test_what_a_restore_takes_out_is_said_and_only_for_grids_the_capture_holds () -> None:
@@ -161,8 +192,8 @@ def test_a_restore_puts_every_variant_back_exactly_and_cues_what_played () -> No
 	for _, path, value in _tool()._sets("app", captured, {"grid": grid.declaration()}):
 		grid.apply(path.split("/")[1:], value)
 
-	assert grid.rows_now("A") == {"kick": [0, 4], "clap": [], "snare": []}
-	assert grid.rows_now("B")["snare"] == [2]
+	assert grid.rows_now("A") == {"kick": {"0": {"velocity": 100}, "4": {"velocity": 100}}}
+	assert grid.rows_now("B")["snare"] == {"2": {"velocity": 100}}
 	assert (grid.playing, grid.cue) == ("A", "B"), "what played went back as a cue"
 
 	grid.now()

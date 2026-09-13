@@ -53,10 +53,10 @@ def pytest_configure (config: pytest.Config) -> None:
 
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums",
-	         "velocity_range": [1, 127],
+	         "velocity_range": [1, 127], "default_velocity": 100,
 	         "about": [{"label": "ch", "value": "10"}, {"label": "", "value": "Vermona DRM1"}]},
 	"second": {"type": "step_grid", "rows": ["kick"], "steps": 8, "beats": 2,
-	           "velocity_range": [1, 127]},
+	           "velocity_range": [1, 127], "default_velocity": 100},
 	"bass": {"type": "note_grid", "rows": ["D2", "C#2", "C2"], "steps": 8, "beats": 2,
 	         "visible_rows": 2,
 	         "voices": 1, "default_length": 1, "default_velocity": 100,
@@ -283,10 +283,13 @@ CONTROLS: dict[str, typing.Any] = {
 	# so that one falls back to the row and gets its letters and one PLAY.
 	"phrase": {"type": "step_grid", "title": "Phrase",
 	           "rows": ["kick", "snare", "hihat_1_closed"],
-	           "steps": 8, "beats": 2, "velocity_range": [1, 127],
+	           "steps": 8, "beats": 2, "velocity_range": [1, 127], "default_velocity": 100,
 	           "variants": ["A", "B", "C"], "lands_every": 1},
+	# **And the one grid here that says nothing about velocity** (#2525), which is an
+	# app other than Subsequence's adapter — so it draws no lane and no slider, its
+	# row names stay marks, and it is short enough to keep its variants in a row.
 	"tiny": {"type": "step_grid", "title": "Tiny", "rows": ["kick", "snare"],
-	         "steps": 5, "beats": 1.25, "velocity_range": [1, 127],
+	         "steps": 5, "beats": 1.25,
 	         "variants": ["A", "B", "C"], "lands_every": 1},
 
 	# **The store's fields and its question come from the adapter itself** (#2487),
@@ -339,8 +342,9 @@ is the case #2075 says needs no synchronising.
 
 
 STATE: dict[str, typing.Any] = {
-	"grid": {"kick": [0, 4], "snare": []},
-	"second": {"kick": [2]},
+	# A step carries how hard it is struck (#2525); the kick's second is a ghost.
+	"grid": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 40}}},
+	"second": {"kick": {"2": {"velocity": 100}}},
 	"bass": {"C2": {"0": {"length": 2, "velocity": 90}}},
 	# A step divided into four, so a note can sit and end between two of them:
 	# a quarter-step note on the boundary, and one starting halfway through the
@@ -364,13 +368,13 @@ STATE: dict[str, typing.Any] = {
 	"transport": {"paused": False, "bpm": 120.0},
 	"store": {"kept": "2026-09-11T14:32:00+00:00", "where": "/rig/piece.patterns.json",
 	          "trouble": None, "refused": [], "aside": None, "unwritten": None},
-	"phrase": {"variants": {"A": {"rows": {"kick": [0, 4], "snare": []}},
-	                        "B": {"rows": {"kick": [], "snare": [2]}},
-	                        "C": {"rows": {"kick": [], "snare": []}}},
+	"phrase": {"variants": {"A": {"rows": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 100}}}},
+	                        "B": {"rows": {"snare": {"2": {"velocity": 100}}}},
+	                        "C": {"rows": {}}},
 	           "playing": "A", "cue": None, "enabled": True},
-	"tiny": {"variants": {"A": {"rows": {"kick": [0], "snare": []}},
-	                      "B": {"rows": {"kick": [], "snare": []}},
-	                      "C": {"rows": {"kick": [], "snare": []}}},
+	"tiny": {"variants": {"A": {"rows": {"kick": {"0": {"velocity": 100}}}},
+	                      "B": {"rows": {}},
+	                      "C": {"rows": {}}},
 	         "playing": "A", "cue": None, "enabled": True},
 }
 """What the stand-in app starts out holding.

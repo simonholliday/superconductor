@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.35.0"
+CONTRACT_VERSION = "1.36.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -332,6 +332,18 @@ block is the absent key, never a stored ``false`` — so a layout kept before th
 reads as every block open, which is what it was.  Additive in both directions: an
 app too old drops the field when it keeps a layout, and the block opens again on
 the next reload; a panel too old draws the block open.
+
+1.36.0 lets a step grid's step carry **how hard it is struck** (#2525).  A row is
+``{"4": {"velocity": 90}}`` rather than the list ``[4]``: a note grid's note, less
+its length.  A step grid declares ``default_velocity`` beside the
+``velocity_range`` it already declared.  ``grid/kick/4`` takes ``true`` (a step at
+the default), ``{"velocity": n}`` or ``false``, and a placement is answered with the
+shape it was kept in; ``grid/kick/4/velocity`` changes a step that is there.
+**The list is still read and never written**, so a store or capture made before
+this, and a whole-grid write from something older, comes back at the default.
+**Not additive in the direction that matters**: a panel too old reads a row of
+objects as nothing and draws every step grid empty, which the contract check on
+its bar is there to say (#2164).
 """
 
 UNIT = "unit"

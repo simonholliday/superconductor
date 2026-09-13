@@ -29,7 +29,14 @@ ROWS = ["kick", "snare", "hat"]
 PITCHES = ["E2", "D2", "C2"]
 
 OPENING = {"kick": [0, 8], "hat": [0, 4, 8, 12]}
-"""What the piece seeds on every start, as `OPENING_PATTERN` does on the rig."""
+"""What the piece seeds on every start, as `OPENING_PATTERN` does on the rig —
+as lists of steps, which a grid reads at its default velocity (#2525)."""
+
+
+def _steps (*numbers: int, velocity: int = 100) -> dict[str, typing.Any]:
+	"""A row as a step grid holds it: each step with how hard it is struck (#2525)."""
+
+	return {str(one): {"velocity": velocity} for one in sorted(numbers)}
 
 CATALOGUE: list[dict[str, typing.Any]] = [
 	{
@@ -252,7 +259,7 @@ def test_a_piece_nobody_has_played_has_nothing_kept_and_starts_as_written (
 	link, composition = _piece(path)
 	link.start()
 
-	assert composition.data["grid"]["kick"] == [0, 8]
+	assert composition.data["grid"]["kick"] == _steps(0, 8)
 	assert not path.exists(), "starting writes nothing"
 
 
@@ -285,7 +292,7 @@ def test_a_restart_puts_back_every_control_a_person_worked (
 
 	stack = typing.cast(adapter.Recipe, again.controls["stack"])
 
-	assert again.controls["rack-a"].kept()["rows"] == {"snare": [3]}
+	assert again.controls["rack-a"].kept()["rows"] == {"snare": _steps(3)}
 	assert [one["id"] for one in stack.layers()] == ["one", "two"]
 
 
@@ -307,7 +314,7 @@ def test_a_seeded_grid_somebody_emptied_stays_empty (
 
 	again, composition = _piece(path)
 
-	assert composition.data["grid"]["kick"] == [0, 8], "the file seeds it, as ever"
+	assert composition.data["grid"]["kick"] == _steps(0, 8), "the file seeds it, as ever"
 
 	again.start()
 
@@ -413,7 +420,7 @@ def test_the_store_is_written_off_the_clock_and_never_on_it (
 
 	assert writers, "nothing was written at all"
 	assert clock not in writers
-	assert _kept(path)["grid"]["rows"]["snare"] == [4]
+	assert _kept(path)["grid"]["rows"]["snare"] == _steps(4)
 
 
 class _Handle:
@@ -522,7 +529,7 @@ def test_the_declared_path_is_honoured_and_nothing_is_written_beside_it (
 	link._apply("grid/snare/4", True, "panel-1", 1)
 	link._keep_now()
 
-	assert _kept(path)["grid"]["rows"]["snare"] == [4]
+	assert _kept(path)["grid"]["rows"]["snare"] == _steps(4)
 	assert sorted(one.name for one in path.parent.iterdir()) == ["piece.patterns.json"]
 
 
@@ -554,7 +561,7 @@ def test_stopping_keeps_what_was_not_kept_yet_and_nothing_when_nothing_changed (
 	touched._apply("grid/snare/4", True, "panel-1", 1)
 	touched.stop()
 
-	assert _kept(path)["grid"]["rows"]["snare"] == [4]
+	assert _kept(path)["grid"]["rows"]["snare"] == _steps(4)
 
 
 # --- what cannot be put back -------------------------------------------------
@@ -579,7 +586,7 @@ def test_a_store_that_cannot_be_read_is_put_aside_loudly_and_never_written_over 
 
 	assert len(aside) == 1
 	assert aside[0].read_text(encoding="utf-8") == "{ this is not json"
-	assert composition.data["grid"]["kick"] == [0, 8], "the file's own seed plays"
+	assert composition.data["grid"]["kick"] == _steps(0, 8), "the file's own seed plays"
 	assert any(aside[0].name in record.getMessage()
 	           for record in caplog.records if record.levelno >= logging.ERROR)
 
@@ -587,7 +594,7 @@ def test_a_store_that_cannot_be_read_is_put_aside_loudly_and_never_written_over 
 	link._apply("grid/snare/4", True, "panel-1", 1)
 	link._keep_now()
 
-	assert _kept(path)["grid"]["rows"]["snare"] == [4]
+	assert _kept(path)["grid"]["rows"]["snare"] == _steps(4)
 	assert aside[0].read_text(encoding="utf-8") == "{ this is not json", "never touched again"
 
 
@@ -603,7 +610,7 @@ def test_a_store_in_a_shape_this_version_does_not_know_is_put_aside_too (
 	link.start()
 
 	assert len(list(tmp_path.glob("piece.patterns.json.unreadable-*"))) == 1
-	assert composition.data["grid"]["kick"] == [0, 8]
+	assert composition.data["grid"]["kick"] == _steps(0, 8)
 
 
 def test_what_the_composition_no_longer_takes_is_refused_and_the_rest_comes_back (
@@ -644,7 +651,7 @@ def test_what_the_composition_no_longer_takes_is_refused_and_the_rest_comes_back
 
 	assert composition.data["synth"]["mode"] == "lcr", "the file's own opening"
 	assert composition.data["synth"]["rate"] == 90, "and the rest came back"
-	assert again.controls["grid"].kept()["rows"]["snare"] == [4], "the rows it still has"
+	assert again.controls["grid"].kept()["rows"]["snare"] == _steps(4), "the rows it still has"
 	assert again.controls["notes"].kept()["chosen"] == ["G3", "C3"]
 
 	aside = list(tmp_path.glob("piece.patterns.json.refused-*"))
@@ -903,7 +910,7 @@ def test_starting_again_is_a_press_on_the_store_and_is_remembered_by_nobody (
 
 	link._apply("store/start_again", True, "panel-1", 2)
 
-	assert composition.data["grid"]["kick"] == [0, 8], "the file's seed is back"
+	assert composition.data["grid"]["kick"] == _steps(0, 8), "the file's seed is back"
 	assert [frame["t"] for frame in sent if frame.get("path") == "store/start_again"] == ["ack"], (
 		f"the press was answered with {[frame['t'] for frame in sent]}, and a `changed` "
 		f"among them would be the service keeping a value nothing holds")

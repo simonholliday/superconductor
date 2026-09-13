@@ -89,7 +89,8 @@ def test_a_tap_asks_the_app_and_does_not_move_the_face_by_itself (
 
 	asked = fake_app.await_set("grid/snare/2")
 
-	assert asked["v"] is True
+	# At the loudness new taps take, which opens where the app declared (#2525).
+	assert asked["v"] == {"velocity": 100}
 	assert "on" not in (panel.locator(conftest.cell("grid/snare/2")).get_attribute("class") or "")
 
 
@@ -1587,9 +1588,11 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	panel.locator(".pages button", has_text="All").click()
 	panel.wait_for_selector(".grid .cell", timeout=5_000)
 
+	# **Not the chosen one**, which a step grid with a velocity lane draws apart on
+	# purpose — ringed and inked, because it says which row the lane shows (#2525).
 	def label (part: str) -> dict:
 		return panel.eval_on_selector(
-			f'.part[data-part="{part}"] .row-label',
+			f'.part[data-part="{part}"] .row-label:not(.chosen)',
 			"""el => {
 				const seen = getComputedStyle(el);
 				const box = el.getBoundingClientRect();
@@ -1622,11 +1625,13 @@ def test_both_kinds_of_grid_label_their_rows_the_same_way (panel: typing.Any) ->
 	assert drums["fromRight"] >= 0, "a label reaches past its own right edge"
 	assert drums["size"] == pitched["size"]
 	assert drums["colour"] == pitched["colour"]
-	# A label is a mark: no surface, no edge, in either kind of block. It used to
-	# carry a dot at its left edge, stacking into a rail down the column —
-	# leftover furniture from before there was a rule for what a target looks
-	# like, and Simon read it as exactly that. Scrolling is what everything but a
-	# cell already does; it needs no announcing.
+	# No rail in either kind of block. A label used to carry a dot at its left
+	# edge, stacking into a rail down the column — leftover furniture from before
+	# there was a rule for what a target looks like, and Simon read it as exactly
+	# that. Scrolling is what everything but a cell already does; it needs no
+	# announcing. (A step grid's label has a surface and an edge since #2525,
+	# because it chooses the lane's row and a target is drawn as one; it still
+	# draws nothing else.)
 	assert drums["bare"] and pitched["bare"], "a row label is drawing something"
 
 
@@ -2179,6 +2184,10 @@ def test_a_range_moves_the_end_the_finger_took_hold_of (
 	_open_the_stack(panel)
 
 	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
+	# **Scrolled to first**: a drum grid carries a lane and a strip since #2525, so
+	# the Generators page is taller than the glass the suite opens at, and a box
+	# measured off the bottom of it is a drag at nothing.
+	ranged.scroll_into_view_if_needed()
 	box = ranged.bounding_box()
 
 	# Held is 40–80 of 1–127, so the left quarter is nearest the low end.
@@ -3222,6 +3231,10 @@ def test_a_range_is_moved_by_its_middle_without_changing_its_width (
 	_open_the_stack(panel)
 
 	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
+	# **Scrolled to first**: a drum grid carries a lane and a strip since #2525, so
+	# the Generators page is taller than the glass the suite opens at, and a box
+	# measured off the bottom of it is a drag at nothing.
+	ranged.scroll_into_view_if_needed()
 	box = ranged.bounding_box()
 
 	# Held is 40–80 of 1–127, so the middle of the span is around a third across.
@@ -3252,6 +3265,10 @@ def test_a_range_moved_to_the_end_stops_rather_than_squashing (
 	_open_the_stack(panel)
 
 	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
+	# **Scrolled to first**: a drum grid carries a lane and a strip since #2525, so
+	# the Generators page is taller than the glass the suite opens at, and a box
+	# measured off the bottom of it is a drag at nothing.
+	ranged.scroll_into_view_if_needed()
 	box = ranged.bounding_box()
 
 	across = ((40 + 80) / 2 - 1) / (127 - 1)
@@ -3309,6 +3326,10 @@ def test_a_range_dragged_past_the_edge_still_goes_the_way_the_finger_went (
 	_open_the_stack(panel)
 
 	ranged = panel.locator('.part[data-part="stack/one"] .dial.ranged')
+	# **Scrolled to first**: a drum grid carries a lane and a strip since #2525, so
+	# the Generators page is taller than the glass the suite opens at, and a box
+	# measured off the bottom of it is a drag at nothing.
+	ranged.scroll_into_view_if_needed()
 	box = ranged.bounding_box()
 	width = panel.evaluate("() => window.innerWidth")
 
@@ -3935,7 +3956,14 @@ def test_a_contribution_moves_on_its_own (
 	before = at("stack/one")
 	was = at("stack/two")
 
-	grip = panel.locator('.part[data-part="stack/two"] .part-title').bounding_box()
+	# **From as near the top of the glass as the page will scroll it**, because the
+	# drag goes 125px down and the page is taller than the glass since a drum grid
+	# carried a lane (#2525): a move past the bottom edge is clamped by Playwright
+	# and reads as no move at all.
+	title = panel.locator('.part[data-part="stack/two"] .part-title')
+	title.evaluate("(el) => el.scrollIntoView({ block: 'start' })")
+	_settled(panel)
+	grip = title.bounding_box()
 
 	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
 	panel.mouse.down()
@@ -6186,7 +6214,7 @@ def test_a_generated_step_is_traced_by_an_ordinary_tap (
 
 	asked = fake_app.await_set("grid/snare/1")
 
-	assert asked["v"] is True, "tracing a generated step did not ask for it"
+	assert asked["v"] == {"velocity": 100}, "tracing a generated step did not ask for it"
 
 
 def test_a_traced_step_still_says_the_algorithm_wants_it (
@@ -6781,7 +6809,7 @@ def test_every_control_centres_what_is_written_on_it (
 
 			if (how === "center") continue;
 
-			/* **Five exceptions, each named on the element and each with a
+			/* **Six exceptions, each named on the element and each with a
 			   reason.** A list is only dangerous when it is implicit; this one
 			   is the same shape as SURFACE_RULES — adding to it is a deliberate
 			   act rather than something that happens.
@@ -6807,8 +6835,13 @@ def test_every_control_centres_what_is_written_on_it (
 			     whatever this property says. So the rule was already being
 			     broken where the test could not see it, and it only became
 			     visible when the theme picker grew to eleven rows and had no
-			     such element. Simon saw it at a glance. */
-			const named = ["option", "picker", "part-title", "dial", "choice"];
+			     such element. Simon saw it at a glance.
+			   - `row-label` names the cells to its right, so it is right-aligned
+			     whatever it is (#2073) — and on a step grid with a velocity lane
+			     it is also what chooses the row the lane shows (#2525), which is
+			     what made it a control at all. Centred, a column of names would
+			     stop lining up with the rows they name. */
+			const named = ["option", "picker", "part-title", "dial", "choice", "row-label"];
 
 			if (named.some((one_) => one.classList.contains(one_))) continue;
 
@@ -9149,6 +9182,160 @@ def test_a_cable_dropped_on_a_collapsed_window_still_lands (
 	assert asked["v"] == {"from": "control", "id": "notes"}, f"the drop asked for {asked['v']}"
 
 
+# --- a step carries how hard it is struck (#2525) -----------------------------
+
+DRUMS = '.part[data-part="grid"]'
+"""The fixture's drum grid: a kick at 100 on step 0 and a ghost at 40 on step 4."""
+
+
+def _fill (panel: typing.Any, path: str) -> float:
+	"""How far up its cell a step is lit, 0 to 1, read off what is painted.
+
+	From the shadow the stylesheet draws rather than the property the client sets,
+	so a rule that stopped reading `--fill` would be caught here."""
+
+	return float(panel.eval_on_selector(conftest.cell(path), """(one) => {
+		const shape = getComputedStyle(one);
+		const lifted = shape.boxShadow.match(/(-?[\\d.]+)px (-?[\\d.]+)px 0px 0px inset/);
+
+		return lifted ? -parseFloat(lifted[2]) / parseFloat(
+			getComputedStyle(document.documentElement).getPropertyValue('--cell')) : 0;
+	}"""))
+
+
+def test_a_step_is_lit_as_far_up_as_it_is_struck (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon's design (#2140 item 10): **full at 127, half at 64, filling from the
+	bottom like a glass** — and not by size, which is already how hard an algorithm
+	played a dot."""
+
+	_settled(panel)
+
+	loud, ghost = _fill(panel, "grid/kick/0"), _fill(panel, "grid/kick/4")
+
+	assert abs(loud - 99 / 126) < 0.02, f"a step at 100 is lit {loud:.2f} of the way up"
+	assert abs(ghost - 39 / 126) < 0.02, f"a step at 40 is lit {ghost:.2f} of the way up"
+
+	fake_app.confirm("grid/kick/4/velocity", 127, by="app")
+	panel.wait_for_function(
+		"(sel) => document.querySelector(sel).style.getPropertyValue('--fill') === '1.000'",
+		arg=conftest.cell("grid/kick/4"), timeout=5_000)
+
+	assert _fill(panel, "grid/kick/4") > 0.99, "a step at 127 is not lit to the top"
+
+
+def test_a_new_step_takes_the_loudness_the_slider_says (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""New taps take the slider's velocity, in the pattern's own settings strip, and
+	**in the same frame as the tap** — never a placement and then a change, which is
+	two crossings of the clock and a bar at the wrong weight.
+
+	The slider is this panel's and asks the app for nothing: how hard *this* hand
+	taps is not a fact about the piece.  It opens where the app declared.
+	"""
+
+	_settled(panel)
+
+	dial = panel.locator(f"{DRUMS} .step-controls .dial")
+
+	assert dial.locator("span").inner_text().strip() == "100", "the slider opened somewhere undeclared"
+
+	before = len(fake_app.sets)
+	box = dial.bounding_box()
+
+	# Halfway along 1–127 is 64.
+	panel.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+	playwright_api.expect(dial.locator("span")).to_have_text("64", timeout=5_000)
+	assert fake_app.sets[before:] == [], "moving the slider asked the app for something"
+
+	panel.locator(conftest.cell("grid/snare/2")).click()
+
+	assert fake_app.await_set("grid/snare/2")["v"] == {"velocity": 64}
+
+
+def test_the_lane_shows_the_row_whose_name_was_pressed (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Ten drum voices share every step and a lane has one bar a column**, so a
+	step grid's lane shows one row, chosen by pressing its name (#2525) — which is
+	a target there and drawn as one.  It opens on the first row with anything in
+	it, and says which row it is showing twice: the ring on the name and the name
+	beside the bars."""
+
+	_settled(panel)
+
+	kick = panel.locator(f'{DRUMS} .grid .row-label[data-row="kick"]')
+	snare = panel.locator(f'{DRUMS} .grid .row-label[data-row="snare"]')
+	bars = panel.locator(f"{DRUMS} .lane .weight i")
+
+	assert kick.get_attribute("aria-pressed") == "true", "the lane did not open on the kick"
+	assert (panel.locator(f"{DRUMS} .lane .row-label").text_content() or "").strip() == "kick"
+	assert bars.count() == 2, "the lane is not showing the kick's two steps"
+
+	snare.click()
+
+	playwright_api.expect(snare).to_have_attribute("aria-pressed", "true", timeout=5_000)
+	assert kick.get_attribute("aria-pressed") == "false"
+	assert (panel.locator(f"{DRUMS} .lane .row-label").text_content() or "").strip() == "snare"
+	playwright_api.expect(bars).to_have_count(0, timeout=5_000)
+
+	fake_app.confirm("grid/snare/6", {"velocity": 90}, by="app")
+
+	playwright_api.expect(bars).to_have_count(1, timeout=5_000)
+
+
+def test_a_bar_in_the_lane_changes_the_chosen_rows_step_and_no_other (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The row chosen, not the first step found in the column**, which is what the
+	lane does beside a pitched grid and would be wrong here: the kick and the snare
+	both sound on step 4, and the snare is the one being shaped."""
+
+	_settled(panel)
+
+	fake_app.confirm("grid/snare/4", {"velocity": 70}, by="app")
+	panel.locator(f'{DRUMS} .grid .row-label[data-row="snare"]').click()
+
+	bar = panel.locator(f'{DRUMS} .lane .weight[data-velocity="4"]')
+
+	playwright_api.expect(bar.locator("i")).to_have_count(1, timeout=5_000)
+
+	bar.scroll_into_view_if_needed()
+	box = bar.bounding_box()
+	before = len(fake_app.sets)
+
+	# A tenth of the way down a lane running 1 to 127 is 114.
+	panel.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.1)
+
+	asked = fake_app.settled(lambda one: str(one.get("path", "")).startswith("grid/"), since=before)
+
+	assert [one["path"] for one in asked] == ["grid/snare/4/velocity"], asked
+	assert abs(asked[-1]["v"] - 114) <= 2, asked[-1]
+
+
+def test_a_grid_that_says_nothing_about_velocity_gets_no_lane_and_places_with_true (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""An app other than Subsequence's may declare a step grid with no velocity at
+	all — two of the three neighbours have none (#2140).  That grid is exactly what
+	every step grid was: no lane, no slider, row names that stay marks, and a tap
+	that asks for a step with ``true`` rather than inventing a loudness."""
+
+	_go_to_the_variants(panel)
+
+	tiny = '.part[data-part="tiny"]'
+
+	assert panel.locator(f"{tiny} .lane").count() == 0
+	assert panel.locator(f"{tiny} .step-controls").count() == 0
+	assert panel.locator(f"{tiny} .grid .row-label.pick").count() == 0
+	assert panel.locator(f"{PHRASE} .grid .row-label.pick").count() == 3, "the grid beside it lost its lane"
+
+	before = len(fake_app.sets)
+	panel.locator(conftest.cell("tiny/variants/A/rows/snare/1")).click()
+
+	asked = fake_app.settled("tiny/variants/A/rows/snare/1", since=before)
+
+	assert [one["v"] for one in asked] == [True]
+
+
 # --- the store, in the bar (#2487) -------------------------------------------
 
 def test_the_store_says_in_the_bar_when_it_last_kept_anything (
@@ -9456,7 +9643,8 @@ def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (
 	asked = fake_app.settled(lambda one: str(one.get("path", "")).startswith("phrase/"),
 	                         since=before)
 
-	assert [(one["path"], one["v"]) for one in asked] == [("phrase/variants/B/rows/kick/1", True)], (
+	assert [(one["path"], one["v"]) for one in asked] == [
+		("phrase/variants/B/rows/kick/1", {"velocity": 100})], (
 		"showing a variant asked the app for something, or the tap went elsewhere")
 
 
@@ -9562,7 +9750,8 @@ def test_an_empty_variant_offers_to_start_from_the_one_playing (
 
 	button.click()
 
-	assert fake_app.await_set("phrase/variants/C/rows")["v"] == {"kick": [0, 4], "snare": []}
+	assert fake_app.await_set("phrase/variants/C/rows")["v"] == {
+		"kick": {"0": {"velocity": 100}, "4": {"velocity": 100}}}
 
 
 def test_clear_works_on_the_variant_shown_and_says_which (

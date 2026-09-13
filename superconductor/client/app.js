@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.35.0";
+const CONTRACT = "1.36.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -303,6 +303,9 @@ const NOTE_CONTROL_CELLS = 2;
    snap to, and the selected note's length. Counted here because a block's
    height is decided before anything is drawn, and a strip the fit did not know
    about is a strip that overflows its own block. */
+const STEP_CONTROL_CELLS = 1;
+/* And the one row a step grid's settings take under its lane: how hard new taps
+   are struck (#2525). Counted for the same reason. */
 const VARIANT_CELLS = 1;
 /* The row of tabs above a grid that declares variants (#2485), counted for the
    same reason: a row the count did not know about puts every block a cell out. */
@@ -942,9 +945,56 @@ function Scenes ({ states, onCue }) {
 		</div>`;
 }
 
+/* One step of a step grid's row, or null — whichever shape the row is in.
+ *
+ * **A row is steps by number, each carrying how hard it is struck** (#2525), and it
+ * was a list of step numbers before that. A service too old to send the new shape
+ * still sends the old one, and a panel that read only one of them would draw every
+ * grid empty for a whole restart; a step from a list says nothing about its
+ * velocity, which is what `{}` says. */
+function stepIn (held, step) {
+	if (Array.isArray(held)) return held.includes(step) ? {} : null;
+
+	return (held || {})[String(step)] || null;
+}
+
+/* A whole row in the shape a step has now, for something that walks it — the
+   velocity lane. A step from a list is at the grid's default. */
+function stepsOf (held, velocity) {
+	if (!Array.isArray(held)) return held || {};
+
+	return Object.fromEntries(held.map((step) => [String(step), { velocity }]));
+}
+
+/* How far up its cell a step is lit, 0 to 1: the velocity against the range the
+ * app declared (#2525). Simon's design, from #2140 item 10: **full at 127, half at
+ * 64, filling from the bottom like a glass** — and not by size, because size is
+ * already how hard an algorithm played a dot, and two things looking alike while
+ * meaning different things has cost this project three times.
+ *
+ * **Never less than an eighth**, so the quietest step there is still reads as a
+ * step and not as an empty cell with a coloured edge. A grid that declared no range
+ * is lit full, because how hard is then a question this panel cannot answer. */
+function fillOf (shape, range, opening) {
+	if (!range || range.length !== 2) return 1;
+
+	const [low, high] = range;
+	const velocity = shape && typeof shape.velocity === "number" ? shape.velocity : opening;
+
+	if (!(high > low) || typeof velocity !== "number") return 1;
+
+	return Math.max(0.125, Math.min(1, (velocity - low) / (high - low)));
+}
+
 /* `cellsAt` is where the cells are addressed: the control's own name, or — on a
-   grid with variants — the variant shown, `grid/variants/B/rows` (#2485). */
-function Grid ({ control, cellsAt = control, rows, steps, beats, weights, cells, drawn, kinds, visible, cell, pending, failed, onTap }) {
+   grid with variants — the variant shown, `grid/variants/B/rows` (#2485).
+
+   `tap` is what a new step is placed with — `{velocity}`, the slider's (#2525) —
+   or nothing, for a grid that declared no range, which places with `true` as every
+   grid did. `chosen` and `onChoose` are the row the velocity lane shows, and are
+   absent on a grid with no lane: its row labels are then marks, as they always
+   were. */
+function Grid ({ control, cellsAt = control, rows, steps, beats, weights, opening, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -958,10 +1008,26 @@ function Grid ({ control, cellsAt = control, rows, steps, beats, weights, cells,
 		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
 		<div class="grid" style=${style}>
 			${rows.map((row, band) => html`
-				<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>
+				${/* **A row's name chooses the row the lane shows** (#2525), where
+				     there is a lane — which makes it a target, so it is drawn as one
+				     (#2107). On release rather than on press: it chooses from a
+				     list, and in a windowed grid the names are where a swipe starts
+				     scrolling, which a press would turn into a choice (#2073). */ ""}
+				${onChoose
+					? html`
+						<div
+							class=${`row-label pick ${row === chosen ? "chosen" : ""}`}
+							key=${`label-${row}`} data-row=${row}
+							role="button" aria-pressed=${row === chosen ? "true" : "false"}
+							title=${`show how hard each ${row.replace(/_/g, " ")} step is struck`}
+							onClick=${() => onChoose(row)}
+						>${row.replace(/_/g, " ")}</div>`
+					: html`<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>`}
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${cellsAt}/${row}/${step}`;
-					const on = (cells[row] || []).includes(step);
+					const shape = stepIn(cells[row], step);
+					const on = Boolean(shape);
+					const fill = on ? fillOf(shape, weights, opening) : 0;
 
 					/* A step an algorithm put here this cycle. Drawn as a dot
 					   rather than a face, because it is not one: nothing stores
@@ -999,7 +1065,8 @@ function Grid ({ control, cellsAt = control, rows, steps, beats, weights, cells,
 						<div
 							key=${path}
 							data-path=${path}
-							class=${["cell", on ? "on" : "", ghost ? "ghost" : "",
+							class=${["cell", on ? "on" : "", on && fill < 0.5 ? "quiet" : "",
+								ghost ? "ghost" : "",
 								routed ? "routed" : "", reshaped ? "reshaped" : "",
 								pending.has(path) ? "pending" : "",
 								failed.has(path) ? "failed" : "",
@@ -1010,9 +1077,18 @@ function Grid ({ control, cellsAt = control, rows, steps, beats, weights, cells,
 							     same in every theme and costs the eleven that
 							     ignore it nothing.  One of them fans the lit
 							     colour across it (#2190). */ ""}
+							${/* `--fill` is how far up the step is lit (#2525). */ ""}
 							style=${{ "--band": rows.length > 1 ? band / (rows.length - 1) : 0,
+								...(on ? { "--fill": fill.toFixed(3) } : {}),
 								...(ghost ? { "--struck": weightOf(struck.v, weights) } : {}) }}
-							onPointerDown=${(event) => { event.preventDefault(); onTap(path, !on); }}
+							${/* **A step acts on press** (#1970), and a new one is
+							     placed at the loudness the slider says in the same
+							     frame — one crossing, never a placement and then a
+							     change (#2525). */ ""}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onTap(path, on ? false : tap || true);
+							}}
 						></div>`;
 				})}
 			`)}
@@ -1479,7 +1555,10 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, beats, divisions, notes,
  *
  * It edits the note in that column and does nothing where there is none —
  * a velocity with no note is not a state the sequencer could report. */
-function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, notes, range, cell, tight, onSet }) {
+/* `label` is what the lane is called: *velocity* beside a pitched grid, whose lane
+   takes the first note in each column, and the row it shows beside a step grid,
+   whose lane shows one row at a time and has to say which (#2525). */
+function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, notes, range, cell, tight, label = "velocity", onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -1525,7 +1604,7 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, beats, divisions, no
 
 	return html`
 		<div class=${`lane ${tight ? "tight" : ""}`} style=${style}>
-			<div class="row-label">velocity</div>
+			<div class="row-label">${label}</div>
 			${Array.from({ length: steps }, (_, step) => {
 				const found = at(step);
 				const height = found ? Math.max(4, ((found.note.velocity - low) / (high - low)) * 100) : 0;
@@ -1705,6 +1784,68 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, drawn, kinds,
 				onSet(`${cellsAt}/${selected.row}/${selected.at}`, false);
 				setSelected(null);
 			}} />`;
+}
+
+/* A step grid and what sets how hard its steps are struck (#2525).
+ *
+ * **Simon's design, decided 2026-09-13 on #2044 and #1969.** A tapped step carries a
+ * velocity. New taps take the slider's, in the pattern's own settings strip; a step
+ * shows its velocity by how far up it is lit; and an existing step's is changed in a
+ * lane under the grid, one row at a time — because ten drum voices share every step
+ * and a lane edits one bar a column. No gesture on the cell: a step still acts on
+ * press (#1970).
+ *
+ * **Both the slider and the chosen row are this panel's**, as a note grid's snap is:
+ * how hard *this* hand taps and which voice *this* person is shaping are not facts
+ * about the piece, and a second panel in the room may want another. So neither is
+ * sent anywhere, and the slider opens at the loudness the app declared.
+ *
+ * **The lane opens on the first row with anything in it**, which is the one worth
+ * looking at before anybody has chosen, and on the first row of an empty grid.
+ *
+ * **Drawn only where the app said what a velocity is** — its range and default — as
+ * a note grid's lane is. A grid that says nothing gets no lane, no slider, row names
+ * that stay marks, and taps that place with `true`, which is every grid before this. */
+function StepBlock ({ name, cellsAt = name, control, cells, drawn, kinds, visible, cell, pending, failed, onSet }) {
+	const range = Array.isArray(control.velocity_range) && control.velocity_range.length === 2
+		? control.velocity_range : null;
+	const opening = range && typeof control.default_velocity === "number"
+		? control.default_velocity : range ? range[1] : null;
+
+	const [tap, setTap] = useState(opening);
+	const [picked, setPicked] = useState(
+		() => control.rows.find((row) => Object.keys(stepsOf(cells[row], opening)).length) || control.rows[0]);
+
+	/* Read against the rows as declared now, so a row that went takes the lane back
+	   to the first rather than drawing a lane for nothing. */
+	const chosen = control.rows.includes(picked) ? picked : control.rows[0];
+
+	return html`
+		<${Grid} control=${name} cellsAt=${cellsAt}
+			rows=${control.rows} steps=${control.steps} beats=${control.beats || 4}
+			weights=${control.velocity_range} opening=${opening}
+			cells=${cells} drawn=${drawn} kinds=${kinds}
+			visible=${visible} cell=${cell}
+			pending=${pending} failed=${failed}
+			tap=${range ? { velocity: tap } : null}
+			chosen=${range ? chosen : null} onChoose=${range ? setPicked : null}
+			onTap=${onSet} />
+		${range && html`
+			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${[chosen]}
+				steps=${control.steps} beats=${control.beats || 4} divisions=${1}
+				label=${chosen.replace(/_/g, " ")}
+				cell=${cell} notes=${{ [chosen]: stepsOf(cells[chosen], opening) }}
+				range=${range} onSet=${onSet} />
+			<div class="note-controls step-controls">
+				<div class="note-row">
+					<span class="row-label">velocity</span>
+					${/* **The same slider every bounded number on this panel is**, and
+					     never a request: it says what the next tap carries. */ ""}
+					<${Setting}
+						field=${{ kind: "number", name: "velocity", min: range[0], max: range[1], step: 1 }}
+						held=${tap} onSet=${setTap} />
+				</div>
+			</div>`}`;
 }
 
 /* An instrument's own settings: switches, numbers and choices.
@@ -5632,20 +5773,14 @@ function Panel () {
 									: layer);
 
 							app[control] = held;
-						} else if (rest.length === 2 && declared && declared.type === "note_grid") {
-							/* Placing or taking away a note, which carries its
-							   own shape rather than being present or absent —
-							   the shape the app answered with, where it did
-							   (#2503). Through the one function a variant's cells
-							   use, so the two cannot keep a note two ways; what
+						} else if (rest.length === 2 && declared && GRIDS.includes(declared.type)) {
+							/* Placing or taking away a note or a step, each of
+							   which carries its own shape rather than being present
+							   or absent — the shape the app answered with (#2503,
+							   #2525). Through the one function a variant's cells
+							   use, so the two cannot keep a cell two ways; what
 							   sits beside the rows is carried through untouched. */
 							app[control] = withCell(app[control] || {}, declared, rest, frame.v);
-						} else if (rest.length === 2) {
-							const grid = { ...(app[control] || {}) };
-							const list = new Set(grid[rest[0]] || []);
-							frame.v ? list.add(Number(rest[1])) : list.delete(Number(rest[1]));
-							grid[rest[0]] = [...list].sort((a, b) => a - b);
-							app[control] = grid;
 						}
 
 						return { ...was, [frame.app]: app };
@@ -6274,10 +6409,14 @@ function Panel () {
 		   read one answer. The fit solves for a cell size from `rows` and `aside`
 		   before anything is drawn; if the page then drew the other shape, every
 		   block on the lattice would be a cell out. */
+		/* A step grid that declares what a velocity is carries a lane and a strip of
+		   its own since #2525, and they are counted exactly as a note grid's are. */
+		const weighed = Array.isArray(controls[name].velocity_range);
+
 		const body = Math.min(controls[name].rows.length, controls[name].visible_rows || Infinity)
 			+ (kindOf(name) === "note_grid" ? NOTE_CONTROL_CELLS : 0)
-			+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].velocity_range)
-				? LANE_CELLS : 0);
+			+ (kindOf(name) === "note_grid" && weighed ? LANE_CELLS : 0)
+			+ (kindOf(name) === "step_grid" && weighed ? LANE_CELLS + STEP_CONTROL_CELLS : 0);
 
 		const variants = Array.isArray(controls[name].variants) ? controls[name].variants.length : 0;
 		const beside = variantsBeside(variants, body);
@@ -7394,24 +7533,19 @@ function Panel () {
 										pending=${pending} failed=${failed} onSet=${request} />`
 								: html`
 									${strip}
-									<${Grid} control=${one.control} cellsAt=${variant ? variant.at : one.control}
-										rows=${controls[one.control].rows}
-										steps=${controls[one.control].steps}
-										beats=${controls[one.control].beats || 4}
-										${/* What a realised cell's weight is measured
-										     against, which is the app's to say and not
-										     this panel's to assume. */ ""}
-										weights=${controls[one.control].velocity_range}
+									${/* What a weight is measured against is the app's
+									     to say and not this panel's to assume; which
+									     layer is a route and which a generator is read
+									     from the stack rather than sent with the event,
+									     because the panel already holds the layers and
+									     a second copy could disagree. */ ""}
+									<${StepBlock} name=${one.control} cellsAt=${variant ? variant.at : one.control}
+										control=${controls[one.control]}
 										cells=${rows}
 										drawn=${drawn}
-										${/* Which layer is a route and which is a
-										     generator, so a dot can say which put it
-										     there. Read from the stack rather than sent
-										     with the event: the panel already holds the
-										     layers, and a second copy could disagree. */ ""}
 										kinds=${layerKinds(one.control)}
 										visible=${rowsShown(one)} cell=${size.cell}
-										pending=${pending} failed=${failed} onTap=${request} />`;
+										pending=${pending} failed=${failed} onSet=${request} />`;
 						})()
 						: null}
 					${up && one.clear && html`
@@ -7679,32 +7813,34 @@ function withCell (rows, declared, cell, value) {
 
 	const [row, step, field] = cell;
 	const next = { ...rows };
+	const noted = declared.type === "note_grid";
 
-	if (declared.type === "note_grid") {
-		const notes = { ...(next[row] || {}) };
+	/* **A note and a step are one shape less a length** (#2525), so one branch holds
+	   both. A row a service too old still spells as a list is read as its steps
+	   first, so a step placed on it is not written into an array. */
+	const cells = { ...(Array.isArray(next[row])
+		? stepsOf(next[row], declared.default_velocity)
+		: next[row] || {}) };
+	const at = String(Number(step));
 
-		if (field !== undefined) {
-			// Only ever sent for a note that is there, so an absent one stays absent.
-			if (notes[step]) notes[step] = { ...notes[step], [field]: value };
-		} else if (value && typeof value === "object") {
-			notes[step] = { ...value };
-		} else if (value) {
-			notes[step] = notes[step] || {
-				length: declared.default_length || 1,
-				velocity: declared.default_velocity || 100 };
-		} else {
-			delete notes[step];
-		}
-
-		next[row] = notes;
-
-		return next;
+	if (field !== undefined) {
+		// Only ever sent for a cell that is there, so an absent one stays absent.
+		if (cells[at]) cells[at] = { ...cells[at], [field]: value };
+	} else if (value && typeof value === "object") {
+		cells[at] = { ...value };
+	} else if (value) {
+		cells[at] = cells[at] || (noted
+			? { length: declared.default_length || 1, velocity: declared.default_velocity || 100 }
+			: { velocity: declared.default_velocity || 100 });
+	} else {
+		delete cells[at];
 	}
 
-	const list = new Set(next[row] || []);
-
-	value ? list.add(Number(step)) : list.delete(Number(step));
-	next[row] = [...list].sort((a, b) => a - b);
+	/* A row with nothing left in it is dropped, as the app's snapshot and the
+	   service's copy both drop it, so a panel that reloads reads what one that did
+	   not already holds. */
+	if (Object.keys(cells).length) next[row] = cells;
+	else delete next[row];
 
 	return next;
 }

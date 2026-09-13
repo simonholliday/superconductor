@@ -97,8 +97,12 @@ def _notes () -> typing.Any:
 	(["rows"], {}),
 	(["rows"], {"kick": [1, 3, 5]}),
 	(["rows"], {"kick": [4, 0, 4], "snare": []}),
+	(["rows"], {"kick": {"1": {"velocity": 40}}, "snare": {"7": {}}}),
 	(["kick", "2"], True),
+	(["kick", "2"], {"velocity": 30}),
+	(["kick", "4"], {"velocity": 127}),
 	(["kick", "0"], False),
+	(["kick", "0", "velocity"], 12),
 	(["enabled"], False),
 ])
 def test_a_step_grid_and_the_service_agree_after_every_write (
@@ -108,6 +112,11 @@ def test_a_step_grid_and_the_service_agree_after_every_write (
 	``rows`` with ``{}`` is the clear button, and it is the one that was broken:
 	the wire carried the mute inside the rows, the service threw the whole frame
 	away, and its copy stayed lit.
+
+	**A step carries its velocity since #2525**, placed with a tap, changed from a
+	lane, and written whole — and a row still spelt as a list, which both halves
+	read and neither writes.  The seed below is a list too, set after the grid was
+	made, which is the case only a read can convert.
 	"""
 
 	_agree(_steps(), rest, value)
@@ -126,6 +135,8 @@ def _variant_steps () -> typing.Any:
 
 @pytest.mark.parametrize(("rest", "value"), [
 	(["variants", "B", "rows", "kick", "2"], True),
+	(["variants", "B", "rows", "kick", "2"], {"velocity": 55}),
+	(["variants", "A", "rows", "kick", "4", "velocity"], 90),
 	(["variants", "A", "rows", "kick", "0"], False),
 	(["variants", "B", "rows"], {"snare": [5, 1, 5]}),
 	(["variants", "A", "rows"], {}),

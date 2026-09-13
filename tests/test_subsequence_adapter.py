@@ -107,18 +107,22 @@ def _link () -> tuple[superconductor.subsequence_adapter.AppLink, list[supercond
 
 
 def test_a_tap_switches_the_step_on_the_grid () -> None:
-	"""Which is a plain dict on composition.data, read by the pattern builder."""
+	"""Which is a plain dict on composition.data, read by the pattern builder —
+	each step carrying how hard it is struck, the default for a step placed with
+	``true`` (#2525)."""
 
 	link, _ = _link()
 
 	link._apply("grid/kick/4", True, "panel-1", 1)
 	link._apply("grid/kick/0", True, "panel-1", 2)
 
-	assert link.composition.data["grid"]["kick"] == [0, 4]
+	assert link.composition.data["grid"]["kick"] == {
+		"0": {"velocity": 100}, "4": {"velocity": 100}}
 
 
 def test_switching_a_step_off_removes_it () -> None:
-	"""And a value applied twice leaves the same grid as applying it once."""
+	"""And a value applied twice leaves the same grid as applying it once — with
+	the emptied row gone, as a note grid's is."""
 
 	link, _ = _link()
 
@@ -126,7 +130,127 @@ def test_switching_a_step_off_removes_it () -> None:
 	link._apply("grid/kick/4", False, "panel-1", 2)
 	link._apply("grid/kick/4", False, "panel-1", 3)
 
-	assert link.composition.data["grid"]["kick"] == []
+	assert "kick" not in link.composition.data["grid"]
+
+
+# --- a step carries how hard it is struck (#2525) ----------------------------
+
+def test_a_step_placed_with_a_velocity_keeps_it_and_is_answered_with_its_shape () -> None:
+	"""**The loudness a person's new taps take**, sent with the tap.  One frame,
+	not a placement and then a change: two crossings on the clock for one tap, and
+	a bar in which the step sounds at the wrong weight."""
+
+	link, sent = _link()
+
+	link._apply("grid/snare/4", {"velocity": 38}, "panel-1", 1)
+
+	assert link.composition.data["grid"]["snare"] == {"4": {"velocity": 38}}
+	assert sent[-1]["v"] == {"velocity": 38}
+
+	# And a placement with `true` is answered with the shape it was kept in, so
+	# the service holds the velocity the app chose rather than rebuilding it.
+	link._apply("grid/snare/8", True, "panel-1", 2)
+
+	assert sent[-1]["v"] == {"velocity": 100}
+
+
+def test_a_steps_velocity_is_changed_where_it_stands () -> None:
+	"""What a velocity lane sends: the step stays where it is and is struck harder
+	or softer.  Refused where there is no step, because a velocity with nothing to
+	strike is not a state anything could report."""
+
+	link, sent = _link()
+
+	link._apply("grid/snare/4", True, "panel-1", 1)
+	link._apply("grid/snare/4/velocity", 120, "panel-1", 2)
+
+	assert link.composition.data["grid"]["snare"] == {"4": {"velocity": 120}}
+	assert sent[-1]["t"] == "changed" and sent[-1]["v"] == 120
+
+	link._apply("grid/snare/5/velocity", 120, "panel-1", 3)
+
+	assert sent[-1]["t"] == "nack" and "no step" in sent[-1]["reason"]
+
+
+@pytest.mark.parametrize("value", [0, 128, 64.5, True, "loud"])
+def test_a_velocity_outside_the_declared_range_is_refused (value: typing.Any) -> None:
+	"""Never 0, which is a note-off: a step that is set must sound (#2044)."""
+
+	link, sent = _link()
+
+	link._apply("grid/snare/4", True, "panel-1", 1)
+	link._apply("grid/snare/4/velocity", value, "panel-1", 2)
+
+	assert sent[-1]["t"] == "nack", f"{value!r} was taken"
+	assert link.composition.data["grid"]["snare"] == {"4": {"velocity": 100}}
+
+
+def test_a_step_placed_with_a_bare_number_is_refused_rather_than_guessed_at () -> None:
+	"""``grid/kick/4`` set to 90 reads as "on" just as well as "at 90", and a request
+	that means two things is answered with whichever the reader guessed."""
+
+	link, sent = _link()
+
+	link._apply("grid/kick/4", 90, "panel-1", 1)
+
+	assert sent[-1]["t"] == "nack"
+	assert "kick" not in link.composition.data.get("grid", {})
+
+
+def test_an_empty_shape_places_a_step_at_the_default_rather_than_taking_one_away () -> None:
+	"""An empty object is false to Python and a step at the default to this grid —
+	and reading it by its truth would take a step away that somebody placed."""
+
+	link, _ = _link()
+
+	link._apply("grid/kick/4", {}, "panel-1", 1)
+
+	assert link.composition.data["grid"]["kick"] == {"4": {"velocity": 100}}
+
+
+def test_a_grid_declares_the_velocity_a_plain_tap_takes () -> None:
+	"""The panel opens its slider there, and a step placed with ``true`` takes it."""
+
+	composition = FakeComposition()
+	grid = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=ROWS, steps=16, default_velocity=80)
+
+	assert grid.declaration()["default_velocity"] == 80
+	assert grid.declaration()["velocity_range"] == [1, 127]
+
+	with pytest.raises(ValueError, match="between 1 and 127"):
+		superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, default_velocity=0)
+
+
+def test_a_seed_written_as_lists_of_steps_is_read_at_the_default () -> None:
+	"""**The spelling every composition used before a step carried a velocity**, read
+	once when the grid is made so the composition's own play function finds one
+	shape — with and without variants."""
+
+	composition = FakeComposition()
+	composition.data["plain"] = {"kick": [4, 0], "snare": []}
+	composition.data["versions"] = {"A": {"rows": {"kick": [2]}}}
+
+	superconductor.subsequence_adapter.StepGrid(
+		composition, rows=ROWS, data_key="plain", name="plain", default_velocity=90)
+	superconductor.subsequence_adapter.StepGrid(
+		composition, rows=ROWS, data_key="versions", name="versions", variants=("A", "B"))
+
+	assert composition.data["plain"] == {
+		"kick": {"0": {"velocity": 90}, "4": {"velocity": 90}}, "snare": {}}
+	assert composition.data["versions"]["A"]["rows"] == {"kick": {"2": {"velocity": 100}}}
+
+
+def test_a_whole_grid_written_as_lists_comes_in_at_the_default () -> None:
+	"""A store kept, a capture taken or a clear sent by something older than a
+	step's velocity (#2525): still read, and never written back that way."""
+
+	link, sent = _link()
+
+	link._apply("grid/rows", {"kick": [8, 0, 8]}, "panel-1", 1)
+
+	assert link.composition.data["grid"] == {"kick": {"0": {"velocity": 100}, "8": {"velocity": 100}}}
+	assert sent[-1]["v"] == {"kick": {"0": {"velocity": 100}, "8": {"velocity": 100}}}
 
 
 def test_what_was_applied_is_reported_with_the_tap_that_asked_for_it () -> None:
@@ -238,14 +362,15 @@ def test_a_beat_carries_what_the_playhead_needs_to_place_itself () -> None:
 	assert sent[1]["beats"] == 4
 
 
-def test_the_grid_is_offered_whole_with_every_row_named () -> None:
-	"""A row nobody has touched is empty rather than absent."""
+def test_the_grid_is_offered_whole_with_every_step_as_struck () -> None:
+	"""A row nobody has touched is absent rather than empty, as a note grid's is and
+	as the service keeps it (#2525) — one pattern described one way."""
 
 	link, _ = _link()
 
 	link._apply("grid/kick/4", True, "panel-1", 1)
 
-	assert link.controls["grid"].snapshot() == {"kick": [4], "snare": [], "enabled": True}
+	assert link.controls["grid"].snapshot() == {"kick": {"4": {"velocity": 100}}, "enabled": True}
 
 
 def _transport () -> tuple[superconductor.subsequence_adapter.Transport, FakeComposition]:

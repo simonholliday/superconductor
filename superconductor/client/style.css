@@ -655,12 +655,15 @@
  * where the whole spectrum is legible — `tests/test_themes.py` walks the fan and
  * says so, because nothing else in this sheet varies a colour per element and a
  * pairing nobody measures is how all three defects in this area happened. */
-[data-theme="prism"] .cell.on,
 [data-theme="prism"] .grid.notes .note {
 	background: hsl(calc(var(--band) * 275) 100% 65%);
 }
 
+/* A step is lit as far up as it is struck (#2525), so its band is the fill and its
+   row's tint below is the ground the fill rises from — the same pair the fan above
+   is walked against. */
 [data-theme="prism"] .cell.on {
+	box-shadow: inset 0 calc(var(--cell) * -1 * var(--fill, 1)) 0 0 hsl(calc(var(--band) * 275) 100% 65%);
 	border-color: hsl(calc(var(--band) * 275) 100% 80%);
 }
 
@@ -1891,8 +1894,20 @@ html, body {
 .beat.off { opacity: 0.45; }
 .beat.barline { height: max(7px, calc(var(--cell) * 0.15)); }
 
+/* **A step is lit from the bottom as far as it is struck** (#2525).
+ *
+ * Simon's design (#2140 item 10): full at 127, half at 64, filling like a glass —
+ * and not by size, which is already how hard an algorithm played a dot.  The edge is
+ * lit whatever the fill, so the quietest step there is still reads as a step; the
+ * client never lets the fill fall below an eighth either.
+ *
+ * **An inset shadow rather than a background**, because the ground a fill rises from
+ * is whatever the cell's own background is — the control face in eleven themes and a
+ * row's tint in Prism — and a shadow paints over it without having to know which.
+ * A shadow offset upward by the fill's height leaves exactly that band at the foot,
+ * inside the cell's own rounded corners.  `--fill` is 0 to 1, set by the client. */
 .cell.on {
-	background: var(--on);
+	box-shadow: inset 0 calc(var(--cell) * -1 * var(--fill, 1)) 0 0 var(--on);
 	border-color: var(--on-edge);
 }
 
@@ -1970,6 +1985,16 @@ html, body {
 }
 
 .cell.on.ghost.reshaped::after { opacity: 0.85; }
+
+/* **A quiet step's marks sit on its unlit ground** (#2525), where a mark drawn for a
+   lit face — `--on-ink`, faint — would be a dark smudge on a dark panel.  Below half
+   a cell of fill a dot and a corner are mostly over the ground, so they take the
+   unlit cell's own mark instead. */
+.cell.on.quiet.ghost::after,
+.cell.on.quiet.ghost.reshaped::after {
+	opacity: 0.55;
+	background: var(--on);
+}
 
 /* The ring is the request, never the value: the face below it is always what
    the sequencer actually holds. It clears when the change is confirmed. */
@@ -2804,6 +2829,30 @@ html, body {
 
 .lane .row-label { position: static; }
 
+/* **A row's name, where it chooses the row a step grid's lane shows** (#2525).
+ *
+ * It is a target there, so it is drawn as one: a surface and an edge (#2107), and a
+ * ring on the one chosen — the ring that already means *this is the one shown*
+ * on a variant's letter.  Right-aligned still, because it names the cells to its
+ * right (#2073), which makes it one of the named exceptions to centring.
+ * `pan-y` rather than `none`, because a window's row names are where a swipe
+ * scrolls it, and the choice is made on release so a swipe never makes one. */
+.grid .row-label.pick {
+	/* The edge is a pixel of the label's width, so the name gives it back and sits
+	   at the same offset from the right as every other label does (#2073). */
+	padding-right: calc(0.6rem - 1px);
+	border: 1px solid var(--edge);
+	border-radius: max(3px, calc(var(--cell) * 0.16));
+	background: var(--panel);
+	touch-action: pan-y;
+	cursor: pointer;
+}
+
+.grid .row-label.pick.chosen {
+	box-shadow: inset 0 0 0 2px var(--ring);
+	color: var(--ink);
+}
+
 /* A column of the velocity lane. Named for what it shows rather than for its
    shape: the header is `.bar` too, and `closest(".bar")` cannot tell a velocity
    column from the chrome at the top of the page — which is not hypothetical,
@@ -3165,7 +3214,8 @@ html, body {
 /* A number is a bar you push rather than a knob you turn: a rotary gesture on
    glass has no detent and no purchase, and a bar says its value by its length
    as well as by its figure. */
-.grid.params .dial {
+.grid.params .dial,
+.step-controls .dial {
 	position: relative;
 	flex: 1;
 	min-height: var(--row);
@@ -3186,7 +3236,8 @@ html, body {
    across the whole control, and the value wrapped underneath it.  Found in a
    screenshot, as the last five have been.  A rule that describes *the fill* has
    to say so; the fill is a child of the dial and a unit is a grandchild. */
-.grid.params .dial > i {
+.grid.params .dial > i,
+.step-controls .dial > i {
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -3196,7 +3247,8 @@ html, body {
 	opacity: 0.85;
 }
 
-.grid.params .dial span {
+.grid.params .dial span,
+.step-controls .dial span {
 	position: relative;
 	color: var(--ink);
 	font-size: var(--type-body);
@@ -3231,14 +3283,16 @@ html, body {
  * A **stepper** needs none of this and deliberately has none: its readout is a
  * flex basis rather than a floor (#2368), so it gives the row back what it does
  * not use and "1 beats" fits where "40 – 80 MIDI velocity" cannot. */
-.grid.params .dial span {
+.grid.params .dial span,
+.step-controls .dial span {
 	display: flex;
 	align-items: baseline;
 	min-width: 0;
 	max-width: 100%;
 }
 
-.grid.params .dial .unit {
+.grid.params .dial .unit,
+.step-controls .dial .unit {
 	flex: 0 1 auto;
 	min-width: 0;
 	overflow: hidden;

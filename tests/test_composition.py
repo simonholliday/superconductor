@@ -613,11 +613,25 @@ def test_a_lane_of_one_row_lands_on_that_voice_and_nowhere_else (
 	been exercised with a grid that was the whole kit.
 	"""
 
-	landed = _built(rig, lambda p: rig._play(p, {"snare": [0, 4, 8, 12]}), rig.STEPS)
+	landed = _built(rig, lambda p: rig._play(
+		p, {"snare": {str(step): {"velocity": 100} for step in (0, 4, 8, 12)}}), rig.STEPS)
 
 	assert landed, "the lane placed nothing at all"
 	assert {note.pitch for note in landed} == {
 		rig.drm1.VERMONA_DRM1_DRUM_MAP["snare"]}
+
+
+def test_a_step_is_played_as_hard_as_it_was_struck (rig: typing.Any) -> None:
+	"""**The whole of #2525 at the far end**: an accent and a ghost note on one row,
+	and each note leaving at its own velocity — in the sixteenth it was placed on,
+	which is where `hit_steps` put it before a step carried a velocity."""
+
+	landed = _built(rig, lambda p: rig._play(
+		p, {"snare": {"4": {"velocity": 127}, "6": {"velocity": 22}}}), rig.STEPS)
+
+	pulses = 24 * rig.STEP_DURATION
+
+	assert sorted((round(note.position / pulses), note.velocity) for note in landed) == [(4, 127), (6, 22)]
 
 
 def test_the_snare_lane_is_declared_one_row_wide (rig: typing.Any) -> None:
@@ -664,7 +678,8 @@ def test_the_drums_the_bass_and_the_chords_take_the_same_four_variants (
 def test_the_opening_pattern_is_variant_a_s (rig: typing.Any) -> None:
 	"""A person starts B from A with a tap; the file seeds the first alone."""
 
-	assert rig.drum_grid.rows_now("A")["kick"] == rig.OPENING_PATTERN["kick"]
+	assert rig.drum_grid.rows_now("A")["kick"] == {
+		str(step): {"velocity": rig.VELOCITY} for step in rig.OPENING_PATTERN["kick"]}
 	assert all(not any(rig.drum_grid.rows_now(one).values()) for one in ("B", "C", "D"))
 
 
@@ -672,7 +687,7 @@ def test_a_build_plays_the_variant_the_grid_says_and_lands_a_cue (rig: typing.An
 	"""**The whole mechanism, through the rig's own play function**: a cued variant
 	becomes the live one at the build and its steps are what the build places."""
 
-	rig.drum_grid.apply(["variants", "B", "rows"], {"clap": [2]})
+	rig.drum_grid.apply(["variants", "B", "rows"], {"clap": {"2": {"velocity": 90}}})
 
 	try:
 		rig.drum_grid.apply(["cue"], "B")
@@ -826,7 +841,10 @@ def test_a_grid_the_panel_makes_can_be_routed_the_moment_it_exists (
 
 	assert landed == [], "an untouched grid placed something"
 
-	rig.composition.data["made_grids-x"]["snare"] = [0, 4]
+	# Through the grid, as a tap is, rather than into the dict: a row is steps
+	# with their velocities now (#2525), and the grid is what gives it that shape.
+	made.apply(["snare", "0"], True)
+	made.apply(["snare", "4"], {"velocity": 60})
 	landed = _built(rig, lambda p: rig.SHARED["made_grids-x"](p), 8)
 
 	assert {note.pitch for note in landed} == {

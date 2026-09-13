@@ -220,8 +220,12 @@ def _gone (prefix: str, now: dict, kept: dict) -> list[str]:
 		if row in BESIDE_THE_ROWS or not held:
 			continue
 
-		wanted = kept.get(row) or []
-		gone.extend(f"{prefix}/{row}/{step}" for step in held if step not in wanted)
+		# **By step number, whichever shape each side is in** (#2525): a row is
+		# steps by number now and was a list of numbers before, and a capture from
+		# before that compared against a grid from after would otherwise report
+		# every step as taken out, because "4" is not 4.
+		wanted = {str(one) for one in (kept.get(row) or [])}
+		gone.extend(f"{prefix}/{row}/{step}" for step in held if str(step) not in wanted)
 
 	return gone
 

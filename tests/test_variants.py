@@ -41,6 +41,12 @@ class Link:
 		self.noted += 1
 
 
+def _steps (*numbers: int, velocity: int = 100) -> dict[str, typing.Any]:
+	"""A row as a step grid holds it: each step with how hard it is struck (#2525)."""
+
+	return {str(one): {"velocity": velocity} for one in sorted(numbers)}
+
+
 def _drums (seed: dict[str, list[int]] | None = None, lands_every: int = 1,
             variants: typing.Sequence[str] = LETTERS) -> tuple[adapter.StepGrid, Link]:
 	"""A three-voice step grid with four variants, the first seeded, and a link."""
@@ -90,10 +96,10 @@ def test_a_grid_declaring_no_variants_is_the_grid_it_always_was () -> None:
 
 	assert "variants" not in grid.declaration()
 	assert "lands_every" not in grid.declaration()
-	assert grid.snapshot() == {"kick": [0], "snare": [], "hat": [], "enabled": True}
+	assert grid.snapshot() == {"kick": _steps(0), "enabled": True}
 
 	assert grid.apply(["snare", "4"], True)
-	assert grid.now() == {"kick": [0], "snare": [4]}
+	assert grid.now() == {"kick": _steps(0), "snare": _steps(4)}
 
 	with pytest.raises(adapter.Refused):
 		grid.apply(["cue"], "B")
@@ -117,8 +123,8 @@ def test_a_cell_lands_in_the_variant_its_path_names_and_nowhere_else () -> None:
 
 	assert grid.apply(["variants", "B", "rows", "snare", "4"], True)
 
-	assert grid.rows_now("B")["snare"] == [4]
-	assert grid.rows_now("A") == {"kick": [0], "snare": [], "hat": []}
+	assert grid.rows_now("B")["snare"] == _steps(4)
+	assert grid.rows_now("A") == {"kick": _steps(0)}
 
 
 def test_the_old_spelling_is_refused_on_a_grid_with_variants () -> None:
@@ -142,11 +148,11 @@ def test_a_whole_variant_is_written_at_once_and_only_that_one () -> None:
 	grid, _ = _drums(seed={"kick": [0, 8]})
 
 	assert grid.apply(["variants", "B", "rows"], grid.rows_now("A"))
-	assert grid.rows_now("B")["kick"] == [0, 8]
+	assert grid.rows_now("B")["kick"] == _steps(0, 8)
 
 	assert grid.apply(["variants", "A", "rows"], {})
-	assert grid.rows_now("A")["kick"] == []
-	assert grid.rows_now("B")["kick"] == [0, 8], "clearing A emptied B"
+	assert "kick" not in grid.rows_now("A")
+	assert grid.rows_now("B")["kick"] == _steps(0, 8), "clearing A emptied B"
 
 	assert grid.applied(["variants", "B", "rows"], {"kick": [8, 0, 8]}) == grid.rows_now("B")
 
@@ -160,7 +166,7 @@ def test_editing_one_variant_while_another_plays_changes_nothing_heard () -> Non
 
 	grid.apply(["variants", "B", "rows", "snare", "4"], True)
 
-	assert grid.now(Builder(3)) == {"kick": [0]}
+	assert grid.now(Builder(3)) == {"kick": _steps(0)}
 
 
 def test_a_cue_lands_at_the_next_build_and_the_app_says_so () -> None:
@@ -176,7 +182,7 @@ def test_a_cue_lands_at_the_next_build_and_the_app_says_so () -> None:
 
 	played = grid.now(Builder(7))
 
-	assert played["snare"] == [4]
+	assert played["snare"] == _steps(4)
 	assert (grid.playing, grid.cue) == ("B", None)
 	assert link.reports == [("grid/playing", "B"), ("grid/cue", None)]
 	assert link.noted == 1
@@ -247,7 +253,7 @@ def test_the_state_of_a_variant_grid_is_every_variant_which_plays_and_which_is_c
 
 	assert set(held) == {"variants", "playing", "cue", "enabled"}
 	assert list(held["variants"]) == list(LETTERS)
-	assert held["variants"]["A"] == {"rows": {"kick": [0], "snare": [], "hat": []}}
+	assert held["variants"]["A"] == {"rows": {"kick": _steps(0)}}
 	assert (held["playing"], held["cue"], held["enabled"]) == ("A", "B", True)
 
 
@@ -286,8 +292,8 @@ def test_rows_kept_before_a_grid_had_variants_become_its_first () -> None:
 	grid.now()
 
 	assert grid.restore({"rows": {"kick": [0, 4]}, "enabled": True}) == []
-	assert grid.rows_now("A")["kick"] == [0, 4]
-	assert grid.rows_now("B")["kick"] == [], "the old rows went to whichever was playing"
+	assert grid.rows_now("A")["kick"] == _steps(0, 4)
+	assert "kick" not in grid.rows_now("B"), "the old rows went to whichever was playing"
 
 
 def test_a_kept_variant_the_composition_no_longer_declares_is_said () -> None:
@@ -300,7 +306,7 @@ def test_a_kept_variant_the_composition_no_longer_declares_is_said () -> None:
 
 	assert any("no variant called E any more" in one for one in refused)
 	assert any("to play any more" in one for one in refused)
-	assert grid.rows_now("A")["kick"] == [1], "the rest came back"
+	assert grid.rows_now("A")["kick"] == _steps(1), "the rest came back"
 	assert grid.playing == "A"
 
 
@@ -313,7 +319,7 @@ def test_variants_kept_for_a_grid_that_no_longer_has_them_put_back_the_one_playi
 	refused = grid.restore({"variants": {"A": {"rows": {"kick": [1]}}, "B": {"rows": {"kick": [9]}}},
 	                        "playing": "B", "enabled": True})
 
-	assert grid.rows_now()["kick"] == [9]
+	assert grid.rows_now()["kick"] == _steps(9)
 	assert refused == ["grid has no variants any more, so A was not put back"]
 
 

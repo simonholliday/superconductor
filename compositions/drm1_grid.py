@@ -57,7 +57,17 @@ disk would say ``PatternStore.beside(__file__)`` and keep it next to itself.
 """
 
 VELOCITY = 100
-"""One fixed velocity per hit: a cell is on or off, with no accent (#2046)."""
+"""How hard a step is struck when nobody said otherwise (#2525).
+
+It was the one velocity every hit had, when a cell was on or off (#2046).  A step
+carries its own now, set by the panel's slider for new taps and changed in the
+velocity lane; this is where the slider opens, and what a step seeded here or
+kept before steps had a velocity comes back at."""
+
+HIT_DURATION = 0.1
+"""How long a drum hit is held, in beats — `hit_steps`' own default, which every
+step here was placed with until `_play` started placing each step at its own
+velocity (#2525).  A drum machine voice ignores the length; the DRM1 does."""
 
 ROWS = [
 	"kick",
@@ -866,14 +876,32 @@ def chords (p: typing.Any) -> None:
 	_transposed(p, chord_grid.transpose)
 
 
-def _play (p: typing.Any, grid: dict[str, list[int]]) -> None:
-	"""Put whatever a grid holds onto the pattern being built."""
+def _play (p: typing.Any, grid: dict[str, dict[str, dict[str, int]]]) -> None:
+	"""Put whatever a grid holds onto the pattern being built, each step as hard as
+	it was struck (#2525).
+
+	**One note a step, placed directly, because that is what costs nothing more.**
+	Measured off the rig with Subsequence's own builder: `hit_steps` once a row, as
+	this was, took 16.9 µs for the opening pattern and 63.8 µs for eighty hits;
+	grouping each row's steps by velocity and calling it once a group took 23.9 µs
+	and 102.8 µs once the velocities varied; a note a step takes 16.0 µs and 64.7 µs
+	whatever they are, and places the same notes.  The clock is paramount (#2140).
+
+	**In sixteenths, which is every drum pattern here**, where `hit_steps` asked the
+	pattern being built.  A grid routed into another pattern plays at that
+	pattern's step, and both the drums and the nine step in `STEP_DURATION`; a
+	destination stepping any other way is the day this reads the step from it.
+	"""
 
 	for row in ROWS:
 		steps = grid.get(row)
 
-		if steps:
-			p.hit_steps(row, list(steps), velocity=VELOCITY)
+		if not steps:
+			continue
+
+		for step, shape in steps.items():
+			p.note(pitch=row, beat=int(step) * STEP_DURATION,
+			       velocity=shape.get("velocity", VELOCITY), duration=HIT_DURATION)
 
 
 def _play_shared (p: typing.Any) -> None:
@@ -1224,7 +1252,7 @@ def _make_grid (spec: dict[str, typing.Any]) -> typing.Any:
 		beats=int(spec["steps"]) * STEP_DURATION,
 		data_key=key, name=key,
 		title=str(spec.get("title") or "Made"),
-		about=[("", "no instrument")])
+		about=[("", "no instrument")], default_velocity=VELOCITY)
 
 
 def _unmake_grid (name: str) -> None:
@@ -1272,7 +1300,8 @@ drum_grid = superconductor.subsequence_adapter.StepGrid(
 	composition, rows=ROWS, steps=STEPS, beats=BEATS,
 	data_key="grid", name="grid", title="DRM1 — pattern 1",
 	about=[("ch", DRUM_CHANNEL), ("", "Vermona DRM1 MkIV")],
-	pattern="drums", variants=VARIANTS, lands_every=LANDS_EVERY)
+	pattern="drums", variants=VARIANTS, lands_every=LANDS_EVERY,
+	default_velocity=VELOCITY)
 
 
 bass_grid = superconductor.subsequence_adapter.NoteGrid(
@@ -1316,7 +1345,7 @@ link = superconductor.subsequence_adapter.AppLink(
 		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=ROWS, steps=STEPS, beats=BEATS,
 			data_key="shared", name="shared", title="Shared — drums",
-			about=[("", "no instrument")]),
+			about=[("", "no instrument")], default_velocity=VELOCITY),
 
 		# The same mechanism as `shared`, one row wide. It lands on the snare
 		# and nowhere else because `snare` is the only row it has, which is all
@@ -1324,7 +1353,7 @@ link = superconductor.subsequence_adapter.AppLink(
 		superconductor.subsequence_adapter.StepGrid(
 			composition, rows=["snare"], steps=STEPS, beats=BEATS,
 			data_key="snare_lane", name="snare_lane", title="Snare lane",
-			about=[("", "no instrument")]),
+			about=[("", "no instrument")], default_velocity=VELOCITY),
 
 		# And the other mechanism, beside it: not a routed grid but a pattern of
 		# its own, nine steps against the sixteen. Drawn narrower than its
@@ -1334,7 +1363,7 @@ link = superconductor.subsequence_adapter.AppLink(
 			composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
 			data_key="nine", name="nine", title="DRM1 — nine",
 			about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
-			pattern="nine"),
+			pattern="nine", default_velocity=VELOCITY),
 		bass_grid,
 		chord_grid,
 		superconductor.subsequence_adapter.Params(

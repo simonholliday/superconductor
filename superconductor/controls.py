@@ -18,7 +18,13 @@ import superconductor.protocol
 
 
 STEP_GRID = "step_grid"
-"""A grid of rows against steps, where a cell is present or absent."""
+"""A grid of rows against steps, where a step is present or absent and carries a velocity.
+
+A row holds its steps by number, each as ``{"velocity": n}`` (#2525): the shape a
+note grid's note has, less its length.  The service keeps what the app reports
+and interprets none of it — how hard a step is struck is the app's to check and
+the composition's to sound.
+"""
 
 TRANSPORT = "transport"
 """Named fields that say how the app is playing: silenced, tempo."""
@@ -372,10 +378,15 @@ def _step (
 	value: typing.Any,
 	path: str,
 ) -> None:
-	"""Switch one step of a step grid's rows, wherever those rows are kept."""
+	"""Place, remove or reshape one step of a step grid's rows, wherever they are kept.
 
-	if len(cell) != 2 or not cell[1].isdigit():
-		raise ControlError(f"{path!r} does not name a cell as control/row/step")
+	The two shapes of address a note grid has, and for the same reasons (#2525):
+	``row/step`` puts a step there or takes it away, and ``row/step/field``
+	changes one that is already there.
+	"""
+
+	if len(cell) not in (2, 3) or not cell[1].isdigit():
+		raise ControlError(f"{path!r} does not name a step as control/row/step or control/row/step/field")
 
 	row, step = cell[0], int(cell[1])
 
@@ -387,14 +398,66 @@ def _step (
 	if not 0 <= step < steps:
 		raise ControlError(f"step {step} is outside a grid {steps} steps wide")
 
-	_set_cell(rows, row, step, bool(value))
+	held = rows.get(row)
+
+	# **A row kept as a list is read as its steps at the default** — the spelling
+	# every row had before a step carried a velocity, which an app too old to send
+	# the new one still reports.
+	if isinstance(held, list):
+		held = rows[row] = _stepped(held, declaration)
+
+	placed = held if isinstance(held, dict) else {}
+	at = str(step)
+
+	if len(cell) == 3:
+		# **Any field, as a note's** (#2128): the value is the app's own report of
+		# its own state, and one this version has not heard of is still kept.
+		if at not in placed:
+			raise ControlError(f"{path!r} shapes a step that is not there")
+
+		placed[at][cell[2]] = value
+		return
+
+	# **The shape the app placed it with, when the app says**, which it always
+	# does (#2503's rule, applied here from the start).  ``true`` is what an app
+	# older than 1.36.0 answers, and it is the default.
+	if isinstance(value, dict):
+		rows.setdefault(row, placed)[at] = dict(value)
+
+	elif value:
+		rows.setdefault(row, placed).setdefault(at, {"velocity": _default_velocity(declaration)})
+
+	else:
+		placed.pop(at, None)
+
+		if not placed:
+			rows.pop(row, None)
+
+
+def _default_velocity (declaration: dict[str, typing.Any]) -> typing.Any:
+	"""How hard a step placed with ``true`` is struck, as the app declared it.
+
+	The note grid's fallback beside it (`_note`), and for the same reason: only an
+	app too old to answer a placement with its shape ever sends ``true`` here, and
+	it declared no default either.
+	"""
+
+	return declaration.get("default_velocity", 100)
+
+
+def _stepped (steps: list[typing.Any], declaration: dict[str, typing.Any]) -> dict[str, typing.Any]:
+	"""A row kept as a list of steps, as the steps it names at the default velocity."""
+
+	return {str(step): {"velocity": _default_velocity(declaration)}
+	        for step in sorted(set(steps))
+	        if isinstance(step, int) and not isinstance(step, bool)}
 
 
 def _readable_rows (
 	declaration: dict[str, typing.Any],
 	value: typing.Any,
 	path: str,
-) -> dict[str, list[int]]:
+) -> dict[str, dict[str, typing.Any]]:
 	"""A whole step grid, checked before any of it replaces what is there."""
 
 	if not isinstance(value, dict):
@@ -402,31 +465,41 @@ def _readable_rows (
 
 	rows = declaration.get("rows", [])
 	steps = declaration.get("steps", 0)
-	kept: dict[str, list[int]] = {}
+	kept: dict[str, dict[str, typing.Any]] = {}
 
 	for row, held in value.items():
 		if row not in rows:
 			raise ControlError(f"this grid has no row named {row!r}")
 
-		if not isinstance(held, list):
-			raise ControlError(f"row {row!r} takes a list of steps, and {held!r} is not one")
+		if isinstance(held, list):
+			for step in held:
+				if isinstance(step, bool) or not isinstance(step, int):
+					raise ControlError(f"a step is a whole number, and {step!r} is not one")
 
-		for step in held:
-			if isinstance(step, bool) or not isinstance(step, int):
-				raise ControlError(f"a step is a whole number, and {step!r} is not one")
+			held = _stepped(held, declaration)
 
-			if not 0 <= step < steps:
-				raise ControlError(f"step {step} is outside a grid {steps} steps wide")
+		if not isinstance(held, dict):
+			raise ControlError(f"row {row!r} takes steps by number, and {held!r} does not")
 
-		# **Every row the app sent, empty ones included.** Dropping them made
-		# this the only place in the file with an opinion about which rows are
-		# worth keeping: `_set_cell` leaves a row that has just been emptied
-		# sitting there as `[]`, and a step grid's own snapshot lists every
-		# declared row whether or not anything sounds in it. So after a clear
-		# the app held `{kick: [], snare: [], enabled: False}` and the service
-		# held `{enabled: False}` — the same pattern, described two ways, which
-		# is how a panel that reloads comes to disagree with one that did not.
-		kept[row] = sorted(set(held))
+		placed: dict[str, typing.Any] = {}
+
+		for step, shape in held.items():
+			if not str(step).isdigit() or not 0 <= int(step) < steps:
+				raise ControlError(f"step {step!r} is outside a grid {steps} steps wide")
+
+			if not isinstance(shape, dict):
+				raise ControlError(f"a step is an object, and {shape!r} is not one")
+
+			# Everything the step carries, as a note's (#2128): the app has already
+			# refused what it would not hold.
+			placed[str(int(step))] = dict(shape)
+
+		# **A row with no steps is left out**, as a note grid's is and as the app's
+		# own snapshot leaves it (#2525).  It was kept as `[]` while the app listed
+		# every declared row; the two halves have to describe an empty row the same
+		# way, and the way both now use is not to describe it at all.
+		if placed:
+			kept[row] = placed
 
 	return kept
 
@@ -1176,19 +1249,3 @@ def _apply_field (
 
 	fields[field] = value
 
-
-def _set_cell (grid: dict[str, list[int]], row: str, step: int, present: bool) -> None:
-	"""Add or remove one step in a row, keeping the row's steps in order.
-
-	A row is held as the list of steps that sound, which is the shape #1914
-	calls the index list and #2046 chose for the wire.
-	"""
-
-	steps = grid.setdefault(row, [])
-
-	if present and step not in steps:
-		steps.append(step)
-		steps.sort()
-
-	elif not present and step in steps:
-		steps.remove(step)

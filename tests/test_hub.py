@@ -80,7 +80,7 @@ async def _hub_with_app () -> tuple[superconductor.hub.Hub, superconductor.hub.A
 	recorder = Recorder()
 
 	app = superconductor.hub.AppLink(
-		name="subsequence", send=recorder.send, controls=CONTROLS, state={"grid": {"kick": [0, 4]}})
+		name="subsequence", send=recorder.send, controls=CONTROLS, state={"grid": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 90}}}})
 	await hub.app_declared(app)
 
 	return hub, app, recorder
@@ -99,7 +99,7 @@ async def test_a_panel_is_told_what_to_draw_the_moment_it_arrives () -> None:
 	snapshot = glass.of_kind("snapshot")[0]
 
 	assert manifest["apps"]["subsequence"]["grid"]["rows"] == ["kick"]
-	assert snapshot["state"] == {"grid": {"kick": [0, 4]}}
+	assert snapshot["state"] == {"grid": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 90}}}}
 
 
 @_on_a_loop_of_its_own
@@ -179,12 +179,13 @@ async def test_the_service_keeps_its_own_copy_so_a_late_panel_sees_the_grid () -
 	hub, app, _ = await _hub_with_app()
 
 	await hub.change_reported(app, superconductor.protocol.changed(
-		"subsequence", "grid/kick/8", True, 5, by="app"))
+		"subsequence", "grid/kick/8", {"velocity": 60}, 5, by="app"))
 
 	late = Recorder()
 	await hub.panel_joined(superconductor.hub.PanelLink(client="panel-2", send=late.send))
 
-	assert late.of_kind("snapshot")[0]["state"]["grid"]["kick"] == [0, 4, 8]
+	assert late.of_kind("snapshot")[0]["state"]["grid"]["kick"] == {
+		"0": {"velocity": 100}, "4": {"velocity": 90}, "8": {"velocity": 60}}
 
 
 @_on_a_loop_of_its_own

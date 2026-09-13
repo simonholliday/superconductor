@@ -55,25 +55,31 @@ def test_a_transport_field_that_was_not_declared_is_refused (path: str) -> None:
 		superconductor.controls.apply_change({}, GRID, path, 1)
 
 
-def test_switching_a_cell_on_adds_its_step_in_order () -> None:
-	"""A row holds the steps that sound, lowest first."""
+def test_switching_a_cell_on_adds_its_step () -> None:
+	"""A row holds the steps that sound by number, each as the app placed it — and a
+	step placed with ``true`` by an app too old to say is at its declared default
+	(#2525)."""
 
 	state: dict[str, typing.Any] = {}
 
-	superconductor.controls.apply_change(state, GRID, "grid/kick/8", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/8", {"velocity": 40})
 	superconductor.controls.apply_change(state, GRID, "grid/kick/0", True)
 
-	assert state["grid"]["kick"] == [0, 8]
+	assert state["grid"]["kick"] == {"8": {"velocity": 40}, "0": {"velocity": 100}}
 
 
 def test_switching_a_cell_off_removes_it () -> None:
-	"""And leaves the rest of the row alone."""
+	"""And leaves the rest of the row alone — or the row gone, once it is empty."""
 
-	state: dict[str, typing.Any] = {"grid": {"kick": [0, 4, 8]}}
+	state: dict[str, typing.Any] = {"grid": {"kick": {"0": {"velocity": 100}, "4": {"velocity": 90}}}}
 
 	superconductor.controls.apply_change(state, GRID, "grid/kick/4", False)
 
-	assert state["grid"]["kick"] == [0, 8]
+	assert state["grid"]["kick"] == {"0": {"velocity": 100}}
+
+	superconductor.controls.apply_change(state, GRID, "grid/kick/0", False)
+
+	assert "kick" not in state["grid"]
 
 
 def test_writing_the_same_value_twice_changes_nothing () -> None:
@@ -81,10 +87,39 @@ def test_writing_the_same_value_twice_changes_nothing () -> None:
 
 	state: dict[str, typing.Any] = {}
 
-	superconductor.controls.apply_change(state, GRID, "grid/kick/4", True)
-	superconductor.controls.apply_change(state, GRID, "grid/kick/4", True)
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4", {"velocity": 70})
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4", {"velocity": 70})
 
-	assert state["grid"]["kick"] == [4]
+	assert state["grid"]["kick"] == {"4": {"velocity": 70}}
+
+
+def test_a_steps_velocity_is_changed_only_where_there_is_a_step () -> None:
+	"""A velocity lane's frame, kept; and one naming a step that is not there is
+	refused, because the app could not have reported it."""
+
+	state: dict[str, typing.Any] = {"grid": {"kick": {"4": {"velocity": 90}}}}
+
+	superconductor.controls.apply_change(state, GRID, "grid/kick/4/velocity", 30)
+
+	assert state["grid"]["kick"] == {"4": {"velocity": 30}}
+
+	with pytest.raises(superconductor.controls.ControlError, match="not there"):
+		superconductor.controls.apply_change(state, GRID, "grid/kick/5/velocity", 30)
+
+
+def test_a_row_kept_as_a_list_is_read_as_its_steps_at_the_default () -> None:
+	"""The spelling before #2525, which an app too old to send the new one still
+	reports: read, and never written back that way."""
+
+	state: dict[str, typing.Any] = {"grid": {"kick": [0, 4]}}
+
+	superconductor.controls.apply_change(state, GRID, "grid/kick/8", True)
+
+	assert state["grid"]["kick"] == {"0": {"velocity": 100}, "4": {"velocity": 100}, "8": {"velocity": 100}}
+
+	superconductor.controls.apply_change(state, GRID, "grid/rows", {"snare": [2, 2]})
+
+	assert state["grid"] == {"snare": {"2": {"velocity": 100}}}
 
 
 @pytest.mark.parametrize("path", ["mixer/kick/4", "grid/cowbell/4", "grid/kick/16", "grid/kick/99"])

@@ -646,6 +646,21 @@ class StepGrid (_Variants, Control):
 	to it.  Nothing wraps it, which is what #2046 decided and what #1914
 	anticipated a helper would later replace.
 
+	**A step carries how hard it is struck** (#2525, Simon's decisions of
+	2026-09-13 on #2044 and #1969).  A row is ``{"4": {"velocity": 90}, ...}``:
+	the shape a note grid's note has, less its length, so the one idea has one
+	shape at every layer (#2403) and a panel's velocity lane reads both grids
+	alike.  The composition's play function places each step at its own
+	velocity; what that number sounds like on an instrument is the
+	composition's business, as a drum map is.
+
+	**A row used to be a list of the steps that sound**, and that spelling is still
+	read and never written: a composition's seed, a store kept before steps
+	carried a velocity, and a whole-grid write from something older all come in
+	at `default_velocity`.  A seed is read when the grid is made, so seed
+	``composition.data`` before making the grid, which every composition here
+	already does.
+
 	**``beats`` is a float, and a whole number of them is a coincidence.**  A
 	cycle is however long its steps make it, and nine sixteenths is 2.25 —
 	which is the whole point of a nine-step pattern running against a sixteen
@@ -669,12 +684,15 @@ class StepGrid (_Variants, Control):
 		pattern: str | None = None,
 		variants: collections.abc.Sequence[str] = (),
 		lands_every: int = 1,
+		default_velocity: int = 100,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps.
 
 		*variants* names the versions of its steps a person can switch between
 		while it plays (#2485), and *lands_every* how many cycles a switch waits
-		for; see `_Variants`.
+		for; see `_Variants`.  *default_velocity* is how hard a step is struck
+		when nobody said otherwise — a step placed with ``true``, and every step a
+		list-shaped seed or store brings in.
 		"""
 
 		self.composition = composition
@@ -686,7 +704,16 @@ class StepGrid (_Variants, Control):
 		self.title = title
 		self.about = list(about)
 
+		low, high = VELOCITY_RANGE
+
+		if isinstance(default_velocity, bool) or not isinstance(default_velocity, int) \
+				or not low <= default_velocity <= high:
+			raise ValueError(f"a step's velocity is between {low} and {high}, not {default_velocity!r}")
+
+		self.default_velocity = default_velocity
+
 		self._take_variants(variants, lands_every)
+		self._take_seed()
 
 		self.pattern = pattern
 		"""Which of the composition's patterns this grid drives, if it drives one.
@@ -709,6 +736,26 @@ class StepGrid (_Variants, Control):
 		it to behave a certain way.
 		"""
 
+	def _take_seed (self) -> None:
+		"""Read whatever the composition seeded into the shape a step has now.
+
+		**In place, once, before anything plays** — the composition's own play
+		function reads this dict, so it has to find every row in one shape.  A row
+		seeded as a list of steps becomes those steps at `default_velocity`; one
+		already carrying velocities is left as it is.
+		"""
+
+		held = self.composition.data.setdefault(self.data_key, {})
+		seeded = [held] if not self.variants else [
+			held[one]["rows"] for one in self.variants]
+
+		for rows in seeded:
+			for row, steps in list(rows.items()):
+				if isinstance(steps, list):
+					rows[row] = {str(step): {"velocity": self.default_velocity}
+					             for step in sorted(set(steps))
+					             if isinstance(step, int) and not isinstance(step, bool)}
+
 	def declaration (self) -> dict[str, typing.Any]:
 		"""Rows, width, how long one time round takes, and what to call it."""
 
@@ -716,13 +763,12 @@ class StepGrid (_Variants, Control):
 			"type": self.kind, "rows": self.rows, "steps": self.steps, "beats": self.beats,
 
 			# **What a weight means, said by the app rather than assumed by the
-			# panel.** A step grid's own cells carry no velocity (#2046), but the
-			# cells a generator realises on it do — and the panel draws each one
-			# at the weight it was played. It was dividing by a hard-coded 127,
-			# which is a MIDI number in a package that carries no MIDI; a note
-			# grid already declared this and a step grid did not, so the one that
-			# said nothing was the one being guessed at.
+			# panel.**  Both the steps a person taps and the cells a generator
+			# realises are drawn at the weight they are struck (#2525), against
+			# this range — it read a hard-coded 127 once, which is a MIDI number
+			# in a package that carries no MIDI (#2140).
 			"velocity_range": list(VELOCITY_RANGE),
+			"default_velocity": self.default_velocity,
 			**self._variant_fields()}
 
 		if self.visible_rows is not None:
@@ -748,7 +794,7 @@ class StepGrid (_Variants, Control):
 		if not isinstance(value, dict):
 			raise Refused("a grid is a set of rows")
 
-		wanted: dict[str, list[int]] = {}
+		wanted: dict[str, dict[str, typing.Any]] = {}
 
 		for row, held in value.items():
 			steps = self._checked_row(row, held)
@@ -758,30 +804,80 @@ class StepGrid (_Variants, Control):
 
 		return self._put_rows(wanted, variant)
 
-	def _checked_row (self, row: typing.Any, held: typing.Any) -> list[int]:
-		"""One row of a whole-grid write, refused if the grid could not hold it.
+	def _checked_row (self, row: typing.Any, held: typing.Any) -> dict[str, typing.Any]:
+		"""One row of a whole-grid write, each step given its shape, or refused.
 
 		A row at a time so a panel's write and a store's restore check the same
 		things the same way, and differ only in what a refusal costs: a panel's
 		write is refused entire, and a restore keeps every row it still can.
+
+		**A list of steps is still read**, at `default_velocity` — the spelling
+		every row had before a step carried a velocity (#2525), and so the spelling
+		of every store and capture made before then.
 		"""
 
 		if row not in self.rows:
 			raise Refused(f"this grid has no {row!r} row")
 
-		if not isinstance(held, list):
-			raise Refused(f"the {row!r} row takes a list of steps")
+		if isinstance(held, list):
+			held = {step: True for step in held}
 
-		for step in held:
-			if isinstance(step, bool) or not isinstance(step, int):
-				raise Refused("a step is a whole number")
+		if not isinstance(held, dict):
+			raise Refused(f"the {row!r} row takes steps by number")
 
-			if not 0 <= step < self.steps:
-				raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+		placed: dict[str, typing.Any] = {}
 
-		return sorted(set(held))
+		for step, shape in sorted(held.items(), key=lambda one: self._checked_step(one[0])):
+			placed[str(self._checked_step(step))] = self._shaped(shape)
 
-	def _put_rows (self, wanted: dict[str, list[int]], variant: str | None = None) -> bool:
+		return placed
+
+	def _checked_step (self, step: typing.Any) -> int:
+		"""A step's number, refused if it is not one of this grid's."""
+
+		if isinstance(step, bool) or not (isinstance(step, int) or (isinstance(step, str) and step.isdigit())):
+			raise Refused("a step is a whole number")
+
+		at = int(step)
+
+		if not 0 <= at < self.steps:
+			raise Refused(f"step {at} is outside a grid {self.steps} steps wide")
+
+		return at
+
+	def _shaped (self, value: typing.Any) -> dict[str, typing.Any]:
+		"""The shape a step is kept in, from what a placement or a write gave.
+
+		``true`` is a step at `default_velocity`, and ``{"velocity": n}`` one at *n*.
+		A number alone is refused rather than read as a velocity, because
+		``grid/kick/4`` set to 90 reads just as well as "on" — and a request that
+		means two things is answered with whichever the reader guessed.
+		"""
+
+		if value is True:
+			return {"velocity": self.default_velocity}
+
+		if not isinstance(value, dict):
+			raise Refused("a step is placed with true, or with its velocity as {\"velocity\": n}")
+
+		return {"velocity": self._checked_velocity(value.get("velocity", self.default_velocity))}
+
+	def _checked_velocity (self, value: typing.Any) -> int:
+		"""How hard a step is struck, refused outside the range this grid declared.
+
+		**The declared pair rather than the same two numbers again** (#2436), and
+		never zero: a velocity of 0 is a note-off, so a step that is set could be
+		silent (#2044).
+		"""
+
+		low, high = VELOCITY_RANGE
+
+		if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+			raise Refused(f"velocity is a whole number between {low} and {high}")
+
+		return value
+
+	def _put_rows (self, wanted: dict[str, dict[str, typing.Any]], variant: str | None = None) -> bool:
 		"""Make the grid, or one variant of it, hold exactly *wanted*; say if it changed."""
 
 		grid = self._rows_of(variant)
@@ -795,19 +891,16 @@ class StepGrid (_Variants, Control):
 		return True
 
 	def kept (self) -> dict[str, typing.Any]:
-		"""The steps somebody put down, and whether they are heard (#2487).
+		"""The steps somebody put down, how hard, and whether they are heard (#2487).
 
 		Every variant, and which one plays; never the cue, which is a request in
 		flight rather than something anybody made.
 		"""
 
-		def written (variant: str | None) -> dict[str, list[int]]:
-			return {row: steps for row, steps in self.rows_now(variant).items() if steps}
-
 		if not self.variants:
-			return {"rows": written(None), "enabled": self.enabled}
+			return {"rows": self.rows_now(), "enabled": self.enabled}
 
-		return {"variants": {one: {"rows": written(one)} for one in self.variants},
+		return {"variants": {one: {"rows": self.rows_now(one)} for one in self.variants},
 		        "playing": self.playing, "enabled": self.enabled}
 
 	def restore (self, kept: typing.Any) -> list[str]:
@@ -821,6 +914,8 @@ class StepGrid (_Variants, Control):
 		**Kept before this grid had variants, it becomes the first of them** — the
 		conversion #2485 asks for — and kept with variants this grid no longer
 		has, the one that was playing becomes the grid and the rest are said.
+		Kept before a step carried a velocity, each step comes back at
+		`default_velocity` (#2525).
 		"""
 
 		if not isinstance(kept, dict):
@@ -837,7 +932,7 @@ class StepGrid (_Variants, Control):
 		"""One set of kept rows put back exactly, a refused row at a time."""
 
 		refused: list[str] = []
-		wanted: dict[str, list[int]] = {}
+		wanted: dict[str, dict[str, typing.Any]] = {}
 
 		for row, held in rows.items():
 			try:
@@ -855,12 +950,15 @@ class StepGrid (_Variants, Control):
 		return refused
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
-		"""What the grid now holds, which for a whole-grid write is not the ask.
+		"""What the grid now holds, which is not always the ask.
 
-		A row given the same step twice, or out of order, is kept once and in
-		order — so the request and the result differ, and the panel has to be
-		told the second.  A cue is answered with the cue as kept, because cueing
-		the variant already playing takes a cue back rather than making one.
+		A whole-grid write is answered with the rows as kept — a step given twice,
+		out of order, or as a list is kept once, in order and with its velocity.  A
+		step placed with ``true`` is answered with the shape it was kept in, as a
+		note grid's is (#2503), so the service and every panel hold the velocity the
+		app chose rather than rebuilding it.  A cue is answered with the cue as
+		kept, because cueing the variant already playing takes a cue back rather
+		than making one.
 		"""
 
 		if rest == ["cue"]:
@@ -869,15 +967,27 @@ class StepGrid (_Variants, Control):
 		if self.variants and len(rest) == 3 and rest[0] == "variants" and rest[2] == "rows":
 			return self.rows_now(rest[1])
 
-		return self.rows_now() if rest == ["rows"] else value
+		if rest == ["rows"]:
+			return self.rows_now()
 
-	def rows_now (self, variant: str | None = None) -> dict[str, list[int]]:
-		"""The grid as it stands, one row at a time, empty rows included.
+		variant, cell = (rest[1], rest[3:]) if self.variants and rest[:1] == ["variants"] else (None, rest)
 
-		Read from the link thread rather than the clock loop, deliberately: the
-		only hazard is a row being sorted at this instant, and copying a list is
-		a single step under the interpreter's lock.  Crossing onto the loop for
-		a read would put socket work on the path that generates MIDI timing.
+		if len(cell) == 2 and value is not False and value is not None and cell[1].isdigit():
+			placed = (self._rows_read(variant).get(cell[0]) or {}).get(str(int(cell[1])))
+
+			return dict(placed) if placed else value
+
+		return value
+
+	def rows_now (self, variant: str | None = None) -> dict[str, dict[str, typing.Any]]:
+		"""Every step as it stands, copied so nothing shares a dict with the loop.
+
+		Read from the link thread rather than the clock loop, deliberately:
+		crossing onto the loop for a read would put socket work on the path that
+		generates MIDI timing.  **Each row is copied whole before it is walked**,
+		for the reason a note grid's is: a tap may be adding a step to the same row
+		at this instant, `dict(row)` is one step under the interpreter's lock, and
+		a comprehension over the live row is many (`a4b7e74`).
 
 		**Rows and nothing else**, which is why this is not `snapshot`.  A write
 		to ``control/rows`` is answered with what that path names; the mute is a
@@ -886,12 +996,29 @@ class StepGrid (_Variants, Control):
 		not a declared row — so a cleared grid stayed lit on every panel while
 		the music went quiet.
 
+		**A row with no steps is left out**, as a note grid's is and as the
+		service's copy leaves it, so the two describe one pattern one way.
 		*variant* says which; the one playing if none is named.
 		"""
 
 		grid = self._rows_read(variant)
 
-		return {row: sorted(grid.get(row, [])) for row in self.rows}
+		return {row: self._copied(grid[row]) for row in self.rows if grid.get(row)}
+
+	def _copied (self, held: typing.Any) -> dict[str, typing.Any]:
+		"""One row, copied whole before it is walked, in the shape a step has now.
+
+		**A row still held as a list is read as its steps at the default** — a
+		composition that seeded its dict after making the grid, which `_take_seed`
+		could not see.  Read, not rewritten: this runs off the clock loop.
+		"""
+
+		if isinstance(held, list):
+			return {str(step): {"velocity": self.default_velocity}
+			        for step in sorted(set(list(held)))
+			        if isinstance(step, int) and not isinstance(step, bool)}
+
+		return {step: dict(shape) for step, shape in dict(held).items()}
 
 	def snapshot (self) -> dict[str, typing.Any]:
 		"""Everything a panel needs to draw this grid, mute included."""
@@ -906,10 +1033,14 @@ class StepGrid (_Variants, Control):
 		return {**self._variants_state(self.rows_now), "enabled": self.enabled}
 
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
-		"""Switch one cell, absolutely rather than by toggling.
+		"""Place, remove or reshape one step, absolutely rather than by toggling.
 
 		Absolute is what makes a re-send after a reconnect safe: applying it
-		twice reaches the same grid as applying it once.
+		twice reaches the same grid as applying it once.  ``row/step`` places a
+		step — ``true`` at `default_velocity`, ``{"velocity": n}`` at *n* — or takes
+		it away with ``false``; ``row/step/velocity`` changes how hard a step that
+		is already there is struck, and is refused where there is none, because a
+		velocity with no step is not a state anything could report.
 		"""
 
 		if rest == ["enabled"]:
@@ -923,29 +1054,74 @@ class StepGrid (_Variants, Control):
 		if not cell:
 			return self._keep_rows(value, variant)
 
-		if len(cell) != 2 or not cell[1].isdigit():
+		if len(cell) not in (2, 3) or not cell[1].isdigit():
 			raise Refused(f"{'/'.join(rest)!r} does not name a cell of this grid")
 
-		row, step = cell[0], int(cell[1])
+		row, step = cell[0], str(int(cell[1]))
 
 		if row not in self.rows:
 			raise Refused(f"this grid has no {row!r} row")
 
-		if not 0 <= step < self.steps:
-			raise Refused(f"step {step} is outside a grid {self.steps} steps wide")
+		self._checked_step(step)
 
-		steps = self._rows_of(variant).setdefault(row, [])
+		grid = self._rows_of(variant)
+		held = grid.get(row)
 
-		if value and step not in steps:
-			steps.append(step)
-			steps.sort()
+		# A row a late seed left as a list becomes its steps here, once, the first
+		# time anything touches it — so a play function never finds the two shapes
+		# mixed within one row.
+		if isinstance(held, list):
+			held = grid[row] = self._copied(held)
+
+		steps = held or {}
+
+		if len(cell) == 3:
+			if cell[2] != "velocity":
+				raise Refused(f"a step has no {cell[2]}")
+
+			if step not in steps:
+				raise Refused("there is no step there to change")
+
+			wanted = self._checked_velocity(value)
+
+			if steps[step]["velocity"] == wanted:
+				return False
+
+			steps[step]["velocity"] = wanted
+
 			return True
 
-		if not value and step in steps:
-			steps.remove(step)
+		# **Taken away by false and nothing else.**  An empty shape is a step at
+		# the default velocity, and reading it by its truth would take a step away
+		# that somebody asked to place.
+		if value is False or value is None:
+			if step not in steps:
+				return False
+
+			del steps[step]
+
+			# Dropped once its last step goes, which is what the service's copy of
+			# the same structure does and what `rows_now` reports.
+			if not steps:
+				grid.pop(row, None)
+
 			return True
 
-		return False
+		# **A step already there is left alone by ``true``**, which asks only that
+		# a step be there; a shape asks for exactly that shape.
+		if value is True and step in steps:
+			return False
+
+		shaped = self._shaped(value)
+
+		if steps.get(step) == shaped:
+			return False
+
+		# Not kept in step order: nothing reads a row in order, and sorting it on
+		# the clock loop at every tap would be a cost for nobody.
+		grid.setdefault(row, steps)[step] = shaped
+
+		return True
 
 
 def _overlaps (at: int, span: int, other_at: int, other: dict[str, typing.Any]) -> bool:
@@ -2234,9 +2410,9 @@ one it knows.  An adapter for a sampler will declare something else here and
 nothing downstream will need changing.
 
 **No unit beside it, and that is #2049 rather than an oversight.**  A unit is
-drawn beside a *number*, and no number is drawn for a velocity anywhere on this
-panel — a grid's weights are a lane of bars.  The field can be added the day
-something reads it.
+drawn beside a *number*, and the only number drawn for a velocity on this panel
+is the loudness a step grid's new taps take (#2525), on a slider labelled for
+what it sets.  The field can be added the day something reads it.
 """
 
 DRAWABLE = superconductor.protocol.PARAMETER_KINDS + ("pitch", "position")

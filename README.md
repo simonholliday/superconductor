@@ -143,10 +143,47 @@ people with their own panels do not have to agree.
 The chooser itself never shrinks. Whatever size you pick, the way back is the
 same size it always was.
 
+## Drum steps
+
+A **step grid** is a drum machine's pattern: a row per voice, a cell per step.
+Press an empty cell to put a step there and press it again to take it away.
+
+Each step carries how hard it is struck. New steps take the velocity set on the
+slider beneath the grid, which opens at the grid's own default, so set it low and
+tap in ghost notes, then set it high and tap in accents. A step is lit from the
+bottom as far as it is struck: a full cell is as loud as it goes, and a half-lit
+one is half as hard.
+
+To change a step that is already there, use the lane beneath the grid. It shows
+one row at a time, because every voice shares the same steps: press a row's name
+to choose it (the name you chose carries a ring), then drag a bar up or down to
+set that step's velocity. Choose the hi-hat, and its accents can be reshaped
+without touching anything else.
+
+The slider and the chosen row belong to the panel you are holding, the way a
+cell size does. Nothing is sent until you place or change a step.
+
+A composition reads each step with its velocity, so its play function places
+every step at its own:
+
+```python
+@composition.pattern(channel=10, steps=16, ...)
+def drums (p):
+    for row, steps in drum_grid.now(p).items():        # {"4": {"velocity": 90}, ...}
+        for step, shape in steps.items():
+            p.note(pitch=row, beat=int(step) * STEP_DURATION, velocity=shape["velocity"])
+```
+
+A composition written before steps carried a velocity may still seed its grids
+with lists of steps. They are read at `default_velocity`, which `StepGrid` takes
+and which is 100 unless the composition says otherwise, and so are patterns kept
+or captured before this.
+
 ## Pitched patterns
 
-A step grid's cells are on or off. A **note grid**'s cells are notes: one row
-per pitch, and a cell that carries its own length and velocity.
+A step grid's steps are there or not, each struck at its own velocity. A **note
+grid**'s cells are notes: one row per pitch, and a cell that carries its own
+length and velocity.
 
 Press an empty cell to place a note where your finger is, to the snap chosen
 beneath the grid, and keep dragging right to make it longer. What you drag is
@@ -386,7 +423,7 @@ drum_grid = superconductor.subsequence_adapter.StepGrid(
 @composition.pattern(channel=10, steps=16, ...)
 def drums (p):
     for row, steps in drum_grid.now(p).items():
-        ...
+        ...    # each step as in *Drum steps* above
 ```
 
 `lands_every=2` holds each switch for the end of a two-bar phrase over a one-bar
