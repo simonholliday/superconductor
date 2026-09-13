@@ -10119,29 +10119,70 @@ def test_the_length_s_row_is_counted_in_its_block (panel: typing.Any) -> None:
 	}"""), "the length's row hangs out of the pitched block"
 
 
-def test_a_block_placed_below_one_whose_length_changes_clears_its_length_row (
-	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
-	"""A page with no arrangement stacks its blocks, and a row the count leaves out is a
-	row the next block is laid over (#2548).  Narrow enough that each block wraps onto a
-	row of its own, which is where the count decides where the next one starts."""
+def _lanes (page: typing.Any, names: list[str]) -> list[tuple[str, str, float, float]]:
+	"""Every pair of blocks where one stands above the other, with the air between them and a cell.
+
+	A page with no arrangement leaves a lane of one cell between two blocks, because
+	blocks packed edge to edge read as one surface (`autoPlace`).  So the air is what
+	says a count was right: a row the count left out eats the lane before it overlaps
+	anything, and a row shorter than a cell eats only part of it — which is why the
+	floor is a whole cell, less a pixel, and not half of one.
+	"""
+
+	measured = page.evaluate("""(names) => ({
+		cell: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')),
+		boxes: Object.fromEntries(names.map((name) => {
+			const box = document.querySelector(`.part[data-part="${name}"]`).getBoundingClientRect();
+			return [name, { top: box.top, bottom: box.bottom, left: box.left, right: box.right }];
+		})),
+	})""", names)
+
+	boxes = measured["boxes"]
+	pairs = []
+
+	for index, one in enumerate(names):
+		for other in names[index + 1:]:
+			a, b = boxes[one], boxes[other]
+
+			if not (a["left"] < b["right"] - 1 and b["left"] < a["right"] - 1):
+				continue
+
+			upper, lower = (one, other) if a["top"] <= b["top"] else (other, one)
+			pairs.append((upper, lower, boxes[lower]["top"] - boxes[upper]["bottom"], measured["cell"]))
+
+	return pairs
+
+
+def _narrow_page (page: typing.Any, service_url: str) -> None:
+	"""A panel narrow enough that every block on these pages wraps onto a row of its own."""
 
 	page.set_viewport_size({"width": 520, "height": 1400})
 	page.goto(service_url)
 	page.wait_for_selector(".cell", timeout=10_000)
 
+
+def test_a_block_placed_below_one_whose_length_changes_keeps_its_lane (
+	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
+	"""A page with no arrangement stacks its blocks by counting their rows, and a row the
+	count leaves out is a row the next block is laid against or over (#2548)."""
+
+	_narrow_page(page, service_url)
 	_go_to_the_variants(page)
 
-	boxes = page.evaluate("""() => Object.fromEntries(
-		['grid', 'phrase', 'tiny'].map((name) => {
-			const box = document.querySelector(`.part[data-part="${name}"]`).getBoundingClientRect();
-			return [name, { top: box.top, bottom: box.bottom, left: box.left, right: box.right }];
-		}))""")
+	lanes = _lanes(page, ["grid", "phrase", "tiny"])
 
-	def overlap (one: dict[str, float], other: dict[str, float]) -> bool:
-		return (one["left"] < other["right"] - 1 and other["left"] < one["right"] - 1
-		        and one["top"] < other["bottom"] - 1 and other["top"] < one["bottom"] - 1)
+	assert lanes, "nothing on the page was stacked, so nothing was measured"
+	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"a lane between blocks was eaten: {lanes}"
 
-	names = list(boxes)
 
-	assert not [(a, b) for index, a in enumerate(names) for b in names[index + 1:]
-	            if overlap(boxes[a], boxes[b])], f"blocks were placed over one another: {boxes}"
+def test_a_block_placed_below_a_transposable_grid_keeps_its_lane (
+	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
+	"""The same fault in the row that had it first: a pitched grid's transposition."""
+
+	_narrow_page(page, service_url)
+	_open_the_fine_grid(page)
+
+	lanes = _lanes(page, ["bass", "fine"])
+
+	assert lanes, "the bass and the fine grid were not stacked, so nothing was measured"
+	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"a lane between blocks was eaten: {lanes}"

@@ -310,6 +310,14 @@ const LENGTH_CELLS = 1;
 /* And the row either strip gains where a pattern's length can change: how many of
    its steps play, and the press that brings it back onto the bar (#2548). Counted
    for the same reason, and only where the app declared a length that changes. */
+const TRANSPOSE_CELLS = 1;
+/* And the row a pitched pattern's strip draws for its transposition, where it
+   declares one. **It was never counted**, and nothing on a page drawn to a stored
+   arrangement could show it, because the fit measures what the count leaves out.
+   A page with no arrangement stacks its blocks by the count, though, and there the
+   block below a transposable grid was placed into the lane that should separate
+   them: 23px of air under a 40px cell, found by the test that watched the length's
+   row do the same. */
 const VARIANT_CELLS = 1;
 /* The row of tabs above a grid that declares variants (#2485), counted for the
    same reason: a row the count did not know about puts every block a cell out. */
@@ -6545,7 +6553,8 @@ function Panel () {
 			+ (kindOf(name) === "note_grid" && weighed ? LANE_CELLS : 0)
 			+ (kindOf(name) === "step_grid" && weighed ? LANE_CELLS + STEP_CONTROL_CELLS : 0)
 			/* And the length's row, on either kind, where the length can change (#2548). */
-			+ (typeof controls[name].min_steps === "number" ? LENGTH_CELLS : 0);
+			+ (typeof controls[name].min_steps === "number" ? LENGTH_CELLS : 0)
+			+ (kindOf(name) === "note_grid" && Array.isArray(controls[name].transpose_range) ? TRANSPOSE_CELLS : 0);
 
 		const variants = Array.isArray(controls[name].variants) ? controls[name].variants.length : 0;
 		const beside = variantsBeside(variants, body);
