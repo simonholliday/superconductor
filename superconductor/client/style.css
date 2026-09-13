@@ -2598,16 +2598,6 @@ html, body {
 	box-shadow: 0 0 0 1px var(--edge-strong), 0 10px 28px var(--shadow-far);
 }
 
-/* The way back to a block that is completely covered, which overlap makes
-   possible and nothing else would answer. */
-.inventory { display: flex; align-items: center; gap: 0.3rem; }
-
-.inventory button {
-	background: transparent;
-	color: var(--ink-quiet);
-	white-space: nowrap;
-	touch-action: none;}
-
 /* A pitched pattern, drawn as a piano roll rather than as pads.
  *
  * **The cells touch.** A step grid is a drum machine and its cells are pads,

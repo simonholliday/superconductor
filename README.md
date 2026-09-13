@@ -264,18 +264,19 @@ the cells on the page. A collapsed block that is switched off says **LIVE OFF**
 on its bar, since the switch itself is out of sight.
 
 Any position is allowed, including on top of another block. The last block you
-moved is the one on top, which is what makes a busy page workable. Nothing is
-ever pushed aside to make room: a block you did not touch does not move.
+moved is the one on top, and pressing a block brings it to the front — anywhere
+but where you play notes, so playing never reshuffles the page. That is what makes
+a busy page workable. Nothing is ever pushed aside to make room: a block you did
+not touch does not move.
 
-Because a block can be covered completely, and a title bar is the only handle
-it has, the bar lists every block on the page. Tapping a name brings that block
-back to the top. Collapsing the block on top uncovers it as well.
+A block can be covered completely. Collapse the block on top of it and it is
+uncovered, with nothing moved; press it and it comes to the front.
 
-Tap **LAYOUT** in the bar to hold the arrangement still — the padlock closes,
-title bars and edges stop moving anything, and the list goes away. That is what
-stops a stray finger rearranging a page mid-performance. The browser remembers
-which way you left it. A block still collapses and expands while the arrangement
-is held, because doing so moves nothing.
+Tap **LAYOUT** in the bar to hold the arrangement still — the padlock closes, and
+title bars and edges stop moving anything. That is what stops a stray finger
+rearranging a page mid-performance. The browser remembers which way you left it.
+A block still collapses and expands while the arrangement is held, because doing
+so moves nothing.
 
 An arrangement is saved when you lift your finger from a block that moved, or
 when you collapse or expand one, and it is saved to the application that declared

@@ -4099,26 +4099,6 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 }
 
 
-/* The parts on this page, by name, while it is being arranged.
- *
- * Overlap is what makes this necessary rather than convenient. A block can be
- * covered completely, and the only way to take hold of one is its title bar,
- * so without a list there would be no way back to it. Choosing a name raises
- * that block to the top, which is the same gesture that a drag performs and
- * therefore needs no explaining. */
-function Inventory ({ names, titles, onRaise }) {
-	if (names.length < 2) return null;
-
-	return html`
-		<div class="inventory">
-			${names.map((name) => html`
-				<button
-					key=${name}
-					onPointerDown=${(event) => { event.preventDefault(); onRaise(name); }}
-				>${titles[name] || name.replace(/_/g, " ")}</button>`)}
-		</div>`;
-}
-
 /* The highlight tracking what is sounding.
  *
  * The sequencer reports beats, not steps: between two of them the position is
@@ -5096,8 +5076,8 @@ function usePinch (cell, choose) {
  * Every popover in the chrome hangs from `right: 0` of the control that opened
  * it, which is correct while the bar is one line and that control is near the
  * right-hand end. The bar wraps at narrow widths — it carries the transport, the
- * tempo, the pattern navigation, the latch, the inventory, both choosers, the
- * lamp and two readouts — and the control then lands near the *left* edge, where
+ * tempo, the pattern navigation, the latch, both choosers, the lamp and two
+ * readouts — and the control then lands near the *left* edge, where
  * a popover reaching leftwards runs off the glass. Measured at 1280: the theme
  * picker at x 14–136 and its popover spanning −25 to 136.
  *
@@ -6476,7 +6456,7 @@ function Panel () {
 	const arranged = moved[pageId] || {};
 
 	/* Move and raise are the same write with one difference, so they are one
-	   function: a drag says where, a tap from the inventory says only that this
+	   function: a drag says where, a press on the block says only that this
 	   block should be on top. Either way the block goes to the end of the
 	   order, which is what "the last one moved is on top" means. A resize and a
 	   collapse say something else about the block and are the same write again,
@@ -7127,10 +7107,16 @@ function Panel () {
 					rememberLock(!locked);
 				}}
 			>${locked ? "🔒" : "🔓"} LAYOUT</button>
-			${!locked && html`
-				<${Inventory} names=${stacked} titles=${Object.fromEntries(
-					drawn.map((one) => [one.key, one.title]))}
-					onRaise=${(who) => rearrange(who, null)} />`}
+			${/* **No list of the page's blocks here any more** (#2537). It was the
+			     way back to a block covered completely, when a title bar was a
+			     block's only handle and nothing else could uncover one. Three
+			     things do now: a press anywhere on a block raises it; the block on
+			     top always has its title bar clear, so a stack comes apart from
+			     the top; and collapsing the block above uncovers what is under it
+			     without moving anything (#2536). Simon saw no need for the list,
+			     and it was the widest thing on the bar: with the layout unlocked,
+			     which is the default, it wrapped the bar onto more lines of chrome
+			     than a held layout needed. */ ""}
 			<span class="spacer"></span>
 			<${Doubled} duplicated=${duplicated} />
 			${notice && html`<span class="warn">${notice}</span>`}

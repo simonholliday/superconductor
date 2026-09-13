@@ -856,7 +856,8 @@ def test_a_block_is_dragged_by_its_title_a_cell_at_a_time (panel: typing.Any) ->
 def test_a_block_may_be_dragged_over_another_and_the_last_moved_is_on_top (
 	panel: typing.Any) -> None:
 	"""Overlap is legal, which is what deletes collision resolution — and what
-	makes an inventory necessary, since a covered block cannot be grabbed."""
+	means a covered block needs a way back, which collapsing the block on top of
+	it is (#2536, #2537)."""
 
 	_unlocked(panel)
 
@@ -875,21 +876,37 @@ def test_a_block_may_be_dragged_over_another_and_the_last_moved_is_on_top (
 	assert depth("grid") > depth("second"), "the block just moved is on top"
 
 
-def test_the_inventory_brings_a_buried_block_back (panel: typing.Any) -> None:
-	"""The one hazard overlap introduces: a block covered completely cannot be
-	taken hold of, because a title bar is the only handle it has."""
+def test_the_bar_lists_no_blocks (panel: typing.Any) -> None:
+	"""Simon, 2026-09-13: *"When I set layout to 'unlocked', additional items in
+	the main bar appear, for each instrument in the view. I can't see a need for
+	them, and I think they should be removed."*
+
+	They were the way back to a block covered completely (#2078), and three things
+	answer that now: a press anywhere on a block raises it, the block on top always
+	has its title bar clear, and collapsing the block above uncovers what is under
+	it (#2536) — which `test_a_buried_window_is_reached_by_collapsing_the_one_above`
+	holds.  **In both states**, because the list only ever appeared unlocked, so
+	the held bar alone would pass against it.
+	"""
 
 	_unlocked(panel)
+	_settled(panel)
 
-	def depth (part: str) -> int:
-		return int(panel.eval_on_selector(f'.part[data-part="{part}"]', "el => getComputedStyle(el).zIndex"))
+	def texts (selector: str) -> set[str]:
+		return {one.strip().lower() for one in panel.locator(selector).all_inner_texts()}
 
-	# **Exact, not a substring.** A generator's own entry is named after the
-	# pattern it builds — "euclidean 1 · Drums" — so `has_text` matched two
-	# buttons the moment a stack started travelling with its pattern (#2211).
-	panel.locator(".inventory").get_by_role("button", name="Drums", exact=True).click()
+	# **Less the page names**, because a block and a page may share one: the
+	# fixture's drum grid is called Drums and so is a page.
+	titles = texts(".part-title > b") - texts(".bar .pages button")
 
-	assert depth("grid") > depth("second")
+	assert "second" in titles, "the page drew no block to look for"
+	assert not titles & texts(".bar button"), (
+		f"the unlocked bar names blocks: {sorted(titles & texts('.bar button'))}")
+
+	_locked(panel)
+
+	assert not titles & texts(".bar button"), (
+		f"the held bar names blocks: {sorted(titles & texts('.bar button'))}")
 
 
 def test_an_arrangement_outlives_a_reload (panel: typing.Any) -> None:
@@ -1951,6 +1968,15 @@ def _on_top (depths: dict[str, int]) -> str:
 	return max(depths, key=lambda name: depths[name])
 
 
+def _raise (panel: typing.Any, part: str) -> None:
+	"""Bring a block to the front the way a person does: by pressing it.
+
+	On its name, which is on the title bar and is nothing else, so the press works
+	nothing inside the block (Simon, 2026-09-11: pressing a block raises it)."""
+
+	panel.locator(f'.part[data-part="{part}"] .part-title > b').click()
+
+
 def test_an_open_menu_is_drawn_above_every_block (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Simon, 2026-09-11: an arpeggio's direction opened its list *under* the
@@ -1958,11 +1984,11 @@ def test_an_open_menu_is_drawn_above_every_block (
 
 	A block's `z-index` is its depth, which makes each block a stacking context,
 	so a menu's own 900 only ever counted inside its block.  The fixture's menu
-	opens upward over the note set; raising the note set first — from the bar's
-	list, the way a person brings a buried block back — is what put it on top."""
+	opens upward over the note set; raising the note set first — by pressing it,
+	the way a person brings a block to the front — is what put it on top."""
 
 	part = _open_a_chord(panel, fake_app)
-	panel.locator(".bar .inventory button", has_text="Notes").click()
+	_raise(panel, "notes")
 	assert _on_top(_depths(panel)) == "notes", "the note set was not raised"
 
 	part.locator('.setting[data-field="pitches"] .picker').click()
@@ -1993,7 +2019,7 @@ def test_working_a_control_brings_its_block_to_the_front_and_playing_does_not (
 	the most-tapped surface here would otherwise reshuffle the page on every hit."""
 
 	part = _open_a_chord(panel, fake_app)
-	panel.locator(".bar .inventory button", has_text="Notes").click()
+	_raise(panel, "notes")
 	assert _on_top(_depths(panel)) == "notes"
 
 	part.locator('.setting[data-field="pitches"] .picker').click()
@@ -7037,12 +7063,16 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	panel.locator(".store > button").click()
 	playwright_api.expect(panel.locator(".store .choices")).to_have_count(0, timeout=5_000)
 
-	# The inventory, which only exists while the layout is unlocked — the default
-	# since #2215, so this is the state a panel opens in rather than one to
-	# switch to. Waited for by name regardless, because a state that renders
-	# nothing checks nothing and would report a clean pass for the wrong reason.
+	# The layout unlocked — the default since #2215, so this is the state a panel
+	# opens in rather than one to switch to — where every title bar is a target
+	# (it is the drag handle then). It carried the bar's list of blocks as well
+	# until #2537. Waited for by what it makes a target regardless, because a state
+	# that renders nothing checks nothing and would report a clean pass for the
+	# wrong reason.
 	_unlocked(panel)
-	panel.wait_for_selector(".inventory button", timeout=5_000)
+	panel.wait_for_function(
+		"() => [...document.querySelectorAll('.part-title')]"
+		".some((one) => getComputedStyle(one).touchAction === 'none')", timeout=5_000)
 	note("the layout unlocked")
 
 	# And held, which the flipped default made the state worth adding: the
@@ -8003,7 +8033,7 @@ def test_no_popover_is_drawn_off_the_side_of_the_glass (panel: typing.Any) -> No
 	**The chrome popovers pin `right: 0`**, which is correct while the bar is one
 	line and that control is near the right-hand end.  The bar wraps at narrow
 	widths — it carries the transport, the tempo, the pattern navigation, the
-	latch, the inventory, both choosers, the lamp and two readouts — and the
+	latch, both choosers, the lamp and two readouts — and the
 	control then lands near the *left* edge, where a popover reaching leftwards
 	runs off the glass.  Measured at 1280 before the fix: the theme picker at
 	x 14–136 and its popover spanning −25 to 136.
@@ -9044,7 +9074,7 @@ def test_a_buried_window_is_reached_by_collapsing_the_one_above (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""The one hazard overlap brings: a block covered completely cannot be taken
 	hold of.  Collapsing the block on top uncovers it without moving anything,
-	which is what lets the inventory go (#2537)."""
+	which is why the bar no longer lists the blocks on a page (#2537)."""
 
 	_unlocked(panel)
 	_settled(panel)
