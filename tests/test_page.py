@@ -8416,6 +8416,19 @@ def test_a_cable_lights_what_the_end_in_your_hand_can_land_on (
 		f"a plug in the hand should light the sources: {holding_plug}")
 
 
+STAMP = ".bar .build:not(.trip)"
+"""The build stamp, told apart from the round-trip readout beside it.
+
+**Both carry `build`**, because both are the same small muted type at the end of
+the bar.  So `.bar .build` alone matches either — and when the stamp draws
+nothing, which is what a panel with no greeting yet does, the trip readout is all
+that is left and a test reading the first match measures *3 / 6 ms* and asserts
+against it.  Seen once on CI on 2026-09-14 and green on the re-run (#2600); the
+selector is narrowed rather than the flake re-run, because the failure it gives
+is a wrong answer rather than a missing element.
+"""
+
+
 def _at_contract (panel: typing.Any, service_url: str, monkeypatch: typing.Any,
                   spoken: str) -> str:
 	"""Reload the panel against a service claiming to speak *spoken*.
@@ -8428,9 +8441,9 @@ def _at_contract (panel: typing.Any, service_url: str, monkeypatch: typing.Any,
 	monkeypatch.setattr(superconductor.protocol, "CONTRACT_VERSION", spoken)
 
 	panel.goto(service_url)
-	panel.wait_for_selector(".bar .build", timeout=10_000)
+	panel.wait_for_selector(STAMP, timeout=10_000)
 
-	return str(panel.locator(".bar .build").first.inner_text()).strip()
+	return str(panel.locator(STAMP).first.inner_text()).strip()
 
 
 def test_the_panel_says_when_the_service_speaks_a_different_contract (
@@ -8464,7 +8477,7 @@ def test_the_panel_says_when_the_service_speaks_a_different_contract (
 	grave = _at_contract(panel, service_url, monkeypatch, f"{major + 1}.0.0")
 	assert "disagree" in grave, grave
 
-	drawn = panel.eval_on_selector(".bar .build", "one => one.className")
+	drawn = panel.eval_on_selector(STAMP, "one => one.className")
 	assert "grave" in drawn, f"a major difference is drawn like a minor one: {drawn}"
 
 
@@ -8478,12 +8491,12 @@ def test_a_matching_contract_leaves_the_build_stamp_alone (
 	"""
 
 	panel.goto(service_url)
-	panel.wait_for_selector(".bar .build", timeout=10_000)
+	panel.wait_for_selector(STAMP, timeout=10_000)
 
-	stamp = str(panel.locator(".bar .build").first.inner_text()).strip()
+	stamp = str(panel.locator(STAMP).first.inner_text()).strip()
 
 	assert "behind" not in stamp and "disagree" not in stamp, stamp
-	assert "mismatch" not in panel.eval_on_selector(".bar .build", "one => one.className")
+	assert "mismatch" not in panel.eval_on_selector(STAMP, "one => one.className")
 
 
 def _on_the_glass (panel: typing.Any, selector: str) -> tuple[int, int, int]:
