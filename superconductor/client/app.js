@@ -163,6 +163,23 @@ const ANCHOR = { floor: 3.5, share: 0.11, ceiling: 7 };
  * behind the block, which is the ambiguity Simon reported in the first place —
  * "it might be possible to misinterpret a line as going *behind* an item". */
 
+const DOUBLE_TAP = 400;
+const DOUBLE_TAP_SLACK = 24;
+/* How quickly, and how close together, two taps on a slider are one gesture.
+ *
+ * **A slider goes back to what its app said it should be** (Simon, 2026-09-14),
+ * which is the one thing a finger cannot do by sliding: finding a number exactly
+ * again is fiddly on glass and impossible while playing.
+ *
+ * 400 ms because this is a fader rather than a mouse, and a second tap is aimed
+ * rather than reflexive; 24 pixels because the same finger lands in about half a
+ * cell of where it did, and a tap further away is a person setting a value.
+ *
+ * **The first tap still sets a value**, and the second corrects it. Holding a tap
+ * back until the window closed would put 400 ms into a control you play, which
+ * #2107 will not have; a value set and immediately replaced costs a write nobody
+ * sees. */
+
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
  *
@@ -1987,7 +2004,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, end, resync, 
  * **Drawn only where the app said what a velocity is** — its range and default — as
  * a note grid's lane is. A grid that says nothing gets no lane, no slider, row names
  * that stay marks, and taps that place with `true`, which is every grid before this. */
-function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, kinds, visible, cell, pending, failed, onSet }) {
+function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, kinds, visible, cell, pending, failed, onSet, onLane }) {
 	const range = Array.isArray(control.velocity_range) && control.velocity_range.length === 2
 		? control.velocity_range : null;
 
@@ -2013,7 +2030,11 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 			visible=${visible} cell=${cell}
 			pending=${pending} failed=${failed}
 			tap=${range ? { velocity: tap } : null}
-			chosen=${range ? chosen : null} onChoose=${range ? setPicked : null}
+			chosen=${range ? chosen : null}
+			${/* **Which lane is showing is told upward** (Simon, 2026-09-14), so the
+			     clear can offer to empty that one voice rather than the kit. It stays
+			     this block's state: the page is told, and does not decide. */ ""}
+			onChoose=${range ? ((row) => { setPicked(row); if (onLane) onLane(row); }) : null}
 			onTap=${onSet} />
 		${range && html`
 			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${[chosen]}
@@ -2029,8 +2050,10 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 						${/* **The same slider every bounded number on this panel is**, and
 						     never a request: it says what the next tap carries. */ ""}
 						<${Setting}
-							field=${{ kind: "number", name: "velocity", min: range[0], max: range[1], step: 1 }}
+							field=${{ kind: "number", name: "velocity", min: range[0], max: range[1], step: 1,
+								default: control.default_velocity }}
 							held=${tap} onSet=${setTap} />
+
 					</div>`}
 				${lengthens && html`
 					<${LengthRow} end=${playing} lowest=${control.min_steps} highest=${control.steps}
@@ -2231,6 +2254,23 @@ function otherFormOnly (offered, params) {
 
 function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
+
+	/* **Two taps on a slider put it back to its default** (see `DOUBLE_TAP`), for
+	   a field that declares one. Kept here rather than on the element, because
+	   both dials want it and the ranged one is two grips on a single surface. */
+	const tapped = useRef({ at: 0, x: 0, y: 0 });
+
+	const resets = (event) => {
+		const was = tapped.current;
+		const now = event.timeStamp || Date.now();
+
+		tapped.current = { at: now, x: event.clientX, y: event.clientY };
+
+		if (!("default" in field) || field.default === null || field.default === undefined) return false;
+		if (now - was.at > DOUBLE_TAP) return false;
+
+		return Math.hypot(event.clientX - was.x, event.clientY - was.y) <= DOUBLE_TAP_SLACK;
+	};
 
 	/* Asked for whatever this parameter turns out to be, because a hook must
 	   be: only a long choice opens a menu, and the shape is not known here
@@ -2654,6 +2694,9 @@ function Setting ({ field, held, onSet }) {
 				class="dial ranged"
 				onPointerDown=${(event) => {
 					event.preventDefault();
+
+					if (resets(event)) { sliding.current = null; onSet(field.default); return; }
+
 					event.currentTarget.setPointerCapture(event.pointerId);
 
 					sliding.current = grip(event);
@@ -2680,6 +2723,9 @@ function Setting ({ field, held, onSet }) {
 			class="dial"
 			onPointerDown=${(event) => {
 				event.preventDefault();
+
+				if (resets(event)) { sliding.current = null; onSet(field.default); return; }
+
 				event.currentTarget.setPointerCapture(event.pointerId);
 				sliding.current = event.pointerId;
 				slide(event);
@@ -5367,7 +5413,50 @@ function useCellSize (blocks, layout, dragging) {
 		}
 	}, [cell, JSON.stringify(blocks)]);
 
-	return { wrap, cell, choice, choose };
+	/* **A size change keeps what you were looking at** (Simon, 2026-09-14):
+	 * *"A user with their instrument in view, wanting to enlarge the buttons,
+	 * selects a new grid size, and then their instrument is hidden."*
+	 *
+	 * Blocks are placed from the origin outwards, so a bigger cell pushes the
+	 * whole arrangement down and to the right — and the view, which stays where
+	 * it was, ends up looking at the empty glass above and to the left of it.
+	 *
+	 * **The point held still is where the eye was**: the middle of the view, or
+	 * the point between two fingers when a pinch is what changed the size, which
+	 * is the thing that hand is actually looking at. Scroll is scaled by the
+	 * *pitch* rather than by the cell, because a block's position is counted in
+	 * pitches (`at.x * (cell + GAP)`), and the two differ by the gap.
+	 *
+	 * **After the effect above, and it must stay after it.** That one grows the
+	 * page; a scroll set before the page has grown is clamped to the old extent,
+	 * which is the same bug in a quieter form. `scrollWidth` is read first to
+	 * force the layout rather than trust the ordering alone. */
+	const focus = useRef(null);
+	const sized = useRef(cell);
+
+	useLayoutEffect(() => {
+		const box = wrap.current;
+		const before = sized.current;
+
+		sized.current = cell;
+
+		if (!box || before === cell) return;
+
+		void box.scrollWidth;
+
+		const frame = box.getBoundingClientRect();
+		const held = focus.current;
+		const point = held
+			? { x: held.x - frame.left, y: held.y - frame.top }
+			: { x: box.clientWidth / 2, y: box.clientHeight / 2 };
+
+		const factor = (cell + GAP) / (before + GAP);
+
+		box.scrollLeft = Math.max(0, (box.scrollLeft + point.x) * factor - point.x);
+		box.scrollTop = Math.max(0, (box.scrollTop + point.y) * factor - point.y);
+	}, [cell]);
+
+	return { wrap, cell, choice, choose, focus };
 }
 
 /* Pinch to resize, so the size is reachable without finding the control for it.
@@ -5384,7 +5473,7 @@ function useCellSize (blocks, layout, dragging) {
  *
  * Nothing is captured and nothing is prevented until the gesture is certain, so
  * a two-finger chord on a grid is still two taps. */
-function usePinch (cell, choose) {
+function usePinch (cell, choose, focus) {
 	const held = useRef({ points: new Map(), apart: 0, from: 0, engaged: false });
 
 	const down = useCallback((event) => {
@@ -5425,6 +5514,10 @@ function usePinch (cell, choose) {
 		const wanted = Math.round(
 			Math.min(FIT_CEILING, Math.max(ZOOM_FLOOR, gesture.from * ratio)));
 
+		/* Where this hand is looking, for the zoom to hold still. Written before
+		   the size changes, because the effect that holds it runs on the change. */
+		if (focus) focus.current = { x: (one.x + two.x) / 2, y: (one.y + two.y) / 2 };
+
 		if (wanted !== cell) choose(String(wanted));
 	}, [cell, choose]);
 
@@ -5436,6 +5529,9 @@ function usePinch (cell, choose) {
 		if (gesture.points.size < 2) {
 			gesture.apart = 0;
 			gesture.engaged = false;
+
+			/* Back to the middle of the view for a size chosen from the menu. */
+			if (focus) focus.current = null;
 		}
 	}, []);
 
@@ -5752,6 +5848,11 @@ function Panel () {
 	const [adding, setAdding] = useState(null);
 	const [making, setMaking] = useState(null);
 	const [clearing, setClearing] = useState(null);
+
+	/* Which lane each grid is showing, so a clear can offer that one voice (#2525's
+	   chosen row, Simon's ask of 2026-09-14). The block owns the choice; this is
+	   only what it said last. */
+	const [lanes, setLanes] = useState({});
 
 	/* Whether the sheet asking to start again from the file is open (#2487). Held
 	   here rather than in the bar's control for the reason `clearing` is: a sheet
@@ -6938,7 +7039,7 @@ function Panel () {
 	   is only as large as its furthest corner. */
 	const size = useCellSize(blocks, layout, dragging);
 
-	const pinch = usePinch(size.cell, size.choose);
+	const pinch = usePinch(size.cell, size.choose, size.focus);
 
 	/* What kind of thing each layer of a grid's stack is, by its id. */
 	const layerKinds = (control) => {
@@ -7639,7 +7740,7 @@ function Panel () {
 							     *to* with. */ ""}
 							adds=${one.rack ? "add grid" : "add generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
-							onClear=${one.clear ? () => setClearing(one.control) : null}
+							onClear=${one.clear ? () => setClearing({ control: one.control }) : null}
 							onSettings=${settingsFor[one.control]
 								? () => setShowing((was) => {
 									const now = new Set(was);
@@ -7807,7 +7908,9 @@ function Panel () {
 										drawn=${drawn}
 										kinds=${layerKinds(one.control)}
 										visible=${rowsShown(one)} cell=${size.cell}
-										pending=${pending} failed=${failed} onSet=${request} />`;
+										pending=${pending} failed=${failed} onSet=${request}
+										onLane=${(row) => setLanes((was) =>
+											(was[one.control] === row ? was : { ...was, [one.control]: row }))} />`;
 						})()
 						: null}
 					${up && one.clear && html`
@@ -8001,12 +8104,31 @@ function Panel () {
 			   grid today, and it says which. What is counted is the declared rows
 			   and nothing else: counting every key a note grid's state holds took
 			   its row labels and its unreachable rows for notes, so the sheet told
-			   a person they were about to lose more than they were. */
-			const variant = variantOf(clearing);
-			const held = (state[appName] || {})[clearing] || {};
-			const named = controls[clearing].rows || [];
+			   a person they were about to lose more than they were.
+
+			   **And it works on one lane where a lane was asked for** (Simon,
+			   2026-09-14): emptying a kit to redo the kick took the snare with it.
+			   One write either way, because the app replaces the whole grid — so a
+			   lane clear is every other row written back unchanged, and a clear
+			   that stops half way through still cannot happen. */
+			const name = clearing.control;
+
+			/* **The lane the block is showing**, which is the one whose name was
+			   pressed for the velocity strip (#2525) — offered as its own answer
+			   rather than as a second button on the block, because a control added
+			   to that strip narrows the slider beside it, and a slider is measured
+			   in what a tap at a given place means. */
+			const lane = (controls[name].rows || []).length > 1 ? lanes[name] || null : null;
+			const variant = variantOf(name);
+			const held = (state[appName] || {})[name] || {};
+			const named = controls[name].rows || [];
 			const rows = variant ? variant.rowsOf(variant.showing)
 				: Object.fromEntries(Object.entries(held).filter(([row]) => named.includes(row)));
+
+			const going = lane ? { [lane]: rows[lane] || {} } : rows;
+			const keeping = lane
+				? Object.fromEntries(Object.entries(rows).filter(([row]) => row !== lane))
+				: {};
 
 			return html`
 				<${Sheet} title=${variant ? `clear variant ${variant.showing}` : "clear this pattern"}
@@ -8016,7 +8138,7 @@ function Panel () {
 						     whitespace around an element, and "taken offDRM1" is what
 						     that looks like on the glass. */ ""}
 						<span>${countOf(rows)} steps will be taken off </span>
-						<b>${controls[clearing].title || clearing}</b>
+						<b>${controls[name].title || name}</b>
 						${variant && html`<span>${`, variant ${variant.showing}`}</span>`}
 						<span>. There is no undo.</span>
 					</p>
@@ -8024,11 +8146,21 @@ function Panel () {
 						<button
 							onPointerDown=${(event) => { event.preventDefault(); setClearing(null); }}
 						>keep them</button>
+						${lane && html`
+							<button
+								class="danger"
+								data-clear-lane=${lane}
+								onPointerDown=${(event) => {
+									event.preventDefault();
+									request(variant ? variant.at : `${name}/rows`, keeping);
+									setClearing(null);
+								}}
+							>${`clear ${lane} only (${countOf(going)})`}</button>`}
 						<button
 							class="danger"
 							onPointerDown=${(event) => {
 								event.preventDefault();
-								request(variant ? variant.at : `${clearing}/rows`, {});
+								request(variant ? variant.at : `${name}/rows`, {});
 								setClearing(null);
 							}}
 						>clear</button>

@@ -3401,6 +3401,49 @@ def test_clearing_a_pattern_asks_first_and_says_what_will_go (
 	assert not [one for one in fake_app.sets if one["path"] == "grid/rows"]
 
 
+def test_clearing_one_lane_leaves_every_other_row_where_it_was (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-14: *"could we allow clearing just the kick lane?"* — emptying a
+	kit to redo one voice took every other voice with it.
+
+	**The lane is the row whose name was pressed**, which the velocity strip already
+	uses, so this is a target rather than a mode. It asks first for the same reason
+	the whole grid does, and it goes as one write: the app replaces the whole grid,
+	so a lane clear is every other row written back unchanged.
+	"""
+
+	_settled(panel)
+
+	# The fixture's kit has the kick alone, so give the snare something to keep:
+	# without it this would pass on a build that emptied the whole grid.
+	panel.locator(conftest.cell("grid/snare/2")).click()
+	fake_app.await_set("grid/snare/2")
+	fake_app.confirm("grid/snare/2", {"velocity": 100})
+	_settled(panel)
+
+	panel.locator('.part[data-part="grid"] .row-label.pick', has_text="kick").click()
+	panel.locator('.part[data-part="grid"] .part-foot .clear').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	lane = panel.locator(".sheet .answers button[data-clear-lane]")
+
+	assert lane.count() == 1, "the clear did not offer the lane the block is showing"
+	# Read without its case: the stylesheet draws these in capitals.
+	says = lane.inner_text().lower()
+
+	assert "kick" in says, f"the answer did not name the lane: {says!r}"
+	assert "(2)" in says, f"the answer did not count the lane: {says!r}"
+
+	lane.click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	wrote = [one for one in fake_app.sets if one["path"] == "grid/rows"]
+
+	assert len(wrote) == 1, f"a lane clear was not one write: {wrote}"
+	assert "kick" not in wrote[0]["v"], "the lane that was cleared came back"
+	assert wrote[0]["v"].get("snare"), "clearing one lane took another with it"
+
+
 def test_agreeing_to_clear_empties_the_whole_grid_in_one_request (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""A cell at a time would be a hundred and sixty frames to empty a drum
@@ -4162,6 +4205,117 @@ def _switch_and_cable (panel: typing.Any, join: str) -> dict[str, typing.Any]:
 
 		return { centre, offCable: nearest, over, box: { w: box.width, h: box.height } };
 	}""", join)
+
+
+def _looking_at (panel: typing.Any) -> dict[str, typing.Any]:
+	"""Which point of the arrangement is in the middle of the view, in lattice cells."""
+
+	return panel.evaluate("""() => {
+		const box = document.querySelector(".grid-wrap");
+		const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+		const pitch = cell + 4;
+
+		return {
+			cell,
+			x: (box.scrollLeft + box.clientWidth / 2) / pitch,
+			y: (box.scrollTop + box.clientHeight / 2) / pitch,
+			scrollable: box.scrollWidth > box.clientWidth + 1 || box.scrollHeight > box.clientHeight + 1,
+		};
+	}""")
+
+
+def _dial_reads (panel: typing.Any) -> str:
+	"""What the step grid's velocity slider says it is set to."""
+
+	return panel.locator('.part[data-part="grid"] .step-controls .dial span').inner_text().strip()
+
+
+def _tap_dial (panel: typing.Any, across: float) -> None:
+	"""Tap the slider a fraction of the way along it."""
+
+	box = panel.locator('.part[data-part="grid"] .step-controls .dial').bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * across, box["y"] + box["height"] / 2)
+
+
+def test_two_taps_on_a_slider_put_it_back_to_its_default (panel: typing.Any) -> None:
+	"""Simon, 2026-09-14: *"Could a double-click/double-tap on a velocity slider reset
+	it to its initial/default state?"*
+
+	It is the one thing a finger cannot do by sliding: finding a number exactly again
+	is fiddly on glass and impossible while playing. The app says what the default is
+	— here, how hard a new tap is struck — and two taps go back to it.
+
+	**The first tap still sets a value**, and the second corrects it: holding a tap
+	back until the window closed would put 400 ms into a control you play.
+	"""
+
+	assert _dial_reads(panel) == "100", "the fixture's default velocity is not what it was"
+
+	_tap_dial(panel, 0.2)
+
+	moved = _dial_reads(panel)
+
+	assert moved != "100", "a tap did not move the slider, so this test proves nothing"
+
+	_tap_dial(panel, 0.2)
+	_tap_dial(panel, 0.2)
+
+	assert _dial_reads(panel) == "100", "two quick taps did not put it back to the default"
+
+
+def test_two_slow_taps_on_a_slider_are_two_values_rather_than_a_reset (panel: typing.Any) -> None:
+	"""The gesture is two taps *quickly*, or a person setting a value twice would find
+	the slider snapping back under them."""
+
+	_tap_dial(panel, 0.2)
+	panel.wait_for_timeout(700)
+	_tap_dial(panel, 0.8)
+
+	assert _dial_reads(panel) != "100", "a slow second tap reset the slider instead of setting it"
+
+
+def test_changing_the_size_keeps_what_you_were_looking_at (panel: typing.Any) -> None:
+	"""Simon, 2026-09-14: *"A user with their instrument in view, wanting to enlarge
+	the buttons, selects a new grid size, and then their instrument is hidden."*
+
+	Blocks are placed from the origin outwards, so a bigger cell pushes the whole
+	arrangement down and to the right while the view stays where it was — and what
+	you were working on slides off the edge. The middle of the view is held instead,
+	which is where the eye is.
+	"""
+
+	panel.set_viewport_size({"width": 700, "height": 520})
+	# Half way into the page rather than pinned to its far corner: at the very
+	# bottom there is nothing below to hold the view against, so the scroll clamps
+	# and the point cannot be kept — which is right, and is not what this measures.
+	panel.evaluate("""() => {
+		const box = document.querySelector(".grid-wrap");
+		box.scrollLeft = (box.scrollWidth - box.clientWidth) / 2;
+		box.scrollTop = (box.scrollHeight - box.clientHeight) / 2;
+	}""")
+	_settled(panel)
+
+	before = _looking_at(panel)
+
+	assert before["scrollable"], "nothing overflowed, so this test could not tell either way"
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Large").click()
+	playwright_api.expect(panel.locator(".sizes .choices")).to_have_count(0, timeout=5_000)
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '60px'",
+		timeout=5_000)
+	_settled(panel)
+
+	after = _looking_at(panel)
+
+	assert after["cell"] > before["cell"], "the size did not grow"
+
+	# The same square of the lattice, give or take the half-cell a scroll can be
+	# clamped by at the far edge of the page.
+	assert abs(after["x"] - before["x"]) < 1.5, f"the view slid sideways: {before} -> {after}"
+	assert abs(after["y"] - before["y"]) < 1.5, f"the view slid up or down: {before} -> {after}"
 
 
 def test_a_cables_switch_rides_clear_of_a_block_it_only_crosses (
