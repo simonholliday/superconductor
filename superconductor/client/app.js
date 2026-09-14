@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.37.0";
+const CONTRACT = "1.38.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -125,6 +125,21 @@ const JACK = { floor: 6, share: 0.17, ceiling: 12 };
  * pointed to it merged with every other head arriving at the same block —
  * Simon found that with three of them. A plug and a socket cannot merge,
  * because they are at opposite ends of their own cable.
+ */
+
+const IN_HAND = 600;
+/* **What is in your hand is in front of everything else on the page.**
+ *
+ * Fittings sit over every block so a finger can always find a plug or a socket
+ * (#2415, `.joins.over` at 500 in the stylesheet), and that is right until the
+ * block *is* the thing being touched: dragged across another cable's switch, the
+ * switch painted through it while its cable ran behind, so the block looked
+ * sliced (Simon, 2026-09-14). A block a hand is on now beats that sheet, which
+ * is the same amendment #2417 made for a cable — the one you are moving comes
+ * forward — applied to the thing doing the moving.
+ *
+ * Above 500 and below the 900 a menu is drawn at, because a menu opened from a
+ * block is still the thing being read.
  */
 
 const SAG_FLOOR = 10;
@@ -580,6 +595,27 @@ const DOWN = { at: "scrollTop", whole: "scrollHeight", seen: "clientHeight",
 const ACROSS = { at: "scrollLeft", whole: "scrollWidth", seen: "clientWidth",
                  pointer: "clientX", start: "left", extent: "width" };
 
+/* **Where a grid's window begins**, for one that asked (`opens_at`, contract
+ * 1.38.0, and the field a pitch set has had since 1.29.0).
+ *
+ * The named row is put at the *bottom* of the window, because that is where a
+ * window opens without being told — at its lowest rows, where a bass line lives.
+ * So a grid drawn over the whole of MIDI that says `C1` opens exactly where one
+ * drawn no lower would have, and everything above it is a scroll away (#2108).
+ *
+ * A name this grid has not got falls back to the default rather than to nothing:
+ * a window that refused to open would be a blank block. */
+function opensOnRow (opensAt) {
+	return (box) => {
+		const target = opensAt && box.querySelector(`[data-row="${CSS.escape(opensAt)}"]`);
+
+		if (!target) { box.scrollTop = box.scrollHeight; return; }
+
+		box.scrollTop += target.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom;
+	};
+}
+
+
 function Window ({ rows, visible, cell, tight, across, extent, opening, marks, children }) {
 	const seen = useRef(null);
 	const windowed = Boolean(visible && visible < rows);
@@ -1018,7 +1054,7 @@ function fillOf (shape, range, opening) {
    grid did. `chosen` and `onChoose` are the row the velocity lane shows, and are
    absent on a grid with no lane: its row labels are then marks, as they always
    were. */
-function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, weights, opening, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
+function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, weights, opening, opensAt, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -1029,7 +1065,8 @@ function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, we
 
 	return html`
 		<${BeatStrip} steps=${steps} beats=${beats} end=${end} />
-		<${Window} rows=${rows.length} visible=${visible} cell=${cell}>
+		<${Window} rows=${rows.length} visible=${visible} cell=${cell}
+			opening=${opensAt ? opensOnRow(opensAt) : null}>
 		<div class="grid" style=${style}>
 			${rows.map((row, band) => html`
 				${/* **A row's name chooses the row the lane shows** (#2525), where
@@ -1249,7 +1286,7 @@ const DRAG_SLOP = 8;
  * answered. It also wakes the composition loop once for a gesture rather than
  * once for every position crossed. */
 function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divisions, notes, drawn, kinds, weights,
-                    cell, window: windowRows,
+                    cell, window: windowRows, opensAt,
                     labels, unreachable, snap, selected, pending, failed, onSelect, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
@@ -1472,7 +1509,8 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divi
 
 	return html`
 		<${BeatStrip} steps=${steps} beats=${beats} end=${end} tight />
-		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight>
+		<${Window} rows=${rows.length} visible=${windowRows} cell=${cell} tight
+			opening=${opensAt ? opensOnRow(opensAt) : null}>
 		<div class="grid notes" style=${style}>
 			${rows.map((row, band) => html`
 				${/* **The pitch it sounds, not the pitch it was drawn at** (#2144).
@@ -1840,6 +1878,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, end, resync, 
 			     against — the same two facts the drum grid is given (#2218). */ ""}
 			drawn=${drawn} kinds=${kinds} weights=${control.velocity_range}
 			notes=${notes} cell=${cell} window=${shows || control.visible_rows}
+			opensAt=${control.opens_at}
 			labels=${notes.labels} unreachable=${notes.unreachable}
 			snap=${snap} selected=${selected} pending=${pending} failed=${failed}
 			onSelect=${setSelected} onSet=${onSet} />
@@ -1910,7 +1949,7 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 	return html`
 		<${Grid} control=${name} cellsAt=${cellsAt}
 			rows=${control.rows} steps=${control.steps} end=${playing} beats=${control.beats || 4}
-			weights=${control.velocity_range} opening=${opening}
+			weights=${control.velocity_range} opening=${opening} opensAt=${control.opens_at}
 			cells=${cells} drawn=${drawn} kinds=${kinds}
 			visible=${visible} cell=${cell}
 			pending=${pending} failed=${failed}
@@ -3415,7 +3454,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onL
  * there when he needs it. So a collapse hides the pane — the body, the footer
  * and the grip — and nothing else changes: not the position, not the width, not
  * the height it opens back to. */
-function Part ({ title, about, name, flavour, at, cell, depth, locked, collapsed, silent, takes, offers, pitchIn, rows, mostRows, leastRows, beside, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, onCollapse, footer, children }) {
+function Part ({ title, about, name, flavour, at, cell, depth, inHand, locked, collapsed, silent, takes, offers, pitchIn, rows, mostRows, leastRows, beside, onMove, onRaise, onHold, onSettled, onResize, onTouch, onClose, onCollapse, footer, children }) {
 	const pitch = cell + GAP;
 	const held = useRef(null);
 	const stretching = useRef(null);
@@ -3425,8 +3464,11 @@ function Part ({ title, about, name, flavour, at, cell, depth, locked, collapsed
 		top: `${(at ? at.y : 0) * pitch}px`,
 		/* **From one, so the sheet of cables behind them can sit at zero** — the
 		   overlay is later in the document, so a block sharing its number would
-		   lose the tie. The order between blocks is unchanged. */
-		zIndex: depth + 1,
+		   lose the tie. The order between blocks is unchanged.
+
+		   **A hand on a block puts it in front of the fittings too**, which
+		   otherwise paint through the block being dragged (`IN_HAND`). */
+		zIndex: inHand ? IN_HAND : depth + 1,
 	};
 
 
@@ -7428,6 +7470,7 @@ function Panel () {
 					flavour=${[one.live === false ? "silent" : "",
 						one.reshaping ? "reshaping" : ""].filter(Boolean).join(" ")}
 					at=${layout[one.key]} cell=${size.cell} depth=${stacked.indexOf(one.key)}
+					inHand=${Boolean(touched) && touched.name === one.key}
 					locked=${locked}
 					collapsed=${Boolean(layout[one.key] && layout[one.key].collapsed)}
 					silent=${one.live === false}

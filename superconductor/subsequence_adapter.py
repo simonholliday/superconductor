@@ -653,6 +653,35 @@ LENGTH_FIELDS: frozenset[str] = frozenset({"end", "resync"})
 """What a grid whose length changes keeps beside its rows, so no row of one may be called either."""
 
 
+class _Window:
+	"""Where a panel's window on this control's rows begins (#2108).
+
+	A grid taller than the block drawn for it shows a window onto its rows, and
+	that window opens at the lowest of them — where a bass line lives.  That is
+	right for a grid drawn over one instrument's register and wrong for one drawn
+	over the whole of MIDI, whose lowest rows are two octaves below anything a rig
+	sounds, so such a grid may name the row it opens on instead.
+
+	**The word is the one a pitch set has used since 1.29.0** (`opens_at`), because
+	it is the same thing said about a different list (#2403).
+	"""
+
+	name: str
+	rows: list[str]
+
+	opens_at: str | None = None
+	"""The row a window opens on, or None to open where it always did."""
+
+	def _take_window (self, opens_at: str | None) -> None:
+
+		"""Hold the row a panel's window opens on, refusing one this control has not got."""
+
+		if opens_at is not None and opens_at not in self.rows:
+			raise ValueError(f"{self.name} cannot open at {opens_at!r}, which is not one of its rows")
+
+		self.opens_at = opens_at
+
+
 class _Length:
 	"""What lets a pattern play fewer of its grid's steps, and come back onto the bar (#2526, #2548).
 
@@ -1074,7 +1103,7 @@ class _Moves (typing.NamedTuple):
 		return picked
 
 
-class StepGrid (_Length, _Variants, Control):
+class StepGrid (_Length, _Window, _Variants, Control):
 	"""A grid of rows against steps, kept as a plain dict on ``composition.data``.
 
 	The dict is the composition's: the pattern builder reads it and this writes
@@ -1116,6 +1145,7 @@ class StepGrid (_Length, _Variants, Control):
 		title: str | None = None,
 		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
 		visible_rows: int | None = None,
+		opens_at: str | None = None,
 		pattern: str | None = None,
 		variants: collections.abc.Sequence[str] = (),
 		lands_every: int = 1,
@@ -1156,6 +1186,7 @@ class StepGrid (_Length, _Variants, Control):
 
 		self._take_variants(variants, lands_every)
 		self._take_seed()
+		self._take_window(opens_at)
 
 		self.pattern = pattern
 		"""Which of the composition's patterns this grid drives, if it drives one.
@@ -1218,6 +1249,9 @@ class StepGrid (_Length, _Variants, Control):
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
+
+		if self.opens_at is not None:
+			declared["opens_at"] = self.opens_at
 
 		declared.update(self.said())
 
@@ -1624,7 +1658,7 @@ def _overlaps (at: int, span: int, other_at: int, other: dict[str, typing.Any]) 
 	return at < other_at + other_span and other_at < at + span
 
 
-class NoteGrid (_Length, _Variants, Control):
+class NoteGrid (_Length, _Window, _Variants, Control):
 	"""A pitched pattern: one row per note, and a cell that is a note.
 
 	The same plain dict on ``composition.data`` that a step grid uses, one level
@@ -1693,6 +1727,7 @@ class NoteGrid (_Length, _Variants, Control):
 		default_length: int = 1,
 		default_velocity: int = 100,
 		visible_rows: int | None = None,
+		opens_at: str | None = None,
 		variants: collections.abc.Sequence[str] = (),
 		lands_every: int = 1,
 		min_steps: int | None = None,
@@ -1784,6 +1819,7 @@ class NoteGrid (_Length, _Variants, Control):
 		self.link: "AppLink | None" = None
 
 		self._take_variants(variants, lands_every)
+		self._take_window(opens_at)
 		self._take_length(min_steps, end, resize)
 
 	def attach (self, link: "AppLink") -> None:
@@ -1812,6 +1848,9 @@ class NoteGrid (_Length, _Variants, Control):
 
 		if self.visible_rows is not None:
 			declared["visible_rows"] = self.visible_rows
+
+		if self.opens_at is not None:
+			declared["opens_at"] = self.opens_at
 
 		declared.update(self.said())
 

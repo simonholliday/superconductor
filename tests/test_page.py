@@ -4083,6 +4083,106 @@ def test_a_line_comes_forward_while_a_hand_is_on_the_block_it_joins (
 	assert sheet_of("stack/one>grid") == ["under"], "the line did not go back"
 
 
+def _lowest_row_in_view (panel: typing.Any, part: str) -> str | None:
+	"""The bottom-most row label the window is actually showing."""
+
+	return panel.evaluate("""(part) => {
+		const box = document.querySelector(`.part[data-part="${part}"] .scroller`);
+		const seen = box.getBoundingClientRect();
+		const rows = [...box.querySelectorAll('[data-row]')]
+			.filter((row) => {
+				const at = row.getBoundingClientRect();
+				return at.top >= seen.top - 1 && at.bottom <= seen.bottom + 1;
+			});
+
+		return rows.length ? rows[rows.length - 1].dataset.row : null;
+	}""", part)
+
+
+def test_a_grid_opens_at_the_row_its_app_asked_for (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""#2108, after Simon asked for a shared grid to hold the whole of MIDI.
+
+	**A window opens at its lowest rows** — where a bass line lives — which is right
+	for a grid drawn over one instrument's register and wrong for one drawn over all
+	of MIDI: those lowest rows are C-1, two octaves below anything a rig sounds, so
+	the line would be found by scrolling on every load.
+
+	So a grid may say where its window begins, in the word a pitch set has used
+	since 1.29.0 (#2403). The named row is the *bottom* of the window, which is
+	exactly where a grid drawn no lower would have opened.
+	"""
+
+	_open_the_bass(panel)
+
+	assert _lowest_row_in_view(panel, "bass") == "C2", "a grid saying nothing stopped opening at its lowest row"
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"bass": {**conftest.CONTROLS["bass"], "opens_at": "C#2"},
+	})
+
+	# Mounted again by leaving the page and coming back, because a window opens
+	# once, when it is mounted: a redeclare alone would prove nothing.
+	panel.locator(".pages button", has_text="All").click()
+	panel.wait_for_selector('.part[data-part="grid"]', timeout=5_000)
+	_open_the_bass(panel)
+
+	assert _lowest_row_in_view(panel, "bass") == "C#2", "the window did not open where the app asked"
+
+
+def test_the_block_in_your_hand_is_in_front_of_another_cables_fittings (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Reported by Simon on 2026-09-14, while trying the shared line (#2108).
+
+	Fittings sit over every block so a finger can always find a plug or a socket
+	(#2415), and the block being *dragged* was never excepted from that: drag one
+	across another cable's switch and the switch painted through it, while that
+	cable's own path ran behind — so the block in the hand was sliced by a control
+	belonging to something else.
+
+	**The same amendment #2417 made for a cable, applied to the thing that moves
+	it**: what is in your hand is in front. Only that block — every other one
+	keeps its depth, so the fittings a finger might reach for stay reachable.
+	"""
+
+	_open_the_stack(panel)
+	_two_generators(panel, fake_app)
+	_joins_settled(panel)
+
+	def depths () -> dict[str, typing.Any]:
+		return panel.evaluate("""() => {
+			const depth = (el) => Number(getComputedStyle(el).zIndex) || 0;
+
+			return {
+				held: depth(document.querySelector('.part[data-part="stack/one"]')),
+				others: [...document.querySelectorAll('.part')]
+					.filter((el) => el.dataset.part !== 'stack/one').map(depth),
+				over: depth(document.querySelector('.joins.over')),
+			};
+		}""")
+
+	resting = depths()
+
+	assert resting["held"] < resting["over"], "a block sat over the fittings with nothing held"
+
+	grip = panel.locator('.part[data-part="stack/one"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 60, grip["y"] + 45)
+
+	holding = depths()
+
+	panel.mouse.up()
+
+	assert holding["held"] > holding["over"], \
+		"a fitting still painted through the block being dragged"
+	assert max(holding["others"]) < holding["over"], \
+		"every block came forward, not only the one in the hand"
+	assert depths()["held"] < depths()["over"], "the block stayed in front after the hand lifted"
+
+
 def test_the_resize_grip_brings_a_blocks_lines_forward_too (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""#2426.  Of the gestures that fell outside #2417's rule this is the one that

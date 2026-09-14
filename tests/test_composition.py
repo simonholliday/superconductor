@@ -941,6 +941,30 @@ def test_the_shared_line_is_offered_to_every_stack_and_drives_nothing (rig: typi
 	assert rig.shared_notes.pattern is None
 
 
+def test_the_shared_line_holds_every_note_and_opens_where_the_bass_register_starts (
+	rig: typing.Any) -> None:
+	"""Simon, on the glass, 2026-09-14: a grid with no instrument should hold the lot.
+
+	**An instrument's grid is drawn over the register it is played in**, which is this
+	file's choice and not the instrument's limit. A grid with no instrument has no
+	such register — it sounds as whatever it is patched into — so it holds every note
+	MIDI has, and says where its window opens, or it would open on C-1.
+	"""
+
+	declared = rig.link.controls["shared_notes"].declaration()
+
+	assert len(declared["rows"]) == 128
+	assert declared["rows"][0] == "G9" and declared["rows"][-1] == "C-1", "drawn highest first"
+	assert declared["opens_at"] == "C1"
+
+	# The thing it could not do before: reach either instrument's own drawn rows.
+	for row in rig.BASS_ROWS + rig.CHORD_ROWS:
+		assert row in declared["rows"], row
+
+	assert rig.shared_notes_recipe.pitches == declared["rows"], \
+		"the stack on it may write anything the grid can hold"
+
+
 def test_the_shared_line_is_drawn_where_both_the_synths_it_feeds_are (rig: typing.Any) -> None:
 	"""A cable has two ends, and a page that shows one of them shows half a connection."""
 

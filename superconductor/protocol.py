@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.37.0"
+CONTRACT_VERSION = "1.38.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -359,6 +359,15 @@ step it starts from, and ``end``, so a playhead follows what is sounding instead
 of the page's one beat count.  **Additive**: a panel too old draws every column
 and a playhead that drifts once a length has changed, and an app too old
 declares no ``min_steps``.
+
+1.38.0 lets a ``step_grid`` and a ``note_grid`` carry ``opens_at``: the row a
+panel's window begins on, which is the field a ``pitch_set`` has had since 1.29.0
+and the same meaning — one word for one concept (#2403).  A windowed grid opens
+at its lowest rows, which is where a bass line lives and is right for a grid
+drawn over one instrument's register; a grid drawn over the whole of MIDI opens
+two octaves below anything a rig sounds, and cannot say otherwise (#2108).
+**Additive**: a grid that says nothing opens where it always did, and a panel too
+old ignores the field and does the same.
 """
 
 UNIT = "unit"

@@ -79,6 +79,31 @@ def _grid (
 	return grid, composition, link
 
 
+def test_a_grid_says_where_a_panel_s_window_opens () -> None:
+	"""A tall grid drawn over the whole of MIDI opens two octaves below anything a rig
+	sounds, unless it can say otherwise — the field a pitch set has had since 1.29.0,
+	under the same name because it is the same thing (#2108, #2403)."""
+
+	grid, _, _ = _grid()
+
+	assert "opens_at" not in grid.declaration(), "a grid that says nothing declares nothing"
+
+	asked = adapter.NoteGrid(
+		FakeComposition(), rows=["C2", "C#2", "D2"], steps=8, beats=2,
+		data_key="bass", name="bass", visible_rows=2, opens_at="C#2")
+
+	assert asked.declaration()["opens_at"] == "C#2"
+
+
+def test_a_grid_cannot_open_at_a_row_it_does_not_have () -> None:
+	"""A window beginning on a row the grid has not got is a composition fault, said at once."""
+
+	with pytest.raises(ValueError, match="not one of its rows"):
+		adapter.NoteGrid(
+			FakeComposition(), rows=["C2", "C#2", "D2"], steps=8, beats=2,
+			data_key="bass", name="bass", opens_at="G9")
+
+
 # --- what the service understands ------------------------------------------
 
 def test_a_note_is_placed_with_the_shape_the_app_declared () -> None:

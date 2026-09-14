@@ -222,6 +222,27 @@ def test_a_grid_declares_the_velocity_a_plain_tap_takes () -> None:
 		superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, default_velocity=0)
 
 
+def test_a_step_grid_says_where_a_panel_s_window_opens () -> None:
+	"""The same field a note grid and a pitch set carry, for the same reason (#2108).
+
+	A kit of forty voices is as tall as two octaves of pitches, and a window opens at
+	the lowest rows whichever it is holding.
+	"""
+
+	composition = FakeComposition()
+
+	assert "opens_at" not in superconductor.subsequence_adapter.StepGrid(
+		composition, rows=ROWS, steps=16).declaration(), "a grid that says nothing declares nothing"
+
+	asked = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=ROWS, steps=16, visible_rows=1, opens_at="snare")
+
+	assert asked.declaration()["opens_at"] == "snare"
+
+	with pytest.raises(ValueError, match="not one of its rows"):
+		superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, opens_at="clap")
+
+
 def test_a_seed_written_as_lists_of_steps_is_read_at_the_default () -> None:
 	"""**The spelling every composition used before a step carried a velocity**, read
 	once when the grid is made so the composition's own play function finds one

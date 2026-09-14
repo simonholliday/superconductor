@@ -196,6 +196,32 @@ octave too high draws a grid that works perfectly and makes no sound.  Checked
 once at import, where it costs nothing and cannot be missed.
 """
 
+SHARED_RANGE = [midi_notes.note_to_name(note) for note in range(0, 128)]
+"""Every note MIDI has, which is what a grid belonging to no instrument may hold.
+
+**An instrument's grid is drawn over the register it is played in**, and that is
+this file's choice rather than the instrument's limit — the Minitaur reaches note
+72 and the Matriarch the whole of MIDI, while their grids here are two octaves
+each.  A grid with no instrument has no register of its own to be drawn over: it
+sounds as whatever it is patched into, so it holds everything and lets the
+patching decide (Simon, 2026-09-14, trying #2108 on the glass).
+"""
+
+SHARED_ROWS = list(reversed(SHARED_RANGE))
+"""The same notes drawn the way a stave is, highest first."""
+
+SHARED_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in SHARED_RANGE}
+"""Row names to MIDI notes, for a grid whose rows *are* notes."""
+
+SHARED_OPENS_AT = "C1"
+"""The row its window opens on, which is where this rig's bass register starts.
+
+**A window opens at a grid's lowest rows**, which is right for a grid drawn over
+one instrument and wrong for one drawn over all of MIDI: without this the shared
+line would open on C-1, two octaves below anything here sounds, and a bassline
+would be found by scrolling on every load (contract 1.38.0).
+"""
+
 BASS_ROWS = list(reversed(BASS_RANGE))
 """The same notes in the order they are drawn, which is top to bottom.
 
@@ -998,7 +1024,7 @@ def _play_shared_notes (p: typing.Any) -> None:
 	for row, notes in shared_notes.now(p).items():
 		for at, note in notes.items():
 			p.note(
-				BASS_NOTE_MAP[row], beat=int(at) * beats_per_position,
+				SHARED_NOTE_MAP[row], beat=int(at) * beats_per_position,
 				velocity=note.get("velocity", BASS_VELOCITY),
 				duration=note.get("length", BASS_LENGTH) * beats_per_position)
 
@@ -1276,14 +1302,13 @@ rows meant something else would be a different declaration in this file.
 """
 
 shared_notes_recipe = _stack_for("shared_notes", "shared_notes_recipe", "Shared — notes stack",
-                                 BASS_ROWS, pitch_notes=BASS_NOTE_MAP)
+                                 SHARED_ROWS, pitch_notes=SHARED_NOTE_MAP)
 """And on the shared line, where the rows are notes rather than voices.
 
 The stack above says a shared grid whose rows meant something else would be a
 different declaration in this file.  This is that declaration: the same mechanism
-with the Minitaur's twenty-five notes as its pool, so a euclidean added here
-writes a bassline both synths then play — and neither has to be the one that owns
-it.
+and its pool is every note MIDI has, so a euclidean added here writes a line both
+synths then play — and neither of them is the one that owns it.
 """
 
 snare_recipe = _stack_for(
@@ -1426,19 +1451,18 @@ refer to.
 
 
 shared_notes = superconductor.subsequence_adapter.NoteGrid(
-	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
+	composition, rows=SHARED_ROWS, steps=STEPS, beats=BEATS,
 	data_key="shared_notes", name="shared_notes", title="Shared — notes",
 	divisions=BASS_DIVISIONS, about=[("", "no instrument")],
 	default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
-	visible_rows=12)
+	visible_rows=12, opens_at=SHARED_OPENS_AT)
 """A line with no instrument behind it, which either synth can take (#2108).
 
-**Drawn over the Minitaur's two octaves, C1 to C3.**  The two instrument grids sit
-a register apart on purpose — the bass is drawn C1 to C3 and the chords C3 to C5 —
-but that is how each is *drawn*, not what its instrument can sound: the Minitaur
-reaches note 72 and the Matriarch the whole of MIDI.  A register both can play is
-what makes one line worth sharing, and it is the bass register because that is
-the case Simon asked for.
+**Drawn over the whole of MIDI, and opening at C1.**  It was the Minitaur's two
+octaves first, and Simon put that right on the glass: a grid with no instrument
+should not inherit one instrument's drawn register, and C1 to C3 could not even
+reach the Matriarch grid's C3 to C5.  What a note sounds like belongs to whatever
+it is patched into.
 
 **No pattern of its own, so no length of its own** (#2548): like every routed grid
 here it plays at the resolution of whatever borrowed it.
