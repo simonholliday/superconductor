@@ -84,7 +84,7 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 
 	asks: list[tuple[str, str, object]] = []
 
-	racks_first = sorted(state, key=lambda control: (declared.get(control) or {}).get("type") != "grids")
+	racks_first = sorted(state, key=lambda control: (declared.get(control) or {}).get("type") != "rack")
 
 	for control in racks_first:
 		held = state[control]

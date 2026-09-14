@@ -789,6 +789,79 @@ for _one in INSTRUMENTS:
 	_register_pattern(_one)
 
 
+# --- Keyboards, made from the glass ---------------------------------------
+
+KEYS = [midi_notes.note_to_name(note)
+        for note in range(midi_notes.name_to_note("A0"), midi_notes.name_to_note("C8") + 1)]
+"""A piano's eighty-eight keys, belonging to no instrument.
+
+**A register of its own on purpose.**  A keyboard here is patched into whatever
+wants notes — an arpeggio on the Minitaur reaching C1 to C3, another on the
+Matriarch reaching C3 to C5 — and picking either instrument's register would make
+the set worse for the other.  Each consumer folds a choice into its own reach
+(``Recipe._folded``), so a wide pool costs nothing downstream.
+"""
+
+KEYBOARDS = "keyboards"
+
+
+def _make_keyboard (spec: dict[str, typing.Any]) -> typing.Any:
+	"""Turn one asked-for keyboard into a set of pitches that anything may read.
+
+	**Everything the package is not allowed to know is decided here** (#1465):
+	that a keyboard holds pitches rather than steps, which pitches exist, and what
+	note each name sounds.  The rack holds a list and knows how long it is.
+
+	**Numbered by where it sits**, because there is no text entry on this panel and
+	there should not be: a control that cannot be worked with one finger on glass,
+	with no keyboard attached, is a defect.  Two keyboards are told apart by their
+	number and by what is chosen on them.
+	"""
+
+	key = str(spec["id"])
+	held = (composition.data.get(KEYBOARDS) or {}).get("made") or []
+	at = next((n for n, one in enumerate(held) if one["id"] == key), len(held))
+
+	return adapter.PitchSet(
+		composition,
+		name=f"{KEYBOARDS}-{key}",
+		title=f"Keyboard {at + 1}",
+		pitches={row: midi_notes.name_to_note(row) for row in KEYS},
+		about=[("", "no instrument")],
+		opens_at="C3")
+
+
+keyboards = adapter.Rack(
+	composition,
+	make=_make_keyboard,
+
+	# **Nothing to choose and no length to set**, so making one is a single press.
+	# A set of pitches holds notes rather than time, and which notes it holds is
+	# chosen on the keyboard itself afterwards rather than described in a form.
+	steps=None,
+	makes="keyboard",
+	data_key=KEYBOARDS,
+	name=KEYBOARDS,
+	title="Keyboards",
+	about=[("", "patch into any generator")])
+"""Keyboards a person makes from the glass, as many as the music wants (#2226).
+
+**Simon's question of 2026-09-14, answered generally rather than for this case**:
+*"For something generic like a keyboard source, which might feed any instrument,
+should we have a way of creating a new instance on the interface?  Or does it
+have to be defined up-front, in the composition?"*
+
+It does not.  A rack has always been the asking, and until contract 1.41.0 the
+only asking anybody had written was shaped like a grid.
+
+**Why more than one is worth having.**  A pitch pool typed into an arpeggio layer
+belongs to that layer; one held here can feed an arpeggio on the Minitaur and
+another on the Matriarch, and the two cannot drift apart because there is one of
+it.  Several keyboards are several such pools — a verse and a chorus — each fed
+wherever it is patched.
+"""
+
+
 # --- The glass ------------------------------------------------------------
 
 DRUMS = ("drm1", "tr8s")
@@ -809,13 +882,15 @@ link = adapter.AppLink(
 		*GRIDS.values(),
 		*STACKS.values(),
 		*(one for one in SETTINGS.values() if one is not None),
+		keyboards,
 		adapter.Transport(composition),
 	],
 	pages=[
-		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS], title="Ensemble"),
+		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS] + [KEYBOARDS],
+		             title="Ensemble"),
 		adapter.Page("drums", parts=list(DRUMS), title="Drums"),
-		adapter.Page("synths", parts=list(SYNTHS), title="Synths"),
-		adapter.Page("bass", parts=list(BASS), title="Bass"),
+		adapter.Page("synths", parts=list(SYNTHS) + [KEYBOARDS], title="Synths"),
+		adapter.Page("bass", parts=list(BASS) + [KEYBOARDS], title="Bass"),
 	],
 	page_store=adapter.PageStore(PAGE_FILE),
 	pattern_store=adapter.PatternStore(PATTERN_FILE),

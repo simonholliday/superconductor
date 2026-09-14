@@ -920,7 +920,7 @@ def test_starting_a_link_survives_a_control_that_registers_more_controls (
 	"""
 
 	composition = FakeComposition()
-	rack = superconductor.subsequence_adapter.GridRack(
+	rack = superconductor.subsequence_adapter.Rack(
 		composition,
 		make=lambda spec: superconductor.subsequence_adapter.StepGrid(
 			composition, rows=spec["rows"], steps=spec["steps"],
@@ -928,7 +928,7 @@ def test_starting_a_link_survives_a_control_that_registers_more_controls (
 		rows=ROWS, data_key="rack", name="rack")
 
 	# What a page store puts back: one grid, made before any of this started.
-	composition.data["rack"] = {"grids": [{"id": "a", "rows": ["kick"], "steps": 8}]}
+	composition.data["rack"] = {"made": [{"id": "a", "rows": ["kick"], "steps": 8}]}
 
 	link = superconductor.subsequence_adapter.AppLink(composition, controls=[rack])
 
@@ -939,7 +939,7 @@ def test_starting_a_link_survives_a_control_that_registers_more_controls (
 
 	assert rack.link is link, "the walk never reached the rack"
 	assert "rack-a" in link.controls, "the grid the rack put back never reached the link"
-	assert rack.made() == ["rack-a"], "the rack does not know what it put there"
+	assert rack.names() == ["rack-a"], "the rack does not know what it put there"
 
 
 def test_a_request_that_changed_nothing_is_still_answered () -> None:

@@ -93,7 +93,7 @@ CONTROLS: dict[str, typing.Any] = {
 	         ]},
 	# A rack: its value is the grids somebody made, and the grids themselves
 	# arrive as ordinary declared controls on the app's next declaration (#2226).
-	"rack": {"type": "grids", "title": "Made here",
+	"rack": {"type": "rack", "makes": "grid", "title": "Made here",
 	         "rows": ["kick", "snare", "clap"],
 	         "min_steps": 1, "max_steps": 32, "opening_steps": 16},
 
@@ -359,7 +359,7 @@ STATE: dict[str, typing.Any] = {
 	                "6": {"length": 2, "velocity": 100}},
 	         "end": 4, "resync": False},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
-	"rack": {"grids": []},
+	"rack": {"made": []},
 	"notes": {"chosen": ["C4", "D#4"], "enabled": True},
 	"stack": {"layers": [
 		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,

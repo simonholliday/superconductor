@@ -1407,7 +1407,7 @@ def _unmake_grid (name: str) -> None:
 	SHARED.pop(name, None)
 
 
-made_grids = superconductor.subsequence_adapter.GridRack(
+made_grids = superconductor.subsequence_adapter.Rack(
 	composition,
 	make=_make_grid,
 	unmake=_unmake_grid,

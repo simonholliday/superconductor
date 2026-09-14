@@ -4867,8 +4867,8 @@ class Recipe (Control):
 		self.link.happened("stalled", control=self.name, layers=dict(self._failing))
 
 
-class GridRack (Control):
-	"""Grids a person makes from the glass, the way a stack makes layers (#2226).
+class Rack (Control):
+	"""Things a person makes from the glass, the way a stack makes layers (#2226).
 
 	Simon asked whether a grid could be created from nothing, with a size chosen
 	at the time.  **It can, and less was missing than it looked.**  There is no
@@ -4879,15 +4879,29 @@ class GridRack (Control):
 
 	**The shape is a rack, deliberately parallel to a stack.**  Its value is an
 	ordered list of specifications, each with an id that lives as long as the
-	grid does; the panel adds, removes and reorders exactly as it does layers.
+	thing does; the panel adds, removes and reorders exactly as it does layers.
 	Nothing new crosses the wire but a control kind.
 
-	**What a grid *is* stays the composition's** (#1465).  This holds a list and
-	knows how long it is; it is handed a ``make`` that turns one specification
+	**What a made thing *is* stays the composition's** (#1465).  This holds a list
+	and knows how long it is; it is handed a ``make`` that turns one specification
 	into a control, and that function is where the step duration, the note map,
 	the channel and whether the thing is routable are decided — none of which
 	this package is allowed to know.  A rack that built its own `StepGrid` would
 	be a rack that had opinions about a studio.
+
+	**And it makes whatever that composition makes** (contract 1.41.0).  It was a
+	rack *of grids* for as long as grids were the only thing anybody had asked to
+	make, and the mechanism was never grid-shaped — only the asking was, which
+	Simon found on 2026-09-14 wanting a keyboard to feed an arpeggiator: *"For
+	something generic like a keyboard source, which might feed any instrument,
+	should we have a way of creating a new instance on the interface?"*
+
+	``makes`` is the composition's own word for what the button produces — *grid*,
+	*keyboard* — and is what the glass says.  ``steps`` is the length its sheet
+	asks for and is **absent for a thing that has no length**, which is what a set
+	of pitches is: it holds notes rather than time.  ``rows`` is the pool the
+	sheet offers to choose from, and is empty where there is nothing to choose and
+	making one is a single press.
 
 	**Persistence is the real cost and it is worse than a lost pattern** (#2067).
 	Without a store a restart would discard the grid's *existence*, which is a
@@ -4901,16 +4915,17 @@ class GridRack (Control):
 	that can be started again from the file.
 	"""
 
-	kind = "grids"
+	kind = "rack"
 
 	def __init__ (
 		self,
 		composition: typing.Any,
 		make: collections.abc.Callable[[dict[str, typing.Any]], Control],
-		rows: collections.abc.Sequence[str],
+		rows: collections.abc.Sequence[str] = (),
 		unmake: collections.abc.Callable[[str], None] | None = None,
-		steps: tuple[int, int] = (1, 32),
+		steps: tuple[int, int] | None = (1, 32),
 		opening_steps: int = 16,
+		makes: str = "grid",
 		data_key: str = "rack",
 		name: str = "rack",
 		title: str | None = None,
@@ -4936,8 +4951,25 @@ class GridRack (Control):
 		"""
 
 		self.rows = list(rows)
+
 		self.steps = steps
+		"""How long a made thing may be, or None where it has no length at all.
+
+		**None is not a floor of zero.**  A set of pitches holds notes rather than
+		time, so its sheet has no length to ask about and its specifications carry
+		none — where a grid of no steps would be a grid nobody can aim at.
+		"""
+
 		self.opening_steps = opening_steps
+
+		self.makes = makes
+		"""The composition's own word for what this rack produces.
+
+		Read on the glass and nowhere else: *make a keyboard* is a sentence this
+		package could not write, because it does not know that a keyboard is one
+		(#1465).  It is handed the word and says it.
+		"""
+
 		self.data_key = data_key
 		self.name = name
 		self.title = title
@@ -4957,36 +4989,45 @@ class GridRack (Control):
 	def declaration (self) -> dict[str, typing.Any]:
 		"""What a panel needs in order to offer a new grid and draw the rack."""
 
-		return {
+		declared: dict[str, typing.Any] = {
 			"type": self.kind,
+			"makes": self.makes,
 			"rows": self.rows,
-			"min_steps": self.steps[0],
-			"max_steps": self.steps[1],
-			"opening_steps": self.opening_steps,
 			**self.said(),
 		}
 
+		# **Left out rather than sent as null for a thing with no length**, the way
+		# a bound a composition never declared is: a sheet drawing a length nobody
+		# asked for is a row that does nothing, which is the silence this package
+		# refuses everywhere else.
+		if self.steps is not None:
+			declared["min_steps"] = self.steps[0]
+			declared["max_steps"] = self.steps[1]
+			declared["opening_steps"] = self.opening_steps
+
+		return declared
+
 	def snapshot (self) -> typing.Any:
-		"""Every grid this rack has been asked for, in the order it holds them."""
+		"""Everything this rack has been asked for, in the order it holds them."""
 
-		return {"grids": self.grids()}
+		return {"made": self.entries()}
 
-	def grids (self) -> list[dict[str, typing.Any]]:
+	def entries (self) -> list[dict[str, typing.Any]]:
 		"""The specifications as they stand."""
 
 		held = self.composition.data.get(self.data_key) or {}
 
-		return list(held.get("grids") or [])
+		return list(held.get("made") or [])
 
-	def made (self) -> list[str]:
+	def names (self) -> list[str]:
 		"""What this rack has put on the link, by control name and in its order.
 
-		Read by the link when it declares its pages: a grid is drawn wherever
-		the rack that made it is drawn, so a page carrying the rack carries its
-		grids too.
+		Read by the link when it declares its pages: a made thing is drawn wherever
+		the rack that made it is drawn, so a page carrying the rack carries them
+		too.
 		"""
 
-		return [self._made[one["id"]] for one in self.grids() if one["id"] in self._made]
+		return [self._made[one["id"]] for one in self.entries() if one["id"] in self._made]
 
 	def attach (self, link: "AppLink") -> None:
 		"""Take the link, and put back whatever was made before this started."""
@@ -4997,109 +5038,117 @@ class GridRack (Control):
 	def apply (self, rest: list[str], value: typing.Any) -> bool:
 		"""Take a whole rack, checked entire before any of it is kept."""
 
-		if rest != ["grids"]:
+		if rest != ["made"]:
 			raise Refused(f"a rack has no {'/'.join(rest)}")
 
 		if not isinstance(value, list):
-			raise Refused("a rack is a list of grids")
+			raise Refused(f"a rack is a list of the {self.makes}s it made")
 
 		wanted: list[dict[str, typing.Any]] = []
 		seen: set[str] = set()
 
 		for entry in value:
-			wanted.append(self._checked_grid(entry, seen))
+			wanted.append(self._checked_entry(entry, seen))
 
-		return self._put_grids(wanted)
+		return self._put_entries(wanted)
 
-	def _checked_grid (self, entry: typing.Any, seen: set[str]) -> dict[str, typing.Any]:
+	def _checked_entry (self, entry: typing.Any, seen: set[str]) -> dict[str, typing.Any]:
 		"""One specification, as this rack would keep it, or refused with a reason.
 
-		*seen* holds the ids already taken in the same list, so two grids cannot
-		share one — the name a grid is drawn and routed by is made from it.
+		*seen* holds the ids already taken in the same list, so two cannot share
+		one — the name a made thing is drawn and routed by is made from it.
+
+		**Only what this rack actually asks for is kept.**  A rack with no length
+		keeps no length, and one with nothing to choose from keeps no rows, so a
+		specification never carries a field that means nothing to what it becomes.
 		"""
 
 		if not isinstance(entry, dict):
-			raise Refused("a grid is an object")
+			raise Refused(f"a {self.makes} is an object")
 
 		one = str(entry.get("id") or "")
 
 		if not one:
-			raise Refused("a grid needs an id of its own")
+			raise Refused(f"a {self.makes} needs an id of its own")
 
 		if one in seen:
-			raise Refused(f"two grids both call themselves {one}")
+			raise Refused(f"two {self.makes}s both call themselves {one}")
 
-		checked = {
+		checked: dict[str, typing.Any] = {
 			"id": one,
-			"rows": self._checked_rows(entry.get("rows")),
-			"steps": self._checked_steps(entry.get("steps")),
 			"title": str(entry["title"]) if entry.get("title") else None,
 		}
+
+		if self.rows:
+			checked["rows"] = self._checked_rows(entry.get("rows"))
+
+		if self.steps is not None:
+			checked["steps"] = self._checked_steps(entry.get("steps"))
 
 		seen.add(one)
 
 		return checked
 
-	def _put_grids (self, wanted: list[dict[str, typing.Any]]) -> bool:
+	def _put_entries (self, wanted: list[dict[str, typing.Any]]) -> bool:
 		"""Hold exactly *wanted*, make and unmake to match, and say whether it moved."""
 
-		if self.grids() == wanted:
+		if self.entries() == wanted:
 			return False
 
-		self.composition.data.setdefault(self.data_key, {})["grids"] = wanted
+		self.composition.data.setdefault(self.data_key, {})["made"] = wanted
 		self._materialise()
 
 		return True
 
 	def kept (self) -> dict[str, typing.Any]:
-		"""Every grid somebody asked for, in order (#2487).
+		"""Everything somebody asked this rack for, in order (#2487).
 
-		What is drawn on each is the grid's own to keep, under its own name, and
-		comes back once this rack has made it again.
+		What is held on each is its own to keep, under its own name, and comes
+		back once this rack has made it again.
 		"""
 
-		return {"grids": self.grids()}
+		return {"made": self.entries()}
 
 	def restore (self, kept: typing.Any) -> list[str]:
-		"""Make every grid that was kept, one at a time, and unmake the rest.
+		"""Make everything that was kept, one at a time, and unmake the rest.
 
-		One at a time because each grid stands alone: a row this rack no longer
-		offers costs that grid, not every grid a person made.
+		One at a time because each stands alone: a row this rack no longer offers
+		costs that one, not everything a person made.
 		"""
 
-		if not isinstance(kept, dict) or not isinstance(kept.get("grids"), list):
-			return [f"{self.name} was kept as something other than a list of grids"]
+		if not isinstance(kept, dict) or not isinstance(kept.get("made"), list):
+			return [f"{self.name} was kept as something other than a list of what it made"]
 
 		refused: list[str] = []
 		wanted: list[dict[str, typing.Any]] = []
 		seen: set[str] = set()
 
-		for entry in kept["grids"]:
+		for entry in kept["made"]:
 			try:
-				wanted.append(self._checked_grid(entry, seen))
+				wanted.append(self._checked_entry(entry, seen))
 
 			except Refused as refusal:
 				refused.append(f"{self.name}: {refusal}")
 
-		self._put_grids(wanted)
+		self._put_entries(wanted)
 
 		return refused
 
 	def applied (self, rest: list[str], value: typing.Any) -> typing.Any:
 		"""What the rack now holds, which is the whole list."""
 
-		return self.grids()
+		return self.entries()
 
 	def _checked_rows (self, rows: typing.Any) -> list[str]:
 		"""The rows asked for, which must all be ones this rack was offered.
 
-		A grid of no rows is refused rather than floored, because unlike a
-		height there is no gesture that gets it back: an empty grid draws
-		nothing to aim at.
+		One of no rows is refused rather than floored, because unlike a height
+		there is no gesture that gets it back: an empty grid draws nothing to aim
+		at.  A rack offering no rows at all never reaches here — it keeps none.
 		"""
 
 		if not isinstance(rows, list) or not rows:
-			raise Refused("a grid needs at least one row")
+			raise Refused(f"a {self.makes} needs at least one row")
 
 		named = [str(row) for row in rows]
 		strange = [row for row in named if row not in self.rows]
@@ -5116,12 +5165,13 @@ class GridRack (Control):
 			wanted = int(steps)
 
 		except (TypeError, ValueError):
-			raise Refused("a grid's steps must be a whole number") from None
+			raise Refused(f"a {self.makes}'s steps must be a whole number") from None
 
+		assert self.steps is not None
 		low, high = self.steps
 
 		if not low <= wanted <= high:
-			raise Refused(f"a grid may be {low} to {high} steps, not {wanted}")
+			raise Refused(f"a {self.makes} may be {low} to {high} steps, not {wanted}")
 
 		return wanted
 
@@ -5143,7 +5193,7 @@ class GridRack (Control):
 			return
 
 		link = self.link
-		wanted = {one["id"]: one for one in self.grids()}
+		wanted = {one["id"]: one for one in self.entries()}
 
 		gone = {one: name for one, name in self._made.items() if one not in wanted}
 		fresh: dict[str, typing.Any] = {}
@@ -6081,7 +6131,7 @@ class AppLink:
 		"""
 
 		refused: list[str] = []
-		racks = [name for name, control in self.controls.items() if isinstance(control, GridRack)]
+		racks = [name for name, control in self.controls.items() if isinstance(control, Rack)]
 
 		for name in racks:
 			if name in kept:
@@ -6721,8 +6771,8 @@ class AppLink:
 		kept = self.page_store.load() if self.page_store is not None else {}
 
 		# What each rack has made, so a page carrying the rack carries its grids.
-		made = {control.name: control.made()
-		        for control in self.controls.values() if isinstance(control, GridRack)}
+		made = {control.name: control.names()
+		        for control in self.controls.values() if isinstance(control, Rack)}
 
 		for control in self.controls.values():
 			control.declared()

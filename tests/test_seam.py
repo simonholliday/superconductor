@@ -610,7 +610,7 @@ def _rack () -> typing.Any:
 
 			change()
 
-	rack = adapter.GridRack(
+	rack = adapter.Rack(
 		Composition(),
 		make=lambda spec: adapter.StepGrid(
 			Composition(), rows=spec["rows"], steps=spec["steps"],
@@ -642,7 +642,7 @@ def test_a_rack_of_grids_and_the_service_agree (value: typing.Any) -> None:
 	a grid of a different length from one that stayed connected.
 	"""
 
-	_agree(_rack(), ["grids"], value)
+	_agree(_rack(), ["made"], value)
 
 
 def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
@@ -659,19 +659,19 @@ def test_a_rack_refuses_at_both_ends_or_at_neither () -> None:
 	nameless = [{"rows": ["kick"], "steps": 8}]
 
 	with pytest.raises(adapter.Refused):
-		rack.apply(["grids"], nameless)
+		rack.apply(["made"], nameless)
 
 	with pytest.raises(superconductor.controls.ControlError):
-		superconductor.controls.apply_change(held, declared, "rack/grids", nameless)
+		superconductor.controls.apply_change(held, declared, "rack/made", nameless)
 
 	twice = [{"id": "a", "rows": ["kick"], "steps": 8},
 	         {"id": "a", "rows": ["snare"], "steps": 8}]
 
 	with pytest.raises(adapter.Refused):
-		rack.apply(["grids"], twice)
+		rack.apply(["made"], twice)
 
 	with pytest.raises(superconductor.controls.ControlError):
-		superconductor.controls.apply_change(held, declared, "rack/grids", twice)
+		superconductor.controls.apply_change(held, declared, "rack/made", twice)
 
 
 # --- A cable, which is the one value shape whose policy was written twice ------

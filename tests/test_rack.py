@@ -69,10 +69,10 @@ def _made (spec: dict[str, typing.Any]) -> typing.Any:
 		title=spec.get("title") or "Grid")
 
 
-def _rack () -> tuple[adapter.GridRack, Link]:
+def _rack () -> tuple[adapter.Rack, Link]:
 	"""A rack over three voices, attached to a link."""
 
-	rack = adapter.GridRack(
+	rack = adapter.Rack(
 		Composition(), make=_made, rows=ROWS, steps=(1, 32),
 		data_key="rack", name="rack")
 
@@ -89,6 +89,107 @@ def _grid (one: str = "a", rows: list[str] | None = None,
 	return {"id": one, "rows": rows or ["kick"], "steps": steps}
 
 
+def _kept () -> tuple[adapter.Rack, Link]:
+	"""A rack that makes something with no length and nothing to choose.
+
+	Which is what a set of pitches is: it holds notes rather than time, and which
+	notes it holds is chosen on the thing itself rather than described in a form.
+	"""
+
+	rack = adapter.Rack(
+		Composition(), make=_a_set, steps=None, makes="keyboard",
+		data_key="keys", name="keys")
+
+	link = Link()
+	rack.attach(typing.cast(typing.Any, link))
+
+	return rack, link
+
+
+def _a_set (spec: dict[str, typing.Any]) -> typing.Any:
+	"""What this composition makes of one specification, which is a set of pitches."""
+
+	return adapter.PitchSet(
+		Composition(), name=f"keys-{spec['id']}", title="Keyboard",
+		pitches={"C4": 60, "E4": 64, "G4": 67})
+
+
+def test_a_rack_says_what_it_makes_in_the_app_s_own_word () -> None:
+	"""**The panel cannot write *make a keyboard*** because it does not know that a
+	keyboard is one (#1465), so the word travels with the declaration.
+
+	Simon, 2026-09-14, of an arpeggiator with nothing to feed it: *"For something
+	generic like a keyboard source, which might feed any instrument, should we have
+	a way of creating a new instance on the interface?"*
+	"""
+
+	assert _rack()[0].declaration()["makes"] == "grid"
+	assert _kept()[0].declaration()["makes"] == "keyboard"
+
+
+def test_a_rack_that_makes_something_with_no_length_declares_none () -> None:
+	"""**Absent rather than sent as a floor**, the way a bound nobody declared is:
+	a sheet drawing a length for a thing that has none is a row that does nothing,
+	which is the silence this package refuses everywhere else."""
+
+	declared = _kept()[0].declaration()
+
+	assert "min_steps" not in declared, declared
+	assert "max_steps" not in declared
+	assert "opening_steps" not in declared
+	assert declared["rows"] == [], "a rack with nothing to choose from offered a choice"
+
+
+def test_making_one_of_those_needs_nothing_but_an_id () -> None:
+	"""One press, because there is nothing to describe: no rows to pick and no
+	length to set.  What it holds is chosen on the keyboard itself afterwards."""
+
+	rack, link = _kept()
+
+	assert rack.apply(["made"], [{"id": "a"}]) is True
+	assert rack.entries() == [{"id": "a", "title": None}], rack.entries()
+	assert sorted(link.controls) == ["keys-a"]
+
+
+def test_a_specification_never_carries_a_field_that_means_nothing_to_it () -> None:
+	"""A rack keeps what it asks for and drops the rest, so a length sent to a rack
+	that has none does not come back as one — which would be a stored fact nothing
+	reads and everything has to keep agreeing about."""
+
+	rack, _ = _kept()
+	rack.apply(["made"], [{"id": "a", "steps": 16, "rows": ["kick"]}])
+
+	assert rack.entries() == [{"id": "a", "title": None}], rack.entries()
+
+
+def test_a_rack_refuses_in_the_words_of_what_it_makes () -> None:
+	"""A refusal is read on the glass by somebody who has just pressed *add
+	keyboard*, so it has to say *keyboard* (#2403)."""
+
+	rack, _ = _kept()
+
+	with pytest.raises(adapter.Refused, match="a keyboard needs an id of its own"):
+		rack.apply(["made"], [{}])
+
+	with pytest.raises(adapter.Refused, match="two keyboards both call themselves"):
+		rack.apply(["made"], [{"id": "a"}, {"id": "a"}])
+
+
+def test_what_a_rack_made_comes_back_across_a_restart () -> None:
+	"""Without this a restart would discard the thing's *existence*, which is a
+	person losing something they made rather than something they played (#2067)."""
+
+	rack, _ = _kept()
+	rack.apply(["made"], [{"id": "a"}, {"id": "b"}])
+
+	again, link = _kept()
+	refused = again.restore(rack.kept())
+
+	assert refused == []
+	assert [one["id"] for one in again.entries()] == ["a", "b"]
+	assert sorted(link.controls) == ["keys-a", "keys-b"]
+
+
 def test_a_rack_offers_the_rows_a_grid_may_be_made_from () -> None:
 	"""Which rows exist is a fact about a studio, so the composition says it and
 	this repeats it — the same join a stack's pitches make (#1465, #2085)."""
@@ -96,7 +197,7 @@ def test_a_rack_offers_the_rows_a_grid_may_be_made_from () -> None:
 	rack, _ = _rack()
 	declared = rack.declaration()
 
-	assert declared["type"] == "grids"
+	assert declared["type"] == "rack"
 	assert declared["rows"] == ROWS
 	assert (declared["min_steps"], declared["max_steps"]) == (1, 32)
 
@@ -108,7 +209,7 @@ def test_asking_for_a_grid_puts_a_control_on_the_link () -> None:
 
 	rack, link = _rack()
 
-	assert rack.apply(["grids"], [_grid("a", ["snare"], 9)]) is True
+	assert rack.apply(["made"], [_grid("a", ["snare"], 9)]) is True
 
 	made = [name for name in link.controls if name.startswith("rack-")]
 
@@ -123,12 +224,12 @@ def test_a_grid_that_leaves_the_list_leaves_the_link () -> None:
 	draws a block for a grid that is not in the rack."""
 
 	rack, link = _rack()
-	rack.apply(["grids"], [_grid("a"), _grid("b")])
+	rack.apply(["made"], [_grid("a"), _grid("b")])
 
 	assert sorted(name for name in link.controls if name.startswith("rack-")) == [
 		"rack-a", "rack-b"]
 
-	rack.apply(["grids"], [_grid("b")])
+	rack.apply(["made"], [_grid("b")])
 
 	assert [name for name in link.controls if name.startswith("rack-")] == ["rack-b"]
 
@@ -138,11 +239,11 @@ def test_a_grid_that_stays_is_not_rebuilt () -> None:
 	change to the list would empty a grid because its neighbour was removed."""
 
 	rack, link = _rack()
-	rack.apply(["grids"], [_grid("a"), _grid("b")])
+	rack.apply(["made"], [_grid("a"), _grid("b")])
 
 	was = link.controls["rack-a"]
 
-	rack.apply(["grids"], [_grid("a"), _grid("b"), _grid("c")])
+	rack.apply(["made"], [_grid("a"), _grid("b"), _grid("c")])
 
 	assert link.controls["rack-a"] is was
 
@@ -154,7 +255,7 @@ def test_a_row_this_rack_never_offered_is_refused () -> None:
 	rack, _ = _rack()
 
 	with pytest.raises(adapter.Refused, match="tom"):
-		rack.apply(["grids"], [_grid("a", ["tom"])])
+		rack.apply(["made"], [_grid("a", ["tom"])])
 
 
 def test_a_grid_of_no_rows_is_refused_rather_than_made_empty () -> None:
@@ -164,7 +265,7 @@ def test_a_grid_of_no_rows_is_refused_rather_than_made_empty () -> None:
 	rack, _ = _rack()
 
 	with pytest.raises(adapter.Refused):
-		rack.apply(["grids"], [{"id": "a", "rows": [], "steps": 16}])
+		rack.apply(["made"], [{"id": "a", "rows": [], "steps": 16}])
 
 
 def test_a_length_outside_the_bounds_is_refused () -> None:
@@ -174,7 +275,7 @@ def test_a_length_outside_the_bounds_is_refused () -> None:
 	rack, _ = _rack()
 
 	with pytest.raises(adapter.Refused, match="1 to 32"):
-		rack.apply(["grids"], [_grid("a", steps=64)])
+		rack.apply(["made"], [_grid("a", steps=64)])
 
 
 def test_two_grids_of_one_name_are_refused_entire () -> None:
@@ -182,12 +283,12 @@ def test_two_grids_of_one_name_are_refused_entire () -> None:
 	rather than half-applied."""
 
 	rack, link = _rack()
-	rack.apply(["grids"], [_grid("a")])
+	rack.apply(["made"], [_grid("a")])
 
 	with pytest.raises(adapter.Refused, match="both call themselves"):
-		rack.apply(["grids"], [_grid("b"), _grid("b")])
+		rack.apply(["made"], [_grid("b"), _grid("b")])
 
-	assert [one["id"] for one in rack.grids()] == ["a"]
+	assert [one["id"] for one in rack.entries()] == ["a"]
 
 
 def test_the_same_list_again_changes_nothing () -> None:
@@ -195,10 +296,10 @@ def test_the_same_list_again_changes_nothing () -> None:
 	every open panel would have to read."""
 
 	rack, link = _rack()
-	rack.apply(["grids"], [_grid("a")])
+	rack.apply(["made"], [_grid("a")])
 	before = link.said
 
-	assert rack.apply(["grids"], [_grid("a")]) is False
+	assert rack.apply(["made"], [_grid("a")]) is False
 	assert link.said == before
 
 
@@ -213,12 +314,12 @@ def test_what_somebody_made_comes_back_after_a_restart () -> None:
 	"""
 
 	rack, _ = _rack()
-	rack.apply(["grids"], [_grid("a", ["snare"], 9)])
+	rack.apply(["made"], [_grid("a", ["snare"], 9)])
 
 	again, link = _rack()
 
 	assert again.restore(rack.kept()) == []
-	assert [one["id"] for one in again.grids()] == ["a"]
+	assert [one["id"] for one in again.entries()] == ["a"]
 	assert link.controls["rack-a"].steps == 9
 
 
@@ -227,16 +328,16 @@ def test_a_kept_grid_the_rack_no_longer_offers_costs_that_grid_alone () -> None:
 	costs the grid that used it and not every grid a person made."""
 
 	rack, _ = _rack()
-	rack.apply(["grids"], [_grid("a", ["snare"]), _grid("b", ["kick"])])
+	rack.apply(["made"], [_grid("a", ["snare"]), _grid("b", ["kick"])])
 
 	kept = rack.kept()
-	kept["grids"][0]["rows"] = ["cowbell"]
+	kept["made"][0]["rows"] = ["cowbell"]
 
 	again, link = _rack()
 	refused = again.restore(kept)
 
 	assert len(refused) == 1 and "cowbell" in refused[0]
-	assert [one["id"] for one in again.grids()] == ["b"]
+	assert [one["id"] for one in again.entries()] == ["b"]
 	assert "rack-b" in link.controls
 
 
@@ -251,16 +352,16 @@ def test_a_grid_that_goes_is_unmade_as_well_as_undeclared () -> None:
 
 	undone: list[str] = []
 
-	rack = adapter.GridRack(
+	rack = adapter.Rack(
 		Composition(), make=_made, unmake=undone.append, rows=ROWS,
 		data_key="rack", name="rack")
 
 	rack.attach(typing.cast(typing.Any, Link()))
-	rack.apply(["grids"], [_grid("a"), _grid("b")])
+	rack.apply(["made"], [_grid("a"), _grid("b")])
 
 	assert undone == [], "nothing has gone yet"
 
-	rack.apply(["grids"], [_grid("b")])
+	rack.apply(["made"], [_grid("b")])
 
 	assert undone == ["rack-a"]
 
@@ -271,8 +372,8 @@ def test_a_rack_with_nothing_to_undo_needs_no_undoing () -> None:
 	special case anywhere."""
 
 	rack, link = _rack()
-	rack.apply(["grids"], [_grid("a")])
-	rack.apply(["grids"], [])
+	rack.apply(["made"], [_grid("a")])
+	rack.apply(["made"], [])
 
 	assert [name for name in link.controls if name.startswith("rack-")] == []
 
@@ -308,18 +409,18 @@ def test_a_grid_is_put_on_the_link_by_the_link_and_not_by_the_clock () -> None:
 
 			self.waiting.append(change)
 
-	rack = adapter.GridRack(
+	rack = adapter.Rack(
 		Composition(), make=_made, rows=ROWS, steps=(1, 32), data_key="rack", name="rack")
 	link = Deferring()
 
 	rack.attach(typing.cast(typing.Any, link))
 
-	assert rack.apply(["grids"], [_grid("a")]) is True
+	assert rack.apply(["made"], [_grid("a")]) is True
 	assert link.controls == {}, "the clock loop resized the dict the link loop walks"
-	assert rack.made() == [], "and said it had made one before the link agreed"
+	assert rack.names() == [], "and said it had made one before the link agreed"
 
 	for change in link.waiting:
 		change()
 
 	assert "rack-a" in link.controls, "the grid never reached the link"
-	assert rack.made() == ["rack-a"], "the rack does not know what it put there"
+	assert rack.names() == ["rack-a"], "the rack does not know what it put there"

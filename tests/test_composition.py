@@ -872,7 +872,7 @@ def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
 
 	declared = rig.link.controls["made_grids"].declaration()
 
-	assert declared["type"] == "grids"
+	assert declared["type"] == "rack"
 	assert declared["max_steps"] == rig.STEPS
 	assert declared["rows"] == rig.ROWS
 

@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.40.0";
+const CONTRACT = "1.41.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -456,7 +456,7 @@ const GRIDS = ["step_grid", "note_grid"];
    kind added in Python and not here is a control the panel quietly stops
    drawing (#2420). */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe", "grids", "pitch_set"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -2884,24 +2884,31 @@ function Params ({ name, fields, values, cell, onSet }) {
  *
  * A row per grid, one row across, with the remove at the end where a close has
  * always been. */
-function Rack ({ made, onRemove }) {
+function Rack ({ made, makes = "grid", onRemove }) {
 	if (!made.length) {
-		return html`<div class="empty">No grids yet.</div>`;
+		return html`<div class="empty">No ${makes}s yet.</div>`;
 	}
+
+	/* **Named by what it is, and only then by what it holds.** A rack that asks
+	   about rows can name one by them; a rack that asks nothing has neither rows
+	   nor a length to show, so the word the app gave is the whole of the name and
+	   the order down the rack is what tells two apart. */
+	const nameOf = (one, at) => one.title
+		|| (one.rows && one.rows.length ? one.rows.join(", ") : `${makes} ${at + 1}`);
 
 	return html`
 		<div class="rack">
-			${made.map((grid) => html`
-				<div class="made" key=${grid.id}>
-					<b>${grid.title || grid.rows.join(", ")}</b>
+			${made.map((one, at) => html`
+				<div class="made" key=${one.id}>
+					<b>${nameOf(one, at)}</b>
 					<span class="spacer"></span>
-					<i>${grid.steps}</i>
+					${one.steps !== undefined && html`<i>${one.steps}</i>`}
 					<button
 						class="close" title="remove" aria-label="remove"
 						onPointerDown=${(event) => {
 							event.preventDefault();
 							event.stopPropagation();
-							onRemove(grid.id);
+							onRemove(one.id);
 						}}
 					><${Icon} of="close" /></button>
 				</div>`)}
@@ -2909,40 +2916,56 @@ function Rack ({ made, onRemove }) {
 }
 
 
-/* The sheet a grid is made in: which rows it has, and how long it is.
+/* The sheet a thing is made in: whatever the rack that makes it asks about.
  *
  * **A form rather than a list**, which is what makes it different from the sheet
- * that adds a generator.  There is nothing to pick from — a grid is described
- * rather than chosen — so the two fields are drawn with the same `Setting` a
+ * that adds a generator.  There is nothing to pick from — a thing is described
+ * rather than chosen — so each field is drawn with the same `Setting` a
  * generator's parameters use, and the only new thing is the button that commits.
  *
- * Held here rather than on the page, because a half-described grid is not a thing
- * the app should be told about: nothing crosses the wire until "make". */
-function NewGrid ({ rows, steps, onMake }) {
+ * **Both fields are the rack's to ask for** (contract 1.41.0).  A rack offering
+ * no rows has nothing to choose and this is one press; a rack with no `steps` is
+ * making something with no length — a set of pitches holds notes rather than time
+ * — and a length row drawn there would be one that does nothing.
+ *
+ * **And the word is the app's.**  This cannot write *make a keyboard*, because it
+ * does not know a keyboard is one: `makes` carries the word and this says it.
+ *
+ * Held here rather than on the page, because a half-described thing is not
+ * something the app should be told about: nothing crosses the wire until "make". */
+function NewThing ({ makes, rows, steps, onMake }) {
 	const [chosen, setChosen] = useState([]);
-	const [length, setLength] = useState(steps.opening);
+	const [length, setLength] = useState(steps ? steps.opening : null);
 
 	const field = { kind: "choices", options: rows.map((row) => ({ value: row, label: row })) };
-	const size = { kind: "number", min: steps.low, max: steps.high, step: 1 };
+	const size = steps && { kind: "number", min: steps.low, max: steps.high, step: 1 };
+	const enough = rows.length === 0 || chosen.length > 0;
 
 	return html`
-		<div class="group">rows</div>
-		<${Setting} field=${field} held=${chosen} onSet=${setChosen} />
+		${rows.length > 0 && html`
+			<div class="group">rows</div>
+			<${Setting} field=${field} held=${chosen} onSet=${setChosen} />`}
 
-		<div class="group">length in steps</div>
-		<${Setting} field=${size} held=${length} onSet=${setLength} />
+		${size && html`
+			<div class="group">length in steps</div>
+			<${Setting} field=${size} held=${length} onSet=${setLength} />`}
 
 		<button
 			class="offer"
-			disabled=${chosen.length === 0}
+			disabled=${!enough}
 			${/* On release, like every other control that chooses from a sheet
 			     (#2213): this one is read and then committed to, not played. */ ""}
 			onClick=${(event) => {
 				event.preventDefault();
 
-				if (chosen.length) onMake({ rows: chosen, steps: length });
+				if (!enough) return;
+
+				onMake({
+					...(rows.length > 0 ? { rows: chosen } : {}),
+					...(steps ? { steps: length } : {}),
+				});
 			}}
-		>${chosen.length ? "make it" : "choose at least one row"}</button>`;
+		>${enough ? `make the ${makes}` : "choose at least one row"}</button>`;
 }
 
 
@@ -6590,8 +6613,8 @@ function Panel () {
 			continue;
 		}
 
-		if (kindOf(name) === "grids") {
-			const made = ((state[appName] || {})[name] || {}).grids || [];
+		if (kindOf(name) === "rack") {
+			const made = ((state[appName] || {})[name] || {}).made || [];
 
 			windows.push({
 				key: name, control: name, title: named(name),
@@ -7796,7 +7819,12 @@ function Panel () {
 							     cable now, made from the grid being routed, so
 							     this adds the only thing a pattern can be added
 							     *to* with. */ ""}
-							adds=${one.rack ? "add grid" : "add generator"}
+							${/* **And the rack's word is the app's**, because this
+							     cannot know that a keyboard is a keyboard (contract
+							     1.41.0, #1465). */ ""}
+							adds=${one.rack
+								? `add ${controls[one.control].makes || "grid"}`
+								: "add generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing({ control: one.control }) : null}
 							onSettings=${settingsFor[one.control]
@@ -7885,9 +7913,9 @@ function Panel () {
 								: undefined} />`}>
 					${one.rack
 						? html`
-							<${Rack} made=${one.made}
-								onRemove=${(id) => request(`${one.rack}/grids`,
-									one.made.filter((grid) => grid.id !== id))} />`
+							<${Rack} made=${one.made} makes=${controls[one.control].makes}
+								onRemove=${(id) => request(`${one.rack}/made`,
+									one.made.filter((each) => each.id !== id))} />`
 						: one.layer
 						? html`
 							<${Contribution} name=${one.control} layer=${one.layer}
@@ -7988,19 +8016,25 @@ function Panel () {
 		</div>
 
 		${making && controls[making] && html`
-			<${Sheet} title="make a grid" onClose=${() => setMaking(null)}>
-				<${NewGrid}
+			<${Sheet} title=${`make a ${controls[making].makes || "grid"}`}
+				onClose=${() => setMaking(null)}>
+				<${NewThing}
+					makes=${controls[making].makes || "grid"}
 					rows=${controls[making].rows || []}
-					steps=${{
-						low: controls[making].min_steps || 1,
-						high: controls[making].max_steps || 32,
-						opening: controls[making].opening_steps || 16,
+					${/* **Absent rather than floored**: a rack that declares no
+					     bounds is making something with no length at all, and a
+					     length picked out of the air would be a row that does
+					     nothing (contract 1.41.0). */ ""}
+					steps=${controls[making].min_steps === undefined ? null : {
+						low: controls[making].min_steps,
+						high: controls[making].max_steps,
+						opening: controls[making].opening_steps,
 					}}
 					onMake=${(spec) => {
-						const held = ((state[appName] || {})[making] || {}).grids || [];
+						const held = ((state[appName] || {})[making] || {}).made || [];
 						const id = freshId();
 
-						request(`${making}/grids`, [...held, { id, ...spec }]);
+						request(`${making}/made`, [...held, { id, ...spec }]);
 
 						/* Where the person was looking when they asked, the same
 						   as a new generator block. The grid arrives on the next

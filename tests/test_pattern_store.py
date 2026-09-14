@@ -153,7 +153,7 @@ def _piece (path: pathlib.Path) -> tuple[adapter.AppLink, Composition]:
 			                 pitches={"C3": 48, "E3": 52, "G3": 55}),
 			adapter.Recipe(composition, catalogue=CATALOGUE, pitches=ROWS,
 			               sources=sources, data_key="stack", name="stack"),
-			adapter.GridRack(composition, make=make, rows=ROWS, data_key="rack", name="rack"),
+			adapter.Rack(composition, make=make, rows=ROWS, data_key="rack", name="rack"),
 			adapter.Transport(composition),
 		],
 		pattern_store=adapter.PatternStore(path),
@@ -232,7 +232,7 @@ def _edit_everything (link: adapter.AppLink) -> None:
 		("synth/rate", 90),
 		("synth/mode", "exp"),
 		("notes/chosen", ["G3", "C3"]),
-		("rack/grids", [{"id": "a", "rows": ["snare"], "steps": 8}]),
+		("rack/made", [{"id": "a", "rows": ["snare"], "steps": 8}]),
 		("rack-a/snare/3", True),
 		("stack/layers", [
 			{"id": "one", "kind": "generator", "generator": "euclidean",

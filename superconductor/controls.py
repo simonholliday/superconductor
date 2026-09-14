@@ -134,18 +134,22 @@ words into a tuple of its own.
 """
 
 
-GRIDS = "grids"
-"""A rack of grids somebody made from the glass, rather than any the app declared.
+RACK = "rack"
+"""Things somebody made from the glass, rather than any the app declared.
 
 **Parallel to a recipe and for the same reasons.**  Its value is an ordered list
-whose entries carry an id that lives as long as the grid does, so adding,
+whose entries carry an id that lives as long as the thing does, so adding,
 removing and reordering are all one write to the list rather than three verbs.
 
 What each entry *becomes* is entirely the app's business — this keeps a copy of
-the list and nothing else.  The grids themselves arrive as ordinary declared
+the list and nothing else.  The things themselves arrive as ordinary declared
 controls on the app's next declaration, which is how an app has always said its
 controls changed (#2226); this service does not have to know that the two facts
 are related, and deliberately does not.
+
+**And it does not know what they are**, which is why this is a rack rather than a
+rack of grids (contract 1.41.0): an app that makes keyboards writes the same list
+in the same shape, and the word for what it makes travels in its declaration.
 """
 
 
@@ -259,7 +263,7 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	elif kind in (TRANSPORT, STORE):
 		_apply_field(state.setdefault(control, {}), declaration, rest, value, path)
 
-	elif kind == GRIDS:
+	elif kind == RACK:
 		_apply_rack(state.setdefault(control, {}), rest, value, path)
 
 	elif kind == PITCH_SET:
@@ -857,45 +861,47 @@ def _apply_rack (
 	value: typing.Any,
 	path: str,
 ) -> None:
-	"""Keep the list of grids somebody has made (#2226).
+	"""Keep the list of things somebody has made (#2226).
 
 	**One shape of address and no second one**, unlike a recipe.  A stack has
 	`recipe/<layer>/<parameter>` as well as the whole list, because turning a
 	knob is by far its commoner change and a whole-stack write would make two
-	people overwrite each other.  A rack has no knobs: a grid's rows and length
-	are fixed when it is made, and everything after that happens on the grid
+	people overwrite each other.  A rack has no knobs: what a thing is made *as*
+	is fixed when it is made, and everything after that happens on the thing
 	itself, which is a control of its own with its own path.
 
 	So the only change is to the list, and it is checked here for the shape this
-	service keeps — an id and nothing else required, because what a grid *is* is
-	the app's to decide and this holds a copy rather than an opinion.
+	service keeps — an id and nothing else required, because what an entry *is*
+	is the app's to decide and this holds a copy rather than an opinion.  That is
+	also why nothing here says the word *grid*: an app that makes keyboards writes
+	the same list (contract 1.41.0).
 	"""
 
-	if rest != ["grids"]:
-		raise ControlError(f"{path!r} names no part of a rack; it takes control/grids")
+	if rest != ["made"]:
+		raise ControlError(f"{path!r} names no part of a rack; it takes control/made")
 
 	if not isinstance(value, list):
-		raise ControlError(f"{path!r} takes a list of grids")
+		raise ControlError(f"{path!r} takes a list of things a rack made")
 
 	kept: list[dict[str, typing.Any]] = []
 	seen: set[str] = set()
 
 	for entry in value:
 		if not isinstance(entry, dict):
-			raise ControlError(f"{path!r}: a grid is an object")
+			raise ControlError(f"{path!r}: a made thing is an object")
 
 		one = entry.get("id")
 
 		if not isinstance(one, str) or not one:
-			raise ControlError(f"{path!r}: a grid needs an id of its own")
+			raise ControlError(f"{path!r}: a made thing needs an id of its own")
 
 		if one in seen:
-			raise ControlError(f"{path!r}: two grids both call themselves {one!r}")
+			raise ControlError(f"{path!r}: two of them both call themselves {one!r}")
 
 		seen.add(one)
 		kept.append(dict(entry))
 
-	rack["grids"] = kept
+	rack["made"] = kept
 
 
 LAYER_FIELDS = ("id", "kind", "bypassed", "source", "generator", "transform", "params",

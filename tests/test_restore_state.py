@@ -29,7 +29,7 @@ def _tool () -> typing.Any:
 DECLARED: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid"},
 	"bass": {"type": "note_grid"},
-	"rack": {"type": "grids"},
+	"rack": {"type": "rack"},
 	"synth": {"type": "params"},
 	"stack": {"type": "recipe"},
 }
@@ -66,12 +66,12 @@ def test_a_rack_goes_back_before_anything_that_could_route_from_its_grids () -> 
 
 	state = {
 		"stack": {"layers": [{"id": "one", "kind": "route", "source": "rack-a"}]},
-		"rack": {"grids": [{"id": "a", "rows": ["kick"], "steps": 16, "title": None}]},
+		"rack": {"made": [{"id": "a", "rows": ["kick"], "steps": 16, "title": None}]},
 	}
 
 	asks = _tool()._sets("app", state, DECLARED)
 
-	assert [path for _, path, _ in asks] == ["rack/grids", "stack/layers"]
+	assert [path for _, path, _ in asks] == ["rack/made", "stack/layers"]
 
 
 def test_what_the_manifest_does_not_describe_is_walked_a_value_at_a_time () -> None:

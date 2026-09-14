@@ -9167,6 +9167,72 @@ def test_a_rack_offers_to_make_a_grid_rather_than_a_generator (
 		has_text="add grid").count() == 1
 
 
+KEYBOARD_RACK = {"type": "rack", "makes": "keyboard", "title": "Keyboards",
+                 "rows": [], "about": []}
+"""A rack that makes something with **no length and nothing to choose** — which is
+what a set of pitches is, and the case contract 1.41.0 exists for."""
+
+
+def test_a_rack_says_what_it_makes_in_the_app_s_own_words (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-14, wanting a keyboard to feed an arpeggiator: *"should we
+	have a way of creating a new instance on the interface?"*
+
+	**The panel cannot write the sentence itself**, because it does not know that a
+	keyboard is a keyboard (#1465).  The app's own word rides in the declaration and
+	the glass says it — on the footer button, on the sheet, and in what an empty
+	rack says about itself.
+	"""
+
+	fake_app.redeclare({**conftest.CONTROLS, "rack": KEYBOARD_RACK})
+	_on_the_rack_page(panel)
+
+	assert panel.locator('.part[data-part="rack"] footer button',
+		has_text="add keyboard").count() == 1, "the footer used a word the app never said"
+
+	assert "keyboards" in panel.locator('.part[data-part="rack"] .empty').inner_text().lower()
+
+
+def test_making_something_with_no_length_asks_nothing_about_one (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**A set of pitches holds notes rather than time.**
+
+	Its sheet had a *length in steps* row for as long as a rack could only make
+	grids — a row that would be kept, stored, and read by nothing.  A rack that
+	declares no bounds is making something with no length, and the row is gone
+	rather than floored at some number picked out of the air.
+
+	Nothing to choose either, so making one is a single press.
+	"""
+
+	fake_app.redeclare({**conftest.CONTROLS, "rack": KEYBOARD_RACK})
+	_on_the_rack_page(panel)
+
+	panel.locator('.part[data-part="rack"] footer button', has_text="add keyboard").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	said = panel.locator(".sheet").inner_text().lower()
+
+	assert "length" not in said, f"the sheet asked about a length for a thing with none: {said}"
+	assert "rows" not in said, "the sheet offered a choice where the rack declared none"
+
+	make = panel.locator(".sheet .offer")
+
+	assert "keyboard" in make.inner_text().lower(), make.inner_text()
+	assert make.is_enabled(), "a thing with nothing to describe could not be made"
+
+	before = len(fake_app.sets)
+	make.click()
+
+	asked = fake_app.settled(lambda one: one.get("path") == "rack/made", since=before)
+
+	assert asked, "pressing make told the app nothing"
+
+	entry = asked[-1]["v"][-1]
+
+	assert set(entry) == {"id"}, f"a keyboard was described as something it has not got: {entry}"
+
+
 def test_making_a_grid_describes_it_rather_than_choosing_one (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**The sheet is a form, not a list**, which is what makes it different from
@@ -9186,13 +9252,13 @@ def test_making_a_grid_describes_it_rather_than_choosing_one (
 		"the app was told about a grid before anybody asked for one")
 
 	panel.locator(".sheet .choices button", has_text="snare").click()
-	panel.locator(".sheet .offer", has_text="make it").click()
+	panel.locator(".sheet .offer", has_text="make the grid").click()
 
 	deadline = time.monotonic() + 5
 	asked = None
 
 	while asked is None and time.monotonic() < deadline:
-		asked = next((one for one in fake_app.sets if one["path"] == "rack/grids"), None)
+		asked = next((one for one in fake_app.sets if one["path"] == "rack/made"), None)
 		time.sleep(0.05)
 
 	assert asked, "asking for a grid sent nothing"
@@ -9227,7 +9293,7 @@ def test_a_made_grid_is_listed_and_can_be_taken_away (
 
 	_on_the_rack_page(panel)
 
-	fake_app.confirm("rack/grids", [
+	fake_app.confirm("rack/made", [
 		{"id": "a", "rows": ["snare"], "steps": 9},
 		{"id": "b", "rows": ["kick", "clap"], "steps": 16}], by="app")
 
@@ -9242,7 +9308,7 @@ def test_a_made_grid_is_listed_and_can_be_taken_away (
 	asked = None
 
 	while asked is None and time.monotonic() < deadline:
-		asked = next((one for one in fake_app.sets if one["path"] == "rack/grids"), None)
+		asked = next((one for one in fake_app.sets if one["path"] == "rack/made"), None)
 		time.sleep(0.05)
 
 	assert asked, "removing a grid sent nothing"

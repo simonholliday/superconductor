@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.40.0"
+CONTRACT_VERSION = "1.41.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -399,6 +399,23 @@ wrapped it at the window rather than at the length (Simon, 2026-09-14).
 **Not additive, and it does not have to be.**  The number's meaning changes, and a
 panel on an older contract reads the new one correctly — it was written for this
 all along.  It is an app too old that is wrong, and it was wrong before.
+
+1.41.0 makes a rack a rack **of things rather than of grids**.  The control kind
+is ``rack`` where it was ``grids``, its value is ``made`` where it was ``grids``,
+and it declares ``makes`` — one word, the app's own, for what pressing the button
+produces: *grid*, *keyboard*, whatever that app builds.
+
+**Because nothing here may know what a keyboard is** (#1465).  A rack has always
+held a list and handed each entry to the app, which decides what it becomes; only
+the *asking* was shaped like a grid, and a rack that made keyboards had to
+describe them as rows and a length.  A rack whose ``steps`` are absent makes
+something with no length, and its sheet asks nothing about one.
+
+Simon, 2026-09-14, of an arpeggiator with nothing to feed it: *"For something
+generic like a keyboard source, which might feed any instrument, should we have a
+way of creating a new instance on the interface?"*  The mechanism was already
+general — an app re-declaring is how it says its controls changed, and that has
+worked since the first day (#2226).  This is the asking catching up.
 """
 
 UNIT = "unit"
@@ -505,7 +522,7 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 
 
 CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
-                 "transport", "grids", "pitch_set", "store")
+                 "transport", "rack", "pitch_set", "store")
 """Every kind of control there is, in the words the wire uses.
 
 **It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to

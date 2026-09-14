@@ -209,6 +209,80 @@ def test_the_streichfett_s_solo_controls_are_set_on_the_strings_channel (rig: ty
 	assert rig.SETTINGS["strings"].declaration()["configures"] == "strings"
 
 
+# --- Keyboards, made from the glass --------------------------------------------
+
+def test_the_rig_offers_keyboards_and_starts_with_none (rig: typing.Any) -> None:
+	"""Simon, 2026-09-14, of an arpeggiator with nothing to feed it: *"should we
+	have a way of creating a new instance on the interface?  Or does it have to be
+	defined up-front, in the composition?"*
+
+	**Neither, in the end**: the composition defines the *rack* and the person makes
+	the keyboards.  Which is also why this rig still comes up from nothing — a rack
+	that has made nothing is a button, not a control holding music.
+	"""
+
+	declared = rig.keyboards.declaration()
+
+	assert declared["type"] == "rack"
+	assert declared["makes"] == "keyboard"
+	assert "min_steps" not in declared, "a keyboard was offered a length"
+	assert declared["rows"] == [], "a keyboard was offered rows to choose"
+
+	assert rig.keyboards.entries() == [], "the rig came up with a keyboard already made"
+
+
+def test_a_made_keyboard_is_a_set_of_pitches_anything_may_read (rig: typing.Any) -> None:
+	"""**What a made thing *is* stays this file's** (#1465): the rack holds a list
+	and this turns one entry into a set of pitches over the eighty-eight keys.
+
+	A pool of its own rather than any instrument's, because it is patched into
+	whatever wants notes and each consumer folds a choice into its own reach.
+	"""
+
+	made = rig._make_keyboard({"id": "abc"})
+
+	assert made.kind == "pitch_set"
+	assert made.name == "keyboards-abc"
+	assert len(made.pitches) == 88
+	assert made.chosen == [], "a new keyboard came up holding notes"
+
+
+def test_a_keyboard_may_be_patched_into_any_generator_that_wants_pitches (
+	rig: typing.Any) -> None:
+	"""The point of the whole thing: one pool feeding an arpeggio on the Minitaur
+	and another on the Matriarch, which cannot drift apart because there is one of
+	it.
+
+	Checked against the protocol's own table rather than by naming a kind here —
+	what may be plugged into what is one policy in one place (#2403).
+	"""
+
+	import superconductor.protocol
+
+	made = rig._make_keyboard({"id": "abc"})
+	arpeggio = next(
+		one for one in rig.STACKS["minitaur"].declaration()["generators"]
+		if one["name"] == "arpeggio")
+	notes = next(one for one in arpeggio["parameters"] if one["name"] == "notes")
+
+	wants = superconductor.protocol.PATCH_INPUTS[(notes["kind"], notes["role"])]
+
+	assert wants[0] == made.kind, \
+		f"an arpeggio wants {wants[0]} and a keyboard is a {made.kind}"
+
+
+def test_the_keyboards_are_reachable_from_every_page_that_plays_notes (
+	rig: typing.Any) -> None:
+	"""A cable is dragged between two blocks, so both have to be on the page — a
+	keyboard on a page of its own could feed nothing anybody could see."""
+
+	pages = {page.declaration()["title"]: page.declaration()["parts"]
+	         for page in rig.link.pages}
+
+	for named in ("Ensemble", "Synths", "Bass"):
+		assert rig.KEYBOARDS in pages[named], f"{named} has no keyboard to patch from"
+
+
 # --- The glass -----------------------------------------------------------------
 
 def test_every_page_names_something_this_composition_declares (rig: typing.Any) -> None:
@@ -235,7 +309,7 @@ def test_every_instrument_is_on_the_ensemble_page (rig: typing.Any) -> None:
 	ensemble = next(page for page in rig.link.pages
 	                if page.declaration()["title"] == "Ensemble")
 
-	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS]
+	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS] + [rig.KEYBOARDS]
 
 
 def test_a_settings_block_needs_no_page_of_its_own (rig: typing.Any) -> None:
