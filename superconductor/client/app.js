@@ -605,6 +605,65 @@ const ACROSS = { at: "scrollLeft", whole: "scrollWidth", seen: "clientWidth",
  *
  * A name this grid has not got falls back to the default rather than to nothing:
  * a window that refused to open would be a blank block. */
+/* **A switch rides where its own cable can be seen.**
+ *
+ * Cables run behind the blocks so a busy page stays readable (#2415), and their
+ * fittings stand in front so a finger can always find one — which is right for a
+ * plug and a socket, because each sits on a block the cable is *joined* to. The
+ * switch is not like that: it rides the middle of the line, and a lead crossing
+ * the page plants it on whatever block happens to be in the way. Simon, with a
+ * screenshot, 2026-09-14: *"I still see a patch cable control over the top of the
+ * Minitaur panel. This cable is not connected to the Minitaur."*
+ *
+ * So it slides along its own cable to the stretch furthest from any block it does
+ * not join, and stays a disc on a line — the gesture is unchanged (#2415: a link
+ * is a line, so you disable it by touching the line). Where a cable is covered
+ * end to end it keeps the middle, because a control that vanishes is worse than
+ * one that overlaps.
+ */
+function ridesAt (line, curve, boxes, room) {
+	const foreign = [];
+
+	for (const [name, at] of boxes) {
+		if (name !== line.from && name !== line.to) foreign.push(at);
+	}
+
+	if (!foreign.length) return curve(0.5);
+
+	const clearance = (point) => {
+		let least = Infinity;
+
+		for (const at of foreign) {
+			const dx = Math.max(at.x - point.x, 0, point.x - (at.x + at.w));
+			const dy = Math.max(at.y - point.y, 0, point.y - (at.y + at.h));
+
+			least = Math.min(least, Math.hypot(dx, dy));
+		}
+
+		return least;
+	};
+
+	let best = null;
+
+	/* Sampled rather than solved: the answer wanted is "somewhere clear", and a
+	   closed form for a cubic against a set of rectangles is a great deal of
+	   arithmetic for a disc a finger is about to cover anyway.  Kept off the ends,
+	   where the plug and the socket already are. */
+	for (let step = 0; step <= 32; step += 1) {
+		const t = 0.15 + (step / 32) * 0.7;
+		const point = curve(t);
+		const clear = clearance(point);
+		const nearer = Math.abs(t - 0.5);
+
+		if (!best || clear > best.clear + 0.5 || (Math.abs(clear - best.clear) <= 0.5 && nearer < best.nearer)) {
+			best = { point, clear, nearer };
+		}
+	}
+
+	return best && best.clear >= room ? best.point : curve(0.5);
+}
+
+
 function opensOnRow (opensAt) {
 	return (box) => {
 		const target = opensAt && box.querySelector(`[data-row="${CSS.escape(opensAt)}"]`);
@@ -4019,6 +4078,7 @@ function addressOf (line) {
 
 function Connections ({ box, joins, touched, cell, when, patching, onFlip, patchable }) {
 	const [drawn, setDrawn] = useState([]);
+	const boxes = useRef(new Map());
 
 	useLayoutEffect(() => {
 		const wrap = box.current;
@@ -4046,6 +4106,12 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 			for (const part of wrap.querySelectorAll("[data-part]")) {
 				where.set(part.dataset.part, placed(part));
 			}
+
+			/* Kept for the render, which is where a switch has to be placed clear
+			   of the blocks a cable only *crosses* — a ref rather than state,
+			   because it is measured in the same pass that sets the lines and
+			   would otherwise be a second render for the same reading. */
+			boxes.current = where;
 
 			/* How high up a block one of its rows is drawn, asked of the page
 			   rather than worked out: a row's height depends on the cell size, on
@@ -4250,13 +4316,21 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				const cable = `M ${line.a.x} ${line.a.y}`
 					+ ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${line.b.x} ${line.b.y}`;
 
-				/* Where the switch rides. The midpoint of a cubic is
-				   (A + 3C₁ + 3C₂ + B) / 8, which for these control points is
-				   the straight midpoint pulled down by three quarters of the
-				   sag — so the switch sits on the cable rather than beside it. */
-				const middle = {
-					x: (line.a.x + line.b.x) / 2,
-					y: (line.a.y + line.b.y) / 2 + dip * 0.75,
+				/* Any point along the cable, so the switch can sit somewhere
+				   other than the middle of it when the middle is covered.  The
+				   midpoint of a cubic is (A + 3C₁ + 3C₂ + B) / 8, which for these
+				   control points is the straight midpoint pulled down by three
+				   quarters of the sag — so `curve(0.5)` is the old answer exactly,
+				   and the switch still sits on the cable rather than beside it. */
+				const curve = (t) => {
+					const u = 1 - t;
+
+					return {
+						x: u * u * u * line.a.x + 3 * u * u * t * c1.x
+							+ 3 * u * t * t * c2.x + t * t * t * line.b.x,
+						y: u * u * u * line.a.y + 3 * u * u * t * c1.y
+							+ 3 * u * t * t * c2.y + t * t * t * line.b.y,
+					};
 				};
 
 				/* **Three row-sized targets need a cable long enough to hold
@@ -4278,6 +4352,11 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 					: null;
 
 				const address = addressOf(line);
+
+				/* On its own cable, and clear of any block it does not join. */
+				const riding = flip
+					? ridesAt(line, curve, boxes.current, controlRow(cell) / 2)
+					: curve(0.5);
 
 				return html`
 					<g key=${address}
@@ -4365,7 +4444,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 						     switch lives in its own block (#2107). */ ""}
 						${which === "over" && flip && html`
 							<circle
-								class="node" cx=${middle.x} cy=${middle.y}
+								class="node" cx=${riding.x} cy=${riding.y}
 								r=${controlRow(cell) / 2}
 								onPointerDown=${flip} />`}
 					</g>`;

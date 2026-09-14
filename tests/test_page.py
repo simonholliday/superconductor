@@ -4131,6 +4131,93 @@ def test_a_grid_opens_at_the_row_its_app_asked_for (
 	assert _lowest_row_in_view(panel, "bass") == "C#2", "the window did not open where the app asked"
 
 
+def _switch_and_cable (panel: typing.Any, join: str) -> dict[str, typing.Any]:
+	"""Where a cable's switch sits, how far it is off its own cable, and what it is over."""
+
+	return panel.evaluate("""(join) => {
+		const disc = document.querySelector(`[data-join^="${join}"] circle.node`);
+		const path = document.querySelector(`[data-join^="${join}"] path.cable`);
+		const at = disc.getBoundingClientRect();
+		const centre = { x: at.left + at.width / 2, y: at.top + at.height / 2 };
+
+		/* How far the disc is from the line it is supposed to be riding, walked
+		   rather than solved: the same reason the client samples it. */
+		const box = path.getBoundingClientRect();
+		const room = path.ownerSVGElement.getBoundingClientRect();
+		let nearest = Infinity;
+
+		for (let step = 0; step <= 200; step += 1) {
+			const point = path.getPointAtLength((step / 200) * path.getTotalLength());
+			const on = { x: point.x + room.left, y: point.y + room.top };
+			nearest = Math.min(nearest, Math.hypot(on.x - centre.x, on.y - centre.y));
+		}
+
+		const over = [...document.querySelectorAll('.part[data-part]')]
+			.filter((part) => {
+				const rect = part.getBoundingClientRect();
+				return centre.x >= rect.left && centre.x <= rect.right
+					&& centre.y >= rect.top && centre.y <= rect.bottom;
+			})
+			.map((part) => part.dataset.part);
+
+		return { centre, offCable: nearest, over, box: { w: box.width, h: box.height } };
+	}""", join)
+
+
+def test_a_cables_switch_rides_clear_of_a_block_it_only_crosses (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, with a screenshot, 2026-09-14: *"I still see a patch cable control over
+	the top of the Minitaur panel. This cable is not connected to the Minitaur."*
+
+	Cables run behind the blocks and their fittings stand in front (#2415), which is
+	right for a plug and a socket — each sits on a block the cable is *joined* to.
+	**A switch is not like that**: it rides the line itself, so a lead crossing the
+	page plants a control on whatever block is in the way.
+
+	It now slides along its own cable to the stretch furthest from any block it does
+	not join. The gesture is unchanged — a link is a line, and you silence it by
+	touching the line — and where a cable is covered end to end it keeps the middle,
+	because a control that vanishes is worse than one that overlaps.
+	"""
+
+	_open_the_stack(panel)
+	_route(panel, fake_app)
+	_joins_settled(panel)
+
+	# A lead long enough to have somewhere clear to ride to. Two blocks side by
+	# side make a cable of a few dozen pixels, which any block covers end to end —
+	# and that is the case where the switch is meant to keep the middle.
+	grip = panel.locator('.part[data-part="second"] .part-title').bounding_box()
+
+	panel.mouse.move(grip["x"] + 20, grip["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(grip["x"] + 360, grip["y"] + 220, steps=8)
+	panel.mouse.up()
+	_joins_settled(panel)
+
+	before = _switch_and_cable(panel, "second>grid#")
+
+	assert before["offCable"] < 2, "the switch was not on its cable to begin with"
+	assert before["box"]["w"] > 200, f"the cable is too short for this test to mean anything: {before}"
+
+	# Stand a block it has nothing to do with squarely on top of the switch.
+	title = panel.locator('.part[data-part="notes"] .part-title').bounding_box()
+	body = panel.locator('.part[data-part="notes"]').bounding_box()
+
+	panel.mouse.move(title["x"] + 20, title["y"] + 5)
+	panel.mouse.down()
+	panel.mouse.move(before["centre"]["x"] - body["width"] / 2 + 20,
+	                 before["centre"]["y"] - body["height"] / 2 + 5, steps=8)
+	panel.mouse.up()
+	_joins_settled(panel)
+
+	after = _switch_and_cable(panel, "second>grid#")
+
+	assert "notes" not in after["over"], \
+		f"the switch stayed on a block its cable only crosses: {after}"
+	assert after["offCable"] < 2, f"the switch left its own cable: {after}"
+
+
 def test_the_block_in_your_hand_is_in_front_of_another_cables_fittings (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Reported by Simon on 2026-09-14, while trying the shared line (#2108).
