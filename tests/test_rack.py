@@ -190,6 +190,35 @@ def test_what_a_rack_made_comes_back_across_a_restart () -> None:
 	assert sorted(link.controls) == ["keys-a", "keys-b"]
 
 
+def test_a_rack_reads_a_store_written_before_it_was_a_rack_of_things () -> None:
+	"""A store from before contract 1.41.0 calls the list `grids`.
+
+	**Read rather than refused**, because the alternative is a rig coming up saying
+	STORE · TROUBLE about a rack that is perfectly fine — and a warning that is not
+	true is worse than none.  Found by replaying this rig's own store against the
+	renamed rack on 2026-09-14, where it would have cried wolf over an empty one.
+	"""
+
+	rack, link = _rack()
+	refused = rack.restore({"grids": [_grid("a", ["snare"], 9)]})
+
+	assert refused == [], refused
+	assert [one["id"] for one in rack.entries()] == ["a"]
+	assert sorted(link.controls) == ["rack-a"]
+
+
+def test_a_rack_kept_as_neither_word_is_still_refused () -> None:
+	"""The migration reads one other word and not anything at all: a rack kept as
+	something that is not a list is a store to say something about."""
+
+	rack, _ = _rack()
+
+	assert rack.restore({"made": "a grid"}) == [
+		"rack was kept as something other than a list of what it made"]
+	assert rack.restore("nothing like a rack") == [
+		"rack was kept as something other than a list of what it made"]
+
+
 def test_a_rack_offers_the_rows_a_grid_may_be_made_from () -> None:
 	"""Which rows exist is a fact about a studio, so the composition says it and
 	this repeats it — the same join a stack's pitches make (#1465, #2085)."""

@@ -5116,14 +5116,27 @@ class Rack (Control):
 		costs that one, not everything a person made.
 		"""
 
-		if not isinstance(kept, dict) or not isinstance(kept.get("made"), list):
+		if not isinstance(kept, dict):
+			return [f"{self.name} was kept as something other than a list of what it made"]
+
+		# **A store written before contract 1.41.0 calls this list `grids`**, which
+		# is what a rack made when grids were all it could make.  Read rather than
+		# refused, because the alternative is a rig coming up saying STORE · TROUBLE
+		# about a rack that is perfectly fine — and a warning that is not true is
+		# worse than none, which this project found out the hard way on 2026-09-14.
+		#
+		# It may go once no store anywhere holds the old word; nothing reads it but
+		# this line, and a store is rewritten on its first save.
+		held = kept.get("made", kept.get("grids"))
+
+		if not isinstance(held, list):
 			return [f"{self.name} was kept as something other than a list of what it made"]
 
 		refused: list[str] = []
 		wanted: list[dict[str, typing.Any]] = []
 		seen: set[str] = set()
 
-		for entry in kept["made"]:
+		for entry in held:
 			try:
 				wanted.append(self._checked_entry(entry, seen))
 
