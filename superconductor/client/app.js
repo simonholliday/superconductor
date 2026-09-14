@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.39.0";
+const CONTRACT = "1.40.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -179,6 +179,35 @@ const DOUBLE_TAP_SLACK = 24;
  * back until the window closed would put 400 ms into a control you play, which
  * #2107 will not have; a value set and immediately replaced costs a write nobody
  * sees. */
+
+/* Whether this press is the second of two taps on the same thing (see `DOUBLE_TAP`).
+ *
+ * **Shared, because it was not, and half the panel went without it** (Simon,
+ * 2026-09-14). It was written inside `Setting` — every bounded number here, the
+ * slider saying how hard the next tap lands among them — and the velocity *lane* is
+ * not one: it is a bar a column with a pointer handler of its own, so the gesture
+ * simply was not there and a double-click on it did nothing twice.
+ *
+ * `what` names the thing being tapped, so two taps on neighbouring bars are two
+ * values rather than a reset; `has` says whether there is anything to go back to, and
+ * without one this is never a reset however fast the taps come. Called on every press,
+ * because it is what records the press for the next one to be measured against. */
+function useDoubleTap () {
+	const tapped = useRef({ at: 0, x: 0, y: 0, what: null });
+
+	return (event, has, what = null) => {
+		const was = tapped.current;
+		const now = event.timeStamp || Date.now();
+
+		tapped.current = { at: now, x: event.clientX, y: event.clientY, what };
+
+		if (!has) return false;
+		if (was.what !== what) return false;
+		if (now - was.at > DOUBLE_TAP) return false;
+
+		return Math.hypot(event.clientX - was.x, event.clientY - was.y) <= DOUBLE_TAP_SLACK;
+	};
+}
 
 const PINCH_THRESHOLD = 0.12;
 /* How far two fingers must move apart or together before it is a pinch.
@@ -1701,7 +1730,7 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divi
 /* `label` is what the lane is called: *velocity* beside a pitched grid, whose lane
    takes the first note in each column, and the row it shows beside a step grid,
    whose lane shows one row at a time and has to say which (#2525). */
-function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, divisions, notes, range, cell, tight, label = "velocity", onSet }) {
+function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, divisions, notes, range, opening, cell, tight, label = "velocity", onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${steps}, var(--cell))`,
 		height: `${LANE_CELLS * cell + (LANE_CELLS - 1) * GAP}px`,
@@ -1709,6 +1738,12 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, 
 
 	const [low, high] = range;
 	const holding = useRef(null);
+
+	/* **Two taps on a bar put that step back to what the grid strikes at** (Simon,
+	   2026-09-14), which is the same number the slider beside this opens at and the
+	   same one a new tap places. The column is what is tapped, so two taps on
+	   neighbouring bars stay two values. */
+	const tapping = useDoubleTap();
 
 	/* The note beginning in this drawn cell, wherever inside it that is: with
 	   more than one division a column is several places a note may start, and
@@ -1745,6 +1780,17 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, 
 		onSet(`${cellsAt}/${found.row}/${found.at}/velocity`, wanted);
 	};
 
+	/* Put back only where there is a note to put back: a velocity with no note is
+	   not a state the sequencer could report, so an empty column has nothing to
+	   reset and asks for nothing. */
+	const back = (step) => {
+		const found = at(step);
+
+		if (!found || found.note.velocity === opening) return;
+
+		onSet(`${cellsAt}/${found.row}/${found.at}/velocity`, opening);
+	};
+
 	return html`
 		<div class=${`lane ${tight ? "tight" : ""}`} style=${style}>
 			<div class="row-label">${label}</div>
@@ -1760,6 +1806,13 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, 
 							step >= end ? "past" : ""].filter(Boolean).join(" ")}
 						onPointerDown=${(event) => {
 							event.preventDefault();
+
+							if (tapping(event, typeof opening === "number" && Boolean(found), step)) {
+								holding.current = null;
+								back(step);
+								return;
+							}
+
 							event.currentTarget.setPointerCapture(event.pointerId);
 							holding.current = event.pointerId;
 							set(event, step);
@@ -1967,7 +2020,8 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, end, resync, 
 		${hasWeights && html`
 			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${control.rows} steps=${steps} end=${playing} beats=${beats}
 				divisions=${divisions} tight
-				cell=${cell} notes=${notes} range=${control.velocity_range} onSet=${onSet} />`}
+				cell=${cell} notes=${notes} range=${control.velocity_range}
+				opening=${control.default_velocity} onSet=${onSet} />`}
 		<${NoteControls} values=${values} snaps=${snaps} snap=${snap} onSnap=${setSnap}
 			selected=${selected} note=${note} room=${room}
 			transpose=${notes.transpose} transposeRange=${control.transpose_range}
@@ -2041,7 +2095,7 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 				steps=${control.steps} end=${playing} beats=${control.beats || 4} divisions=${1}
 				label=${chosen.replace(/_/g, " ")}
 				cell=${cell} notes=${{ [chosen]: stepsOf(cells[chosen], opening) }}
-				range=${range} onSet=${onSet} />`}
+				range=${range} opening=${control.default_velocity} onSet=${onSet} />`}
 		${(range || lengthens) && html`
 			<div class="note-controls step-controls">
 				${range && html`
@@ -2256,21 +2310,12 @@ function Setting ({ field, held, onSet }) {
 	const sliding = useRef(null);
 
 	/* **Two taps on a slider put it back to its default** (see `DOUBLE_TAP`), for
-	   a field that declares one. Kept here rather than on the element, because
-	   both dials want it and the ranged one is two grips on a single surface. */
-	const tapped = useRef({ at: 0, x: 0, y: 0 });
+	   a field that declares one. One surface rather than one per grip, because the
+	   ranged dial is two grips on a single one. */
+	const tapping = useDoubleTap();
 
-	const resets = (event) => {
-		const was = tapped.current;
-		const now = event.timeStamp || Date.now();
-
-		tapped.current = { at: now, x: event.clientX, y: event.clientY };
-
-		if (!("default" in field) || field.default === null || field.default === undefined) return false;
-		if (now - was.at > DOUBLE_TAP) return false;
-
-		return Math.hypot(event.clientX - was.x, event.clientY - was.y) <= DOUBLE_TAP_SLACK;
-	};
+	const resets = (event) => tapping(
+		event, "default" in field && field.default !== null && field.default !== undefined);
 
 	/* **What this control goes back to**, which for a range is two ends on one
 	   number: a generator names a scalar default and both halves widen it the same

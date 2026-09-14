@@ -9762,6 +9762,77 @@ def test_a_bar_in_the_lane_changes_the_chosen_rows_step_and_no_other (
 	assert abs(asked[-1]["v"] - 114) <= 2, asked[-1]
 
 
+def test_two_taps_on_a_bar_in_the_lane_put_that_step_back_to_the_grid_s_own_loudness (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-14: *"Neither double-tap, nor double-click in the velocity lane
+	resets the velocity … the first click set the velocity at the point where I tap."*
+
+	He was describing the gesture working on half the panel.  It was built into
+	`Setting`, which is every bounded number here — the slider that says how hard the
+	*next* tap lands among them — and the lane is not one: it is a bar a column, with
+	a pointer handler of its own, and it had no such gesture at all.
+
+	**Back to what the app said a step is struck at**, `default_velocity`, which is
+	also what the slider beside it opens at and what a new tap places.  Two taps on a
+	column holding nothing do nothing: there is no note there to put back, and a
+	velocity with no note is not a state the sequencer could report.
+	"""
+
+	_settled(panel)
+
+	fake_app.confirm("grid/snare/4", {"velocity": 70}, by="app")
+	panel.locator(f'{DRUMS} .grid .row-label[data-row="snare"]').click()
+
+	bar = panel.locator(f'{DRUMS} .lane .weight[data-velocity="4"]')
+
+	playwright_api.expect(bar.locator("i")).to_have_count(1, timeout=5_000)
+
+	bar.scroll_into_view_if_needed()
+	box = bar.bounding_box()
+	at = (box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.1)
+
+	def sent () -> list[typing.Any]:
+		return [one["v"] for one in fake_app.sets if one["path"] == "grid/snare/4/velocity"]
+
+	panel.mouse.click(*at)
+	fake_app.await_set("grid/snare/4/velocity")
+
+	assert sent()[-1] != 100, "the first tap did not ask for something other than the default"
+
+	panel.mouse.click(*at)
+	panel.mouse.click(*at)
+	_settled(panel)
+
+	assert sent()[-1] == 100, f"two taps did not put the step back to the grid's own loudness: {sent()}"
+
+
+def test_two_taps_on_an_empty_column_of_the_lane_ask_for_nothing (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A velocity with no note is not a state the sequencer could report, so there is
+	nothing to put back and nothing to send — the same rule the single tap follows."""
+
+	_settled(panel)
+
+	panel.locator(f'{DRUMS} .grid .row-label[data-row="snare"]').click()
+
+	bar = panel.locator(f'{DRUMS} .lane .weight[data-velocity="7"]')
+
+	playwright_api.expect(bar.locator("i")).to_have_count(0, timeout=5_000)
+
+	bar.scroll_into_view_if_needed()
+	box = bar.bounding_box()
+	at = (box["x"] + box["width"] / 2, box["y"] + box["height"] * 0.1)
+	before = len(fake_app.sets)
+
+	panel.mouse.click(*at)
+	panel.mouse.click(*at)
+	_settled(panel)
+
+	asked = [one for one in fake_app.sets[before:] if "velocity" in str(one.get("path", ""))]
+
+	assert not asked, f"two taps on an empty column asked for something: {asked}"
+
+
 def test_a_grid_that_says_nothing_about_velocity_gets_no_lane_and_places_with_true (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""An app other than Subsequence's may declare a step grid with no velocity at
@@ -10546,6 +10617,32 @@ def test_the_playhead_follows_a_pattern_s_own_cycle (
 	assert round(_playhead_step(panel, PHRASE)) == 7, "the playhead ignored where this pattern's cycle began"
 	assert round(_playhead_step(panel, '.part[data-part="grid"]')) == 0, \
 		"one pattern's cycle moved another pattern's playhead"
+
+
+def test_the_playhead_follows_a_cycle_that_began_long_before_this_bar (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The test above measured the right thing at numbers the rig never sends.
+
+	Its cycle began at beat 1.5 against a beat count of 1, which are the same size
+	only in the first bar a composition ever plays.  A rig running for an hour reports
+	cycles at beat 1201.5 — and the panel kept none of them, because a cycle that has
+	not begun changes nothing and every one of them looked as though it had not.  So
+	the playhead fell back to the page's beat count and wrapped at the window, sweeping
+	the steps a shortened pattern does not play, which is what Simon saw on 2026-09-14.
+
+	Eight steps over two beats, so four to a beat.  A cycle begun on beat 1201.5 from
+	step 0 and wrapping at six has, by beat 1204, run ten steps — which is step 4 the
+	second time round, and step 0 if the cycle was thrown away.
+	"""
+
+	_go_to_the_variants(panel)
+
+	fake_app.cycle("phrase", at=1201.5, start=0, end=6)
+	fake_app.beat(1203, interval=0.2)
+	panel.wait_for_timeout(500)
+
+	assert round(_playhead_step(panel, PHRASE)) == 4, \
+		"a cycle reported at a running composition's beat count was read as not yet begun"
 
 
 def test_the_length_s_row_is_counted_in_its_block (panel: typing.Any) -> None:

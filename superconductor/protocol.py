@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.39.0"
+CONTRACT_VERSION = "1.40.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -383,6 +383,22 @@ is already a pair is used as it stands.
 **Additive**: a field that has no opening value declares none, as an instrument's
 switch does, so ``may_be_unset`` reads exactly what it read before — it turns on
 the key being present *and* null; and a panel too old ignores the field.
+
+1.40.0 says what a ``beat`` event counts: **beats since the composition started,
+not the beat within its bar.**
+
+**The panel has always read it that way**, in both places it uses it — the
+transport counter takes the bar from it, and the playhead compares it against
+where a pattern's cycle began, which a grid reports in beats from the pattern's
+first.  A sequencer announces the beat within the bar, and the adapter passed that
+straight on, so the two halves were counting differently and neither said so: the
+counter could only ever read bar 001, and every cycle a grid reported looked as
+though it had not begun, which put the playhead back on the page's beat count and
+wrapped it at the window rather than at the length (Simon, 2026-09-14).
+
+**Not additive, and it does not have to be.**  The number's meaning changes, and a
+panel on an older contract reads the new one correctly — it was written for this
+all along.  It is an app too old that is wrong, and it was wrong before.
 """
 
 UNIT = "unit"

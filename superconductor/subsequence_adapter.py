@@ -5954,6 +5954,20 @@ class AppLink:
 		self._stopping = threading.Event()
 		self._last_beat_at: float | None = None
 
+		self._bar = 0
+		"""The bar the composition is in, which is the half a beat does not say."""
+
+		self._beats = -1
+		"""Beats since the composition started, which is what the panel is told.
+
+		**Not the beat within its bar**, which is what a sequencer announces and what
+		this passed on until 2026-09-14.  Both halves of the panel read this as a
+		count from the start — the transport counter takes the bar from it, and the
+		playhead compares it against where a pattern's cycle began, which a grid
+		reports in beats from its first.  Sent bar-relative, the counter could say
+		only bar 001 and no cycle ever looked as though it had begun.
+		"""
+
 	def start (self) -> None:
 		"""Begin listening to the clock and dialling the service.
 
@@ -5962,6 +5976,10 @@ class AppLink:
 		"""
 
 		self.composition.on_event("beat", self._on_beat)
+
+		# **The bar as well**, because a beat says only where it falls inside one
+		# and the panel counts from the start (see `_beats`).
+		self.composition.on_event("bar", self._on_bar)
 
 		# **A snapshot, because attaching a control can register more of them.**
 		# A rack puts back the grids somebody made before this started (#2226),
@@ -6099,6 +6117,37 @@ class AppLink:
 	# On the composition's clock loop
 	# ------------------------------------------------------------------
 
+	def _on_bar (self, bar: int) -> None:
+		"""Note which bar the composition is in, which is the half a beat does not say."""
+
+		self._bar = bar
+
+	def _counting (self, beat: int) -> int:
+		"""This beat counted from the composition's start rather than from its bar.
+
+		**A beat never goes back.**  The bar and the beat are announced at the same
+		pulse and each is handed to the loop as a task of its own, so the first beat
+		of a bar can be seen before the bar it belongs to — and taken with the bar as
+		it stands it would land a whole bar back, jumping the playhead and the counter
+		backwards once a bar.  One that would go back is the first beat of the next
+		bar whose bar has not arrived yet, so it goes forward by a bar instead.
+		"""
+
+		per = 4
+		signature = getattr(self.composition, "time_signature", None)
+
+		if isinstance(signature, (tuple, list)) and signature:
+			per = max(1, int(signature[0]))
+
+		counted = self._bar * per + beat
+
+		if counted <= self._beats:
+			counted += per
+
+		self._beats = counted
+
+		return counted
+
 	def _on_beat (self, beat: int) -> None:
 		"""Note the beat, pass it on, and report anything the composition changed.
 
@@ -6127,7 +6176,7 @@ class AppLink:
 			(c for c in self.controls.values() if isinstance(c, (StepGrid, NoteGrid))), None)
 
 		self._emit(superconductor.protocol.event(
-			self.app_name, "beat", beat=beat, ts=now, interval=interval,
+			self.app_name, "beat", beat=self._counting(beat), ts=now, interval=interval,
 			steps=grid.steps if grid else None, beats=grid.beats if grid else None))
 
 		for control in self.controls.values():

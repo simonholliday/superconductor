@@ -877,17 +877,106 @@ def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
 	assert declared["rows"] == rig.ROWS
 
 
-def _routed (rig: typing.Any, source: str, note_map: dict[str, int]) -> list[tuple[int, int]]:
-	"""Play one of this rig's sources into a pattern carrying *note_map*, and read back what landed."""
+def _routed (rig: typing.Any, source: str, note_map: dict[str, int],
+             steps: int | None = None) -> list[tuple[int, int]]:
+	"""Play one of this rig's sources into a pattern carrying *note_map*, and read back what landed.
 
-	pattern = subsequence.pattern.Pattern(channel=1, length=rig.BEATS)
+	*steps* is how long the borrowing pattern plays, which is what `p.grid` says
+	and what a pattern shortened from the glass leaves there.
+	"""
+
+	playing = rig.STEPS if steps is None else steps
+	pattern = subsequence.pattern.Pattern(channel=1, length=rig.BEATS * playing / rig.STEPS)
 	builder = subsequence.pattern_builder.PatternBuilder(
 		pattern=pattern, cycle=0, rng=random.Random(1),
-		drum_note_map=note_map, default_grid=rig.STEPS)
+		drum_note_map=note_map, default_grid=playing)
 
 	rig.SHARED[source](builder)
 
 	return sorted((note.position, note.pitch) for note in builder.placed())
+
+
+def _lengths (rig: typing.Any, source: str, note_map: dict[str, int], steps: int) -> list[tuple[int, int]]:
+	"""The same, read back as each note's position and how long it sounds."""
+
+	pattern = subsequence.pattern.Pattern(channel=1, length=rig.BEATS * steps / rig.STEPS)
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1),
+		drum_note_map=note_map, default_grid=steps)
+
+	rig.SHARED[source](builder)
+
+	return sorted((note.position, note.duration) for note in builder.placed())
+
+
+def test_a_shared_line_stops_at_the_end_of_the_pattern_it_is_played_into (rig: typing.Any) -> None:
+	"""Simon, 2026-09-14, of a Matriarch shortened to twelve steps: *"I still hear
+	notes in them, whether placed locally, or generated externally and inherited."*
+
+	**Subsequence plays a note placed past a pattern's length inside the next cycle
+	rather than dropping it**, so a sixteen-step line routed into a twelve-step
+	pattern does not sound late — it sounds at the *start of the next bar*, on top of
+	whatever is already there.  Measured on this rig's own shape: steps 13 to 16 of
+	the shared line came out as steps 1 to 4 of the cycle after.
+
+	`_play` has guarded the drum grids against exactly this since #2548 and this
+	path did not, which is the whole defect: a pitched line was added in #2108 and
+	the guard was not carried across with it.
+	"""
+
+	held = rig.composition.data.get("shared_notes")
+
+	try:
+		# One note inside a twelve-step pattern and one past its end.
+		rig.composition.data["shared_notes"] = {
+			"C2": {str(rig.BASS_DIVISIONS * 11): {"velocity": 90, "length": 1},
+			       str(rig.BASS_DIVISIONS * 13): {"velocity": 90, "length": 1}}}
+
+		landed = _routed(rig, "shared_notes", rig.BASS_NOTE_MAP, steps=12)
+		pulses = int(24 * rig.STEP_DURATION)
+
+		assert landed == [(pulses * 11, rig.BASS_NOTE_MAP["C2"])], \
+			f"a routed line played past the end of the pattern it was played into: {landed}"
+
+	finally:
+		if held is None:
+			rig.composition.data.pop("shared_notes", None)
+		else:
+			rig.composition.data["shared_notes"] = held
+
+
+def test_a_shared_note_is_cut_at_the_end_rather_than_ringing_past_it (rig: typing.Any) -> None:
+	"""The grid's own rule in the borrowed pattern (#2548).
+
+	A note is **cut, never shortened**: the line goes on holding the length somebody
+	gave it, and only the copy handed to this build stops where the pattern does.
+	Without it a note begun on the last step rings into the next bar, which is the
+	same wrong sound as a note placed past the end.
+	"""
+
+	held = rig.composition.data.get("shared_notes")
+
+	try:
+		# Begun two steps before a twelve-step end, and four steps long.
+		rig.composition.data["shared_notes"] = {
+			"C2": {str(rig.BASS_DIVISIONS * 10): {"velocity": 90, "length": rig.BASS_DIVISIONS * 4}}}
+
+		landed = _lengths(rig, "shared_notes", rig.BASS_NOTE_MAP, steps=12)
+		pulses = int(24 * rig.STEP_DURATION)
+
+		assert landed == [(pulses * 10, pulses * 2)], \
+			f"a routed note rang past the end of the pattern it was played into: {landed}"
+
+		# And it is the *copy* that was cut, not the line.
+		kept = rig.composition.data["shared_notes"]["C2"][str(rig.BASS_DIVISIONS * 10)]
+
+		assert kept["length"] == rig.BASS_DIVISIONS * 4, "cutting the copy shortened the line itself"
+
+	finally:
+		if held is None:
+			rig.composition.data.pop("shared_notes", None)
+		else:
+			rig.composition.data["shared_notes"] = held
 
 
 def test_a_shared_line_of_notes_sounds_the_same_on_either_synth (rig: typing.Any) -> None:

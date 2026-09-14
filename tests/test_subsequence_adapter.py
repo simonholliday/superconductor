@@ -366,6 +366,72 @@ def test_the_first_beat_is_where_the_clock_loop_is_found () -> None:
 	assert sent[0]["name"] == "beat"
 
 
+def test_a_beat_is_counted_from_the_start_rather_than_within_its_bar () -> None:
+	"""Simon, 2026-09-14, of a pattern shortened to twelve steps: *"the play head
+	still moves through those lines"*.
+
+	**The panel has always read this as a count from the start**, in both places it
+	uses it: the transport counter takes the bar from it, and the playhead compares
+	it against where a pattern's cycle began — which a grid reports in beats from the
+	pattern's first, and therefore counted the same way.
+
+	**Subsequence's own `beat` event is the beat within the bar**, 0 to 3, and this
+	passed it straight on.  So the counter could only ever say bar 001, and every
+	cycle a grid reported looked as though it had not begun yet — the playhead fell
+	back to the page's beat count and wrapped at the window, sweeping the steps a
+	shortened pattern does not play.  One number, three symptoms.
+	"""
+
+	link, sent = _link()
+
+	def a_bar_and_a_half () -> None:
+		link._on_bar(0)
+
+		for beat in (0, 1, 2, 3):
+			link._on_beat(beat)
+
+		link._on_bar(1)
+
+		for beat in (0, 1):
+			link._on_beat(beat)
+
+	_on_a_loop(a_bar_and_a_half)
+
+	counted = [one["beat"] for one in sent if one.get("name") == "beat"]
+
+	assert counted == [0, 1, 2, 3, 4, 5], f"a beat was not counted from the start: {counted}"
+
+
+def test_a_beat_that_overtakes_its_own_bar_is_still_counted_forward () -> None:
+	"""Both are announced at the same pulse and each is handed to the loop as its own
+	task, so a beat 0 may be seen before the bar it belongs to.
+
+	Taking the bar as it stands would put that beat a whole bar back, and the
+	playhead and the counter would both jump backwards once a bar.  A beat never
+	goes back: one that would is the first of the next bar, whose bar has not
+	arrived yet.
+	"""
+
+	link, sent = _link()
+
+	def beat_first () -> None:
+		link._on_bar(0)
+
+		for beat in (0, 1, 2, 3):
+			link._on_beat(beat)
+
+		# The first beat of the second bar, before its bar event.
+		link._on_beat(0)
+		link._on_bar(1)
+		link._on_beat(1)
+
+	_on_a_loop(beat_first)
+
+	counted = [one["beat"] for one in sent if one.get("name") == "beat"]
+
+	assert counted == [0, 1, 2, 3, 4, 5], f"a beat went backwards when it overtook its bar: {counted}"
+
+
 def test_a_beat_carries_what_the_playhead_needs_to_place_itself () -> None:
 	"""The gap between two beats is what the highlight moves across."""
 

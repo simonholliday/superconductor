@@ -1017,16 +1017,45 @@ def _play_shared_notes (p: typing.Any) -> None:
 	**The destination's transposition still applies**, because a pattern is
 	transposed after every contribution has been placed — so both synths play one
 	line, each in the register its own grid is set to.
+
+	**Nothing past the end of the pattern it plays into**, which is `_play`'s rule
+	carried across (#2548).  It was not, when this was written for #2108, and Simon
+	heard it on 2026-09-14 with the Matriarch at twelve steps: **a note placed past a
+	pattern's length does not sound late, it sounds at the start of the next cycle**,
+	on top of whatever is already there — steps 13 to 16 of the line came out as
+	steps 1 to 4 of the bar after.  This line has no length of its own to be cut by,
+	because it drives no pattern; the pattern it is borrowed by has one, and `p.grid`
+	is that pattern's own count of steps, which follows its length.
+
+	**A note is cut, never shortened**, as the grid's own notes are: the line goes on
+	holding the length somebody gave it and only the copy handed to this build stops
+	at the end, so the note is whole again when the pattern grows.
+
+	As in `_play`, the destination is assumed to step in `STEP_DURATION`, which every
+	pattern on this rig does; a destination stepping any other way is the day both of
+	these read the step from it instead.
 	"""
 
 	beats_per_position = STEP_DURATION / BASS_DIVISIONS
+	ends = getattr(p, "grid", None)
+	last = None if ends is None else ends * BASS_DIVISIONS
 
 	for row, notes in shared_notes.now(p).items():
 		for at, note in notes.items():
+			begins = int(at)
+
+			if last is not None and begins >= last:
+				continue
+
+			length = note.get("length", BASS_LENGTH)
+
+			if last is not None:
+				length = min(length, last - begins)
+
 			p.note(
-				SHARED_NOTE_MAP[row], beat=int(at) * beats_per_position,
+				SHARED_NOTE_MAP[row], beat=begins * beats_per_position,
 				velocity=note.get("velocity", BASS_VELOCITY),
-				duration=note.get("length", BASS_LENGTH) * beats_per_position)
+				duration=length * beats_per_position)
 
 	shared_notes_recipe.build(p)
 
