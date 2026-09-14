@@ -9,6 +9,7 @@ import typing
 import pytest
 
 import superconductor.controls
+import superconductor.protocol
 import superconductor.subsequence_adapter as adapter
 
 
@@ -36,6 +37,40 @@ def _params () -> tuple[adapter.Params, typing.Any, list[tuple[str, typing.Any]]
 		on_change=lambda name, value: moved.append((name, value)))
 
 	return settings, composition, moved
+
+
+def test_a_parameter_says_what_it_opens_at () -> None:
+	"""So a panel can put a slider back to it (contract 1.39.0, Simon 2026-09-14).
+
+	A generator's parameters have always declared theirs; an instrument's settings
+	kept it, used it to seed an untouched control, and told the panel nothing — so
+	two taps on a Minitaur's glide rate had nowhere to go back to.
+	"""
+
+	held = adapter.Parameter(
+		"glide_rate", "number", label="Glide rate", default=24, minimum=0, maximum=127)
+
+	assert held.declaration()["default"] == 24
+
+	assert "default" not in adapter.Parameter(
+		"glide", "switch", label="Glide").declaration(), \
+		"a setting with no opening value declared one anyway"
+
+
+def test_a_parameter_that_may_be_unset_still_reads_as_it_did () -> None:
+	"""`may_be_unset` turns on the key being present *and* null (#2381, #2518), and
+	declaring an opening value must not offer an instrument's switch an auto it has
+	no way to be."""
+
+	settings = adapter.Parameter(
+		"cutoff", "number", label="Cutoff", minimum=0, maximum=127).declaration()
+
+	assert not superconductor.protocol.may_be_unset(settings)
+
+	catalogue = {"name": "velocity", "kind": "number", "required": False, "default": None}
+
+	assert superconductor.protocol.may_be_unset(catalogue), \
+		"a catalogue parameter stopped being able to say a value may be taken off"
 
 
 def test_a_setting_opens_where_the_composition_said () -> None:
@@ -79,12 +114,12 @@ def test_a_parameter_says_what_it_is_measured_in_and_never_what_that_means () ->
 	count, and inventing a word for either would be worse than the silence.
 	"""
 
-	said = superconductor.subsequence_adapter.Parameter(
+	said = adapter.Parameter(
 		"cutoff", "number", minimum=0, maximum=127, unit="MIDI").declaration()
 
 	assert said["unit"] == "MIDI"
 
-	bare = superconductor.subsequence_adapter.Parameter(
+	bare = adapter.Parameter(
 		"amount", "number", minimum=0, maximum=1).declaration()
 
 	assert "unit" not in bare, "a parameter with no unit was given an empty one"

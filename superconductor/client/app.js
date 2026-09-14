@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.38.0";
+const CONTRACT = "1.39.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -2272,6 +2272,13 @@ function Setting ({ field, held, onSet }) {
 		return Math.hypot(event.clientX - was.x, event.clientY - was.y) <= DOUBLE_TAP_SLACK;
 	};
 
+	/* **What this control goes back to**, which for a range is two ends on one
+	   number: a generator names a scalar default and both halves widen it the same
+	   way (contract 1.39.0). A default that is already a pair is used as it is. */
+	const goesBackTo = () => (field.kind !== "range" ? field.default
+		: Array.isArray(field.default) ? [field.default[0], field.default[1]]
+		: [field.default, field.default]);
+
 	/* Asked for whatever this parameter turns out to be, because a hook must
 	   be: only a long choice opens a menu, and the shape is not known here
 	   until after the hooks have run. */
@@ -2695,7 +2702,7 @@ function Setting ({ field, held, onSet }) {
 				onPointerDown=${(event) => {
 					event.preventDefault();
 
-					if (resets(event)) { sliding.current = null; onSet(field.default); return; }
+					if (resets(event)) { sliding.current = null; onSet(goesBackTo()); return; }
 
 					event.currentTarget.setPointerCapture(event.pointerId);
 
@@ -2724,7 +2731,7 @@ function Setting ({ field, held, onSet }) {
 			onPointerDown=${(event) => {
 				event.preventDefault();
 
-				if (resets(event)) { sliding.current = null; onSet(field.default); return; }
+				if (resets(event)) { sliding.current = null; onSet(goesBackTo()); return; }
 
 				event.currentTarget.setPointerCapture(event.pointerId);
 				sliding.current = event.pointerId;
@@ -3329,7 +3336,12 @@ function Icon ({ of, filled }) {
  * worse than the screen. Clearing a pattern is destructive and has no undo, so
  * it has to be read before it is agreed to — which is the whole argument for a
  * dialog over an armed button: only a dialog can say *what* is about to go. */
-function Sheet ({ title, onClose, children }) {
+/* **A sheet that asks a question carries its own way out** (Simon, 2026-09-14):
+ * the clear had *keep them* among its answers and *close* in its header, which do
+ * the same thing, and two ways to back out of one question is one too many. A
+ * sheet that only *shows* something keeps its close, because there is nothing
+ * else on it to leave by. */
+function Sheet ({ title, onClose, asks, children }) {
 	return html`
 		<div
 			class="sheet"
@@ -3341,9 +3353,10 @@ function Sheet ({ title, onClose, children }) {
 				<header>
 					<b>${title}</b>
 					<span class="spacer"></span>
-					<button
-						onPointerDown=${(event) => { event.preventDefault(); onClose(); }}
-					>close</button>
+					${!asks && html`
+						<button
+							onPointerDown=${(event) => { event.preventDefault(); onClose(); }}
+						>close</button>`}
 				</header>
 				${children}
 			</div>
@@ -8131,7 +8144,7 @@ function Panel () {
 				: {};
 
 			return html`
-				<${Sheet} title=${variant ? `clear variant ${variant.showing}` : "clear this pattern"}
+				<${Sheet} asks title=${variant ? `clear variant ${variant.showing}` : "clear this pattern"}
 					onClose=${() => setClearing(null)}>
 					<p class="ask">
 						${/* Spaces kept inside the spans: the template collapses the
@@ -8145,7 +8158,7 @@ function Panel () {
 					<div class="answers">
 						<button
 							onPointerDown=${(event) => { event.preventDefault(); setClearing(null); }}
-						>keep them</button>
+						>cancel</button>
 						${lane && html`
 							<button
 								class="danger"
@@ -8169,14 +8182,14 @@ function Panel () {
 		})()}
 
 		${startingAgain && storeName && html`
-			<${Sheet} title="start again from the file" onClose=${() => setStartingAgain(false)}>
+			<${Sheet} asks title="start again from the file" onClose=${() => setStartingAgain(false)}>
 				${/* What starting again does is the app's to say, so the sentence
 				     is the one it declared rather than one written here (#2144). */ ""}
 				<p class="ask">${controls[storeName].start_again}</p>
 				<div class="answers">
 					<button
 						onPointerDown=${(event) => { event.preventDefault(); setStartingAgain(false); }}
-					>keep what is here</button>
+					>cancel</button>
 					<button
 						class="danger"
 						onPointerDown=${(event) => {

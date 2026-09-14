@@ -3395,7 +3395,7 @@ def test_clearing_a_pattern_asks_first_and_says_what_will_go (
 	assert "2 steps" in asking, f"the dialog did not count what would go: {asking!r}"
 	assert "Drums" in asking, f"the dialog did not name the pattern: {asking!r}"
 
-	panel.locator(".sheet .answers button", has_text="keep them").click()
+	panel.locator(".sheet .answers button", has_text="cancel").click()
 	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
 
 	assert not [one for one in fake_app.sets if one["path"] == "grid/rows"]
@@ -4262,6 +4262,102 @@ def test_two_taps_on_a_slider_put_it_back_to_its_default (panel: typing.Any) -> 
 	_tap_dial(panel, 0.2)
 
 	assert _dial_reads(panel) == "100", "two quick taps did not put it back to the default"
+
+
+def test_a_sheet_that_asks_a_question_has_one_way_out_of_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-14: *"'keep them' and 'close' appear to do the same thing. If
+	that is the case, we only need one, and it should say 'cancel'."*
+
+	A sheet that only shows something keeps its close, because there is nothing else
+	on it to leave by.
+	"""
+
+	_settled(panel)
+
+	panel.locator('.part[data-part="grid"] .part-foot .clear').click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	assert panel.locator(".sheet header button").count() == 0, \
+		"a question sheet still had a close in its header as well as its answers"
+
+	ways = [one.lower() for one in panel.locator(".sheet .answers button").all_inner_texts()]
+
+	assert len([one for one in ways if "cancel" in one]) == 1, f"not one way out: {ways}"
+
+	panel.locator(".sheet .answers button", has_text="cancel").click()
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	assert not [one for one in fake_app.sets if one["path"] == "grid/rows"]
+
+
+def test_a_settings_slider_goes_back_to_what_its_app_opens_it_at (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon tried the gesture with a mouse and nothing happened (2026-09-14).
+
+	It was not the mouse: a double-click is two pointer downs like any two taps. The
+	sliders he tried were an **instrument's settings**, which kept what they open at
+	to themselves — a generator's parameters have always declared theirs. The app
+	says it now (contract 1.39.0), and a panel cannot put a control back to a value
+	nobody told it.
+	"""
+
+	# **Held apart from what each opens at**, so going back to 24 cannot be read
+	# as going back to whatever the panel happened to load — it is the declared
+	# default or it is nothing.
+	fake_app.state["moog"] = {**fake_app.state["moog"], "rate": 100, "spread": [20, 60]}
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"moog": {**conftest.CONTROLS["moog"], "fields": [
+			{"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127,
+			 "step": 1, "default": 24},
+			{"name": "spread", "kind": "range", "label": "Spread", "min": 0, "max": 127,
+			 "step": 1, "default": 40},
+		]},
+	})
+	_settled(panel)
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector('.part[data-part="moog"] .dial', timeout=5_000)
+
+	# **Read as what the panel sent**, not as what it shows: a setting's face is the
+	# app's value and does not move until the app confirms, which is the rule every
+	# control here follows (#2046).
+	def sent (path: str) -> list[typing.Any]:
+		return [one["v"] for one in fake_app.sets if one["path"] == path]
+
+	plain = panel.locator('.part[data-part="moog"] .dial').first
+	box = plain.bounding_box()
+
+	panel.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)
+	fake_app.await_set("moog/rate")
+
+	assert sent("moog/rate")[-1] != 24, "the tap did not ask for a different value"
+
+	panel.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)
+	panel.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)
+	_settled(panel)
+
+	assert sent("moog/rate")[-1] == 24, \
+		f"two taps did not ask for what it opens at: {sent('moog/rate')}"
+
+	# **A range goes back to both ends on one number**, which is how a scalar
+	# default is widened wherever it is read (contract 1.39.0).
+	ranged = panel.locator('.part[data-part="moog"] .dial.ranged')
+	# **Scrolled to first**, as every other test of a range does: a box measured
+	# off the bottom of the glass is a click at nothing, and the click is silently
+	# clamped back inside the window rather than refused.
+	ranged.scroll_into_view_if_needed()
+	at = ranged.bounding_box()
+
+	panel.mouse.click(at["x"] + at["width"] * 0.9, at["y"] + at["height"] / 2)
+	fake_app.await_set("moog/spread")
+	panel.mouse.click(at["x"] + at["width"] * 0.5, at["y"] + at["height"] / 2)
+	panel.mouse.click(at["x"] + at["width"] * 0.5, at["y"] + at["height"] / 2)
+	_settled(panel)
+
+	assert sent("moog/spread")[-1] == [40, 40], \
+		f"a range did not go back to both ends on its default: {sent('moog/spread')}"
 
 
 def test_two_slow_taps_on_a_slider_are_two_values_rather_than_a_reset (panel: typing.Any) -> None:
@@ -9712,7 +9808,7 @@ def test_starting_again_is_asked_first_in_the_app_s_words_and_is_one_press (
 	assert panel.locator(".store .choices").count() == 0, "the popover stayed open under the sheet"
 	assert panel.locator(".sheet .ask").inner_text().strip() == conftest.CONTROLS["store"]["start_again"]
 
-	panel.locator(".sheet .answers button", has_text="keep what is here").click()
+	panel.locator(".sheet .answers button", has_text="cancel").click()
 	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
 
 	assert fake_app.settled("store/start_again", since=before) == [], "keeping it sent something"

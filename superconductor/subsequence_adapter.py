@@ -2529,6 +2529,19 @@ class Parameter:
 		elif self.kind in ("choice", "choices", "action"):
 			declared["options"] = [{"value": value, "label": label} for value, label in self.options]
 
+		# **What it opens at, said on the wire rather than kept here** (contract
+		# 1.39.0, Simon 2026-09-14).  Two taps on a slider put it back to its
+		# default, and a panel cannot return a control to a value nobody told it.
+		# This is the same number `opening()` seeds an untouched control with.
+		#
+		# **Only where there is one.**  A settings row with no opening value —
+		# a switch this composition does not assert at startup — declares nothing,
+		# which keeps `may_be_unset` reading what it always did: that turns on the
+		# key being *present* and null, and is a catalogue parameter's way of
+		# saying a value may be taken off again (#2381, #2518).
+		if self.default is not None:
+			declared["default"] = self.default
+
 		return declared
 
 	def opening (self) -> typing.Any:

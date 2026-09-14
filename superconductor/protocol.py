@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.38.0"
+CONTRACT_VERSION = "1.39.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -368,6 +368,21 @@ drawn over one instrument's register; a grid drawn over the whole of MIDI opens
 two octaves below anything a rig sounds, and cannot say otherwise (#2108).
 **Additive**: a grid that says nothing opens where it always did, and a panel too
 old ignores the field and does the same.
+
+1.39.0 lets a ``params`` field carry ``default``: the value it opens at, which a
+catalogue parameter has always declared and an instrument's settings kept to
+themselves.  A panel returns a slider to it — two taps, Simon's ask of
+2026-09-14 — and cannot return a control to a value nobody told it.
+
+**A ``range`` declares a scalar default and opens with both ends on it.**  A
+generator that takes ``int | (int, int)`` names one number (``euclidean`` opens at
+velocity 100, not at a pair), so both halves widen it the same way: the adapter
+when it seeds an untouched layer, a panel when it puts one back.  A default that
+is already a pair is used as it stands.
+
+**Additive**: a field that has no opening value declares none, as an instrument's
+switch does, so ``may_be_unset`` reads exactly what it read before — it turns on
+the key being present *and* null; and a panel too old ignores the field.
 """
 
 UNIT = "unit"
