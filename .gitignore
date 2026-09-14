@@ -24,6 +24,7 @@ pages/
 # tree.  `PageStore.load` says a missing one is the ordinary case.
 compositions/*
 !compositions/drm1_grid.py
+!compositions/ensemble.py
 
 # The agent brief. Kept out of the repository on purpose and held on backed-up
 # storage instead, as the sequencer project does with its own.
