@@ -68,8 +68,16 @@ dev = [
 	# and `pymidiinstrumentdefs` is what one model does.  0.1.1 rather than 0.1,
 	# because the Matriarch's arpeggiator controls have their bands from 0.1.1 on
 	# (#2203) and this rig draws all three.
+	#
+	# **0.1.2 on Simon's decision of 2026-09-14, and it is a claim about the
+	# corpus rather than about this code.**  Nothing here reads a `part` yet, so
+	# by the usual rule the floor would have stayed where it was; what 0.1.2
+	# carries is a corrected Streichfett and a Voce described as the three parts
+	# it is (#2542), and somebody arriving should get those rather than the
+	# readings they replaced.  The rule resumes when a part is read: raise it
+	# then because the code needs it, and say so here.
 	"pymididefs>=0.4",
-	"pymidiinstrumentdefs>=0.1.1",
+	"pymidiinstrumentdefs>=0.1.2",
 	# Drives the page in a real browser. The browser itself is a separate
 	# download ("playwright install firefox") and needs system libraries the
 	# page tests skip cleanly without.
