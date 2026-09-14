@@ -18,13 +18,13 @@ device names live in your own files, never in here.
 ## Status
 
 **This is an early release, and it is not polished.** It has been played on real
-hardware most days, by one person — its author — and by nobody else. Expect
+hardware most days, by one person - its author - and by nobody else. Expect
 rough edges, and expect the interface to move: very little here is settled
 enough to be promised, and a version that changes how something works is more
 likely than one that does not.
 
 **So far it drives Subsequence, and nothing else.** The package itself knows
-nothing about any particular music software — an application dials in and
+nothing about any particular music software - an application dials in and
 declares what it can be controlled by, and that door is open to anything that
 can hold a WebSocket and speak the protocol. But Subsequence, a generative MIDI
 sequencer, is the only application anyone has written an adapter for, so today
@@ -39,16 +39,16 @@ What runs today: as many pages as an application declares, holding step grids,
 pitched note grids with sub-step timing, an instrument's own settings, stacks of
 generators and transforms that contribute to a pattern, a set of notes chosen on
 a keyboard, and a transport with a bar-beat-step counter. Blocks are arranged by
-dragging, and the arrangement — and, if the application asks, everything made
-on the glass — is kept by the application. A generator is wired to
+dragging, and the arrangement - and, if the application asks, everything made
+on the glass - is kept by the application. A generator is wired to
 the pattern it builds; a grid that belongs to no instrument, or a set of notes,
-is patched into as many places as you like by dragging a cable from its outlet —
+is patched into as many places as you like by dragging a cable from its outlet -
 and a grid can be made on the glass as well as declared. Everything below
 documents one of those.
 
 **One thing to know before you play anything into it.** A pattern you edit on
 the glass lives in the running composition, and it is kept across a restart
-only if the composition asks for that — see *Keeping what you make* below.
+only if the composition asks for that - see *Keeping what you make* below.
 Without it, restarting the composition throws away every note you tapped.
 Either way there are two tools in the repository as a safety net, and the habit
 is to run the first before restarting anything:
@@ -59,11 +59,11 @@ python tools/restore_state.py      # after
 ```
 
 A restore puts each grid back exactly: a step the composition seeds on every
-start, and that you had taken out, stays out — and the restore says which steps
+start, and that you had taken out, stays out - and the restore says which steps
 it took out.
 
 Those two tools live in the repository rather than in the installed package, as
-does `compositions/drm1_grid.py` below — the only worked example, and the only
+does `compositions/drm1_grid.py` below - the only worked example, and the only
 place the application-facing API is written down. Installing from a package
 index gets you the service and the page; the examples are worth the clone.
 
@@ -114,8 +114,8 @@ The page shows nothing until an application dials in and declares something,
 which is the expected state on a fresh start rather than a fault.
 
 The corner of the bar shows the version and the build the page was made from.
-If the service has newer files than the browser loaded — which happens whenever
-you change something while a panel is left open — that readout becomes a button
+If the service has newer files than the browser loaded - which happens whenever
+you change something while a panel is left open - that readout becomes a button
 saying so, and tapping it loads the new page. It never reloads on its own:
 somebody may be playing.
 
@@ -123,7 +123,7 @@ somebody may be playing.
 
 The **size** button on the page sets how big a grid cell is. It starts on *fit
 the glass*, which measures your own screen and makes the grid as large as will
-fit on it — so a panel nothing here was written against still uses all of
+fit on it - so a panel nothing here was written against still uses all of
 itself. The named sizes override that:
 
 | | |
@@ -137,7 +137,7 @@ itself. The named sizes override that:
 None of these is recommended over the others, because the right one depends on
 your hands, your panel and how far away it is. Someone who wants the most music
 on the glass and someone who needs a larger target are both served by the same
-control, and the choice is remembered by the browser that made it — so two
+control, and the choice is remembered by the browser that made it - so two
 people with their own panels do not have to agree.
 
 The chooser itself never shrinks. Whatever size you pick, the way back is the
@@ -204,7 +204,7 @@ hard that note is struck.
 
 Rows are drawn in the order they are declared, so a pitched part lists its
 highest note first and a rising line rises. A part that declares `visible_rows`
-shows a window onto a pattern taller than itself — two octaves is twenty-five
+shows a window onto a pattern taller than itself - two octaves is twenty-five
 rows, and a block tall enough for all of them crowds everything else off the
 page. Only the pitches scroll: the velocity lane and the playhead stay put,
 because a column is a moment in time and scrolling up and down does not change
@@ -218,7 +218,7 @@ first, and each one taken is reported so the glass never goes dark unexplained.
 
 That is enforced by the application rather than left to the instrument: a
 monophonic synth handed two notes at once chooses between them by its own
-note-priority setting, which the panel cannot see — so the glass would show two
+note-priority setting, which the panel cannot see - so the glass would show two
 notes while one sounded. It is counted by *extent* rather than by starting
 position, because a note beginning part-way through another is exactly the case
 the instrument would have to arbitrate.
@@ -236,7 +236,7 @@ answers to, and probably most other instruments.
 
 Nothing in this package knows that a switch is a MIDI control change. A
 composition declares what shape each setting is and what it may hold, and is
-given a function to call when one moves — which is where a message gets sent,
+given a function to call when one moves - which is where a message gets sent,
 if that is what the setting stands for:
 
 ```python
@@ -253,19 +253,19 @@ superconductor.subsequence_adapter.Params(
 ```
 
 The settings worth putting on glass are usually the ones an instrument has no
-knob for at all — reachable otherwise only through editor software. On the
+knob for at all - reachable otherwise only through editor software. On the
 Minitaur that is most of them.
 
 ## A set of notes
 
 A **pitch set** is a block holding notes somebody chose, and it sounds nothing by
-itself. Drag a cable from its outlet onto a generator that takes pitches — an
-arpeggio, a chord — and that generator plays those notes. One set can feed as
+itself. Drag a cable from its outlet onto a generator that takes pitches - an
+arpeggio, a chord - and that generator plays those notes. One set can feed as
 many generators as you like, on as many instruments, and each plays it in its own
 instrument's register, so the same chord reaches a bass synth and a lead without
 being chosen twice.
 
-It is drawn as a keyboard, an octave at a time — thirteen notes, C to C — however
+It is drawn as a keyboard, an octave at a time - thirteen notes, C to C - however
 wide the range it offers. Drag the strip beneath the keys to move along it; marks
 on the strip show where every chosen note is, including ones out of view. Each C
 is labelled with its octave.
@@ -288,7 +288,7 @@ bass synth and its lead.
 ## Arranging a page
 
 A block's title bar is its handle: drag one and it moves a cell at a time, on
-the same lattice the steps themselves sit on — so two patterns on a page line up
+the same lattice the steps themselves sit on - so two patterns on a page line up
 step for step rather than nearly. A grid's bottom edge is a handle too: drag it
 to show more of its rows or fewer. The grids go on playing throughout; only a
 title bar or an edge moves anything.
@@ -301,7 +301,7 @@ the cells on the page. A collapsed block that is switched off says **LIVE OFF**
 on its bar, since the switch itself is out of sight.
 
 Any position is allowed, including on top of another block. The last block you
-moved is the one on top, and pressing a block brings it to the front — anywhere
+moved is the one on top, and pressing a block brings it to the front - anywhere
 but where you play notes, so playing never reshuffles the page. That is what makes
 a busy page workable. Nothing is ever pushed aside to make room: a block you did
 not touch does not move.
@@ -309,7 +309,7 @@ not touch does not move.
 A block can be covered completely. Collapse the block on top of it and it is
 uncovered, with nothing moved; press it and it comes to the front.
 
-Tap **LAYOUT** in the bar to hold the arrangement still — the padlock closes, and
+Tap **LAYOUT** in the bar to hold the arrangement still - the padlock closes, and
 title bars and edges stop moving anything. That is what stops a stray finger
 rearranging a page mid-performance. The browser remembers which way you left it.
 A block still collapses and expands while the arrangement is held, because doing
@@ -330,7 +330,7 @@ link = superconductor.subsequence_adapter.AppLink(
 )
 ```
 
-Leave `page_store` out and arranging still works — it simply is not kept, and
+Leave `page_store` out and arranging still works - it simply is not kept, and
 the panel says so rather than letting you find out at the next reload. Because
 the arrangement belongs to the application rather than to one browser, a second
 panel sees it too.
@@ -364,10 +364,10 @@ after your first edit the composition file is no longer the score: its opening
 pattern and opening values apply only where the store holds nothing.
 
 `beside(__file__)` keeps it next to the composition. Give a path instead to keep
-it anywhere else — the example rig keeps its own on the machine's own disk,
+it anywhere else - the example rig keeps its own on the machine's own disk,
 because its compositions sit on a network share.
 
-The bar says when the store last wrote — **KEPT · 15:32** — and says **STORE ·
+The bar says when the store last wrote - **KEPT · 15:32** - and says **STORE ·
 TROUBLE** if anything went wrong with it. Tap it for the details, and for
 **START AGAIN FROM THE FILE**, which puts every pattern, stack, setting and mute
 back as the composition file has them and removes the grids made on the glass.
@@ -376,15 +376,15 @@ for good.
 
 If the store cannot be read, it is moved aside untouched, the bar and the log
 say where, and the piece starts as its file says. Anything the composition no
-longer accepts — an option renamed, a row taken away — is refused on its own
+longer accepts - an option renamed, a row taken away - is refused on its own
 and listed, the rest comes back, and a copy of the store as it was is kept
 beside it.
 
 ## Variants
 
 A pattern can hold several versions of its notes, and switch between them while
-it plays. A grid that has them carries a column down its right-hand edge — a
-letter and a **▶** to a row, **A** to **D** — and each row is one variant, with
+it plays. A grid that has them carries a column down its right-hand edge - a
+letter and a **▶** to a row, **A** to **D** - and each row is one variant, with
 two things you can do to it:
 
 - **Tap the letter** to show that variant and edit it. The music does not change:
@@ -396,23 +396,23 @@ two things you can do to it:
 The lit row is the one playing and the ringed letter is the one you are looking
 at; when they are the same row it is both. While you are looking at a variant
 that is not playing, the grid shows its notes without the dots the playing
-variant's generators are placing — and if it is empty, its ▶ gives way to a **⧉**
+variant's generators are placing - and if it is empty, its ▶ gives way to a **⧉**
 that fills it from the one sounding, since an empty variant has nothing to play
 anyway. **Clear** works on the variant you are looking at. Which variant you are
 looking at belongs to your panel; which one plays belongs to the piece, and every
 panel sees it.
 
 A block with fewer rows than it has variants has nowhere to put a column, and
-keeps a row of tabs above the pattern instead. That row says *B — A is playing*
-in words, because one row can mark which variant is shown or which is playing but
-not both.
+keeps a row of tabs above the pattern instead. That row names the one you are
+looking at and says which one is playing beside it, in words, because one row
+can mark which variant is shown or which is playing but not both.
 
 Only the notes are a variant's. The mute, a pitched pattern's transposition and
 the generators that build the pattern stay the pattern's, so switching variant
 never changes the key you are in.
 
 A composition says which grids have variants and what they are called, and its
-play function asks the grid what to play when the pattern is built — which is
+play function asks the grid what to play when the pattern is built - which is
 the moment a cued variant lands:
 
 ```python
@@ -503,7 +503,7 @@ link.start()
 the file that holds the MIDI port, the channel and which drum voice sits on
 which row, and it is the file you would copy and change for your own rig.
 
-The adapter imports nothing from the application it serves — it is written
+The adapter imports nothing from the application it serves - it is written
 against whatever object it is handed. That is deliberate, and it is what keeps
 this package free of any dependency on a particular piece of music software.
 
@@ -518,7 +518,7 @@ If you do want it supervised and you have systemd, there are two shapes and the
 difference is real. A **system unit** starts at boot with nobody logged in,
 which is what you want on a machine that boots into being a studio. A **user
 unit** needs no root and shares your own environment and files, which suits a
-machine that is also somebody's desktop — but it starts only when you log in
+machine that is also somebody's desktop - but it starts only when you log in
 unless you enable lingering.
 
 Both of these have placeholders in capitals. They will not start until you have
@@ -590,7 +590,7 @@ playwright install firefox
 playwright install-deps firefox
 ```
 
-Firefox rather than all three browsers — it is a third of the packages, and it
+Firefox rather than all three browsers - it is a third of the packages, and it
 is the browser this is built for. `--browser firefox` is not optional: the test
 plugin defaults to Chromium.
 
@@ -607,7 +607,7 @@ the files and reload the browser.
 
 | | |
 | --- | --- |
-| `superconductor/` | the package — the service, the protocol, the adapter and the page it serves |
+| `superconductor/` | the package - the service, the protocol, the adapter and the page it serves |
 | `compositions/` | the worked example, and the only place the application-facing API is written down |
 | `tools/` | probes that stand in for a browser, a capture and a restore, and the theme separation check |
 | `tests/` | the suite, including the ones that drive a real Firefox |
@@ -624,7 +624,7 @@ them should be checkable, not because they describe the code as it stands.
 ## Licence
 
 Functional Source License 1.1 with an Apache 2.0 future licence
-(`FSL-1.1-ALv2`) — see [LICENSE](LICENSE). You may read, run, modify and
+(`FSL-1.1-ALv2`) - see [LICENSE](LICENSE). You may read, run, modify and
 redistribute it for any purpose except competing with it, and each version
 converts to Apache 2.0 two years after its release.
 
