@@ -978,8 +978,36 @@ def _play_snare_lane (p: typing.Any) -> None:
 	snare_recipe.build(p)
 
 
+def _play_shared_notes (p: typing.Any) -> None:
+	"""Replay the instrument-less *pitched* grid, and run whatever is stacked on it.
+
+	**A pitch means itself, where a drum row means whatever the destination says**
+	(#2108).  `_play` puts down a row name and lets the borrowing pattern's own note
+	map turn it into a note, which is exactly what lets one grid land on two DRM1
+	patterns.  A bassline shared by two synths cannot work that way: "C2" is not a
+	name either instrument has to look up.  So this places the number, and the line
+	sounds the same wherever the cable is dragged.
+
+	**The destination's transposition still applies**, because a pattern is
+	transposed after every contribution has been placed — so both synths play one
+	line, each in the register its own grid is set to.
+	"""
+
+	beats_per_position = STEP_DURATION / BASS_DIVISIONS
+
+	for row, notes in shared_notes.now(p).items():
+		for at, note in notes.items():
+			p.note(
+				BASS_NOTE_MAP[row], beat=int(at) * beats_per_position,
+				velocity=note.get("velocity", BASS_VELOCITY),
+				duration=note.get("length", BASS_LENGTH) * beats_per_position)
+
+	shared_notes_recipe.build(p)
+
+
 SHARED: dict[str, collections.abc.Callable[[typing.Any], None]] = {
 	"shared": _play_shared,
+	"shared_notes": _play_shared_notes,
 	"snare_lane": _play_snare_lane,
 }
 """Annotated rather than inferred: a dict is invariant in its value type, and a
@@ -992,10 +1020,14 @@ notice."""
 file's.**  The velocity, the drum map and what a row name means are all facts
 about this rig; the package routes and does not look inside (#1465, #2108).
 
-One so far — a grid belonging to no instrument, which sounds only where it is
-routed.  Simon's own case is a bassline shared by two synths, each adding notes
-of its own; this is the same shape with one machine and two patterns, which is
-what this rig can show today.
+Two kinds of them.  A grid whose rows are this kit's *voices* lands wherever
+those names are known, which is how one grid feeds two DRM1 patterns.  A grid
+whose rows are *notes* sounds the same line on any instrument it is patched into,
+because a pitch means itself.
+
+**The second is Simon's own case** (#2108): a bassline shared by two synths, each
+adding notes of its own.  `shared_notes` is it — one line, the Minitaur and the
+Matriarch both taking it, and each instrument's own grid still its own.
 """
 
 
@@ -1243,6 +1275,17 @@ are the DRM1's because that is what its rows are named after; a shared grid whos
 rows meant something else would be a different declaration in this file.
 """
 
+shared_notes_recipe = _stack_for("shared_notes", "shared_notes_recipe", "Shared — notes stack",
+                                 BASS_ROWS, pitch_notes=BASS_NOTE_MAP)
+"""And on the shared line, where the rows are notes rather than voices.
+
+The stack above says a shared grid whose rows meant something else would be a
+different declaration in this file.  This is that declaration: the same mechanism
+with the Minitaur's twenty-five notes as its pool, so a euclidean added here
+writes a bassline both synths then play — and neither has to be the one that owns
+it.
+"""
+
 snare_recipe = _stack_for(
 	"snare_lane", "snare_recipe", "Snare lane — stack", pitches=["snare"])
 """And on the lane that is one voice wide, where the pitches are the point.
@@ -1382,6 +1425,26 @@ refer to.
 """
 
 
+shared_notes = superconductor.subsequence_adapter.NoteGrid(
+	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
+	data_key="shared_notes", name="shared_notes", title="Shared — notes",
+	divisions=BASS_DIVISIONS, about=[("", "no instrument")],
+	default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
+	visible_rows=12)
+"""A line with no instrument behind it, which either synth can take (#2108).
+
+**Drawn over the Minitaur's two octaves, C1 to C3.**  The two instrument grids sit
+a register apart on purpose — the bass is drawn C1 to C3 and the chords C3 to C5 —
+but that is how each is *drawn*, not what its instrument can sound: the Minitaur
+reaches note 72 and the Matriarch the whole of MIDI.  A register both can play is
+what makes one line worth sharing, and it is the bass register because that is
+the case Simon asked for.
+
+**No pattern of its own, so no length of its own** (#2548): like every routed grid
+here it plays at the resolution of whatever borrowed it.
+"""
+
+
 nine_grid = superconductor.subsequence_adapter.StepGrid(
 	composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
 	data_key="nine", name="nine", title="DRM1 — nine",
@@ -1412,6 +1475,10 @@ link = superconductor.subsequence_adapter.AppLink(
 			composition, rows=["snare"], steps=STEPS, beats=BEATS,
 			data_key="snare_lane", name="snare_lane", title="Snare lane",
 			about=[("", "no instrument")], default_velocity=VELOCITY),
+
+		# And the same again with notes for rows, which is what lets two
+		# different instruments share one line (#2108).
+		shared_notes,
 
 		nine_grid,
 		bass_grid,
@@ -1459,6 +1526,7 @@ link = superconductor.subsequence_adapter.AppLink(
 		bass_recipe,
 		chord_recipe,
 		shared_recipe,
+		shared_notes_recipe,
 		snare_recipe,
 		nine_recipe,
 		notes,
@@ -1489,7 +1557,8 @@ link = superconductor.subsequence_adapter.AppLink(
 		# flexible and independent by a patch cable."*
 		superconductor.subsequence_adapter.Page(
 			"notes",
-			parts=["notes", "bass", "bass_recipe", "chords", "chord_recipe"],
+			parts=["notes", "shared_notes", "shared_notes_recipe",
+			       "bass", "bass_recipe", "chords", "chord_recipe"],
 			title="Notes"),
 
 		# The DRM1 with the things that write into it and the things that can be

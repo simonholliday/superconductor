@@ -877,6 +877,79 @@ def test_the_rack_cannot_make_a_grid_longer_than_a_route_can_carry (
 	assert declared["rows"] == rig.ROWS
 
 
+def _routed (rig: typing.Any, source: str, note_map: dict[str, int]) -> list[tuple[int, int]]:
+	"""Play one of this rig's sources into a pattern carrying *note_map*, and read back what landed."""
+
+	pattern = subsequence.pattern.Pattern(channel=1, length=rig.BEATS)
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1),
+		drum_note_map=note_map, default_grid=rig.STEPS)
+
+	rig.SHARED[source](builder)
+
+	return sorted((note.position, note.pitch) for note in builder.placed())
+
+
+def test_a_shared_line_of_notes_sounds_the_same_on_either_synth (rig: typing.Any) -> None:
+	"""#2108's own sentence: one line, two synths, each keeping a grid of its own.
+
+	**A drum row lands wherever its name is known** — which is what lets one grid
+	feed two DRM1 patterns, and what stops it reaching a Minitaur, whose rows are
+	named nothing like a kit's. A pitch means itself, so this grid places the
+	number and the line sounds the same on whatever borrowed it.
+	"""
+
+	held = rig.composition.data.get("shared_notes")
+
+	try:
+		rig.composition.data["shared_notes"] = {
+			"C2": {"0": {"velocity": 90, "length": rig.BASS_LENGTH}},
+			"G2": {str(rig.BASS_DIVISIONS * 4): {"velocity": 90, "length": rig.BASS_LENGTH}}}
+
+		on_the_minitaur = _routed(rig, "shared_notes", rig.BASS_NOTE_MAP)
+		on_the_matriarch = _routed(rig, "shared_notes", rig.CHORD_NOTE_MAP)
+
+		assert on_the_minitaur == on_the_matriarch, \
+			"the same line did not reach both, so a row name was resolved somewhere"
+
+		pulses = int(24 * rig.STEP_DURATION)
+
+		assert on_the_minitaur == [
+			(0, rig.BASS_NOTE_MAP["C2"]), (pulses * 4, rig.BASS_NOTE_MAP["G2"])]
+
+		# And the grid a Matriarch draws does not hold C2 at all, which is the
+		# point: the note reached it without being one of its rows.
+		assert "C2" not in rig.CHORD_NOTE_MAP
+
+	finally:
+		if held is None:
+			rig.composition.data.pop("shared_notes", None)
+		else:
+			rig.composition.data["shared_notes"] = held
+
+
+def test_the_shared_line_is_offered_to_every_stack_and_drives_nothing (rig: typing.Any) -> None:
+	"""It is a source like the drum grids, and like them it has no pattern, so no length."""
+
+	for stack in ("bass_recipe", "chord_recipe", "drum_recipe"):
+		assert "shared_notes" in rig.link.controls[stack].declaration()["sources"], stack
+
+	declared = rig.link.controls["shared_notes"].declaration()
+
+	assert declared["type"] == "note_grid"
+	assert "min_steps" not in declared, "a grid with no pattern was offered a length (#2548)"
+	assert rig.shared_notes.pattern is None
+
+
+def test_the_shared_line_is_drawn_where_both_the_synths_it_feeds_are (rig: typing.Any) -> None:
+	"""A cable has two ends, and a page that shows one of them shows half a connection."""
+
+	notes_page = next(page for page in rig.link.pages if page.page_id == "notes")
+
+	for part in ("shared_notes", "shared_notes_recipe", "bass", "chords"):
+		assert part in notes_page.parts, part
+
+
 def test_the_note_set_is_a_whole_keyboard_seen_from_c2 (rig: typing.Any) -> None:
 	"""Eighty-eight keys, opening on the octave between the bass and the lead (#2389)."""
 
