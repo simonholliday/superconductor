@@ -1806,8 +1806,11 @@ def test_only_one_scrollbar_and_it_is_ours (panel: typing.Any) -> None:
 		return {
 			// A native scrollbar takes its width out of the content box.
 			gutter: scroller.offsetWidth - scroller.clientWidth,
+			// **A box, with content taller than it.**  An inline element reports no
+			// height of its own, so a label's words in their `<bdi>` counted as four
+			// more things that scroll, which none of them can.
 			scrolling: [...part.querySelectorAll('*')]
-				.filter(el => el.scrollHeight > el.clientHeight).length,
+				.filter(el => el.clientHeight > 0 && el.scrollHeight > el.clientHeight).length,
 			marks: part.querySelectorAll('.track').length,
 		};
 	}""")
@@ -3110,6 +3113,107 @@ def test_every_row_label_is_right_aligned_at_the_same_offset (panel: typing.Any)
 	assert offsets, "no labels were drawn"
 	assert len(set(offsets)) == 1, f"labels sit at different offsets: {sorted(set(offsets))}"
 	assert offsets[0] >= 0, "a label reaches past its own right edge"
+
+
+TRIMMED = """() => {
+	const found = [];
+
+	for (const label of document.querySelectorAll('.part .row-label')) {
+		const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+		let text = walker.nextNode();
+
+		while (text && !text.data.trim()) text = walker.nextNode();
+
+		if (!text) continue;
+
+		// The box that lays out the words' line, and the box that clips them.  An
+		// ellipsis is drawn only where the two are one block.
+		let lays = text.parentElement;
+
+		while (lays !== label && getComputedStyle(lays).display.startsWith('inline')) lays = lays.parentElement;
+
+		let clips = text.parentElement;
+
+		while (clips !== label && getComputedStyle(clips).overflowX === 'visible') clips = clips.parentElement;
+
+		const edge = clips.getBoundingClientRect();
+		const style = getComputedStyle(lays);
+		let kept = '';
+
+		for (let at = 0; at < text.length; at++) {
+			const range = document.createRange();
+
+			range.setStart(text, at);
+			range.setEnd(text, at + 1);
+
+			const one = range.getBoundingClientRect();
+
+			if (one.left >= edge.left - 0.5 && one.right <= edge.right + 0.5) kept += text.data[at];
+		}
+
+		if (kept.length === text.data.length) continue;
+
+		found.push({ words: text.data.trim(), kept: kept.trim(), display: style.display,
+		             mark: style.textOverflow, own: lays === clips });
+	}
+
+	return found;
+}"""
+"""Every label on the page whose words do not fit, with the box that trims them."""
+
+
+def test_an_over_long_label_is_trimmed_at_its_front_with_a_mark (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**The mark was never drawn.**  A label is set right to left so that an
+	over-long name loses its front and the ellipsis lands where the loss is — but a
+	label is a flex row, which is what centres it, and an ellipsis is drawn only by
+	a block laying out a line of its own.  So a name too long for the column lost
+	its front with nothing to say a word had gone, which is what the stylesheet said
+	it had stopped doing.
+
+	**The names come from the app** — a drum voice's words (#2459), an instrument's
+	setting, a generator's parameter — so they are as long as the app makes them,
+	and each kind of column is given one too long for it at the compact size.
+	"""
+
+	generators = conftest.CONTROLS["stack"]["generators"]
+	euclidean = {**generators[0], "parameters": [
+		{**one, "label": "pulses spread through the bar"} if one["name"] == "pulses" else one
+		for one in generators[0]["parameters"]]}
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"moog": {**conftest.CONTROLS["moog"], "fields": [
+			{**one, "label": "Filter velocity sensitivity"} if one["name"] == "rate" else one
+			for one in conftest.CONTROLS["moog"]["fields"]]},
+		"stack": {**conftest.CONTROLS["stack"], "generators": [euclidean, *generators[1:]]},
+	})
+	fake_app.confirm("grid/labels", {"kick": "closed hi-hat with a long tail"}, by="app")
+
+	panel.locator(".sizes > button").click()
+	panel.locator(".sizes .choices button", has_text="Compact").click()
+	panel.wait_for_function(
+		"() => getComputedStyle(document.documentElement).getPropertyValue('--cell') === '22px'",
+		timeout=5_000)
+
+	for page_named, long in (("Drums", "closed hi-hat with a long tail"),
+	                         ("Moog", "Filter velocity sensitivity"),
+	                         ("Generators", "pulses spread through the bar")):
+		panel.locator(".pages button", has_text=page_named).click()
+		_settled(panel)
+
+		trimmed = panel.evaluate(TRIMMED)
+
+		assert long in [one["words"] for one in trimmed], (
+			f"{long!r} was not trimmed on {page_named}, so this tests nothing there: {trimmed}")
+
+		for one in trimmed:
+			assert one["own"] and one["mark"] == "ellipsis" and "flex" not in one["display"] \
+				and "grid" not in one["display"], (
+				f"{one['words']!r} is trimmed where no mark is drawn: laid out by a "
+				f"{one['display']} box that {'clips' if one['own'] else 'does not clip'} it")
+			assert one["kept"] and one["words"].endswith(one["kept"]), (
+				f"{one['words']!r} kept {one['kept']!r}, which is not its end")
 
 
 def _two_fingers (panel: typing.Any, apart: int, then: int) -> None:

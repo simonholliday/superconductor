@@ -1695,9 +1695,9 @@ html, body {
 	   the end of a line, which is the end that fits. At the compact size
 	   "hihat_1_closed" was simply losing its h, silently, with the rest intact
 	   and nothing to say a letter had gone. Reversing the direction puts the
-	   mark where the loss is. */
+	   mark where the loss is — drawn by the words inside, below, because this
+	   is a flex row and a flex row draws none. */
 	direction: rtl;
-	text-overflow: ellipsis;
 
 	/* **No rail.** Every label used to carry a dot at its left edge, stacking
 	   into a dotted line down the column — a convention for "this is not a
@@ -1707,6 +1707,24 @@ html, body {
 	   rule a mark hinting at an affordance is the exact ambiguity the rule
 	   exists to remove. Scrolling is what everything that is not a cell does;
 	   it does not need announcing. */
+}
+
+/* **A label's words, in the one box that both clips them and marks the loss.**
+ *
+ * An ellipsis is drawn only by a block laying out a line it clips, and a label is
+ * a flex row, which is what centres it — so the mark the rule above promises was
+ * never drawn, and a name too long for its column lost its front with nothing to
+ * say so. Found when a row's words became the app's to make as long as it likes
+ * (#2459); an instrument's settings had been losing theirs all along.
+ *
+ * As a flex item this is a block, it inherits the reversed direction and so trims
+ * at the front, and `min-width: 0` lets it be narrower than its words. The `<bdi>`
+ * inside keeps them in the order they were written. */
+.row-label > .words {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .cell {

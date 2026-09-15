@@ -1099,6 +1099,14 @@ function Scenes ({ states, onCue }) {
 		</div>`;
 }
 
+/* A label's words as a label column draws them: in the box that trims them at the
+ * front with a mark, and isolated so they stand in the order they were written.
+ * See `.row-label > .words` for why the box, and `rowLabel` for why the isolation.
+ * Every label naming something an app named goes through here. */
+function labelText (words) {
+	return html`<span class="words"><bdi>${words}</bdi></span>`;
+}
+
 /* What a row says on the glass: the app's words where it gave some, and its id
  * tidied where it did not (#2459).
  *
@@ -1108,10 +1116,10 @@ function Scenes ({ states, onCue }) {
  * without a step moving. The words are drawn as the app wrote them; only an id is
  * tidied, because an id is an address and not a sentence.
  *
- * **Drawn inside a `<bdi>` wherever a label column holds them**, so they stand in the
- * order they were written: the column is set right to left to trim an over-long
- * name at its front, and a name beginning with a number had the number carried to
- * its end — the app said `808 kick` and the glass said `KICK 808`. */
+ * **Drawn through `labelText`**, inside a `<bdi>`, so they stand in the order they
+ * were written: the column is set right to left to trim an over-long name at its
+ * front, and a name beginning with a number had the number carried to its end —
+ * the app said `808 kick` and the glass said `KICK 808`. */
 function rowLabel (labels, row) {
 	const words = (labels || {})[row];
 
@@ -1206,8 +1214,8 @@ function Grid ({ control, cellsAt = control, rows, labels, steps, end = steps, b
 							role="button" aria-pressed=${row === chosen ? "true" : "false"}
 							title=${`show how hard each ${rowLabel(labels, row)} step is struck`}
 							onClick=${() => onChoose(row)}
-						><bdi>${rowLabel(labels, row)}</bdi></div>`
-					: html`<div class="row-label" key=${`label-${row}`} data-row=${row}><bdi>${rowLabel(labels, row)}</bdi></div>`}
+						>${labelText(rowLabel(labels, row))}</div>`
+					: html`<div class="row-label" key=${`label-${row}`} data-row=${row}>${labelText(rowLabel(labels, row))}</div>`}
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${cellsAt}/${row}/${step}`;
 					const shape = stepIn(cells[row], step);
@@ -1650,7 +1658,7 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divi
 				<div
 					class=${`row-label ${(unreachable || []).includes(row) ? "unreachable" : ""}`}
 					key=${`label-${row}`} data-row=${row}
-				><bdi>${rowLabel(labels, row)}</bdi></div>
+				>${labelText(rowLabel(labels, row))}</div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${cellsAt}/${row}/${step * divisions}`;
 					const note = (notes[row] || {})[String(step * divisions)];
@@ -1812,7 +1820,7 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, 
 
 	return html`
 		<div class=${`lane ${tight ? "tight" : ""}`} style=${style}>
-			<div class="row-label"><bdi>${label}</bdi></div>
+			<div class="row-label">${labelText(label)}</div>
 			${Array.from({ length: steps }, (_, step) => {
 				const found = at(step);
 				const height = found ? Math.max(4, ((found.note.velocity - low) / (high - low)) * 100) : 0;
@@ -2856,7 +2864,7 @@ function Params ({ name, fields, values, cell, onSet }) {
 				: [
 					html`
 						<div class="row-label" key=${`label-${one.field.name}`}>
-							${one.field.label || one.field.name}
+							${labelText(one.field.label || one.field.name)}
 						</div>`,
 					html`
 						<div class="setting" key=${one.field.name} data-field=${one.field.name}
@@ -3251,7 +3259,7 @@ function Contribution ({ name, layer, layers, offered, why, onSet }) {
 								     will let a generator have more than one. */ ""}
 								<div class="row-label" key=${`label-${field.name}`}
 									data-row=${field.name}>
-									${field.label || field.name}
+									${labelText(field.label || field.name)}
 								</div>`,
 							html`
 								<div class="setting" key=${field.name} data-field=${field.name}
