@@ -32,25 +32,28 @@ while saying it was a probe for any.
 
 ## Keeping a pattern across a restart
 
-**A pattern edited on the glass does not survive restarting the composition it
-belongs to.** It lives in `composition.data` and nothing writes it down
-(Subroutine #2067). That has cost real work more than once, and it will keep
-costing it until #2067 is settled — so until then these two exist, and the habit
-is to run the first before restarting anything.
+**A composition given a pattern store keeps what is made on the glass by itself**
+(Subroutine #2487), so a routine restart brings every pattern back with no help
+from here. **It keeps neither the tempo nor the pause**, which are how a piece is
+being played rather than anything made: a restarted rig comes back playing, at
+the tempo its composition declares. So the habit is to capture before restarting
+anything, and to put the transport back after every restart.
 
 | File | What it does |
 | --- | --- |
 | `capture_state.py` | Joins as a panel, keeps the first snapshot of every connected app, and writes it out. Defaults to `/home/si/superconductor-state.json` — on disk rather than in tmpfs, so it survives a reboot as well as a restart. |
-| `restore_state.py` | Replays that file through the panel's own socket, every value as an ordinary `set`. Nothing reaches into a composition, so a restore is exactly as legitimate as a tap. |
+| `restore_transport.py` | Sends every connected app's transport the tempo and then the pause the capture holds, and **proves the pause by counting beats** rather than by reading the field, which reads the same for a clock that is held and one that is not. Exits non-zero when a value is refused or the clock disagrees. Run it after every restart. |
+| `restore_state.py` | Replays the whole file through the panel's own socket, every value as an ordinary `set`. Nothing reaches into a composition, so a restore is exactly as legitimate as a tap. For when the store could not bring something back. |
 
 ```
 python tools/capture_state.py [where-to-write.json]
+python tools/restore_transport.py [what-to-read.json]
 python tools/restore_state.py [what-to-read.json]
 ```
 
-Two things to know about a restore. **It is additive and cannot clear**, so a
-composition that seeds an opening pattern comes back with that pattern *plus*
-whatever was captured. And **a capture carries the contract it was taken under**:
+Two things to know about a full restore. **A grid goes back exactly** (#2465): one
+whole-grid write each, so a step a composition seeds on every start and somebody
+had taken out stays out. And **a capture carries the contract it was taken under**:
 a file older than 1.12.0 is converted by reading the live manifest, because a
 note at position 12 meant step 12 in the old shape and two steps in the new one,
 and both look like a pattern.
