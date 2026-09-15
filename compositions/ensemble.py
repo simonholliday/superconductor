@@ -4,8 +4,9 @@
 empty: no seeded steps, no generators, no routes, no cables, no note set.  What
 the glass holds after the first minute is what somebody put there, which is the
 whole of what this file is for — `drm1_grid.py` beside it is the demonstration
-rig, and keeps the shared line, the routed lane, the polyrhythm and the grid rack
-that show what the panel can do.
+rig, and keeps the routed lane, the polyrhythm and the grid rack that show what
+the panel can do.  **What a person makes here comes from racks**: a keyboard to
+feed generators, and a line to feed instruments (#2108).
 
 **Everything about this particular studio lives in this file**: which interface
 each instrument is plugged into, which channel it listens on, and which register
@@ -583,6 +584,21 @@ def _places (steps: int) -> adapter.Positions:
 	}
 
 
+SOURCES: dict[str, collections.abc.Callable[[typing.Any], None]] = {}
+"""What any stack here may route from, and how to play each — one map for all of them.
+
+**Empty at the start**, which is *from nothing* holding for cables as well as notes:
+a stack offers a route only where there is something to route from.  A line made on
+the glass adds itself (`_make_line`) and a line taken away removes itself, and
+because every stack holds this map rather than a copy of it (#2421) each of them
+offers the line the moment it exists.
+
+**Turning a grid into notes is this file's business, so the function is this
+file's** (#1465, #2108); the package routes and does not look inside.  Annotated
+rather than inferred, because a dict is invariant in its value type.
+"""
+
+
 def _stack_for (instrument: Instrument) -> typing.Any:
 	"""A stack of contributions that build this instrument's pattern.
 
@@ -623,7 +639,7 @@ def _stack_for (instrument: Instrument) -> typing.Any:
 			"steps": (100, 5000),
 		},
 		builds=instrument.key,
-		sources={},
+		sources=SOURCES,
 		pulses_per_beat=subsequence.constants.MIDI_QUARTER_NOTE,
 		data_key=f"{instrument.key}_recipe",
 		name=f"{instrument.key}_recipe",
@@ -862,6 +878,129 @@ wherever it is patched.
 """
 
 
+# --- Lines, made from the glass -------------------------------------------
+
+LINE_ROWS = [midi_notes.note_to_name(note) for note in range(127, -1, -1)]
+"""Every note MIDI has, highest first, which is what a line belonging to no instrument holds.
+
+**A register of its own, and the widest there is** (Simon, 2026-09-14, on the line in
+`drm1_grid.py`): a line sounds as whatever it is patched into, so drawing it over one
+instrument's register would make it worse for the other.  Windowed, so it is as tall
+on the glass as any pitched grid.
+"""
+
+LINE_NOTES = {row: midi_notes.name_to_note(row) for row in LINE_ROWS}
+"""Row names to MIDI notes, for a grid whose rows *are* notes."""
+
+LINE_OPENS_AT = "C2"
+"""Where a line's window opens: the bass register, which is what one is first made for.
+
+A window opens at a grid's lowest rows, which for a grid over all of MIDI is C-1 —
+two octaves below anything here sounds (contract 1.38.0).
+"""
+
+LINES = "lines"
+
+
+def _make_line (spec: dict[str, typing.Any]) -> typing.Any:
+	"""Turn one asked-for line into a pitched grid with no instrument, routable from every stack.
+
+	**The case #2108 was raised for**: *"I have the Minitaur and Behringer Model D. I
+	want to create a bass pattern which plays on both."*  A line is drawn on by hand,
+	routed into both stacks, and each instrument goes on adding notes of its own.
+
+	**A pitch means itself**, so the line places note numbers rather than row names,
+	and it sounds the same notes on whatever it is patched into — each destination
+	then transposed by its own grid.
+
+	**Nothing past the end of the pattern it plays into** (#2548, `7eb4817`): a line
+	drives no pattern and has no length of its own, and Subsequence sounds a note
+	placed past a pattern's length at the start of its next cycle rather than dropping
+	it.  `p.grid` is the borrowing pattern's count of steps, which follows its length,
+	so what lies past it is left out and a note running over is cut — in the copy
+	played, never on the line.
+
+	**What it cannot do yet is take generators**, as a made grid in `drm1_grid.py`
+	cannot: a stack is declared against a pattern when this file is read.  Put
+	generators on the instruments it feeds.
+	"""
+
+	number = str(spec["id"])
+	key = f"{LINES}-{number}"
+	held = (composition.data.get(LINES) or {}).get("made") or []
+	at = next((n for n, one in enumerate(held) if one["id"] == number), len(held))
+
+	line = adapter.NoteGrid(
+		composition, rows=LINE_ROWS, steps=STEPS, beats=BEATS,
+		data_key=key, name=key, title=f"Line {at + 1}",
+		divisions=DIVISIONS, default_length=NOTE_LENGTH, default_velocity=VELOCITY,
+		visible_rows=12, opens_at=LINE_OPENS_AT,
+		about=[("", "no instrument")])
+
+	per_position = STEP_DURATION / DIVISIONS
+
+	def play (p: typing.Any) -> None:
+		"""Put this line's notes onto whatever routed it, and nothing past that pattern's end."""
+
+		ends = getattr(p, "grid", None)
+		last = None if ends is None else ends * DIVISIONS
+
+		for row, notes in line.now(p).items():
+			for placed, note in notes.items():
+				begins = int(placed)
+
+				if last is not None and begins >= last:
+					continue
+
+				length = note.get("length", NOTE_LENGTH)
+
+				if last is not None:
+					length = min(length, last - begins)
+
+				p.note(LINE_NOTES[row], beat=begins * per_position,
+				       velocity=note.get("velocity", VELOCITY),
+				       duration=length * per_position)
+
+	# Routable the moment it exists: a stack reads its sources when it declares, and
+	# the rack asks for a declaration as soon as it has made this.
+	SOURCES[key] = play
+
+	return line
+
+
+def _unmake_line (name: str) -> None:
+	"""Stop offering a line that has gone as a thing to route from.
+
+	Its notes stay in ``composition.data``, unreachable, as a removed layer's
+	parameters do; what must not stay is the source, or every stack goes on offering
+	a cable to a line nobody can see.
+	"""
+
+	SOURCES.pop(name, None)
+
+
+lines = adapter.Rack(
+	composition,
+	make=_make_line,
+	unmake=_unmake_line,
+
+	# **Nothing to choose and no length to set**: a line holds every note MIDI has,
+	# and plays at the length of whatever it is routed into.
+	steps=None,
+	makes="line",
+	data_key=LINES,
+	name=LINES,
+	title="Lines",
+	about=[("", "route into any instrument")])
+"""Lines a person makes from the glass, each one playable on as many instruments as it is routed into.
+
+**#2108 on the rig Simon plays.**  `drm1_grid.py` declares one shared line up front;
+this rig declares nothing up front, so a line is made here the way a keyboard is —
+and the rig still comes up from nothing, because a rack that has made nothing is a
+button rather than a control holding music.
+"""
+
+
 # --- The glass ------------------------------------------------------------
 
 DRUMS = ("drm1", "tr8s")
@@ -883,14 +1022,15 @@ link = adapter.AppLink(
 		*STACKS.values(),
 		*(one for one in SETTINGS.values() if one is not None),
 		keyboards,
+		lines,
 		adapter.Transport(composition),
 	],
 	pages=[
-		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS] + [KEYBOARDS],
+		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS] + [KEYBOARDS, LINES],
 		             title="Ensemble"),
 		adapter.Page("drums", parts=list(DRUMS), title="Drums"),
-		adapter.Page("synths", parts=list(SYNTHS) + [KEYBOARDS], title="Synths"),
-		adapter.Page("bass", parts=list(BASS) + [KEYBOARDS], title="Bass"),
+		adapter.Page("synths", parts=list(SYNTHS) + [KEYBOARDS, LINES], title="Synths"),
+		adapter.Page("bass", parts=list(BASS) + [KEYBOARDS, LINES], title="Bass"),
 	],
 	page_store=adapter.PageStore(PAGE_FILE),
 	pattern_store=adapter.PatternStore(PATTERN_FILE),

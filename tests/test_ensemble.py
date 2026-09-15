@@ -80,13 +80,18 @@ def test_the_rig_comes_up_with_nothing_on_it (rig: typing.Any) -> None:
 def test_no_grid_here_takes_from_another (rig: typing.Any) -> None:
 	"""No routes and no cables either, which is the other half of *from nothing*.
 
-	A stack offers a route only where the composition hands it sources; these are
-	handed none, so there is no cable to drag on the first morning and every one
-	that appears later was patched by somebody.
+	A stack offers a route only where there is something to route from, and nothing
+	is until a person makes a line — so there is no cable to drag on the first
+	morning and every one that appears later was patched by somebody.
+
+	**One map for every stack** (#2108), held rather than copied (#2421), which is
+	what lets a line made on the glass be offered to all of them the moment it
+	exists.
 	"""
 
 	for key, stack in rig.STACKS.items():
 		assert not stack.declaration().get("sources"), f"{key} was offered something to route from"
+		assert stack.sources is rig.SOURCES, f"{key} routes from a map of its own"
 
 
 def test_every_instrument_listens_on_a_channel_of_its_own (rig: typing.Any) -> None:
@@ -283,6 +288,127 @@ def test_the_keyboards_are_reachable_from_every_page_that_plays_notes (
 		assert rig.KEYBOARDS in pages[named], f"{named} has no keyboard to patch from"
 
 
+# --- Lines, made from the glass ------------------------------------------------
+
+def test_the_rig_offers_lines_and_starts_with_none (rig: typing.Any) -> None:
+	"""**#2108 on the rig Simon plays**: *"I have the Minitaur and Behringer Model D. I
+	want to create a bass pattern which plays on both."*  It was built in
+	`drm1_grid.py` and this composition had no way to do it.
+
+	Made from the glass, as a keyboard is, so the rig still comes up from nothing: a
+	rack that has made nothing is a button.  A line has every note MIDI has, so there
+	is nothing to choose, and it plays at the length of whatever it is routed into,
+	so there is no length to set either.
+	"""
+
+	declared = rig.lines.declaration()
+
+	assert declared["type"] == "rack"
+	assert declared["makes"] == "line"
+	assert "min_steps" not in declared, "a line was offered a length of its own"
+	assert declared["rows"] == [], "a line was offered rows to choose"
+
+	assert rig.lines.entries() == [], "the rig came up with a line already made"
+	assert rig.SOURCES == {}, "the rig came up with something to route from"
+
+
+def test_a_made_line_is_every_note_with_no_instrument_and_every_stack_may_take_it (
+	rig: typing.Any) -> None:
+	"""**A pitched grid belonging to no pattern**, drawn over the whole of MIDI and
+	opening where this rig's bass lives, because what a note sounds like belongs to
+	whatever it is patched into (Simon, 2026-09-14, on `drm1_grid.py`'s line).
+
+	Routable the moment it exists, from every stack here, and withdrawn when it goes,
+	or a stack goes on offering a cable to a line nobody can see.
+	"""
+
+	made = rig._make_line({"id": "abc"})
+
+	try:
+		assert made.kind == "note_grid"
+		assert made.name == "lines-abc"
+		assert made.pattern is None, "a line drives a pattern of its own"
+		assert len(made.rows) == 128 and made.rows[0] == "G9" and made.rows[-1] == "C-1"
+		assert made.declaration()["opens_at"] == rig.LINE_OPENS_AT
+
+		for key, stack in rig.STACKS.items():
+			assert stack.declaration().get("sources") == ["lines-abc"], f"{key} was not offered the line"
+
+	finally:
+		rig._unmake_line("lines-abc")
+
+	for key, stack in rig.STACKS.items():
+		assert not stack.declaration().get("sources"), f"{key} still offers a line that has gone"
+
+
+def _landed (rig: typing.Any, source: str, into: str, steps: int) -> list[tuple[int, int, int]]:
+	"""Play one source into a pattern like *into*'s, *steps* long, and read back each note.
+
+	Each note as its position, its pitch and how long it sounds, which is what a line
+	routed into that instrument would put on the wire.
+	"""
+
+	import random
+
+	import subsequence.pattern
+	import subsequence.pattern_builder
+
+	instrument = next(one for one in rig.INSTRUMENTS if one.key == into)
+	pattern = subsequence.pattern.Pattern(channel=instrument.channel, length=rig.BEATS * steps / rig.STEPS)
+	builder = subsequence.pattern_builder.PatternBuilder(
+		pattern=pattern, cycle=0, rng=random.Random(1),
+		drum_note_map=rig._note_map(instrument), default_grid=steps)
+
+	rig.SOURCES[source](builder)
+
+	return sorted((note.position, note.pitch, note.duration) for note in builder.placed())
+
+
+def test_a_line_sounds_its_own_notes_in_either_synth_and_stops_where_each_ends (
+	rig: typing.Any) -> None:
+	"""**A pitch means itself**, so the same line is the same notes on the Minitaur and
+	the Model D, each then transposed by its own grid.
+
+	**And nothing past the end of the pattern it plays into** (#2548, `7eb4817`):
+	Subsequence sounds a note placed past a pattern's length at the start of the next
+	cycle rather than dropping it, so a line routed into a twelve-step pattern must
+	lose its last four steps and cut a note that runs over, not play them into the bar
+	after.  A note is cut in the copy played and kept whole on the line.
+	"""
+
+	made = rig._make_line({"id": "both"})
+	per_step = rig.DIVISIONS
+
+	try:
+		made.apply(["C2", "0"], True)
+		made.apply(["G2", str(10 * per_step)], True)
+		made.apply(["G2", str(10 * per_step), "length"], 4 * per_step)
+		made.apply(["E2", str(13 * per_step)], True)
+
+		whole = _landed(rig, "lines-both", "minitaur", steps=16)
+		short = _landed(rig, "lines-both", "model_d", steps=12)
+
+		assert [(pitch) for _, pitch, _ in whole] == [36, 43, 40], f"the Minitaur heard {whole}"
+		assert [(pitch) for _, pitch, _ in short] == [36, 43], f"the Model D heard {short}"
+		assert short[1][2] < whole[1][2], "a note running past a twelve-step end was not cut"
+		assert made.rows_now()["G2"][str(10 * per_step)]["length"] == 4 * per_step, \
+			"cutting the copy shortened the note on the line"
+
+	finally:
+		rig._unmake_line("lines-both")
+
+
+def test_the_lines_are_reachable_from_every_page_that_plays_notes (rig: typing.Any) -> None:
+	"""A cable is dragged between two blocks, so the rack and what it makes have to be
+	on the page where the synths are."""
+
+	pages = {page.declaration()["title"]: page.declaration()["parts"]
+	         for page in rig.link.pages}
+
+	for named in ("Ensemble", "Synths", "Bass"):
+		assert rig.LINES in pages[named], f"{named} has no line to patch from"
+
+
 # --- The glass -----------------------------------------------------------------
 
 def test_every_page_names_something_this_composition_declares (rig: typing.Any) -> None:
@@ -309,7 +435,7 @@ def test_every_instrument_is_on_the_ensemble_page (rig: typing.Any) -> None:
 	ensemble = next(page for page in rig.link.pages
 	                if page.declaration()["title"] == "Ensemble")
 
-	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS] + [rig.KEYBOARDS]
+	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS] + [rig.KEYBOARDS, rig.LINES]
 
 
 def test_a_settings_block_needs_no_page_of_its_own (rig: typing.Any) -> None:
@@ -345,6 +471,19 @@ def test_the_rig_plays_nothing_until_somebody_plays_it (tmp_path: pathlib.Path) 
 		f"something other than the Matriarch's voicing was sent: {played['controls']}"
 
 
+def test_one_line_routed_into_two_synths_plays_on_both (tmp_path: pathlib.Path) -> None:
+	"""**The whole of #2108, through Subsequence's own scheduler**: a line made on the
+	glass with one note on it, a route to it on the Minitaur's stack and on the Model
+	D's, and that note arriving on both channels and nowhere else."""
+
+	played = _rendered(tmp_path, place=False, route=True)
+	rig = _composition()
+	channels = {one.key: one.channel - 1 for one in rig.INSTRUMENTS}
+
+	assert sorted(played["notes"]) == sorted([[channels["minitaur"], 36], [channels["model_d"], 36]]), \
+		f"the line did not reach exactly the two synths it was routed into: {played['notes']}"
+
+
 def test_a_note_on_every_instrument_reaches_its_own_channel (tmp_path: pathlib.Path) -> None:
 	"""And the other half: once somebody puts a note on each grid, each one sounds
 	where its instrument is listening.  Channels are counted from zero on the wire
@@ -358,11 +497,15 @@ def test_a_note_on_every_instrument_reaches_its_own_channel (tmp_path: pathlib.P
 		f"a note did not reach its instrument: {sorted(wire)}"
 
 
-def _rendered (where: pathlib.Path, place: bool) -> dict[str, typing.Any]:
-	"""Play the composition in a child process and read back what reached the port."""
+def _rendered (where: pathlib.Path, place: bool, route: bool = False) -> dict[str, typing.Any]:
+	"""Play the composition in a child process and read back what reached the port.
+
+	*route* makes a line holding one C2 and routes it into the Minitaur and the Model D.
+	"""
 
 	done = subprocess.run(
-		[sys.executable, str(pathlib.Path(__file__)), str(where), "place" if place else "silent"],
+		[sys.executable, str(pathlib.Path(__file__)), str(where),
+		 "route" if route else "place" if place else "silent"],
 		capture_output=True, text=True, timeout=180, check=False, cwd=str(HERE))
 
 	assert done.returncode == 0, done.stderr[-4000:]
@@ -383,6 +526,7 @@ def dataclasses_replace (rig: typing.Any, key: str, **fields: typing.Any) -> typ
 if __name__ == "__main__":
 	_where = pathlib.Path(sys.argv[1])
 	_place = sys.argv[2] == "place"
+	_route = sys.argv[2] == "route"
 
 	import importlib
 
@@ -409,6 +553,13 @@ if __name__ == "__main__":
 			_grid = _rig.GRIDS[_one.key]
 			_grid.apply(["variants", "A", "rows", _row, "0"],
 			            True if _one.drums else {"length": 1, "velocity": 100})
+
+	if _route:
+		_line = _rig._make_line({"id": "shared"})
+		_line.apply(["C2", "0"], True)
+
+		for _into in ("minitaur", "model_d"):
+			_rig.STACKS[_into].apply(["layers"], [{"id": "from-line", "kind": "route", "source": _line.name}])
 
 	_notes: list[list[int]] = []
 	_controls: list[list[int]] = []
