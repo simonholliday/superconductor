@@ -277,6 +277,14 @@ CONTROLS: dict[str, typing.Any] = {
 	          "opens_at": "C3",
 	          "about": [{"label": "feeds", "value": "any generator that takes pitches"}]},
 
+	# **A set of degrees, which follows a key** (#2527), beside the set of pitches it
+	# is the other kind of: same outlet, same cable, a row of degrees an octave.
+	# **Declared and on no page**, because a block added to the Generators page moves
+	# every window flowed after it, and a dozen tests measure where those land; the
+	# tests about degrees put it on that page themselves.
+	"degrees": {"type": "degree_set", "title": "Degrees", "octaves": [-1, 0, 1], "steps": 7,
+	            "about": [{"label": "feeds", "value": "any generator that takes pitches"}]},
+
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 
 	# **Two grids with variants, and each draws the strip the other cannot** (#2485,
@@ -361,6 +369,15 @@ STATE: dict[str, typing.Any] = {
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
 	"rack": {"made": []},
 	"notes": {"chosen": ["C4", "D#4"], "enabled": True},
+	# The root, the fifth, and a seventh flattened an octave up, in D dorian: what the
+	# app says each step makes is in the state, because the panel knows no key.
+	"degrees": {"chosen": [{"step": 1, "octave": 0, "chroma": 0},
+	                       {"step": 5, "octave": 0, "chroma": 0},
+	                       {"step": 7, "octave": 1, "chroma": -1}],
+	            "enabled": True, "key": "D dorian",
+	            "scale": [{"note": note, "flat": flat, "sharp": sharp} for note, flat, sharp in (
+	                ("D", "C#", "D#"), ("E", "D#", "F"), ("F", "E", "F#"), ("G", "F#", "G#"),
+	                ("A", "G#", "A#"), ("B", "A#", "C"), ("C", "B", "C#"))]},
 	"stack": {"layers": [
 		{"id": "one", "generator": "euclidean", "index": 1, "bypassed": False,
 		 "params": {"pitch": "kick", "pulses": 3, "velocity": [40, 80],

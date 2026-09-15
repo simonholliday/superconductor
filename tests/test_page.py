@@ -6041,6 +6041,199 @@ def test_a_note_set_is_dragged_into_the_generator_that_reads_it (
 		f"the drag asked for {asked['v']}"
 
 
+DEGREES = '.part[data-part="degrees"]'
+"""The fixture's degree set: 1, 5 and ♭7 an octave up, in D dorian (#2527)."""
+
+
+def _degree (step: int, octave: int = 0) -> str:
+	"""The button for one step in one octave of the degree set."""
+
+	return f'{DEGREES} .degree[data-step="{step}"][data-octave="{octave}"]'
+
+
+def _one (step: int, octave: int = 0, chroma: int = 0) -> dict[str, int]:
+	"""One degree as it crosses the wire."""
+
+	return {"step": step, "octave": octave, "chroma": chroma}
+
+
+FIXTURE_DEGREES = [_one(1), _one(5), _one(7, 1, -1)]
+
+
+WITH_DEGREES = [{**page, "parts": [*page["parts"], "degrees"]} if page["id"] == "stack" else page
+                for page in conftest.PAGES]
+"""The fixture's pages with the degree set on the Generators page, which it is not by default."""
+
+
+def _the_degrees (panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The Generators page drawn with the degree set on it, and the set in view."""
+
+	fake_app.redeclare(conftest.CONTROLS, WITH_DEGREES)
+	_open_the_stack(panel)
+	block = panel.locator(f"{DEGREES} .degrees")
+	block.wait_for(timeout=5_000)
+	block.scroll_into_view_if_needed()
+
+
+def test_a_degree_set_is_a_button_a_step_saying_the_note_each_makes_in_the_key (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Simon's design of 2026-09-15** (#2527): a button for each step of the key's
+	scale, three octave rows, each saying its degree and — beneath — the note it makes
+	now.  The panel knows no key (#2144), so the words are the app's.  A chosen degree
+	carries its sign, and says the note the sign makes."""
+
+	_the_degrees(panel, fake_app)
+
+	assert "d dorian" in panel.locator(f"{DEGREES} .degree-key").inner_text().lower()
+
+	rows = panel.locator(f"{DEGREES} .degree-row")
+
+	assert [one.get_attribute("data-octave") for one in rows.all()] == ["1", "0", "-1"], (
+		"the octaves are not drawn highest first")
+
+	home = panel.locator(f'{DEGREES} .degree-row[data-octave="0"] .degree')
+
+	assert home.count() == 7
+	assert [(one.locator(".note").text_content() or "").strip() for one in home.all()] == \
+		["D", "E", "F", "G", "A", "B", "C"]
+
+	lit = {(one.get_attribute("data-octave"), one.get_attribute("data-step"))
+	       for one in panel.locator(f'{DEGREES} .degree[aria-pressed="true"]').all()}
+
+	assert lit == {("0", "1"), ("0", "5"), ("1", "7")}
+
+	seventh = panel.locator(_degree(7, 1))
+
+	assert (seventh.locator("b").text_content() or "").strip() == "♭7"
+	assert (seventh.locator(".note").text_content() or "").strip() == "B", "a flattened C is not called B"
+
+
+def test_a_degree_is_added_and_taken_away_by_a_press (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""On press, as a keyboard's key is (#1970), and the whole set each time, in the
+	order chosen."""
+
+	_the_degrees(panel, fake_app)
+
+	before = len(fake_app.sets)
+	panel.locator(_degree(3)).click()
+
+	assert fake_app.settled("degrees/chosen", since=before)[-1]["v"] == [*FIXTURE_DEGREES, _one(3)]
+
+	before = len(fake_app.sets)
+	panel.locator(_degree(5)).click()
+
+	assert fake_app.settled("degrees/chosen", since=before)[-1]["v"] == [_one(1), _one(7, 1, -1)]
+
+
+def test_a_flat_is_for_the_next_degree_pressed_and_then_it_lets_go (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**A one-shot, lit while it waits** (#2527 decision 4): ♭ says what the next
+	press means, asks the app for nothing itself, and switches itself off once used,
+	so nothing stays latched to surprise a later press."""
+
+	_the_degrees(panel, fake_app)
+
+	flat = panel.locator(f'{DEGREES} .degree-sign[data-chroma="-1"]')
+	before = len(fake_app.sets)
+
+	flat.click()
+
+	playwright_api.expect(flat).to_have_attribute("aria-pressed", "true", timeout=5_000)
+	assert fake_app.settled("degrees/chosen", since=before, limit=0.5) == [], "pressing ♭ asked the app for something"
+
+	panel.locator(_degree(3)).click()
+
+	assert fake_app.settled("degrees/chosen", since=before)[-1]["v"] == [*FIXTURE_DEGREES, _one(3, 0, -1)]
+	playwright_api.expect(flat).to_have_attribute("aria-pressed", "false", timeout=5_000)
+
+
+def test_a_sharp_pressed_onto_a_chosen_degree_changes_its_sign_where_it_stands (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The degree keeps its place in the order, because order is what a generator is
+	handed; a second press without a sign takes it away, sign and all."""
+
+	_the_degrees(panel, fake_app)
+
+	panel.locator(f'{DEGREES} .degree-sign[data-chroma="1"]').click()
+
+	before = len(fake_app.sets)
+	panel.locator(_degree(5)).click()
+
+	assert fake_app.settled("degrees/chosen", since=before)[-1]["v"] == [_one(1), _one(5, 0, 1), _one(7, 1, -1)]
+
+
+def test_a_chosen_step_the_scale_has_not_got_is_drawn_kept_and_out_of_play (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**Hatched, as a step past a pattern's end is** (#2548): a seventh chosen in
+	dorian stays chosen in a pentatonic scale and does not play, and the row shows it
+	rather than hiding it."""
+
+	_the_degrees(panel, fake_app)
+
+	fake_app.confirm("degrees/scale", [
+		{"note": note, "flat": "", "sharp": ""} for note in ("D", "F", "G", "A", "C")], by="app")
+	fake_app.confirm("degrees/key", "D minor pentatonic", by="app")
+
+	seventh = panel.locator(_degree(7, 1))
+
+	playwright_api.expect(seventh).to_have_class(re.compile(r"\bpast\b"), timeout=5_000)
+	assert seventh.get_attribute("aria-pressed") == "true", "an out-of-scale degree stopped saying it is chosen"
+	assert "past" not in (panel.locator(_degree(5)).get_attribute("class") or "")
+
+
+def test_with_no_key_the_set_says_so_and_can_still_be_chosen (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""A degree means nothing until there is a key, and the block says where one is
+	set rather than drawing buttons that play nothing and say nothing."""
+
+	_the_degrees(panel, fake_app)
+
+	fake_app.confirm("degrees/key", None, by="app")
+	fake_app.confirm("degrees/scale", [], by="app")
+
+	# **Holding only a second**, so how many steps are offered can only come from what
+	# the set declares it may hold, and not from the highest step already chosen.
+	fake_app.confirm("degrees/chosen", [_one(2)], by="app")
+
+	playwright_api.expect(panel.locator(f"{DEGREES} .degree-key")).to_contain_text(
+		re.compile("no key", re.IGNORECASE), timeout=5_000)
+	playwright_api.expect(panel.locator(f'{DEGREES} .degree-row[data-octave="0"] .degree')).to_have_count(
+		7, timeout=5_000)
+
+	before = len(fake_app.sets)
+	panel.locator(_degree(6)).click()
+
+	assert fake_app.settled("degrees/chosen", since=before)[-1]["v"] == [_one(2), _one(6)]
+
+
+def test_a_degree_set_is_dragged_into_the_generator_that_reads_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The same outlet, the same cable and the same socket as a set of pitches: one row
+	of the patch table takes both (#2527)."""
+
+	fake_app.redeclare(conftest.CONTROLS, WITH_DEGREES)
+	_open_the_stack(panel)
+	panel.locator(f"{DEGREES} .degrees").wait_for(timeout=5_000)
+	_settled(panel)
+
+	outlet = panel.locator(f"{DEGREES} .outlet")
+	outlet.scroll_into_view_if_needed()
+	take = outlet.bounding_box()
+	drop = panel.locator('.part[data-part="stack/two"] .part-title').bounding_box()
+
+	panel.mouse.move(take["x"] + take["width"] / 2, take["y"] + take["height"] / 2)
+	panel.mouse.down()
+	panel.mouse.move(drop["x"] + drop["width"] / 2, drop["y"] + drop["height"] / 2, steps=12)
+
+	assert panel.locator(".grid-wrap.patching.pitching").count() == 1, \
+		"the page does not say a note cable is out"
+
+	panel.mouse.up()
+
+	assert fake_app.await_set("stack/two/pitches")["v"] == {"from": "control", "id": "degrees"}
+
+
 def test_a_note_cable_lands_on_the_input_under_the_finger (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""#2425.  A generator with **two** pools is the only thing that can tell a

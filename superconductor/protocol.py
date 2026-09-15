@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.42.0"
+CONTRACT_VERSION = "1.43.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -431,6 +431,24 @@ step under it.  Now the words move and the steps stay.
 **Additive**: a grid with no words carries no field, and a panel too old draws the
 ids it always drew.  The words are the pattern's rather than a variant's, as the
 mute is, so they sit beside ``variants`` rather than inside one.
+
+1.43.0 adds ``degree_set``: a set of scale degrees that follows the piece's key, and
+feeds whatever a ``pitch_set`` feeds (#2527, Simon's design of 2026-09-15).  Where a
+pitch set holds *C, E and G*, this holds *the 1st, 3rd and 5th*, so changing the key
+moves every part it feeds with nothing re-patched.
+
+**Declared** with the ``octaves`` it offers and the most ``steps`` a row may hold.
+**Its state** is ``chosen``, an ordered list of ``{step, octave, chroma}`` — step
+1-based, octave one of those declared, chroma one of ``DEGREE_CHROMAS``, and no step
+twice in one octave — plus two fields only the app writes: ``key``, the key in the
+app's own words or ``null`` where there is none, and ``scale``, one ``{note, flat,
+sharp}`` per step of the key's scale saying what that step makes.  **The panel knows
+no music theory** (#2144), so those words are what it draws.
+
+**A pitch socket takes either kind of set**, which is one row of ``PATCH_INPUTS``
+naming both.  The service keeps a cable from a degree set as it keeps one from a
+pitch set, and never resolves it: the app resolves degrees against its key at every
+build.  **Additive**: an app that declares no degree set changes nothing.
 """
 
 UNIT = "unit"
@@ -537,7 +555,7 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 
 
 CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
-                 "transport", "rack", "pitch_set", "store")
+                 "transport", "rack", "pitch_set", "degree_set", "store")
 """Every kind of control there is, in the words the wire uses.
 
 **It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to
@@ -582,8 +600,8 @@ does.**  The adapter spelled the same four characters by hand five times while
 the service had a name for them, which is a second copy of a wire word.
 """
 
-PATCH_INPUTS: dict[tuple[str, str], tuple[str, str]] = {
-	("choices", "pitch"): ("pitch_set", "a set of pitches"),
+PATCH_INPUTS: dict[tuple[str, str], tuple[tuple[str, ...], str]] = {
+	("choices", "pitch"): (("pitch_set", "degree_set"), "a set of pitches or degrees"),
 }
 """What may be plugged into what: a parameter's (kind, role) against its source.
 
@@ -596,7 +614,8 @@ from a transport and from a control that did not exist, and the service refused
 both; `hub.change_reported` logs the refusal and forwards the frame anyway, so a
 connected panel drew the cable and a reloading one did not.
 
-The value is the source's control kind and **the words to refuse in**.  A refusal
+The value is the source control kinds a socket takes — a pitch socket takes a set of
+pitches and a set of degrees alike (#2527) — and **the words to refuse in**.  A refusal
 is read on the glass by somebody holding a lead, so it has to say what the socket
 wants rather than name a type: *"which is a transport rather than a set of
 pitches"* is the sentence, and the second half of it lives here.
@@ -658,9 +677,66 @@ def patch_refusal (
 	if wants is None:
 		return f"{name!r} takes no patch, so nothing can be plugged into it"
 
-	if source_kind != wants[0]:
+	if source_kind not in wants[0]:
 		return (f"{name!r} is patched from {named!r}, which is a "
 		        f"{source_kind} rather than {wants[1]}")
+
+	return None
+
+
+DEGREE_CHROMAS: tuple[int, ...] = (-1, 0, 1)
+"""How far a degree may be moved off its scale step: flattened, as it is, or sharpened.
+
+**A semitone either way and no further** (#2527): a flat or a sharp, which is what a
+person reaching past a scale means, and what the one-shot ♭ and ♯ on the glass can say.
+"""
+
+DEGREE_FIELDS: tuple[str, ...] = ("step", "octave", "chroma")
+"""What one degree is, every field always present: the shape of Subsequence's ``Degree``."""
+
+
+def degrees_refusal (
+	degrees: typing.Any,
+	steps: typing.Any,
+	octaves: typing.Any,
+) -> str | None:
+	"""Why a degree set could not hold *degrees*, or ``None`` if it could (#2527).
+
+	*steps* and *octaves* are what the set declared.  **One rule, read by both halves**,
+	as `patch_refusal` is (#2519): the app refuses with `Refused` and the service with
+	`ControlError`, and both say this sentence.
+
+	**No step twice in one octave**, whatever its sign: a row on the glass is one button
+	a step, and a button showing both 3 and ♭3 at once could show neither honestly.
+	"""
+
+	if not isinstance(degrees, list):
+		return "a degree set takes a list of degrees"
+
+	offered = list(octaves) if isinstance(octaves, (list, tuple)) else []
+	most = steps if isinstance(steps, int) and not isinstance(steps, bool) else 0
+	taken: set[tuple[int, int]] = set()
+
+	for one in degrees:
+		if not isinstance(one, dict) or set(one) != set(DEGREE_FIELDS) or not all(
+				isinstance(one[field], int) and not isinstance(one[field], bool) for field in DEGREE_FIELDS):
+			return f"a degree is its step, octave and chroma as whole numbers, not {one!r}"
+
+		if not 1 <= one["step"] <= most:
+			return f"a step is 1 to {most}, not {one['step']}"
+
+		if one["octave"] not in offered:
+			return f"this set offers the octaves {offered}, not {one['octave']}"
+
+		if one["chroma"] not in DEGREE_CHROMAS:
+			return f"a degree is flat or sharp by one semitone at most, not {one['chroma']}"
+
+		place = (one["step"], one["octave"])
+
+		if place in taken:
+			return f"step {one['step']} is in the set once in an octave, and it was named twice"
+
+		taken.add(place)
 
 	return None
 

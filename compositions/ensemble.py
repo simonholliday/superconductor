@@ -5,8 +5,8 @@ empty: no seeded steps, no generators, no routes, no cables, no note set.  What
 the glass holds after the first minute is what somebody put there, which is the
 whole of what this file is for — `drm1_grid.py` beside it is the demonstration
 rig, and keeps the routed lane, the polyrhythm and the grid rack that show what
-the panel can do.  **What a person makes here comes from racks**: a keyboard to
-feed generators, and a line to feed instruments (#2108).
+the panel can do.  **What a person makes here comes from racks**: a set of pitches
+or of degrees to feed generators, and a line to feed instruments (#2108, #2527).
 
 **Everything about this particular studio lives in this file**: which interface
 each instrument is plugged into, which channel it listens on, and which register
@@ -37,6 +37,7 @@ import pymidiinstrumentdefs
 import subsequence
 import subsequence.constants.durations
 import subsequence.constants.midi_notes as midi_notes
+import subsequence.intervals
 import subsequence.pattern_builder
 
 import superconductor.subsequence_adapter as adapter
@@ -841,7 +842,7 @@ def _make_keyboard (spec: dict[str, typing.Any]) -> typing.Any:
 	return adapter.PitchSet(
 		composition,
 		name=f"{KEYBOARDS}-{key}",
-		title=f"Keyboard {at + 1}",
+		title=f"Pitches {at + 1}",
 		pitches={row: midi_notes.name_to_note(row) for row in KEYS},
 		about=[("", "no instrument")],
 		opens_at="C3")
@@ -855,10 +856,14 @@ keyboards = adapter.Rack(
 	# A set of pitches holds notes rather than time, and which notes it holds is
 	# chosen on the keyboard itself afterwards rather than described in a form.
 	steps=None,
-	makes="keyboard",
+
+	# **"Pitches" on the glass, and still `keyboards` where it is kept** (#2527 decision
+	# 5): the pair is Pitches and Degrees, named for what each holds, and a name a store
+	# keeps sets under is not a word anybody reads — so every set already made comes back.
+	makes="pitch set",
 	data_key=KEYBOARDS,
 	name=KEYBOARDS,
-	title="Keyboards",
+	title="Pitches",
 	about=[("", "patch into any generator")])
 """Keyboards a person makes from the glass, as many as the music wants (#2226).
 
@@ -875,6 +880,150 @@ belongs to that layer; one held here can feed an arpeggio on the Minitaur and
 another on the Matriarch, and the two cannot drift apart because there is one of
 it.  Several keyboards are several such pools — a verse and a chorus — each fed
 wherever it is patched.
+"""
+
+
+# --- The key, and degrees that follow it ---------------------------------
+
+ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+"""The twelve roots a key may have, spelt as Subsequence reads them."""
+
+SCALES = ("major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian",
+          "harmonic_minor", "melodic_minor", "major_pentatonic", "minor_pentatonic",
+          "hirajoshi", "in_sen", "iwato", "yo", "egyptian")
+"""Subsequence's scales, in the order a musician reaches for them.
+
+**All of `intervals.SCALE_MODE_MAP` but the two it spells twice**: ``ionian`` is
+``major`` and ``aeolian`` is ``minor``, and a list offering both is two buttons for
+one scale.  The names are Subsequence's, borrowed with their meaning (#2403).
+"""
+
+KEY = "key"
+
+
+def _rekey (name: str, value: typing.Any) -> None:
+	"""Make the Key block's key the composition's, and tell every degree set.
+
+	**The composition's own key** (`Composition.key`, `Composition.scale`), which
+	Subsequence reads at every build, so what the glass says and what a pattern is
+	built in are one fact.  Called on the clock loop for a change on the glass and on
+	the link thread when a kept key is asserted at the first beat; a degree set hands
+	its report to the clock loop either way.
+	"""
+
+	held = composition.data.get(KEY) or {}
+	composition.key = held.get("root")
+	composition.scale = held.get("scale")
+
+	for one in list(DEGREE_SETS.values()):
+		one.rekeyed()
+
+
+key_block = adapter.Params(
+	composition,
+	parameters=[
+		adapter.Parameter("root", "choice", label="root", default="C",
+		                  options=[(root, root) for root in ROOTS]),
+		adapter.Parameter("scale", "choice", label="scale", default="major",
+		                  options=[(scale, scale.replace("_", " ")) for scale in SCALES]),
+	],
+	data_key=KEY,
+	name=KEY,
+	title="Key",
+	about=[("", "every set of degrees follows it")],
+	on_change=_rekey)
+"""**One key for the whole piece, in a block of its own** (Simon, 2026-09-15, #2527).
+
+**Kept with the patterns across a restart**, as a setting is, because a key is part
+of the music rather than how it is being played.  **It opens at C major** rather than
+at no key: nothing on this rig reads a key but a degree set, and a set made on the
+first morning should play at once.
+"""
+
+composition.key = composition.data[KEY]["root"]
+composition.scale = composition.data[KEY]["scale"]
+
+
+def _key_now () -> tuple[str, list[int]] | None:
+	"""The key as a degree set asks for it: its words, and one octave of its scale from the tonic.
+
+	**Read from the Key block's own values rather than from the composition**, which is
+	given them on a change and at the first beat — so a key put back from the store is
+	right at the first build and in the first declaration, before either has happened.
+	The octave starts at the tonic's fourth, around middle C; a stack folds whatever a
+	set sounds into its own instrument's reach (#2374), so where it starts is a shape.
+	"""
+
+	held = composition.data.get(KEY) or {}
+	root, scale = held.get("root"), held.get("scale")
+
+	if root not in ROOTS or scale not in SCALES:
+		return None
+
+	classes = subsequence.intervals.scale_pitch_classes(0, str(scale))
+	tonic = midi_notes.name_to_note(f"{root}4")
+
+	return f"{root} {str(scale).replace('_', ' ')}", [tonic + (one - classes[0]) % 12 for one in classes]
+
+
+def _note_name (note: int) -> str:
+	"""A note's name without its octave, which is what a degree's button says."""
+
+	return str(midi_notes.note_to_name(note)).rstrip("-0123456789")
+
+
+MOST_STEPS = max(len(subsequence.intervals.scale_pitch_classes(0, scale)) for scale in SCALES)
+"""The longest scale on offer, which is how long a row of degrees may be."""
+
+DEGREES = "degrees"
+
+DEGREE_SETS: dict[str, adapter.DegreeSet] = {}
+"""Every degree set made here, so a key change can tell each of them."""
+
+
+def _make_degrees (spec: dict[str, typing.Any]) -> adapter.DegreeSet:
+	"""Turn one asked-for set of degrees into a set that follows the key (#2527).
+
+	**Everything a key is stays in this file** (#1465): the set asks `_key_now` what the
+	key is each time it is read, and `_note_name` what to call a note.  Numbered by where
+	it sits, as a set of pitches is.
+	"""
+
+	number = str(spec["id"])
+	key = f"{DEGREES}-{number}"
+	held = (composition.data.get(DEGREES) or {}).get("made") or []
+	at = next((n for n, one in enumerate(held) if one["id"] == number), len(held))
+
+	made = adapter.DegreeSet(
+		composition, key=_key_now, named=_note_name, name=key, title=f"Degrees {at + 1}",
+		about=[("", "follows the key")], octaves=(-1, 0, 1), steps=MOST_STEPS)
+
+	DEGREE_SETS[key] = made
+
+	return made
+
+
+def _unmake_degrees (name: str) -> None:
+	"""Stop telling a set that has gone about the key."""
+
+	DEGREE_SETS.pop(name, None)
+
+
+degrees = adapter.Rack(
+	composition,
+	make=_make_degrees,
+	unmake=_unmake_degrees,
+	steps=None,
+	makes="degree set",
+	data_key=DEGREES,
+	name=DEGREES,
+	title="Degrees",
+	about=[("", "patch into any generator; follows the key")])
+"""Sets of degrees a person makes from the glass, each patched wherever pitches are wanted (#2527).
+
+**The chain Simon sketched on 2026-09-09** — key, then notes, then arpeggiator, then
+instrument — with the notes written as degrees, so changing the key moves every part
+a set feeds with nothing re-patched.
 """
 
 
@@ -1021,16 +1170,18 @@ link = adapter.AppLink(
 		*GRIDS.values(),
 		*STACKS.values(),
 		*(one for one in SETTINGS.values() if one is not None),
+		key_block,
 		keyboards,
+		degrees,
 		lines,
 		adapter.Transport(composition),
 	],
 	pages=[
-		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS] + [KEYBOARDS, LINES],
+		adapter.Page("ensemble", parts=[one.key for one in INSTRUMENTS] + [KEY, KEYBOARDS, DEGREES, LINES],
 		             title="Ensemble"),
 		adapter.Page("drums", parts=list(DRUMS), title="Drums"),
-		adapter.Page("synths", parts=list(SYNTHS) + [KEYBOARDS, LINES], title="Synths"),
-		adapter.Page("bass", parts=list(BASS) + [KEYBOARDS, LINES], title="Bass"),
+		adapter.Page("synths", parts=list(SYNTHS) + [KEY, KEYBOARDS, DEGREES, LINES], title="Synths"),
+		adapter.Page("bass", parts=list(BASS) + [KEY, KEYBOARDS, DEGREES, LINES], title="Bass"),
 	],
 	page_store=adapter.PageStore(PAGE_FILE),
 	pattern_store=adapter.PatternStore(PATTERN_FILE),

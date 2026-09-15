@@ -99,6 +99,13 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 		if said.get("type") in GRIDS and said.get("variants"):
 			asks.extend(_variant_sets(app, control, held, said))
 
+		elif said.get("type") == "degree_set":
+			# **What was chosen and whether it plays, and nothing the key made of it**
+			# (#2527): ``key`` and ``scale`` are the app's to say again, and are not
+			# skipped by name, because a Key block's own field is called ``scale``.
+			asks.extend((app, f"{control}/{field}", held[field])
+			            for field in ("chosen", "enabled") if field in held)
+
 		elif said.get("type") in GRIDS:
 			asks.append((app, f"{control}/rows",
 			             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))

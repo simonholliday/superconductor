@@ -153,6 +153,14 @@ in the same shape, and the word for what it makes travels in its declaration.
 """
 
 
+DEGREE_SET = "degree_set"
+"""A set of scale degrees, which the app resolves against its key (#2527).
+
+The service keeps what is chosen, checked by `protocol.degrees_refusal` exactly as
+the app checks it, and two fields only the app writes: ``key``, in the app's words,
+and ``scale``, what each step makes.  It resolves nothing and knows no key.
+"""
+
 PITCH_SET = "pitch_set"
 """A set of pitches somebody chose, held as a control in its own right.
 
@@ -268,6 +276,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 
 	elif kind == PITCH_SET:
 		_apply_pitch_set(state.setdefault(control, {}), declaration, rest, value, path)
+
+	elif kind == DEGREE_SET:
+		_apply_degree_set(state.setdefault(control, {}), declaration, rest, value, path)
 
 	else:
 		raise ControlError(f"{control!r} is a {kind!r}, which this version does not know")
@@ -844,6 +855,51 @@ def _apply_pitch_set (
 		taken.append(one)
 
 	held["chosen"] = taken
+
+
+def _apply_degree_set (
+	held: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Replace the whole set, switch it off, or keep what the app says its key makes (#2527).
+
+	**Whole, and in order**, for a pitch set's reasons.  ``key`` and ``scale`` are the
+	app's alone — only it knows what a key is — so they are kept as said and checked
+	only for their shape.
+	"""
+
+	if rest == ["enabled"]:
+		held["enabled"] = bool(value)
+		return
+
+	if rest == ["chosen"]:
+		why = superconductor.protocol.degrees_refusal(
+			value, declaration.get("steps"), declaration.get("octaves"))
+
+		if why is not None:
+			raise ControlError(why)
+
+		held["chosen"] = [dict(one) for one in value]
+		return
+
+	if rest == ["key"]:
+		if value is not None and not isinstance(value, str):
+			raise ControlError(f"{path!r} takes the key in words, or null")
+
+		held["key"] = value
+		return
+
+	if rest == ["scale"]:
+		if not isinstance(value, list) or not all(isinstance(one, dict) for one in value):
+			raise ControlError(f"{path!r} takes what each step of the scale makes")
+
+		held["scale"] = [dict(one) for one in value]
+		return
+
+	raise ControlError(f"{path!r} does not name a degree set as control/chosen")
 
 
 def _patched (value: typing.Any) -> bool:

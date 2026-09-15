@@ -4439,6 +4439,121 @@ html, body {
 	padding-top: calc(var(--gap) / 2);
 }
 
+/* **A set of degrees** (#2527): a line saying the key, a row of steps an octave, and
+ * the one-shot ♭ and ♯ with the set's order beside them.
+ *
+ * **A degree is two rows wide and one tall**, as a white key is two rows wide: a
+ * target a row in both directions, with its number and the note it makes on one
+ * line, because a control holding two lines is an option and this is not one.
+ * Its size is its own and its lettering is its children's, which is how a key keeps
+ * clear of the rules that give every other button on a block its height and type. */
+.degrees {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gap);
+	--degree: calc(var(--row) * 2);
+}
+
+.degrees .degree-key,
+.degrees .chosen-notes {
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	line-height: 1;
+}
+
+.degrees .degree-row {
+	display: flex;
+	align-items: stretch;
+	gap: 0;
+}
+
+/* Which octave a row is, as a mark and not a target: the figures face, beside it. */
+.degrees .degree-octave {
+	align-items: center;
+	color: var(--ink-quiet);
+	display: flex;
+	flex: 0 0 auto;
+	font-family: var(--face-figures);
+	font-size: var(--type-note);
+	justify-content: center;
+	width: var(--row);
+}
+
+.degrees .degree {
+	align-items: center;
+	background: var(--panel);
+	border: 1px solid var(--edge-strong);
+	display: flex;
+	flex: 0 0 auto;
+	height: var(--row);
+	justify-content: center;
+	padding: 0;
+	width: var(--degree);
+}
+
+.degrees .degree .face {
+	align-items: baseline;
+	display: flex;
+	gap: 0.3em;
+}
+
+.degrees .degree b {
+	color: var(--ink);
+	font-family: var(--face-figures);
+	font-size: var(--type-note);
+	line-height: 1;
+}
+
+.degrees .degree .note {
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	line-height: 1;
+}
+
+/* Lit, as a chosen key is: the same statement, this one sounds. */
+.degrees .degree.here {
+	background: var(--on);
+	border-color: var(--on-edge);
+}
+
+.degrees .degree.here b,
+.degrees .degree.here .note {
+	color: var(--on-ink);
+}
+
+/* **A chosen step the scale has not got**: kept and out of play, and marked by the
+   hatching that says so past a pattern's end (#2548) rather than by fading. */
+.degrees .degree.past {
+	background-image: repeating-linear-gradient(
+		135deg, var(--edge-strong) 0 1px, transparent 1px max(4px, calc(var(--cell) * 0.16)));
+}
+
+.degrees .degree.here.past {
+	background: var(--panel);
+	background-image: repeating-linear-gradient(
+		135deg, var(--on) 0 2px, transparent 2px max(5px, calc(var(--cell) * 0.2)));
+}
+
+.degrees .degree.here.past b,
+.degrees .degree.here.past .note {
+	color: var(--ink);
+}
+
+.degrees .degree-foot {
+	align-items: center;
+	display: flex;
+	gap: var(--gap);
+}
+
+/* The one waiting, lit as a latched lock is: the next degree pressed takes it. */
+.degrees .degree-sign.chosen {
+	background: var(--on);
+	border-color: var(--on-edge);
+	color: var(--on-ink);
+	font-weight: 600;
+}
+
 /* A parameter fed from somewhere else, and the button that says so. */
 /* **What a patched parameter says, and it is a statement rather than a control**
    (#2374).  The cable arriving at this row is the connection; these words name

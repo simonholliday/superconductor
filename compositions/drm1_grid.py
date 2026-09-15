@@ -1298,7 +1298,8 @@ the package's to say — a bass line and a lead line meet about here (Simon,
 notes = superconductor.subsequence_adapter.PitchSet(
 	composition,
 	name="notes",
-	title="Notes",
+	# "Pitches", beside "Degrees", named for what each holds (#2527).
+	title="Pitches",
 	pitches={row: midi_notes.name_to_note(row) for row in NOTES_RANGE},
 	about=[("feeds", "any generator that takes pitches")],
 	opens_at=NOTES_OPEN_AT,

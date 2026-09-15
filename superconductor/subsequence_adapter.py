@@ -1011,6 +1011,16 @@ class _Unplaced (Exception):
 	"""A layer given one place in its pattern, which the cycle being built does not play (#2548)."""
 
 
+class Unresolved (Exception):
+	"""A source patched into a layer that cannot say what it is worth this cycle.
+
+	A degree set with no key to resolve against is the first (#2527).  **Raised rather
+	than answered with nothing**, so the one layer it feeds rests and says why on the
+	glass (#2368) while every other layer plays: an empty list would be silence with
+	no reason given.
+	"""
+
+
 class _Moves (typing.NamedTuple):
 	"""How the cycle being built moves a place in its pattern (#2548).
 
@@ -3532,6 +3542,213 @@ class PitchSet (Control):
 		return [self.pitches[one] for one in self.chosen]
 
 
+class DegreeSet (Control):
+	"""A set of scale degrees, which follows the piece's key and feeds whatever wants pitches (#2527).
+
+	**Simon's design of 2026-09-15.**  Where a `PitchSet` holds *C, E and G*, this holds
+	*the 1st, 3rd and 5th*, resolved against the key each time a pattern is built — so
+	changing the key moves every part it feeds, with nothing re-patched.  Three
+	octaves, and a flat or a sharp on any degree; a degree is the shape of
+	Subsequence's own ``Degree``, ``{step, octave, chroma}``, and order is kept as it
+	was chosen, as a pitch set's is.
+
+	**Nothing here knows what a key is** (#1465, #2144).  The composition hands over
+	*key*, which says what the key is now — its words, and the notes of one octave of
+	its scale, tonic first — or ``None`` where there is none; and *named*, which names
+	a note.  From those two the set resolves a degree to a note and says, in its state,
+	what each step makes, which is what the panel draws on its buttons.
+
+	**A step the scale has not got is kept and not played**, as a step past a
+	pattern's end is (#2548): a seventh chosen in a major key rests in a pentatonic one
+	and plays again when the scale is long enough.  It is not carried into the octave
+	above, which would sound a note nobody chose.
+	"""
+
+	kind = "degree_set"
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		key: collections.abc.Callable[[], tuple[str, collections.abc.Sequence[int]] | None],
+		named: collections.abc.Callable[[int], str],
+		name: str = "degrees",
+		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+		octaves: collections.abc.Sequence[int] = (-1, 0, 1),
+		steps: int = 7,
+		chosen: collections.abc.Sequence[dict[str, int]] = (),
+	) -> None:
+		"""Hold a set of degrees, asking *key* what they mean each time they are read.
+
+		*octaves* are the rows a panel draws, relative to the key's own octave, and
+		*steps* the most a row may hold, which is the longest scale the composition
+		offers.  Both are declared, and both are what a degree is checked against.
+		"""
+
+		if isinstance(steps, bool) or not isinstance(steps, int) or steps < 1:
+			raise ValueError(f"{name} holds at least one step to a row, not {steps!r}")
+
+		self.composition = composition
+		self.key = key
+		self.named = named
+		self.name = name
+		self.title = title
+		self.about = list(about)
+		self.octaves = [int(one) for one in octaves]
+		self.steps = steps
+		self.link: "AppLink | None" = None
+
+		self.chosen: list[dict[str, int]] = []
+		"""What is in the set now, in the order it was chosen."""
+
+		self._said: tuple[str | None, list[dict[str, str]]] | None = None
+		"""The key and the scale a panel was last told, so a rekey that changes nothing says nothing."""
+
+		if chosen:
+			why = superconductor.protocol.degrees_refusal(list(chosen), self.steps, self.octaves)
+
+			if why is not None:
+				raise ValueError(f"{name}: {why}")
+
+			self.chosen = [dict(one) for one in chosen]
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""The octaves it offers and the most steps a row may hold."""
+
+		return {"type": self.kind, "octaves": list(self.octaves), "steps": self.steps, **self.said()}
+
+	def _heard (self) -> tuple[str | None, list[dict[str, str]]]:
+		"""The key in the composition's words, and what each step of its scale makes.
+
+		Each step says its note and the notes a flat and a sharp would make of it, so
+		a panel can label a chosen ♭7 without working out what a flat seventh is.
+		"""
+
+		heard = self.key()
+
+		if heard is None:
+			return None, []
+
+		words, notes = heard
+
+		return str(words), [
+			{"note": self.named(note), "flat": self.named(note - 1), "sharp": self.named(note + 1)}
+			for note in notes]
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""What is chosen, whether it plays, and what the key makes of each step."""
+
+		words, scale = self._heard()
+
+		return {"chosen": [dict(one) for one in self.chosen], "enabled": self.enabled,
+		        "key": words, "scale": scale}
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""The degrees and the mute; the key is the Key block's to keep (#2487)."""
+
+		return {"chosen": [dict(one) for one in self.chosen], "enabled": self.enabled}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put the degrees back in their order, leaving out any this set no longer takes."""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("chosen"), list):
+			return [f"{self.name} was kept as something other than a set of degrees"]
+
+		refused: list[str] = []
+		taken: list[dict[str, int]] = []
+
+		for one in kept["chosen"]:
+			why = superconductor.protocol.degrees_refusal([*taken, one], self.steps, self.octaves)
+
+			if why is not None:
+				refused.append(f"{self.name}: {why}")
+
+			else:
+				taken.append(dict(one))
+
+		self.chosen = taken
+
+		return refused + self._restore_enabled(kept.get("enabled", True))
+
+	def attach (self, link: "AppLink") -> None:
+		"""Keep the link, so a key change can be said."""
+
+		self.link = link
+
+	def declared (self) -> None:
+		"""Remember what the declaration told every panel about the key."""
+
+		self._said = self._heard()
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Replace the set entire, or switch it off."""
+
+		if rest == ["enabled"]:
+			return self._keep_enabled(value)
+
+		if rest != ["chosen"]:
+			raise Refused("a degree set is addressed as control/chosen")
+
+		why = superconductor.protocol.degrees_refusal(value, self.steps, self.octaves)
+
+		if why is not None:
+			raise Refused(why)
+
+		wanted = [dict(one) for one in value]
+
+		if wanted == self.chosen:
+			return False
+
+		self.chosen = wanted
+
+		return True
+
+	def notes (self) -> list[int]:
+		"""What the set sounds in the key as it is now, in the order chosen.
+
+		**Switched off is empty rather than absent**, as a pitch set's is.  **With no
+		key it raises** `Unresolved`, so the layer it feeds says why it rests.
+		"""
+
+		if not self.enabled:
+			return []
+
+		heard = self.key()
+
+		if heard is None:
+			raise Unresolved(f"{self.title or self.name} follows the key, and no key is set")
+
+		scale = list(heard[1])
+
+		return [scale[one["step"] - 1] + 12 * one["octave"] + one["chroma"]
+		        for one in self.chosen if one["step"] <= len(scale)]
+
+	def rekeyed (self) -> None:
+		"""Say what the key makes of each step now, once the composition has changed it.
+
+		**Handed to the clock loop from wherever it is called**, because a key moved on
+		the glass arrives on the clock loop and one put back from the store is settled
+		on the link thread, and a `changed` frame is numbered on the clock loop alone.
+		Before the first beat there is nothing to hand it to, and nothing is lost: the
+		next declaration carries the key.
+		"""
+
+		if self.link is not None:
+			self.link.on_clock(self._say_key)
+
+	def _say_key (self) -> None:
+		"""Report the key and the scale, if either moved since a panel was told."""
+
+		heard = self._heard()
+
+		if heard == self._said or self.link is None:
+			return
+
+		self._said = heard
+		self.link.report(f"{self.name}/key", heard[0])
+		self.link.report(f"{self.name}/scale", heard[1])
+
+
 class Recipe (Control):
 	"""An ordered stack of generators that build one pattern.
 
@@ -4418,6 +4635,12 @@ class Recipe (Control):
 			except _Unplaced:
 				continue
 
+			# **A source that cannot say what it is worth rests this layer and says
+			# why** (#2527): a degree set with no key.  The other layers play.
+			except Unresolved as why:
+				self._complain(generator, str(why), layer=str(layer["id"]))
+				continue
+
 			seed = self._seed_for(method, generator, str(layer["id"]), base,
 			                      dealt=layer.get("dealt"))
 
@@ -4788,6 +5011,11 @@ class Recipe (Control):
 
 		named = patch.get("id")
 		held = self.link.controls.get(str(named)) if self.link is not None else None
+
+		# **A degree set is read at the build, against the key as it is now** (#2527),
+		# which is the whole reason it follows one; it raises `Unresolved` with no key.
+		if isinstance(held, DegreeSet):
+			return self._folded(held.notes())
 
 		if not isinstance(held, PitchSet):
 			return []
@@ -6675,6 +6903,23 @@ class AppLink:
 		"""
 
 		self._emit(superconductor.protocol.event(self.app_name, name, **fields))
+
+	def on_clock (self, work: collections.abc.Callable[[], None]) -> None:
+		"""Run *work* on the clock loop, soon, from whichever thread asks.
+
+		For a control that must report something it learned off the clock loop — a
+		degree set whose key was put back from the store (#2527).  **Before the first
+		beat there is no clock loop to hand it to** and the work is dropped, which is
+		safe for what uses it: a declaration still to come carries everything.
+		"""
+
+		loop = self._clock_loop
+
+		if loop is None:
+			return
+
+		with contextlib.suppress(RuntimeError):
+			loop.call_soon_threadsafe(work)
 
 	def report (self, path: str, value: typing.Any) -> None:
 		"""Announce something the app did of its own accord, on the clock loop.

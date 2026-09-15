@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.42.0";
+const CONTRACT = "1.43.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -456,7 +456,7 @@ const GRIDS = ["step_grid", "note_grid"];
    kind added in Python and not here is a control the panel quietly stops
    drawing (#2420). */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set", "degree_set"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -3027,6 +3027,9 @@ const KEYBOARD_VIEW = 8;
 
 const accidental = (midi) => [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
 
+/* The two kinds of note set, either of which feeds a pitch socket (#2527). */
+const NOTE_SETS = ["pitch_set", "degree_set"];
+
 function Keyboard ({ pitches, chosen, opensAt, cell, onSet }) {
 	const held = Array.isArray(chosen) ? chosen : [];
 
@@ -3125,6 +3128,110 @@ function Keyboard ({ pitches, chosen, opensAt, cell, onSet }) {
 			     the same notes in another order. */ ""}
 			<div class="chosen-notes ink-quiet">
 				${held.length ? held.join(" · ") : "no notes — patched generators will rest"}
+			</div>
+		</div>`;
+}
+
+
+/* A set of degrees, which follows the key (#2527): the other kind of note set.
+ *
+ * **Simon's design of 2026-09-15.**  A button for each step of the key's scale, in
+ * three octave rows drawn highest first as a stave is, each saying its degree and —
+ * beneath — the note it makes now.  **The panel knows no key** (#2144): what a step
+ * makes, flattened or sharpened, is the app's to say, in the state beside what is
+ * chosen, and it changes when the key does.
+ *
+ * **♭ and ♯ are a one-shot** (decision 4): pressed, one lights and says what the next
+ * degree pressed means, and it lets go once used, so nothing stays latched to surprise
+ * a later press.  It is this panel's alone and asks the app for nothing.  Pressed onto
+ * a chosen degree it changes that degree's sign where it stands in the order; with no
+ * sign waiting, a press takes a chosen degree away.
+ *
+ * **A chosen step the scale has not got is hatched**, kept and out of play, as a step
+ * past a pattern's end is (#2548).  With no key, every step the set can hold is
+ * offered without a note, and the key line says where one is set. */
+const SIGNS = [[-1, "♭"], [1, "♯"]];
+
+function Degrees ({ octaves, steps, chosen, keyWords, scale, onSet }) {
+	const held = Array.isArray(chosen) ? chosen : [];
+	const known = Array.isArray(scale) ? scale : [];
+	const keyed = typeof keyWords === "string" && keyWords.length > 0;
+	const [sign, setSign] = useState(0);
+
+	const widest = Math.max(keyed ? known.length : steps || 0, ...held.map((one) => one.step));
+	const rows = [...(Array.isArray(octaves) && octaves.length ? octaves : [0])]
+		.sort((one, other) => other - one);
+
+	const at = (step, octave) => held.findIndex((one) => one.step === step && one.octave === octave);
+	const signOf = (chroma) => (chroma < 0 ? "♭" : chroma > 0 ? "♯" : "");
+	const octaveOf = (octave) => (octave > 0 ? `+${octave}` : octave < 0 ? `−${-octave}` : "0");
+
+	const noteOf = (step, chroma) => {
+		const made = keyed ? known[step - 1] : null;
+
+		if (!made) return "";
+
+		return chroma < 0 ? made.flat : chroma > 0 ? made.sharp : made.note;
+	};
+
+	const press = (step, octave) => {
+		const found = at(step, octave);
+		const next = held.map((one) => ({ ...one }));
+
+		if (found < 0) next.push({ step, octave, chroma: sign });
+		else if (sign !== 0 && held[found].chroma !== sign) next[found] = { ...held[found], chroma: sign };
+		else next.splice(found, 1);
+
+		setSign(0);
+		onSet(next);
+	};
+
+	return html`
+		<div class="degrees">
+			<div class="degree-key ink-quiet">${keyed ? `key · ${keyWords}` : "no key · set one in the Key block"}</div>
+			${rows.map((octave) => html`
+				<div class="degree-row" key=${`octave-${octave}`} data-octave=${octave}>
+					<span class="degree-octave">${octaveOf(octave)}</span>
+					${Array.from({ length: widest }, (_, index) => {
+						const step = index + 1;
+						const found = at(step, octave);
+						const one = found < 0 ? null : held[found];
+						const chroma = one ? one.chroma : 0;
+						const note = noteOf(step, chroma);
+
+						return html`
+							<button
+								key=${`degree-${octave}-${step}`}
+								type="button"
+								class=${["degree", one ? "here" : "",
+									keyed && step > known.length ? "past" : ""].filter(Boolean).join(" ")}
+								data-step=${step}
+								data-octave=${octave}
+								aria-pressed=${one ? "true" : "false"}
+								title=${`degree ${signOf(chroma)}${step}, octave ${octaveOf(octave)}${note ? `: ${note}` : ""}`}
+								onPointerDown=${(event) => { event.preventDefault(); press(step, octave); }}
+							>${/* **One face, holding the degree and its note on one line**: a
+							     button with two children is an option, which stacks two lines,
+							     and this is a single label read left to right. */ ""}<span class="face"><b>${signOf(chroma)}${step}</b>${note && html`<span class="note">${note}</span>`}</span></button>`;
+					})}
+				</div>`)}
+			<div class="degree-foot">
+				<div class="gang" role="group" aria-label="flatten or sharpen the next degree pressed">
+					${SIGNS.map(([chroma, mark]) => html`
+						<button
+							key=${`sign-${chroma}`}
+							type="button"
+							class=${`offer degree-sign ${sign === chroma ? "chosen" : ""}`}
+							data-chroma=${chroma}
+							aria-pressed=${sign === chroma ? "true" : "false"}
+							title=${`${chroma < 0 ? "flatten" : "sharpen"} the next degree pressed`}
+							onPointerDown=${(event) => { event.preventDefault(); setSign(sign === chroma ? 0 : chroma); }}
+						>${mark}</button>`)}
+				</div>
+				${/* What it is worth, in the order it will be played, as a keyboard says. */ ""}
+				<span class="chosen-notes ink-quiet">${held.length
+					? held.map((one) => `${signOf(one.chroma)}${one.step}${one.octave ? ` (${octaveOf(one.octave)})` : ""}`).join(" · ")
+					: "no degrees — patched generators will rest"}</span>
 			</div>
 		</div>`;
 }
@@ -6538,7 +6645,9 @@ function Panel () {
 	 * page with what it feeds would make the patch depend on an arrangement —
 	 * which is the mistake #2211 was, in the other direction. One set feeding two
 	 * instruments is the whole point, and those two are rarely on one page. */
-	const pitchSets = Object.keys(controls).filter((name) => kindOf(name) === "pitch_set");
+	/* **Both kinds of note set, pitches and degrees** (#2527): one outlet, one cable
+	   and one socket, because a pitch socket takes either. */
+	const noteSets = Object.keys(controls).filter((name) => NOTE_SETS.includes(kindOf(name)));
 
 	/* A stack says which pattern it contributes to, and that one fact places its
 	   buttons: the pattern grows an "add a generator", not the stack. */
@@ -6636,6 +6745,21 @@ function Panel () {
 				rows: 5,
 				steps: Math.max(PARAM_CELLS, 2 * Math.min(KEYBOARD_VIEW, (controls[name].pitches || [])
 					.filter((one) => !accidental(one.midi)).length)),
+			});
+			continue;
+		}
+
+		/* **A set of degrees is a patch source as a set of pitches is** (#2527), with the
+		   same outlet and the same mute, and as wide as its rows of steps: two lattice
+		   cells to a degree, as a white key is, and one for the octave beside each row. */
+		if (kindOf(name) === "degree_set") {
+			windows.push({
+				key: name, control: name, title: named(name),
+				about: controls[name].about || [],
+				patches: true,
+				live: ((state[appName] || {})[name] || {}).enabled !== false,
+				rows: 2 + Math.max(1, (controls[name].octaves || []).length),
+				steps: Math.max(PARAM_CELLS, 1 + 2 * Math.max(1, controls[name].steps || 1)),
 			});
 			continue;
 		}
@@ -6959,7 +7083,7 @@ function Panel () {
 		 * keeps the disc off the line — a cable that offered one would be
 		 * promising a value the model does not hold. */
 		...contributions
-			.filter((one) => one.patchedFrom && pitchSets.includes(one.patchedFrom))
+			.filter((one) => one.patchedFrom && noteSets.includes(one.patchedFrom))
 			.map((one) => ({
 				from: one.patchedFrom,
 				to: one.key,
@@ -7242,7 +7366,7 @@ function Panel () {
 	 * is what lights a block as a source. */
 	const offering = patching && patching.end === "plug"
 		? (patching.pitch
-			? pitchSets
+			? noteSets
 			: patching.into ? (controls[patching.into] || {}).sources || [] : null)
 		: null;
 
@@ -7250,7 +7374,7 @@ function Panel () {
 	   it rather than every block that can receive anything. A note cable and a
 	   grid cable land on different things and only one of them is holding. */
 	const pitching = Boolean(patching
-		&& (patching.pitch || (patching.from && pitchSets.includes(patching.from))));
+		&& (patching.pitch || (patching.from && noteSets.includes(patching.from))));
 
 	const wrapPoint = (event) => {
 		const wrap = size.wrap.current;
@@ -7358,7 +7482,7 @@ function Panel () {
 		 * unpatched, and an empty pool is what this parameter held before
 		 * anybody patched it. */
 		const pitching = Boolean(
-			held.pitch || (held.from && pitchSets.includes(held.from)));
+			held.pitch || (held.from && noteSets.includes(held.from)));
 
 		if (pitching) {
 			const rest = held.pitch
@@ -7374,7 +7498,7 @@ function Panel () {
 
 				if (!held.pitch) return;
 
-				if (source && pitchSets.includes(source)) {
+				if (source && noteSets.includes(source)) {
 					request(
 						`${held.pitch.control}/${held.pitch.layer}/${held.pitch.field}`,
 						{ from: "control", id: source });
@@ -7966,6 +8090,15 @@ function Panel () {
 								opensAt=${controls[one.control].opens_at}
 								cell=${size.cell}
 								chosen=${((state[appName] || {})[one.control] || {}).chosen || []}
+								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
+						: kindOf(one.control) === "degree_set"
+						? html`
+							<${Degrees}
+								octaves=${controls[one.control].octaves}
+								steps=${controls[one.control].steps}
+								chosen=${((state[appName] || {})[one.control] || {}).chosen || []}
+								keyWords=${((state[appName] || {})[one.control] || {}).key}
+								scale=${((state[appName] || {})[one.control] || {}).scale || []}
 								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
 						: kindOf(one.control) === "params"
 						? html`

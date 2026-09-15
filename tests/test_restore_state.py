@@ -83,6 +83,26 @@ def test_a_step_grid_s_words_are_left_for_the_app_to_say_again () -> None:
 	assert grid.snapshot()["labels"] == {"36": "kick"}, "a restore put back what a row was called"
 
 
+def test_a_degree_set_goes_back_as_what_was_chosen_and_nothing_its_key_made () -> None:
+	"""**What a key makes of each step is the app's to say again** (#2527): replayed,
+	``key`` and ``scale`` are refused by name.  And not skipped by those names either,
+	because a Key block's own field is called ``scale`` and has to go back."""
+
+	state = {
+		"degrees": {"chosen": [{"step": 1, "octave": 0, "chroma": 0}], "enabled": True,
+		            "key": "D dorian", "scale": [{"note": "D", "flat": "C#", "sharp": "D#"}]},
+		"key": {"root": "D", "scale": "dorian"},
+	}
+	declared = {"degrees": {"type": "degree_set"}, "key": {"type": "params"}}
+
+	assert _tool()._sets("app", state, declared) == [
+		("app", "degrees/chosen", [{"step": 1, "octave": 0, "chroma": 0}]),
+		("app", "degrees/enabled", True),
+		("app", "key/root", "D"),
+		("app", "key/scale", "dorian"),
+	]
+
+
 def test_a_rack_goes_back_before_anything_that_could_route_from_its_grids () -> None:
 	"""The grids a rack made exist only once it has made them, and a stack
 	refuses a route to a grid that does not exist."""

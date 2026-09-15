@@ -301,6 +301,44 @@ Where it opens is yours to say because it depends on your instruments: the
 worked example offers a piano's eighty-eight keys and opens at C2, between its
 bass synth and its lead.
 
+## A set of degrees
+
+A **degree set** is the other kind of set. Where a pitch set holds *C, E and G*,
+a degree set holds *the 1st, 3rd and 5th*, and plays them in whatever key the
+piece is in. Patch it into a generator exactly as you would a pitch set; change
+the key, and every part it feeds moves at its next cycle, with nothing re-patched.
+
+It is drawn as three rows of buttons: one for each step of the key's scale, in
+the octave below, the home octave and the octave above. Each button shows its
+degree and the note it makes in the key right now, and the notes change when the
+key does. Press **♭** or **♯** and then a degree to flatten or sharpen it: the
+sign lights while it waits and lets go once it is used, and a chosen degree shows
+its sign. A degree the current scale has not got, such as a seventh in a
+pentatonic scale, stays chosen but is hatched and does not play until the scale
+is long enough again.
+
+The key is the composition's, and so is what a key makes of each step, because
+the panel knows no music theory:
+
+```python
+def key_now ():
+    # The key in your own words, and one octave of its scale from the tonic.
+    return "D dorian", [62, 64, 65, 67, 69, 71, 72]
+
+degrees = superconductor.subsequence_adapter.DegreeSet(
+    composition,
+    name="degrees",
+    key=key_now,
+    named=lambda note: NAMES[note % 12],    # what to call a note on a button
+)
+```
+
+Call `degrees.rekeyed()` whenever the key changes, so every panel is told the new
+notes. Where `key_now` returns `None` there is no key: the set says so on the
+glass, and a generator it feeds rests and says why rather than falling silent.
+`compositions/ensemble.py` offers a **Key** block, a root and one of Subsequence's
+scales, and makes degree sets from a rack.
+
 ## Arranging a page
 
 A block's title bar is its handle: drag one and it moves a cell at a time, on

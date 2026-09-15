@@ -216,7 +216,7 @@ def test_the_streichfett_s_solo_controls_are_set_on_the_strings_channel (rig: ty
 
 # --- Keyboards, made from the glass --------------------------------------------
 
-def test_the_rig_offers_keyboards_and_starts_with_none (rig: typing.Any) -> None:
+def test_the_rig_offers_sets_of_pitches_and_starts_with_none (rig: typing.Any) -> None:
 	"""Simon, 2026-09-14, of an arpeggiator with nothing to feed it: *"should we
 	have a way of creating a new instance on the interface?  Or does it have to be
 	defined up-front, in the composition?"*
@@ -229,7 +229,8 @@ def test_the_rig_offers_keyboards_and_starts_with_none (rig: typing.Any) -> None
 	declared = rig.keyboards.declaration()
 
 	assert declared["type"] == "rack"
-	assert declared["makes"] == "keyboard"
+	# "Pitches" since #2527 decision 5; it made keyboards before that, and still draws one.
+	assert declared["makes"] == "pitch set"
 	assert "min_steps" not in declared, "a keyboard was offered a length"
 	assert declared["rows"] == [], "a keyboard was offered rows to choose"
 
@@ -272,7 +273,7 @@ def test_a_keyboard_may_be_patched_into_any_generator_that_wants_pitches (
 
 	wants = superconductor.protocol.PATCH_INPUTS[(notes["kind"], notes["role"])]
 
-	assert wants[0] == made.kind, \
+	assert made.kind in wants[0], \
 		f"an arpeggio wants {wants[0]} and a keyboard is a {made.kind}"
 
 
@@ -286,6 +287,136 @@ def test_the_keyboards_are_reachable_from_every_page_that_plays_notes (
 
 	for named in ("Ensemble", "Synths", "Bass"):
 		assert rig.KEYBOARDS in pages[named], f"{named} has no keyboard to patch from"
+
+
+# --- The key, and degrees that follow it ----------------------------------------
+
+def test_the_key_block_offers_a_root_and_subsequence_s_own_scales (rig: typing.Any) -> None:
+	"""**One key for the whole piece, in a block of its own** (Simon, 2026-09-15, #2527):
+	a root and a scale, Subsequence's names, opening at C major so that a degree set
+	made on the first morning plays at once.
+
+	Every scale Subsequence offers except the two it spells twice: ``ionian`` is
+	``major`` and ``aeolian`` is ``minor``, and a list offering both would be two
+	buttons for one scale.
+	"""
+
+	import subsequence.intervals
+
+	fields = {one["name"]: one for one in rig.key_block.declaration()["fields"]}
+
+	assert [one["value"] for one in fields["root"]["options"]] == list(rig.ROOTS)
+	assert len(rig.ROOTS) == 12
+
+	offered = [one["value"] for one in fields["scale"]["options"]]
+
+	assert set(offered) <= set(subsequence.intervals.SCALE_MODE_MAP)
+	assert set(subsequence.intervals.SCALE_MODE_MAP) - set(offered) == {"ionian", "aeolian"}
+	assert subsequence.intervals.scale_pitch_classes(0, "ionian") == subsequence.intervals.scale_pitch_classes(0, "major")
+	assert subsequence.intervals.scale_pitch_classes(0, "aeolian") == subsequence.intervals.scale_pitch_classes(0, "minor")
+
+	assert rig.composition.data[rig.KEY] == {"root": "C", "scale": "major"}
+	assert rig._key_now() == ("C major", [60, 62, 64, 65, 67, 69, 71])
+
+
+def test_changing_the_key_sets_the_composition_s_and_moves_every_degree_set (rig: typing.Any) -> None:
+	"""The key the Key block holds is the composition's own (`Composition.key`), which
+	Subsequence reads at every build, and every degree set made here is told."""
+
+	made = rig._make_degrees({"id": "key-test"})
+
+	class Told:
+		"""A link that notes each time a set asks to say its key."""
+
+		def __init__ (self) -> None:
+			self.asked = 0
+
+		def on_clock (self, work: typing.Any) -> None:
+			self.asked += 1
+
+	told = Told()
+	made.attach(typing.cast(typing.Any, told))
+
+	try:
+		made.apply(["chosen"], [{"step": 1, "octave": 0, "chroma": 0}, {"step": 3, "octave": 0, "chroma": 0}])
+
+		assert made.notes() == [60, 64]
+
+		rig.key_block.apply(["root"], "D")
+		rig.key_block.apply(["scale"], "dorian")
+
+		assert told.asked == 2, "a degree set was not told the key moved, so no panel would be"
+		assert (rig.composition.key, rig.composition.scale) == ("D", "dorian")
+		assert made.notes() == [62, 65]
+		assert made.snapshot()["key"] == "D dorian"
+		assert [one["note"] for one in made.snapshot()["scale"]] == ["D", "E", "F", "G", "A", "B", "C"]
+
+	finally:
+		rig.key_block.apply(["root"], "C")
+		rig.key_block.apply(["scale"], "major")
+		rig._unmake_degrees(made.name)
+
+
+def test_the_rig_offers_degree_sets_and_starts_with_none (rig: typing.Any) -> None:
+	"""Made from the glass beside the sets of pitches, and as many as the music wants;
+	three octaves, and a row as long as the longest scale on offer."""
+
+	declared = rig.degrees.declaration()
+
+	assert declared["type"] == "rack" and declared["makes"] == "degree set"
+	assert "min_steps" not in declared and declared["rows"] == []
+	assert rig.degrees.entries() == []
+
+	made = rig._make_degrees({"id": "abc"})
+
+	try:
+		assert made.kind == "degree_set"
+		assert made.name == "degrees-abc"
+		assert made.declaration()["octaves"] == [-1, 0, 1]
+		assert made.declaration()["steps"] == 7
+		assert made.title == "Degrees 1"
+
+	finally:
+		rig._unmake_degrees(made.name)
+
+
+def test_a_set_of_pitches_is_called_so_on_the_glass_and_kept_where_it_always_was (
+	rig: typing.Any) -> None:
+	"""**"Pitches" and "Degrees"** (#2527 decision 5), a matching pair named for what
+	each holds.  The words on the glass move and the names things are kept by do not,
+	so every set already made comes back."""
+
+	declared = rig.keyboards.declaration()
+
+	assert declared["title"] == "Pitches" and declared["makes"] == "pitch set"
+	assert rig.keyboards.name == "keyboards", "the name a store keeps the sets under moved"
+	assert rig._make_keyboard({"id": "xyz"}).title == "Pitches 1"
+
+
+def test_the_key_and_the_degrees_are_on_every_page_that_plays_notes (rig: typing.Any) -> None:
+	"""A cable is dragged between two blocks, and the key is changed where the sets are."""
+
+	pages = {page.declaration()["title"]: page.declaration()["parts"] for page in rig.link.pages}
+
+	for named in ("Ensemble", "Synths", "Bass"):
+		assert rig.KEY in pages[named] and rig.DEGREES in pages[named], f"{named} lacks the key or the degrees"
+
+
+def test_a_degree_set_patched_into_an_arpeggio_follows_the_key_it_is_played_in (
+	tmp_path: pathlib.Path) -> None:
+	"""**Done when**, as #2527 says it: one degree set, 1 3 5, patched into the
+	Minitaur's arpeggio, rendered through Subsequence in C major and then in D major —
+	and the same set plays C E G, then D F# A, with nothing re-patched."""
+
+	def classes (root: str) -> set[int]:
+		played = _rendered(tmp_path / root, place=False, key=root)
+		rig = _composition()
+		channel = next(one.channel for one in rig.INSTRUMENTS if one.key == "minitaur") - 1
+
+		return {note % 12 for on, note in played["notes"] if on == channel}
+
+	assert classes("C") == {0, 4, 7}
+	assert classes("D") == {2, 6, 9}
 
 
 # --- Lines, made from the glass ------------------------------------------------
@@ -435,7 +566,8 @@ def test_every_instrument_is_on_the_ensemble_page (rig: typing.Any) -> None:
 	ensemble = next(page for page in rig.link.pages
 	                if page.declaration()["title"] == "Ensemble")
 
-	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS] + [rig.KEYBOARDS, rig.LINES]
+	assert ensemble.declaration()["parts"] == [one.key for one in rig.INSTRUMENTS] + [
+		rig.KEY, rig.KEYBOARDS, rig.DEGREES, rig.LINES]
 
 
 def test_a_settings_block_needs_no_page_of_its_own (rig: typing.Any) -> None:
@@ -497,15 +629,19 @@ def test_a_note_on_every_instrument_reaches_its_own_channel (tmp_path: pathlib.P
 		f"a note did not reach its instrument: {sorted(wire)}"
 
 
-def _rendered (where: pathlib.Path, place: bool, route: bool = False) -> dict[str, typing.Any]:
+def _rendered (where: pathlib.Path, place: bool, route: bool = False, key: str | None = None) -> dict[str, typing.Any]:
 	"""Play the composition in a child process and read back what reached the port.
 
 	*route* makes a line holding one C2 and routes it into the Minitaur and the Model D.
+	*key* sets that major key and patches a degree set holding 1, 3 and 5 into the
+	Minitaur's arpeggio.
 	"""
+
+	where.mkdir(parents=True, exist_ok=True)
 
 	done = subprocess.run(
 		[sys.executable, str(pathlib.Path(__file__)), str(where),
-		 "route" if route else "place" if place else "silent"],
+		 f"key:{key}" if key else "route" if route else "place" if place else "silent"],
 		capture_output=True, text=True, timeout=180, check=False, cwd=str(HERE))
 
 	assert done.returncode == 0, done.stderr[-4000:]
@@ -527,6 +663,7 @@ if __name__ == "__main__":
 	_where = pathlib.Path(sys.argv[1])
 	_place = sys.argv[2] == "place"
 	_route = sys.argv[2] == "route"
+	_key = sys.argv[2][4:] if sys.argv[2].startswith("key:") else None
 
 	import importlib
 
@@ -560,6 +697,24 @@ if __name__ == "__main__":
 
 		for _into in ("minitaur", "model_d"):
 			_rig.STACKS[_into].apply(["layers"], [{"id": "from-line", "kind": "route", "source": _line.name}])
+
+	if _key:
+		_rig.key_block.apply(["root"], _key)
+		_rig.key_block.apply(["scale"], "major")
+
+		_degrees = _rig._make_degrees({"id": "triad"})
+		_degrees.apply(["chosen"], [{"step": step, "octave": 0, "chroma": 0} for step in (1, 3, 5)])
+
+		# **Attached as a started link attaches them**, because a stack reads a patched
+		# set through its link; nothing here dials the service.
+		_rig.link.controls[_degrees.name] = _degrees
+
+		for _control in list(_rig.link.controls.values()):
+			_control.attach(_rig.link)
+
+		_rig.STACKS["minitaur"].apply(["layers"], [{
+			"id": "arp", "kind": "generator", "generator": "arpeggio",
+			"params": {"notes": {"from": "control", "id": _degrees.name}}}])
 
 	_notes: list[list[int]] = []
 	_controls: list[list[int]] = []
