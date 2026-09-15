@@ -1125,6 +1125,14 @@ class StepGrid (_Length, _Window, _Variants, Control):
 	``composition.data`` before making the grid, which every composition here
 	already does.
 
+	**A row is kept by what it is and drawn by what it says** (#2459).  ``labels``
+	maps a row to the words beside it — ``{"36": "kick"}`` for a kit keyed by note
+	number — and a row given none is drawn as its id, as every row was.  The words
+	are state rather than declaration, as a transposed note grid's are (#2144),
+	because an app that renames a voice while it plays (Subsample, #2458) must be
+	able to say so without orphaning every step under it: the steps stay at the
+	id and only the words move.  See `set_labels`.
+
 	**``beats`` is a float, and a whole number of them is a coincidence.**  A
 	cycle is however long its steps make it, and nine sixteenths is 2.25 —
 	which is the whole point of a nine-step pattern running against a sixteen
@@ -1153,6 +1161,7 @@ class StepGrid (_Length, _Window, _Variants, Control):
 		min_steps: int | None = None,
 		end: int | None = None,
 		resize: collections.abc.Callable[[typing.Any, int], None] | None = None,
+		labels: collections.abc.Mapping[str, str] | None = None,
 	) -> None:
 		"""Describe the grid to offer over a dict the composition already keeps.
 
@@ -1165,6 +1174,9 @@ class StepGrid (_Length, _Window, _Variants, Control):
 		*min_steps* offers a length from that many steps up to *steps*, opening at
 		*end*, and *resize* is how the composition makes its pattern that long;
 		see `_Length`.  A grid given none of the three has the length it always had.
+
+		*labels* is what a row says on the glass where that is not its id; see
+		`set_labels`.  A grid given none holds and sends exactly what it always did.
 		"""
 
 		self.composition = composition
@@ -1187,6 +1199,9 @@ class StepGrid (_Length, _Window, _Variants, Control):
 		self._take_variants(variants, lands_every)
 		self._take_seed()
 		self._take_window(opens_at)
+
+		self.labels: dict[str, str] | None = None if labels is None else self._checked_labels(labels)
+		"""What each row says on the glass, where that is not its id, or None for a grid with no words (#2459)."""
 
 		self.pattern = pattern
 		"""Which of the composition's patterns this grid drives, if it drives one.
@@ -1261,6 +1276,62 @@ class StepGrid (_Length, _Window, _Variants, Control):
 		"""Keep the link, so a variant landing at a build can be said (#2485)."""
 
 		self.link = link
+
+	def set_labels (self, labels: collections.abc.Mapping[str, str]) -> None:
+		"""Say what each row is called from now on, and tell every panel (#2459).
+
+		**Whole, as every write here is**: a row left out goes back to being drawn as
+		its id.  **The steps do not move**, being kept by id, and the store keeps
+		none of this, because what a row is called is the app's to say again rather
+		than something a person made (#1965).
+
+		**On the clock loop** — in a play function, or an event the composition
+		handles — because the frame this sends is numbered there, as a transposed
+		grid's labels are.  Before the link starts, the words are simply held, and
+		the first declaration carries them.  Checked as the grid's first words were,
+		and refused whole.
+		"""
+
+		wanted = self._checked_labels(labels)
+
+		if wanted == self.labels:
+			return
+
+		self.labels = wanted
+
+		if self.link is not None:
+			self.link.report(f"{self.name}/labels", dict(wanted))
+
+	def _checked_labels (self, labels: typing.Any) -> dict[str, str]:
+		"""The words each row says, refused whole if any could not be meant.
+
+		**No row of a grid with words may be called ``labels``**: the words sit beside
+		the rows in one object, as the mute does, so a row of that name would be two
+		things at one address.  Refused only where there are words, as a length
+		refuses ``end`` only where one is offered, so a grid given none is the grid it
+		always was.
+		"""
+
+		if not isinstance(labels, collections.abc.Mapping):
+			raise ValueError(f"{self.name}'s labels go from a row to its words, not {labels!r}")
+
+		rows = set(self.rows)
+
+		if "labels" in rows:
+			raise ValueError(f"{self.name} keeps its labels beside its rows, so no row may be called that")
+
+		checked: dict[str, str] = {}
+
+		for row, words in labels.items():
+			if row not in rows:
+				raise ValueError(f"{self.name} has no row called {row!r} to label")
+
+			if not isinstance(words, str) or not words.strip():
+				raise ValueError(f"a row's label is words, and {words!r} is none for {row!r}")
+
+			checked[row] = words
+
+		return checked
 
 	def _keep_rows (self, value: typing.Any, variant: str | None = None) -> bool:
 		"""Replace the whole grid, or one variant of it, which is how it is cleared.
@@ -1509,11 +1580,16 @@ class StepGrid (_Length, _Window, _Variants, Control):
 		# Beside the rows rather than under a key of its own, because a control's
 		# state is one object and a panel reads it as one. `rows` is already
 		# reserved here for the whole-grid write, so a row cannot be called that
-		# either; this is the second word spent and it buys a mute.
-		if not self.variants:
-			return {**self.rows_now(), "enabled": self.enabled, **self._length_state()}
+		# either; this is the second word spent and it buys a mute.  `labels` is a
+		# third, spent only by a grid that has words (#2459), and like the mute it
+		# is the pattern's rather than a variant's.
+		said = {} if self.labels is None else {"labels": dict(self.labels)}
 
-		return {**self._variants_state(self.rows_now), "enabled": self.enabled, **self._length_state()}
+		if not self.variants:
+			return {**self.rows_now(), "enabled": self.enabled, **said, **self._length_state()}
+
+		return {**self._variants_state(self.rows_now), "enabled": self.enabled, **said,
+		        **self._length_state()}
 
 	def _cut (self, rows: dict[str, typing.Any], first: int, played: int) -> dict[str, typing.Any]:
 		"""The steps this cycle plays, each at its place in the cycle (#2548).

@@ -60,6 +60,29 @@ def test_a_note_grid_goes_back_whole_with_its_offset_and_nothing_it_works_out ()
 	                ("app", "bass/transpose", 3)]
 
 
+def test_a_step_grid_s_words_are_left_for_the_app_to_say_again () -> None:
+	"""**A drum row's words are the app's, as a transposed row's are** (#2459): a
+	capture holds them because a panel arriving late needs them, and a restore that
+	sent them back would be refused — or, walked, taken apart into steps that do not
+	exist.  Through a real grid, so a refusal would raise."""
+
+	composition = types.SimpleNamespace(data={})
+	grid = adapter.StepGrid(composition, rows=["36", "38"], steps=16, data_key="kit", name="kit",
+	                        labels={"36": "kick"})
+
+	captured = {"kit": {"36": {"4": {"velocity": 90}}, "enabled": True, "labels": {"36": "808 kick"}}}
+
+	asks = _tool()._sets("app", captured, {"kit": grid.declaration()})
+
+	assert [path for _, path, _ in asks] == ["kit/rows", "kit/enabled"]
+
+	for _, path, value in asks:
+		grid.apply(path.split("/")[1:], value)
+
+	assert grid.rows_now() == {"36": {"4": {"velocity": 90}}}
+	assert grid.snapshot()["labels"] == {"36": "kick"}, "a restore put back what a row was called"
+
+
 def test_a_rack_goes_back_before_anything_that_could_route_from_its_grids () -> None:
 	"""The grids a rack made exist only once it has made them, and a stack
 	refuses a route to a grid that does not exist."""

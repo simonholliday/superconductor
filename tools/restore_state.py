@@ -39,13 +39,15 @@ DERIVED: frozenset[str] = frozenset({"labels", "unreachable"})
 """Fields an app works out for itself, which a restore must not try to put back.
 
 A snapshot carries them because a panel arriving late has no other way to learn
-them — what each row is called once a pattern is transposed, and which rows have
-stopped sounding.  But they are **consequences of `transpose` rather than values
-in their own right**, so replaying them is at best redundant and at worst wrong:
-the app refuses the path, and `labels` is a dict of rows that this walker would
+them — what each row is called, and which rows have stopped sounding.  But they
+are **the app's to say rather than anything a person made**: a note grid's follow
+from its `transpose`, and a step grid's words are whatever the composition calls
+its rows (#2459).  So replaying them is at best redundant and at worst wrong: the
+app refuses the path, and `labels` is a dict of rows that this walker would
 otherwise take apart into steps that do not exist.
 
-Restoring the offset regenerates both, which is why skipping them loses nothing.
+Restoring the offset regenerates a note grid's, and a step grid's come with the
+app's declaration, which is why skipping them loses nothing.
 
 **This is a list of names and lists of names go stale**, so it is the thing to
 check when a restore starts nacking after a contract change.  The better fix is

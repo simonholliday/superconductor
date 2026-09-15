@@ -15,7 +15,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.41.0"
+CONTRACT_VERSION = "1.42.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -416,6 +416,21 @@ generic like a keyboard source, which might feed any instrument, should we have 
 way of creating a new instance on the interface?"*  The mechanism was already
 general — an app re-declaring is how it says its controls changed, and that has
 worked since the first day (#2226).  This is the asking catching up.
+
+1.42.0 lets a step grid's state carry ``labels``: what each row says on the glass,
+apart from what it is.  A note grid's has since 1.17.0, and the shape is the same —
+row to words, checked against the declared rows, kept whole and changed by an
+ordinary ``changed`` frame at ``<control>/labels``, which only the app sends.
+
+**A row's id is what the steps are kept under, and its label is what a person
+reads.**  A step grid drew its id, so the two were one thing: a kit keyed by note
+number read ``36``, and an app whose voices are renamed while it plays — a
+sampler, above all (#2458) — could only say so by renaming the row, orphaning every
+step under it.  Now the words move and the steps stay.
+
+**Additive**: a grid with no words carries no field, and a panel too old draws the
+ids it always drew.  The words are the pattern's rather than a variant's, as the
+mute is, so they sit beside ``variants`` rather than inside one.
 """
 
 UNIT = "unit"

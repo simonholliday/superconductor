@@ -346,6 +346,42 @@ def test_a_transposed_grid_and_the_service_agree () -> None:
 		f"the service holds {held[grid.name]!r} and the app holds {grid.snapshot()!r}")
 
 
+@pytest.mark.parametrize("variants", [(), ("A", "B")])
+def test_a_step_grid_given_new_words_and_the_service_agree (variants: tuple[str, ...]) -> None:
+	"""**Said by the app and never asked for by a panel** (#2459), so this is the
+	transposed grid's round trip without the press: new words, one frame, and a
+	panel that reloads reads what one that stayed connected does.  Then a clear,
+	which must leave the words on both sides — with variants and without, because
+	the words are the pattern's either way.
+	"""
+
+	composition = Composition()
+	grid = adapter.StepGrid(
+		composition, rows=["36", "38"], steps=8, beats=2, data_key="kit", name="kit",
+		variants=variants, labels={"36": "kick"})
+	link = Reporting()
+	grid.attach(typing.cast(typing.Any, link))
+
+	declared = {grid.name: grid.declaration()}
+	held = {grid.name: grid.snapshot()}
+
+	grid.set_labels({"36": "808 kick", "38": "snare"})
+
+	for path, value in link.reported:
+		superconductor.controls.apply_change(held, declared, path, value)
+
+	assert held[grid.name] == grid.snapshot(), (
+		f"the service holds {held[grid.name]!r} and the app holds {grid.snapshot()!r}")
+
+	clear = ["variants", "A", "rows"] if variants else ["rows"]
+
+	grid.apply(clear, {})
+	superconductor.controls.apply_change(held, declared, "/".join([grid.name, *clear]), grid.applied(clear, {}))
+
+	assert held[grid.name] == grid.snapshot()
+	assert held[grid.name]["labels"] == {"36": "808 kick", "38": "snare"}
+
+
 def test_a_rows_write_no_longer_carries_off_whatever_sits_beside_them () -> None:
 	"""The mute used to be saved and restored here by name.
 

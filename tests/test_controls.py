@@ -307,6 +307,60 @@ def test_labels_and_unreachable_are_kept_and_checked_against_the_rows () -> None
 	with pytest.raises(superconductor.controls.ControlError):
 		superconductor.controls.apply_change(state, MOVED, "bass/labels", {"G9": "x"})
 
+	# **A shape checked before it is read** — labels sent as a list reached `.keys()`
+	# first, and raised an AttributeError that nothing receiving an app's report
+	# catches.
+	with pytest.raises(superconductor.controls.ControlError, match="takes an object"):
+		superconductor.controls.apply_change(state, MOVED, "bass/labels", ["C2"])
+
+	with pytest.raises(superconductor.controls.ControlError, match="takes a list"):
+		superconductor.controls.apply_change(state, MOVED, "bass/unreachable", {"C2": True})
+
+
+KIT: dict[str, typing.Any] = {
+	"kit": {"type": "step_grid", "rows": ["36", "38"], "steps": 16},
+	"takes": {"type": "step_grid", "rows": ["36", "38"], "steps": 16, "variants": ["A", "B"]},
+}
+"""Two kits keyed by note number, one with variants, for a step grid's words (#2459)."""
+
+
+def test_a_step_grid_keeps_the_words_its_rows_say_as_a_note_grid_does () -> None:
+	"""**What a row says, apart from what it is** (#2459), kept and checked exactly
+	as a note grid's labels are: never interpreted, but a copy naming a row this grid
+	does not have could not have come from the app.  A clear takes the steps and
+	leaves the words, because they sit beside the rows rather than in them."""
+
+	state: dict[str, typing.Any] = {}
+
+	superconductor.controls.apply_change(state, KIT, "kit/36/4", {"velocity": 90})
+	superconductor.controls.apply_change(state, KIT, "kit/labels", {"36": "kick", "38": "snare"})
+
+	assert state["kit"] == {"36": {"4": {"velocity": 90}}, "labels": {"36": "kick", "38": "snare"}}
+
+	superconductor.controls.apply_change(state, KIT, "kit/rows", {})
+
+	assert state["kit"] == {"labels": {"36": "kick", "38": "snare"}}
+
+	with pytest.raises(superconductor.controls.ControlError, match="no row named '40'"):
+		superconductor.controls.apply_change(state, KIT, "kit/labels", {"40": "tom"})
+
+	with pytest.raises(superconductor.controls.ControlError, match="takes an object"):
+		superconductor.controls.apply_change(state, KIT, "kit/labels", ["kick"])
+
+
+def test_a_step_grid_s_words_are_the_pattern_s_and_not_a_variant_s () -> None:
+	"""Switching variant changes what plays, not what a voice is called — the rule the
+	mute and a transposition already follow (#2485 Q4), so the words are answered
+	before a variant's rows are looked for."""
+
+	state: dict[str, typing.Any] = {}
+
+	superconductor.controls.apply_change(state, KIT, "takes/labels", {"38": "snare"})
+	superconductor.controls.apply_change(state, KIT, "takes/variants/B/rows/38/2", {"velocity": 100})
+
+	assert state["takes"] == {"labels": {"38": "snare"},
+	                          "variants": {"B": {"rows": {"38": {"2": {"velocity": 100}}}}}}
+
 
 def test_clearing_a_grid_keeps_everything_that_is_not_a_row () -> None:
 	"""The mute used to be saved and restored here by name, so every field added

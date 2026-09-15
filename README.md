@@ -179,6 +179,22 @@ with lists of steps. They are read at `default_velocity`, which `StepGrid` takes
 and which is 100 unless the composition says otherwise, and so are patterns kept
 or captured before this.
 
+A row is kept under the name the composition gives it and drawn with whatever
+words the composition says for it, so a kit keyed by MIDI note number can read
+*kick* rather than *36*:
+
+```python
+drum_grid = superconductor.subsequence_adapter.StepGrid(
+    composition, rows=["36", "38", "42"], steps=16,
+    labels={"36": "kick", "38": "snare", "42": "closed hat"})
+```
+
+A row given no words is drawn as its name, with each underscore as a space. The
+words can change while the piece plays, with `drum_grid.set_labels(...)` called
+from a play function, and every step stays where it was: steps are kept under a
+row's name, never under its words. The words are not kept with the pattern,
+because the composition says them again when it starts.
+
 ## Pitched patterns
 
 A step grid's steps are there or not, each struck at its own velocity. A **note

@@ -299,6 +299,12 @@ def _apply_cell (
 	if _apply_length(grid, declaration, rest, value, path):
 		return
 
+	# **What a row says, apart from what it is** (#2459) — the pattern's rather than
+	# a variant's, so answered before a variant's rows are looked for, as the mute is.
+	if rest == ["labels"]:
+		_apply_labels(grid, declaration, value, path)
+		return
+
 	if declaration.get("variants"):
 		landed = _in_variant(grid, declaration, rest, value, path)
 
@@ -337,6 +343,35 @@ def _apply_cell (
 		return
 
 	_step(grid, declaration, rest, value, path)
+
+
+def _apply_labels (
+	grid: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Keep what each row of a grid says, a note grid's and a step grid's alike.
+
+	**The app's words, held and never interpreted** — what a transposed row sounds
+	as (#2144), or what a drum voice is called apart from its id (#2459).  Checked
+	against the declared rows, because a copy naming a row this grid does not have
+	could not have come from the app, and kept whole: a row left out is drawn as its
+	id.  One function for both kinds, so the two cannot come to disagree about it.
+
+	**The shape is checked before a row is read.**  A note grid's labels sent as a
+	list once reached `.keys()` first, and raised an `AttributeError` that nothing
+	receiving an app's report catches.
+	"""
+
+	if not isinstance(value, dict):
+		raise ControlError(f"{path!r} takes an object")
+
+	for row in value:
+		if row not in declaration.get("rows", []):
+			raise ControlError(f"this grid has no row named {row!r}")
+
+	grid["labels"] = dict(value)
 
 
 def _apply_length (
@@ -1128,22 +1163,23 @@ def _apply_note (
 	if _apply_length(grid, declaration, rest, value, path):
 		return
 
-	if rest in (["labels"], ["unreachable"]):
-		# **What a row is called once the pattern has moved, and which rows have
-		# stopped sounding.** Both are the app's alone — only the composition
-		# knows a row is a pitch — so this keeps them and interprets neither. It
-		# does check they name declared rows, because a copy that named a row
-		# this grid does not have could not have come from the app.
-		named = value.keys() if rest == ["labels"] else value
+	if rest == ["labels"]:
+		_apply_labels(grid, declaration, value, path)
+		return
 
-		if not isinstance(value, (dict if rest == ["labels"] else list)):
-			raise ControlError(f"{path!r} takes {'an object' if rest == ['labels'] else 'a list'}")
+	if rest == ["unreachable"]:
+		# **Which rows have stopped sounding once the pattern has moved.** The
+		# app's alone — only the composition knows a row is a pitch — so this keeps
+		# it and interprets nothing, checked against the rows as the labels beside
+		# it are.
+		if not isinstance(value, list):
+			raise ControlError(f"{path!r} takes a list")
 
-		for row in named:
+		for row in value:
 			if row not in declaration.get("rows", []):
 				raise ControlError(f"this grid has no row named {row!r}")
 
-		grid[rest[0]] = dict(value) if rest == ["labels"] else list(value)
+		grid["unreachable"] = list(value)
 		return
 
 	# The notes are a variant's; the mute, the offset and the labels it implies

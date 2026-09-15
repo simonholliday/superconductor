@@ -243,6 +243,123 @@ def test_a_step_grid_says_where_a_panel_s_window_opens () -> None:
 		superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, opens_at="clap")
 
 
+KIT = ["36", "38"]
+"""A kit keyed by note number, which is what a row's words are apart from (#2459)."""
+
+
+def test_a_step_grid_s_rows_may_say_something_other_than_their_ids () -> None:
+	"""**What a row is, apart from what it says** (#2459): a kit keyed by note number
+	and drawn by name, the way a note grid's rows have been since 1.17.0.
+
+	**State rather than declaration**, because a sampler renames a voice while it
+	plays (#2458) and a declaration is what a panel reads once.  The words are the
+	pattern's, beside its variants rather than inside one, and they never reach the
+	composition's own dict, which its play function reads by id.  **A grid given
+	none holds exactly what it always did**, so nothing else sees a difference.
+	"""
+
+	composition = FakeComposition()
+	plain = superconductor.subsequence_adapter.StepGrid(composition, rows=ROWS, steps=16)
+
+	assert "labels" not in plain.snapshot(), "a grid given no labels grew a field"
+
+	kit = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=KIT, steps=16, data_key="kit", name="kit",
+		labels={"36": "kick", "38": "snare"})
+
+	kit.apply(["36", "4"], True)
+
+	assert kit.snapshot() == {"36": {"4": {"velocity": 100}}, "enabled": True,
+	                          "labels": {"36": "kick", "38": "snare"}}
+	assert kit.declaration()["rows"] == KIT and "labels" not in kit.declaration()
+	assert composition.data["kit"] == {"36": {"4": {"velocity": 100}}}, (
+		"the words reached the dict the composition plays from")
+
+	takes = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=KIT, steps=16, data_key="takes", name="takes",
+		variants=("A", "B"), labels={"38": "snare"})
+
+	assert takes.snapshot()["labels"] == {"38": "snare"}
+	assert all("labels" not in one for one in composition.data["takes"].values()), (
+		"the words went into a variant")
+
+
+@pytest.mark.parametrize(("labels", "says"), [
+	({"40": "tom"}, "no row called '40'"),
+	({"36": ""}, "words"),
+	({"36": 36}, "words"),
+	(["kick", "snare"], "from a row to its words"),
+])
+def test_labels_a_composition_cannot_mean_are_refused_when_the_grid_is_made (
+	labels: typing.Any, says: str) -> None:
+	"""Loudly, at the start, rather than as a row drawn with nothing beside it."""
+
+	with pytest.raises(ValueError, match=says):
+		superconductor.subsequence_adapter.StepGrid(FakeComposition(), rows=KIT, labels=labels)
+
+
+def test_no_row_of_a_grid_with_labels_may_be_called_labels () -> None:
+	"""The words sit beside the rows in one object, as the mute does, so a row of that
+	name would be two things at one address.  **A grid given no labels is not
+	refused it**, being the grid it always was — as a length refuses ``end`` only
+	where one is offered."""
+
+	with pytest.raises(ValueError, match="no row may be called that"):
+		superconductor.subsequence_adapter.StepGrid(
+			FakeComposition(), rows=["labels", "kick"], labels={"kick": "bd"})
+
+	unlabelled = superconductor.subsequence_adapter.StepGrid(FakeComposition(), rows=["labels", "kick"])
+
+	with pytest.raises(ValueError, match="no row may be called that"):
+		unlabelled.set_labels({"kick": "bd"})
+
+
+def test_new_words_are_said_once_and_move_no_step () -> None:
+	"""**The whole reason the words are apart from the ids** (#2459): an app renaming
+	a voice while it plays keeps every step under it, the store keeps what somebody
+	made rather than what anything was called, and the words go out in one frame of
+	their own — the one a transposed grid's labels travel in.
+
+	**Whole, as every write here is**: a voice left out goes back to its id.  And a
+	grid made with none may be given some later, which is how an app that learns its
+	names after it starts would say them.
+	"""
+
+	link, sent = _link()
+	composition = link.composition
+	kit = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=KIT, steps=16, data_key="kit", name="kit", labels={"36": "kick"})
+
+	kit.attach(link)
+	kit.apply(["36", "4"], True)
+	kept = kit.kept()
+
+	kit.set_labels({"36": "808 kick", "38": "snare"})
+	kit.set_labels({"36": "808 kick", "38": "snare"})
+
+	assert [(frame["path"], frame["v"]) for frame in sent] == [
+		("kit/labels", {"36": "808 kick", "38": "snare"})], "the same words were said twice, or not at all"
+	assert kit.snapshot()["labels"] == {"36": "808 kick", "38": "snare"}
+	assert kit.rows_now() == {"36": {"4": {"velocity": 100}}}, "renaming a voice moved its steps"
+	assert kit.kept() == kept and "labels" not in kept, "the store keeps what a row was called"
+
+	kit.set_labels({"38": "snare"})
+
+	assert kit.snapshot()["labels"] == {"38": "snare"}
+
+	with pytest.raises(ValueError, match="no row called '40'"):
+		kit.set_labels({"40": "tom"})
+
+	assert kit.snapshot()["labels"] == {"38": "snare"}, "refused words were half taken"
+
+	later = superconductor.subsequence_adapter.StepGrid(
+		composition, rows=KIT, steps=16, data_key="later", name="later")
+
+	later.set_labels({"36": "kick"})
+
+	assert later.snapshot()["labels"] == {"36": "kick"}
+
+
 def test_a_seed_written_as_lists_of_steps_is_read_at_the_default () -> None:
 	"""**The spelling every composition used before a step carried a velocity**, read
 	once when the grid is made so the composition's own play function finds one

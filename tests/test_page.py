@@ -9800,6 +9800,111 @@ def test_the_lane_shows_the_row_whose_name_was_pressed (
 	playwright_api.expect(bars).to_have_count(1, timeout=5_000)
 
 
+READS_ACROSS = """(el) => {
+	const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+	const seen = [];
+
+	for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+		for (let at = 0; at < text.length; at++) {
+			const range = document.createRange();
+
+			range.setStart(text, at);
+			range.setEnd(text, at + 1);
+			seen.push([range.getBoundingClientRect().left, text.data[at]]);
+		}
+	}
+
+	return seen.sort((one, other) => one[0] - other[0]).map((one) => one[1]).join("");
+}"""
+"""A label's characters in the order they stand on the glass, left to right.
+
+**Not its text**, which is the order they were written in.  A label column is set
+right to left so that an over-long name is trimmed at its front, and that is
+exactly what can put an app's words in another order from the one it sent."""
+
+
+def test_a_drum_row_says_the_words_the_app_gives_it_and_keeps_its_address (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""**What a row is, apart from what it says** (#2459).
+
+	A step grid drew its row's id, so a kit keyed by note number read ``36``, and an
+	app renaming a voice while it plays could only rename the row, orphaning every
+	step under it.  The app sends the words, as it does a note grid's; the row keeps
+	its address, so a step under it is still asked for by id; and the lane beside it
+	and the clear that empties it name it the way the grid does.  A panel that
+	reloads reads them from the service's copy, which is the half a panel that
+	stayed connected never tests.
+
+	**And in the order they were written.**  Set right to left for the trimming, a
+	name beginning with a number was drawn with the number at its end: the app said
+	``808 kick`` and the glass said ``KICK 808``.
+	"""
+
+	_settled(panel)
+
+	fake_app.confirm("grid/labels", {"kick": "808 kick"}, by="app")
+
+	kick = panel.locator(f'{DRUMS} .grid .row-label[data-row="kick"]')
+
+	playwright_api.expect(kick).to_have_text(re.compile("808 kick", re.IGNORECASE), timeout=5_000)
+
+	assert kick.evaluate(READS_ACROSS) == "808 kick", "the app's words are drawn in another order"
+	assert (panel.locator(f'{DRUMS} .grid .row-label[data-row="snare"]').text_content() or "").strip() \
+		== "snare", "a row the app gave no words stopped reading as its id"
+
+	# The lane opened on the kick, and names it as the grid does.
+	lane = panel.locator(f"{DRUMS} .lane .row-label")
+
+	assert (lane.text_content() or "").strip() == "808 kick", "the lane still names the row by its id"
+	assert lane.evaluate(READS_ACROSS) == "808 kick"
+
+	before = len(fake_app.sets)
+	panel.locator(conftest.cell("grid/kick/2")).click()
+
+	assert fake_app.settled("grid/kick/2", since=before), "a step under a renamed row lost its address"
+
+	# The clear offers the lane whose name was pressed, so press it.
+	kick.click()
+	panel.locator(f"{DRUMS} .part-foot .clear").click()
+	panel.wait_for_selector(".sheet", timeout=5_000)
+
+	answer = panel.locator(".sheet .answers button[data-clear-lane]")
+
+	assert answer.get_attribute("data-clear-lane") == "kick"
+	assert "808 kick" in answer.inner_text().lower(), f"the clear names the lane by its id: {answer.inner_text()!r}"
+
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+
+	playwright_api.expect(kick).to_have_text(re.compile("808 kick", re.IGNORECASE), timeout=5_000)
+
+
+@pytest.mark.parametrize(("page_named", "control", "row", "words"), [
+	# A step grid that declares no velocity, so its names are marks rather than targets.
+	("Drums", "tiny", "snare", "909 snare"),
+	# A pitched grid, whose words have been the app's since 1.17.0 (#2144) — a note
+	# number beside its name, which is how a grid over all of MIDI might say both.
+	("Bass", "bass", "C2", "36 C2"),
+])
+def test_an_app_s_words_stand_in_the_order_it_wrote_them_on_every_grid (
+	panel: typing.Any, fake_app: typing.Any, page_named: str, control: str, row: str, words: str) -> None:
+	"""**Every label column is set right to left**, so every place a row's words are
+	drawn is a place they can be reordered, and a leading number is carried to the
+	end.  A row name that is a target and one that is a mark are drawn by different
+	branches, and a pitched grid by a third (#2459)."""
+
+	panel.locator(".pages button", has_text=page_named).click()
+
+	label = panel.locator(f'.part[data-part="{control}"] .grid .row-label[data-row="{row}"]')
+
+	label.wait_for(timeout=5_000)
+	fake_app.confirm(f"{control}/labels", {row: words}, by="app")
+
+	playwright_api.expect(label).to_have_text(re.compile(re.escape(words), re.IGNORECASE), timeout=5_000)
+
+	assert label.evaluate(READS_ACROSS) == words, "the app's words are drawn in another order"
+
+
 def test_a_bar_in_the_lane_changes_the_chosen_rows_step_and_no_other (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""**The row chosen, not the first step found in the column**, which is what the
@@ -10233,6 +10338,26 @@ def test_a_letter_shows_a_variant_to_edit_and_asks_the_app_for_nothing (
 	assert [(one["path"], one["v"]) for one in asked] == [
 		("phrase/variants/B/rows/kick/1", {"velocity": 100})], (
 		"showing a variant asked the app for something, or the tap went elsewhere")
+
+
+def test_a_row_s_words_are_the_pattern_s_whichever_variant_is_shown (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Showing another variant changes the steps drawn and not what a voice is called:
+	the words are the pattern's, as its mute is (#2459, #2485 Q4), so they are read
+	from beside the variants rather than from the rows of the one shown."""
+
+	_go_to_the_variants(panel)
+
+	fake_app.confirm("phrase/labels", {"hihat_1_closed": "closed hat"}, by="app")
+
+	hat = panel.locator(f'{PHRASE} .grid .row-label[data-row="hihat_1_closed"]')
+
+	playwright_api.expect(hat).to_have_text(re.compile("closed hat", re.IGNORECASE), timeout=5_000)
+
+	panel.locator(_letter("B")).click()
+	panel.wait_for_selector(conftest.cell("phrase/variants/B/rows/snare/2"), timeout=5_000)
+
+	assert (hat.text_content() or "").strip() == "closed hat", "showing B lost the pattern's words"
 
 
 def test_a_cell_the_app_confirms_is_drawn_in_its_own_variant_only (

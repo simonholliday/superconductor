@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.41.0";
+const CONTRACT = "1.42.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -1099,6 +1099,25 @@ function Scenes ({ states, onCue }) {
 		</div>`;
 }
 
+/* What a row says on the glass: the app's words where it gave some, and its id
+ * tidied where it did not (#2459).
+ *
+ * **A row is kept by its id and read by its words.** A note grid's words have been
+ * the app's since 1.17.0 — the pitch a transposed row sounds — and a step grid's are
+ * now, so a kit keyed by note number can read *kick* and a sampler can rename a voice
+ * without a step moving. The words are drawn as the app wrote them; only an id is
+ * tidied, because an id is an address and not a sentence.
+ *
+ * **Drawn inside a `<bdi>` wherever a label column holds them**, so they stand in the
+ * order they were written: the column is set right to left to trim an over-long
+ * name at its front, and a name beginning with a number had the number carried to
+ * its end — the app said `808 kick` and the glass said `KICK 808`. */
+function rowLabel (labels, row) {
+	const words = (labels || {})[row];
+
+	return typeof words === "string" && words ? words : row.replace(/_/g, " ");
+}
+
 /* One step of a step grid's row, or null — whichever shape the row is in.
  *
  * **A row is steps by number, each carrying how hard it is struck** (#2525), and it
@@ -1159,7 +1178,7 @@ function fillOf (shape, range, opening) {
    grid did. `chosen` and `onChoose` are the row the velocity lane shows, and are
    absent on a grid with no lane: its row labels are then marks, as they always
    were. */
-function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, weights, opening, opensAt, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
+function Grid ({ control, cellsAt = control, rows, labels, steps, end = steps, beats, weights, opening, opensAt, cells, drawn, kinds, visible, cell, pending, failed, tap, chosen, onChoose, onTap }) {
 	/* A label column bounded by the viewport, then one column per step at
 	   whatever size is set. The columns are that size exactly rather than at
 	   least it: a person who asks for compact cells wants the space back for
@@ -1185,10 +1204,10 @@ function Grid ({ control, cellsAt = control, rows, steps, end = steps, beats, we
 							class=${`row-label pick ${row === chosen ? "chosen" : ""}`}
 							key=${`label-${row}`} data-row=${row}
 							role="button" aria-pressed=${row === chosen ? "true" : "false"}
-							title=${`show how hard each ${row.replace(/_/g, " ")} step is struck`}
+							title=${`show how hard each ${rowLabel(labels, row)} step is struck`}
 							onClick=${() => onChoose(row)}
-						>${row.replace(/_/g, " ")}</div>`
-					: html`<div class="row-label" key=${`label-${row}`} data-row=${row}>${row.replace(/_/g, " ")}</div>`}
+						><bdi>${rowLabel(labels, row)}</bdi></div>`
+					: html`<div class="row-label" key=${`label-${row}`} data-row=${row}><bdi>${rowLabel(labels, row)}</bdi></div>`}
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${cellsAt}/${row}/${step}`;
 					const shape = stepIn(cells[row], step);
@@ -1631,7 +1650,7 @@ function NoteGrid ({ name, cellsAt = name, rows, steps, end = steps, beats, divi
 				<div
 					class=${`row-label ${(unreachable || []).includes(row) ? "unreachable" : ""}`}
 					key=${`label-${row}`} data-row=${row}
-				>${(labels || {})[row] || row}</div>
+				><bdi>${rowLabel(labels, row)}</bdi></div>
 				${Array.from({ length: steps }, (_, step) => {
 					const path = `${cellsAt}/${row}/${step * divisions}`;
 					const note = (notes[row] || {})[String(step * divisions)];
@@ -1793,7 +1812,7 @@ function VelocityLane ({ name, cellsAt = name, rows, steps, end = steps, beats, 
 
 	return html`
 		<div class=${`lane ${tight ? "tight" : ""}`} style=${style}>
-			<div class="row-label">${label}</div>
+			<div class="row-label"><bdi>${label}</bdi></div>
 			${Array.from({ length: steps }, (_, step) => {
 				const found = at(step);
 				const height = found ? Math.max(4, ((found.note.velocity - low) / (high - low)) * 100) : 0;
@@ -2058,7 +2077,7 @@ function NoteBlock ({ name, cellsAt = name, control, shows, notes, end, resync, 
  * **Drawn only where the app said what a velocity is** — its range and default — as
  * a note grid's lane is. A grid that says nothing gets no lane, no slider, row names
  * that stay marks, and taps that place with `true`, which is every grid before this. */
-function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, kinds, visible, cell, pending, failed, onSet, onLane }) {
+function StepBlock ({ name, cellsAt = name, control, cells, labels, end, resync, drawn, kinds, visible, cell, pending, failed, onSet, onLane }) {
 	const range = Array.isArray(control.velocity_range) && control.velocity_range.length === 2
 		? control.velocity_range : null;
 
@@ -2078,7 +2097,7 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 
 	return html`
 		<${Grid} control=${name} cellsAt=${cellsAt}
-			rows=${control.rows} steps=${control.steps} end=${playing} beats=${control.beats || 4}
+			rows=${control.rows} labels=${labels} steps=${control.steps} end=${playing} beats=${control.beats || 4}
 			weights=${control.velocity_range} opening=${opening} opensAt=${control.opens_at}
 			cells=${cells} drawn=${drawn} kinds=${kinds}
 			visible=${visible} cell=${cell}
@@ -2093,7 +2112,7 @@ function StepBlock ({ name, cellsAt = name, control, cells, end, resync, drawn, 
 		${range && html`
 			<${VelocityLane} name=${name} cellsAt=${cellsAt} rows=${[chosen]}
 				steps=${control.steps} end=${playing} beats=${control.beats || 4} divisions=${1}
-				label=${chosen.replace(/_/g, " ")}
+				label=${rowLabel(labels, chosen)}
 				cell=${cell} notes=${{ [chosen]: stepsOf(cells[chosen], opening) }}
 				range=${range} opening=${control.default_velocity} onSet=${onSet} />`}
 		${(range || lengthens) && html`
@@ -7990,6 +8009,10 @@ function Panel () {
 									<${StepBlock} name=${one.control} cellsAt=${variant ? variant.at : one.control}
 										control=${controls[one.control]}
 										cells=${rows}
+										${/* **The pattern's words, whichever variant is
+										     shown** (#2459): beside the variants, as the
+										     mute is, never in the rows of one. */ ""}
+										labels=${held.labels}
 										end=${held.end} resync=${held.resync}
 										drawn=${drawn}
 										kinds=${layerKinds(one.control)}
@@ -8247,7 +8270,7 @@ function Panel () {
 									request(variant ? variant.at : `${name}/rows`, keeping);
 									setClearing(null);
 								}}
-							>${`clear ${lane} only (${countOf(going)})`}</button>`}
+							>${`clear ${rowLabel(held.labels, lane)} only (${countOf(going)})`}</button>`}
 						<button
 							class="danger"
 							onPointerDown=${(event) => {
