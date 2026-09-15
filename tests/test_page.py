@@ -4395,6 +4395,21 @@ def test_a_sheet_that_asks_a_question_has_one_way_out_of_it (
 	assert not [one for one in fake_app.sets if one["path"] == "grid/rows"]
 
 
+def _asked (fake_app: typing.Any, path: str, value: typing.Any, since: int) -> None:
+	"""Wait until the panel has asked for *value* at *path*, and has then gone quiet.
+
+	**For two taps and a reset, never a wait for the layout.**  These tests read what
+	the panel sent straight after its last click, and `_settled` waits for the cell
+	size, not for frames: on a slow runner the reset was still crossing the service,
+	so the list said `[115]` and the test failed on GitHub while passing here (#2600).
+	A fake app slowed to 0.4 s a frame reproduces it.  Waiting for the value rather
+	than for any frame on the path is what makes a slow second tap, which asks for
+	something first, still wait for the reset behind it.
+	"""
+
+	fake_app.settled(lambda one: one.get("path") == path and one.get("v") == value, since=since)
+
+
 def test_a_settings_slider_goes_back_to_what_its_app_opens_it_at (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Simon tried the gesture with a mouse and nothing happened (2026-09-14).
@@ -4438,9 +4453,10 @@ def test_a_settings_slider_goes_back_to_what_its_app_opens_it_at (
 
 	assert sent("moog/rate")[-1] != 24, "the tap did not ask for a different value"
 
+	before = len(fake_app.sets)
 	panel.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)
 	panel.mouse.click(box["x"] + box["width"] * 0.8, box["y"] + box["height"] / 2)
-	_settled(panel)
+	_asked(fake_app, "moog/rate", 24, before)
 
 	assert sent("moog/rate")[-1] == 24, \
 		f"two taps did not ask for what it opens at: {sent('moog/rate')}"
@@ -4456,9 +4472,10 @@ def test_a_settings_slider_goes_back_to_what_its_app_opens_it_at (
 
 	panel.mouse.click(at["x"] + at["width"] * 0.9, at["y"] + at["height"] / 2)
 	fake_app.await_set("moog/spread")
+	before = len(fake_app.sets)
 	panel.mouse.click(at["x"] + at["width"] * 0.5, at["y"] + at["height"] / 2)
 	panel.mouse.click(at["x"] + at["width"] * 0.5, at["y"] + at["height"] / 2)
-	_settled(panel)
+	_asked(fake_app, "moog/spread", [40, 40], before)
 
 	assert sent("moog/spread")[-1] == [40, 40], \
 		f"a range did not go back to both ends on its default: {sent('moog/spread')}"
@@ -10074,9 +10091,10 @@ def test_two_taps_on_a_bar_in_the_lane_put_that_step_back_to_the_grid_s_own_loud
 
 	assert sent()[-1] != 100, "the first tap did not ask for something other than the default"
 
+	before = len(fake_app.sets)
 	panel.mouse.click(*at)
 	panel.mouse.click(*at)
-	_settled(panel)
+	_asked(fake_app, "grid/snare/4/velocity", 100, before)
 
 	assert sent()[-1] == 100, f"two taps did not put the step back to the grid's own loudness: {sent()}"
 
@@ -10101,7 +10119,10 @@ def test_two_taps_on_an_empty_column_of_the_lane_ask_for_nothing (
 
 	panel.mouse.click(*at)
 	panel.mouse.click(*at)
-	_settled(panel)
+
+	# **Given time to arrive before nothing is believed**: a frame still crossing the
+	# service when the list is read is a test that passes on a slow runner.
+	fake_app.settled(lambda one: "velocity" in str(one.get("path", "")), since=before, limit=1.5)
 
 	asked = [one for one in fake_app.sets[before:] if "velocity" in str(one.get("path", ""))]
 
