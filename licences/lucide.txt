@@ -1,4 +1,4 @@
-The icon paths in `superintendent/client/app.js` (the `ICONS` map) are from
+The icon paths in `superconductor/client/app.js` (the `ICONS` map) are from
 Lucide, copied rather than depended on. Lucide is a fork of Feather Icons and
 carries this notice from both projects.
 

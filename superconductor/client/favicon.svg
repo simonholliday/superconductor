@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- @license lucide-static v1.47.0 - ISC -->
+<!--
+	Superconductor's mark: Lucide's wand-sparkles, which Simon chose for it on
+	2026-09-17 (#2861), with the paths exactly as lucide-static 1.47.0 ships them.
+
+	The same glyph the bar draws as `ICONS.brand` in app.js.  A mark in the page
+	takes its colour from what is around it; a favicon has no page, so the panel's
+	own ink is written in: the dark theme's as the plain answer, and the light
+	theme's for a browser that asks for light, as subsystem.co's favicons do.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <style>svg{color:#e8eaee}@media(prefers-color-scheme:light){svg{color:#171a1f}}</style>
+  <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" />
+  <path d="m14 7 3 3" />
+  <path d="M5 6v4" />
+  <path d="M19 14v4" />
+  <path d="M10 2v2" />
+  <path d="M7 8H3" />
+  <path d="M21 16h-4" />
+  <path d="M11 3H9" />
+</svg>

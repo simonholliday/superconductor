@@ -9,6 +9,7 @@ import re
 import time
 import types
 import typing
+import xml.etree.ElementTree
 
 import pytest
 
@@ -368,7 +369,7 @@ def test_everything_on_the_bar_is_one_height (panel: typing.Any) -> None:
 	tall = panel.evaluate("""() => {
 		const out = {};
 
-		for (const one of document.querySelectorAll(".bar button, .bar .lcd")) {
+		for (const one of document.querySelectorAll(".bar button, .bar .lcd, .bar .brand .badge")) {
 			const at = Math.round(one.getBoundingClientRect().height);
 
 			out[at] = out[at] || [];
@@ -379,6 +380,126 @@ def test_everything_on_the_bar_is_one_height (panel: typing.Any) -> None:
 	}""")
 
 	assert len(tall) == 1, f"the bar draws its controls at {sorted(tall)}px: {tall}"
+
+
+def test_the_bar_opens_with_the_products_mark_and_name (panel: typing.Any) -> None:
+	"""Simon, 2026-09-18: *"The product icon and name at the top left of the
+	display, vertically aligned with the controls.  The icon should be in a
+	rounded box ... in the left-hand position.  Adjacent to that, in Lexend font,
+	the word 'superconductor' all in lower case.  Use consistent spacing between
+	the icon and the text, and between that group of two items, and the adjacent
+	transport - as we have defined for spacing already."*
+
+	**The box is sunk, not raised**, which was his choice: on this panel a raised
+	surface with an edge is a control, and the mark is never pressed.  So it is
+	held to a readout's look and to not being a target, as well as to the row.
+
+	**The face has to arrive, not only be asked for.**  A family names a face the
+	browser may not have, and the fallback draws the same word in the system sans
+	without a sound, which is how Barlow once went missing from a built wheel.
+	"""
+
+	_settled(panel)
+
+	seen = panel.evaluate("""async () => {
+		await document.fonts.ready;
+
+		const bar = document.querySelector(".bar");
+		const brand = bar.firstElementChild;
+		const badge = brand.querySelector(".badge");
+		const word = brand.querySelector(".wordmark");
+		const transport = brand.nextElementSibling;
+		const readout = bar.querySelector(".lcd");
+		const box = (one) => one.getBoundingClientRect();
+		const middle = (one) => box(one).top + box(one).height / 2;
+		const shape = (one) => getComputedStyle(one);
+
+		/* A gap token resolved the way the bar resolves it, as a length. */
+		const px = (name) => {
+			const probe = document.createElement("div");
+
+			probe.style.width = shape(document.documentElement).getPropertyValue(name);
+			document.body.appendChild(probe);
+
+			const width = box(probe).width;
+
+			probe.remove();
+
+			return width;
+		};
+
+		return {
+			first: brand.className,
+			next: transport.className,
+			/* As drawn rather than as written: `innerText` applies a
+			   `text-transform`, which `textContent` would not see. */
+			word: word.innerText,
+			family: shape(word).fontFamily,
+			faces: [...document.fonts]
+				.filter((face) => face.family.replace(/"/g, "") === "Lexend")
+				.map((face) => face.status),
+			badge: [box(badge).width, box(badge).height],
+			readout: box(readout).height,
+			offCentre: [middle(badge) - middle(transport), middle(word) - middle(transport)],
+			inside: box(word).left - box(badge).right,
+			between: box(transport).left - box(word).right,
+			tight: px("--bar-tight"),
+			loose: px("--bar-loose"),
+			ground: [shape(badge).backgroundColor, shape(readout).backgroundColor],
+			recess: shape(badge).boxShadow,
+			touch: shape(badge).touchAction,
+		};
+	}""")
+
+	assert seen["first"] == "brand", f"the bar opens with {seen['first']!r}"
+	assert seen["next"] == "transport", f"the name is followed by {seen['next']!r}"
+	assert seen["word"] == "superconductor"
+	assert seen["family"].replace('"', "").startswith("Lexend"), seen["family"]
+	assert seen["faces"] == ["loaded"], f"Lexend was asked for and is {seen['faces']}"
+
+	assert seen["badge"] == [44, 44], f"the box is {seen['badge']}, not a square the bar's height"
+	assert seen["badge"][1] == seen["readout"]
+	assert all(abs(off) <= 1 for off in seen["offCentre"]), (
+		f"the mark and the name sit off the transport's middle by {seen['offCentre']}px")
+
+	assert abs(seen["inside"] - seen["tight"]) < 0.5, (
+		f"{seen['inside']}px between the mark and the name, not the tight gap")
+	assert abs(seen["between"] - seen["loose"]) < 0.5, (
+		f"{seen['between']}px between the name and the transport, not the bar's gap")
+
+	assert seen["ground"][0] == seen["ground"][1], "the box is not on a readout's ground"
+	assert "inset" in seen["recess"], "the box is not sunk"
+	assert seen["touch"] == "auto", "the mark is drawn as something to touch"
+
+
+def test_the_favicon_is_the_mark_on_the_bar (panel: typing.Any, service_url: str) -> None:
+	"""Simon, 2026-09-18: *"The icon should also be the favicon for the
+	browser."*
+
+	**One glyph, in two files**, because a favicon has no page to take a colour
+	from and so carries its ink, and the bar's is drawn in whatever ink is around
+	it.  The two are compared stroke for stroke, so a mark changed in one place
+	and not the other fails here rather than on somebody's tab.
+	"""
+
+	_settled(panel)
+
+	link = panel.locator('link[rel="icon"]')
+
+	assert link.count() == 1, "the page names no icon"
+	assert link.get_attribute("type") == "image/svg+xml"
+
+	answer = panel.request.get(service_url + link.get_attribute("href"))
+
+	assert answer.status == 200
+	assert answer.headers["content-type"].startswith("image/svg+xml")
+
+	served = xml.etree.ElementTree.fromstring(answer.body())
+	strokes = [one.get("d") for one in served.iter("{http://www.w3.org/2000/svg}path")]
+	drawn = panel.evaluate("""() => [...document.querySelectorAll(".bar .brand .badge path")]
+		.map((one) => one.getAttribute("d"))""")
+
+	assert strokes and strokes == drawn, f"the favicon draws {strokes}, the bar {drawn}"
 
 
 def test_a_readout_centres_its_figures_and_not_its_boxes (
@@ -7278,7 +7399,8 @@ def test_every_size_and_face_on_the_page_is_one_the_scale_names (
 	line had all quietly fallen back to the body face.
 
 	**What a thing is decides its face**: lettering on the equipment, a
-	sentence, or a figure.  What it does decides its size, out of six.
+	sentence, or a figure.  What it does decides its size, out of six.  And the
+	product's name is in the family's own face, the fourth (Simon, 2026-09-18).
 	"""
 
 	_open_the_stack(panel)
@@ -7310,7 +7432,7 @@ def test_every_size_and_face_on_the_page_is_one_the_scale_names (
 		   not. */
 		const tidy = (stack) => stack.replace(/\s+/g, " ").trim();
 
-		const faces = new Set(["--face-panel", "--face-body", "--face-figures"]
+		const faces = new Set(["--face-panel", "--face-body", "--face-figures", "--face-brand"]
 			.map((name) => tidy(root.getPropertyValue(name))));
 
 		probe.remove();

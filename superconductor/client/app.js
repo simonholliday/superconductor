@@ -3515,6 +3515,16 @@ const ICONS = {
 	   window's lower edge will move (#2536). */
 	collapse: "m18 15-6-6-6 6",
 	expand: "m6 9 6 6 6-6",
+	/* **Superconductor's own mark** (Simon, 2026-09-17, #2861): Lucide's
+	   wand-sparkles, the icon each product in the family wears beside its name,
+	   as lucide-static 1.47.0 ships it.  Eight strokes, kept as the file draws
+	   them rather than joined into one path, because a path that opens with a
+	   relative move means something else once it follows another.  `favicon.svg`
+	   is the same glyph with the ink written in. */
+	brand: [
+		"m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
+		"m14 7 3 3", "M5 6v4", "M19 14v4", "M10 2v2", "M7 8H3", "M21 16h-4", "M11 3H9",
+	],
 };
 
 /* One glyph, sized by the surface it sits on rather than by itself — the size
@@ -3527,8 +3537,28 @@ function Icon ({ of, filled }) {
 			fill=${filled ? "currentColor" : "none"}
 			stroke=${filled ? "none" : "currentColor"}
 			stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-			<path d=${ICONS[of]} />
+			${[].concat(ICONS[of]).map((d) => html`<path d=${d} />`)}
 		</svg>`;
+}
+
+/* **The product's name, first on the bar** (Simon, 2026-09-18): its mark in a
+ * box, and beside it the name in lower case, as every product in the family
+ * wears them.
+ *
+ * **The box is sunk, not raised**, which was Simon's choice between the two.  On
+ * this panel only a control is a raised surface with an edge, because a bordered
+ * label is a button that does nothing when pressed; a thing that is read and
+ * never pressed, framed at a control's height, is a readout.  So the mark is
+ * drawn as the counter and the tempo are.
+ *
+ * One group, so the bar's own rule spaces it: the tight gap between the mark and
+ * the name, the loose one between the name and the transport. */
+function Brand () {
+	return html`
+		<div class="brand">
+			<span class="badge"><${Icon} of="brand" /></span>
+			<span class="wordmark">superconductor</span>
+		</div>`;
 }
 
 /* A sheet: the whole glass, briefly, for something that needs answering.
@@ -7779,6 +7809,7 @@ function Panel () {
 	if (!declaredGrids.length) {
 		return html`
 			<div class="bar">
+				<${Brand} />
 				<span class="spacer"></span>
 				<${Theme} choice=${theme.choice} onChoose=${theme.choose} />
 				<${Doubled} duplicated=${duplicated} />
@@ -7823,6 +7854,7 @@ function Panel () {
 
 	return html`
 		<div class="bar">
+			<${Brand} />
 			${transportName && html`
 				<${Transport} control=${controls[transportName]} name=${transportName}
 					fields=${transportFields} up=${up} anchor=${anchor} onSet=${request} />`}

@@ -667,7 +667,7 @@ the files and reload the browser.
 | `tests/` | the suite, including the ones that drive a real Firefox |
 | `research/` | the probes and raw measurements the design was made from |
 | `reviews/` | the code reviews it has been through |
-| `licences/` | notices for the vendored face and icons |
+| `licences/` | notices for the vendored faces and icons |
 
 `research/` and `reviews/` are provenance: they record what was true on the day
 they were written and are deliberately not kept up to date. They still say

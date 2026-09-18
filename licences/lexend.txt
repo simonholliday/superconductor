@@ -1,8 +1,12 @@
-Barlow Condensed SemiBold (latin subset) is bundled at
-superconductor/client/fonts/barlow-condensed-600-latin.woff2 and served by this
-package's own service, so a panel needs no internet and reaches no CDN.
+Lexend SemiBold (latin subset) is bundled at
+superconductor/client/fonts/lexend-latin-600-normal.woff2 and served by this
+package's own service, so a panel needs no internet and reaches no CDN.  It sets
+the product's name on the bar and nothing else.
 
-Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+The file is Fontsource's @fontsource/lexend 5.3.0, the same bytes subsystem.co and
+Subroutine serve, so the family's wordmark is one face everywhere it appears.
+
+Copyright 2019 The Lexend Project Authors (https://github.com/googlefonts/lexend)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
@@ -22,7 +26,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The

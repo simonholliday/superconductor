@@ -25,6 +25,21 @@
 	src: url("/client/fonts/barlow-condensed-600-latin.woff2") format("woff2");
 }
 
+/* Lexend, the family's wordmark face (Simon, 2026-09-18), for the product's name
+ * on the bar and nothing else.
+ *
+ * The same file subsystem.co and Subroutine serve, byte for byte: Fontsource's
+ * 5.3.0 latin subset at 600, the weight their wordmarks are set in.  Bundled for
+ * Barlow's reason, 15KB from this origin that reaches nothing.  SIL Open Font
+ * License 1.1; the text is in `licences/lexend.txt`. */
+@font-face {
+	font-family: "Lexend";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("/client/fonts/lexend-latin-600-normal.woff2") format("woff2");
+}
+
 /* The surface is read at two very different angles — upright like a monitor and
    flat like a table — so contrast is kept high and nothing depends on a hue
    that shifts when the panel is tilted away from you.
@@ -228,6 +243,13 @@
 	 *                    name. Tabular by default, because a figure that moves
 	 *                    when it changes reads as a different figure.
 	 *
+	 * And a fourth, which is not the panel's:
+	 *
+	 *   `--face-brand`   the product's name, and nothing else. Lexend, the face
+	 *                    every product in the family sets its name in (Simon,
+	 *                    2026-09-18), so a person who has read subsystem.co
+	 *                    knows this name when they see it on the glass.
+	 *
 	 * The fallbacks are real stacks rather than a bare `sans-serif`: the bundled
 	 * face is swapped in when it lands, and what stands in until then has to be
 	 * legible on a machine nobody here has seen (#2049). */
@@ -235,6 +257,7 @@
 		ui-sans-serif, system-ui, sans-serif;
 	--face-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 	--face-figures: ui-monospace, "SF Mono", "Cascadia Mono", "Liberation Mono", monospace;
+	--face-brand: "Lexend", ui-sans-serif, system-ui, sans-serif;
 
 	/* Two gaps for the header and no third: things that belong together, and
 	   the space between one group and the next. */
@@ -2184,7 +2207,8 @@ html, body {
  * hardware counter's do. No seven-segment face — segments are a photograph of a
  * 1982 display, and they cost legibility at the size this actually needs, which
  * is the line between familiar and kitsch. */
-.lcd {
+.lcd,
+.brand .badge {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -2248,6 +2272,35 @@ html, body {
 	font-size: var(--type-chrome-quiet);
 	line-height: 1;
 	color: var(--ink-faint);
+}
+
+/* **The product's name, first on the bar** (Simon, 2026-09-18): its mark sunk
+ * in a box, and the name beside it in lower case.
+ *
+ * One group, so the gap inside it is the tight one and the bar's own gap is what
+ * separates it from the transport.  The box is drawn by the readouts' rule above,
+ * because it is one: a thing read and never pressed, framed at a control's
+ * height, which is how this panel says "not a control" without leaving the row.
+ * Square, and the mark in the readouts' own ink, since a recess is dark in every
+ * theme and the page's ink is not. */
+.brand { display: flex; align-items: center; gap: var(--bar-tight); flex: none; }
+
+.brand .badge {
+	width: 44px;
+	padding: 0;
+	color: var(--readout);
+}
+
+.brand .badge .icon { width: 1.5em; height: 1.5em; }
+
+.wordmark {
+	font-family: var(--face-brand);
+	font-size: var(--type-display);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	color: var(--ink);
+	white-space: nowrap;
 }
 
 .tempo { display: flex; align-items: center; gap: var(--bar-tight); }
