@@ -116,6 +116,8 @@ def test_a_part_sits_where_its_definition_says_above_the_base (rig: typing.Any) 
 	channel above the base sound the solo voice.
 	"""
 
+	_needs(rig, "strings", "solo")
+
 	streichfett = pymidiinstrumentdefs.load("waldorf/streichfett")
 	strings = next(one for one in rig.INSTRUMENTS if one.key == "strings")
 	solo = next(one for one in rig.INSTRUMENTS if one.key == "solo")
@@ -130,6 +132,8 @@ def test_a_part_that_moved_under_the_rig_is_refused_rather_than_played_wrong (
 	"""The check the pair above is worth having: a table saying otherwise fails at
 	import, where somebody is looking, rather than on a channel nothing answers."""
 
+	_needs(rig, "solo")
+
 	wrong = dataclasses_replace(rig, "solo", channel=7)
 
 	with pytest.raises(ValueError, match="sits 1 above its base"):
@@ -140,6 +144,8 @@ def test_each_part_sounds_as_many_notes_as_it_says_and_not_as_many_as_the_instru
 	rig: typing.Any) -> None:
 	"""A Streichfett's strings take 128 notes and its solo eight, which is a real
 	difference on the glass: the solo grid refuses a ninth note in a column."""
+
+	_needs(rig, "strings", "solo")
 
 	assert rig.GRIDS["strings"].declaration()["voices"] == 128
 	assert rig.GRIDS["solo"].declaration()["voices"] == 8
@@ -187,6 +193,8 @@ def test_an_instrument_with_nothing_to_receive_gets_no_settings_block (rig: typi
 	(#2046), so they get a pattern and no block — and a block of no rows is worse
 	than no block."""
 
+	_needs(rig, "model_d", "malevolent", "strings", "solo")
+
 	for key in ("model_d", "malevolent", "drm1", "solo"):
 		assert rig.SETTINGS[key] is None, f"{key} was given a settings block with nothing in it"
 
@@ -202,6 +210,8 @@ def test_the_streichfett_s_solo_controls_are_set_on_the_strings_channel (rig: ty
 	Measured on the hardware first (#2544): control changes 76, 70 and 77 sent to
 	the channel above the base moved nothing at all.
 	"""
+
+	_needs(rig, "strings")
 
 	streichfett = pymidiinstrumentdefs.load("waldorf/streichfett")
 	by_part = streichfett.controls_by_part()
@@ -507,6 +517,8 @@ def test_a_line_sounds_its_own_notes_in_either_synth_and_stops_where_each_ends (
 	after.  A note is cut in the copy played and kept whole on the line.
 	"""
 
+	_needs(rig, "model_d")
+
 	made = rig._make_line({"id": "both"})
 	per_step = rig.DIVISIONS
 
@@ -608,6 +620,8 @@ def test_one_line_routed_into_two_synths_plays_on_both (tmp_path: pathlib.Path) 
 	glass with one note on it, a route to it on the Minitaur's stack and on the Model
 	D's, and that note arriving on both channels and nowhere else."""
 
+	_needs(_composition(), "model_d")
+
 	played = _rendered(tmp_path, place=False, route=True)
 	rig = _composition()
 	channels = {one.key: one.channel - 1 for one in rig.INSTRUMENTS}
@@ -647,6 +661,21 @@ def _rendered (where: pathlib.Path, place: bool, route: bool = False, key: str |
 	assert done.returncode == 0, done.stderr[-4000:]
 
 	return typing.cast(dict[str, typing.Any], json.loads((where / "played.json").read_text()))
+
+
+def _needs (rig: typing.Any, *keys: str) -> None:
+	"""Wait, rather than fail, while an instrument a test is about is set aside.
+
+	Simon set four aside in `ensemble.py` on 2026-09-18, to test the glass on a
+	lighter page and bring them back later.  A test about one of them then says
+	which it is missing, and runs again the moment it is uncommented.
+	"""
+
+	present = {one.key for one in rig.INSTRUMENTS}
+	missing = [key for key in keys if key not in present]
+
+	if missing:
+		pytest.skip(f"set aside in ensemble.py: {', '.join(missing)}")
 
 
 def dataclasses_replace (rig: typing.Any, key: str, **fields: typing.Any) -> typing.Any:

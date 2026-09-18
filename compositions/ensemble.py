@@ -290,14 +290,19 @@ INSTRUMENTS = (
 		key="minitaur", definition="moog/minitaur", channel=6,
 		title="Moog Minitaur", about="Moog Minitaur",
 		low="C1", high="C3", settings=MINITAUR_SETTINGS),
-	Instrument(
-		key="model_d", definition="behringer/model_d", channel=4,
-		title="Behringer Model D", about="Behringer Model D",
-		low="C1", high="C4", opens_at="C2", visible_rows=12),
-	Instrument(
-		key="malevolent", definition="pwm/malevolent", channel=9,
-		title="PWM Malevolent", about="PWM Malevolent",
-		low="C2", high="C5", opens_at="C3", visible_rows=12),
+	# **Set aside on 2026-09-18, to come back** (Simon): the Pi 5 drew the page less
+	# smoothly with every instrument on it, the playhead pausing at the start of a
+	# pattern, and he wanted to test the glass without chasing that first.  All four
+	# held nothing in the store: no notes, no generators, no cables.  Uncomment them
+	# here and in `SYNTHS` to bring them back, empty.
+	# Instrument(
+	# 	key="model_d", definition="behringer/model_d", channel=4,
+	# 	title="Behringer Model D", about="Behringer Model D",
+	# 	low="C1", high="C4", opens_at="C2", visible_rows=12),
+	# Instrument(
+	# 	key="malevolent", definition="pwm/malevolent", channel=9,
+	# 	title="PWM Malevolent", about="PWM Malevolent",
+	# 	low="C2", high="C5", opens_at="C3", visible_rows=12),
 	Instrument(
 		key="matriarch", definition="moog/matriarch", channel=1,
 		title="Moog Matriarch", about="Moog Matriarch",
@@ -308,15 +313,15 @@ INSTRUMENTS = (
 		# instrument and says nothing.
 		voices=4,
 		asserted=("paraphony_voice_mode", "four_voice")),
-	Instrument(
-		key="strings", definition="waldorf/streichfett", channel=2,
-		title="Streichfett — Strings", about="Waldorf Streichfett",
-		low="C2", high="C5", opens_at="C3", visible_rows=12,
-		settings=STREICHFETT_SETTINGS, part="strings"),
-	Instrument(
-		key="solo", definition="waldorf/streichfett", channel=3,
-		title="Streichfett — Solo", about="Waldorf Streichfett",
-		low="C3", high="C6", opens_at="C4", visible_rows=12, part="solo"),
+	# Instrument(
+	# 	key="strings", definition="waldorf/streichfett", channel=2,
+	# 	title="Streichfett — Strings", about="Waldorf Streichfett",
+	# 	low="C2", high="C5", opens_at="C3", visible_rows=12,
+	# 	settings=STREICHFETT_SETTINGS, part="strings"),
+	# Instrument(
+	# 	key="solo", definition="waldorf/streichfett", channel=3,
+	# 	title="Streichfett — Solo", about="Waldorf Streichfett",
+	# 	low="C3", high="C6", opens_at="C4", visible_rows=12, part="solo"),
 )
 """The room, in the order the ensemble page draws it.
 
@@ -1153,7 +1158,10 @@ button rather than a control holding music.
 # --- The glass ------------------------------------------------------------
 
 DRUMS = ("drm1", "tr8s")
-SYNTHS = ("matriarch", "model_d", "malevolent", "strings", "solo")
+SYNTHS = (
+	"matriarch",
+	# "model_d", "malevolent", "strings", "solo",   # set aside with them in INSTRUMENTS
+)
 BASS = ("minitaur",)
 """Which instruments each page draws, and the whole of what a page is here.
 
