@@ -6137,6 +6137,48 @@ function Panel () {
 	   are plausible at the site that reads it. */
 	const [stalled, setStalled] = useState({});
 
+	/* **Reports that arrive together are drawn together** (#2875).
+	 *
+	 * Every pattern reports its cycle as it starts: what its algorithms
+	 * realised, and where the cycle began.  Each report is its own message and
+	 * set state here, at the top of the page, so each one drew the whole page
+	 * again, and at a cycle's start they all arrive at once.  Measured on
+	 * 2026-09-19 with eight patterns: 21 whole-page draws where four would do,
+	 * and the animation held up for 50 ms on this machine; on the Pi that is the
+	 * playhead pausing at the start of a pattern and then catching up.  Held
+	 * until the next animation frame and applied in one go, a cycle's reports
+	 * cost one draw however many patterns there are.
+	 *
+	 * **Only reports, never state.**  A `changed` and its `ack` still land as
+	 * they arrive, so a cell's face is never a frame behind the ring the ack
+	 * clears.  And **a hidden tab runs no animation frames**, so there a report
+	 * is applied at once, after anything still waiting, so that nothing older
+	 * can land on top of something newer when the tab is shown again. */
+	const waiting = useRef(null);
+
+	const together = useCallback((apply) => {
+		const flush = () => {
+			const all = waiting.current || [];
+
+			waiting.current = null;
+
+			for (const one of all) one();
+		};
+
+		if (document.hidden) {
+			flush();
+			apply();
+			return;
+		}
+
+		if (waiting.current === null) {
+			waiting.current = [];
+			requestAnimationFrame(flush);
+		}
+
+		waiting.current.push(apply);
+	}, []);
+
 	const theme = useTheme();
 
 	const link = useRef(null);
@@ -6499,14 +6541,18 @@ function Panel () {
 
 				case "event":
 					if (frame.name === "beat") {
-						setAnchor({
-							beat: frame.beat, at: performance.now(), interval: frame.interval,
+						/* When it arrived, taken now rather than when it is
+						   drawn: the playhead extrapolates from this instant. */
+						const at = performance.now();
+
+						together(() => setAnchor({
+							beat: frame.beat, at, interval: frame.interval,
 							/* Carried so the counter can say which bar and which
 							   step of it, which is arithmetic on what the app
 							   already declares rather than a fifth number that
 							   could disagree with the other four. */
 							steps: frame.steps, beats: frame.beats,
-						});
+						}));
 					}
 
 					/* What the algorithms put on a pattern this cycle. Held apart
@@ -6514,7 +6560,7 @@ function Panel () {
 					   notes are not intent and nothing keeps them (#1965). A
 					   person's taps stay the only thing anything stores. */
 					if (frame.name === "realised" && typeof frame.control === "string") {
-						setRealised((was) => ({ ...was, [frame.control]: frame.cells || {} }));
+						together(() => setRealised((was) => ({ ...was, [frame.control]: frame.cells || {} })));
 					}
 
 					/* **Where a pattern's cycle starts, from which step, and where it wraps**
@@ -6525,8 +6571,8 @@ function Panel () {
 						&& typeof frame.at === "number" && typeof frame.end === "number") {
 						const one = { at: frame.at, from: Number(frame.from) || 0, end: frame.end };
 
-						setCycles((was) => ({
-							...was, [frame.control]: [...(was[frame.control] || []).slice(-1), one] }));
+						together(() => setCycles((was) => ({
+							...was, [frame.control]: [...(was[frame.control] || []).slice(-1), one] })));
 					}
 
 					/* **Which layers were skipped this cycle, and why** (#2368).
@@ -6537,7 +6583,7 @@ function Panel () {
 					   the signal. So it is a report from the build rather than a
 					   fact in the manifest. */
 					if (frame.name === "stalled" && typeof frame.control === "string") {
-						setStalled((was) => ({ ...was, [frame.control]: frame.layers || {} }));
+						together(() => setStalled((was) => ({ ...was, [frame.control]: frame.layers || {} })));
 					}
 					break;
 			}

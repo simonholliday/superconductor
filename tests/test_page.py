@@ -7035,6 +7035,137 @@ def _realised (panel: typing.Any, fake_app: typing.Any,
 	panel.wait_for_timeout(200)
 
 
+HOLDS_FRAMES = """(() => {
+	window.__reports = 0;
+	window.__held = [];
+	window.__hold = false;
+
+	const Real = window.WebSocket;
+
+	window.WebSocket = class extends Real {
+		constructor (...args) {
+			super(...args);
+			this.addEventListener("message", (event) => {
+				if (String(event.data).includes('"realised"')) window.__reports += 1;
+			});
+		}
+	};
+
+	const later = window.requestAnimationFrame.bind(window);
+
+	window.requestAnimationFrame = (callback) => {
+		if (window.__hold) {
+			window.__held.push(callback);
+			return 0;
+		}
+
+		return later(callback);
+	};
+
+	window.__release = () => {
+		window.__hold = false;
+
+		for (const callback of window.__held.splice(0)) later(callback);
+	};
+})();"""
+"""Lets a test hold the page's animation frames, and counts the reports it is sent.
+
+For the tests of #2875, which have to say what is drawn *before* the next frame
+without a clock: `__hold` holds every frame asked for, `__release()` lets them
+go, and `__reports` counts the `realised` reports the socket has carried.
+"""
+
+
+def _with_frames_held (panel: typing.Any) -> None:
+	"""Reload the page with `HOLDS_FRAMES` in it, ready and settled."""
+
+	panel.add_init_script(HOLDS_FRAMES)
+	panel.reload()
+	panel.wait_for_selector(".cell", timeout=10_000)
+	_settled(panel)
+
+
+def test_a_cycle_s_reports_are_drawn_together_not_one_by_one (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""Simon, 2026-09-18, on the Pi: *"The play head appears to 'pause' at the
+	start of the pattern, before catching up later"*, worse with more
+	instruments (#2875).  Every pattern reports its cycle as it starts, each
+	report drew the whole page, and eight patterns meant 21 draws in a burst.
+
+	**Proved without a clock.**  The page's animation frames are held while two
+	patterns report, the socket counts what arrived, and nothing may be drawn
+	until the frames are let go; then both patterns' dots arrive in one change
+	to the page.  Drawn one by one, the dots are already there before release,
+	and the page changes twice.
+	"""
+
+	_with_frames_held(panel)
+
+	panel.evaluate("""() => {
+		window.__changes = 0;
+
+		new MutationObserver((records) => {
+			if (records.some((one) => one.target.classList && one.target.classList.contains("ghost"))) {
+				window.__changes += 1;
+			}
+		}).observe(document.querySelector(".grid-wrap"),
+			{ subtree: true, attributes: true, attributeFilter: ["class"] });
+
+		window.__hold = true;
+	}""")
+
+	fake_app.realised("grid", {"kick": {"2": 100}})
+	fake_app.realised("second", {"kick": {"5": 100}})
+
+	# **On a timer, not on frames**: Playwright polls on animation frames by
+	# default, and those are exactly what this test is holding.
+	panel.wait_for_function("window.__reports >= 2", polling=50, timeout=5_000)
+
+	assert panel.locator(".cell.ghost").count() == 0, (
+		"each report was drawn as it arrived, rather than with the others at the next frame")
+
+	panel.evaluate("window.__release()")
+
+	playwright_api.expect(panel.locator(".cell.ghost")).to_have_count(2, timeout=5_000)
+
+	assert panel.evaluate("window.__changes") == 1, "the two reports were drawn separately"
+
+
+def test_a_hidden_tab_draws_a_report_at_once_and_nothing_older_lands_on_it (
+	panel: typing.Any, fake_app: typing.Any) -> None:
+	"""The other half of #2875's batching.  **A hidden tab runs no animation
+	frames**, so a report held for the next one would wait until the tab was
+	shown; there it is drawn at once.  And whatever was already waiting is drawn
+	first, or the older report would land on top of the newer when the frames
+	resumed: here the cycle that put a dot on step 3 would come back over the
+	one that moved it to step 7.
+	"""
+
+	_with_frames_held(panel)
+
+	panel.evaluate("window.__hold = true")
+	fake_app.realised("grid", {"kick": {"3": 100}})
+	panel.wait_for_function("window.__reports >= 1", polling=50, timeout=5_000)
+
+	assert panel.locator(".cell.ghost").count() == 0
+
+	panel.evaluate("""() => Object.defineProperty(document, "hidden", {
+		configurable: true, get: () => true })""")
+	fake_app.realised("grid", {"kick": {"7": 100}})
+	panel.wait_for_function("window.__reports >= 2", polling=50, timeout=5_000)
+
+	ghost = panel.locator(".cell.ghost")
+
+	playwright_api.expect(ghost).to_have_count(1, timeout=5_000)
+	assert ghost.get_attribute("data-path") == "grid/kick/7", "a hidden tab kept the newer report waiting"
+
+	panel.evaluate("window.__release()")
+	panel.wait_for_timeout(300)
+
+	assert [one.get_attribute("data-path") for one in ghost.all()] == ["grid/kick/7"], (
+		"the report held from before the tab was hidden landed on top of the newer one")
+
+
 def test_a_generated_step_is_drawn_as_a_dot_not_as_a_face (
 	panel: typing.Any, fake_app: typing.Any) -> None:
 	"""Nothing stores it, and next cycle an unseeded generator may put it
