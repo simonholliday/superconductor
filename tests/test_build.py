@@ -17,6 +17,7 @@ import typing
 import pytest
 import starlette.testclient
 
+import conftest
 import superconductor.build
 import superconductor.config
 import superconductor.protocol
@@ -75,7 +76,7 @@ def test_the_panel_is_told_what_it_has_reached () -> None:
 	socket without having fetched a page to open one from.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	client.get("/")
 	frame = _panel_greeting(client)
@@ -99,7 +100,7 @@ def test_a_panel_that_did_not_fetch_the_page_is_told_nothing_and_then_told () ->
 	the refresh that keeps *newer page available* reachable closes this as well.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
@@ -138,7 +139,7 @@ def test_a_panel_is_told_when_the_client_changes_under_the_service (
 		superconductor.build, "client_build",
 		lambda directory: next(answers, "bbbbbbbbbbbb"))
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	client.get("/")
 
@@ -160,7 +161,7 @@ def test_the_page_names_its_assets_by_their_build () -> None:
 	"""So a cached copy cannot answer for a new one: the URL it was kept under
 	is not the URL the page now asks for."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 	build = superconductor.build.client_build(superconductor.service.CLIENT_DIR)
 
 	page = client.get("/")
@@ -174,7 +175,7 @@ def test_the_page_itself_is_never_stored () -> None:
 	"""It is the file that names the others, so a cached one would name the
 	wrong ones. It is also a few hundred bytes, so nothing is lost by saying so."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	assert client.get("/").headers["cache-control"] == "no-store"
 
@@ -183,7 +184,7 @@ def test_a_stamped_asset_is_still_served () -> None:
 	"""The query is for the browser's cache, not for the router: the file is
 	found by its path and the stamp is ignored."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 	build = superconductor.build.client_build(superconductor.service.CLIENT_DIR)
 
 	assert client.get(f"/client/app.js?v={build}").status_code == 200
@@ -198,7 +199,7 @@ def _app_says (
 ) -> list[str]:
 	"""Let one app dial in claiming *build*, and hand back what the service said."""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level(logging.WARNING, logger="superconductor.service"):
@@ -338,7 +339,7 @@ def test_greeting_a_panel_never_waits_for_the_disk (
 	the read for as long as the test allows and asks how long the greeting took.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 	stamped = superconductor.build.client_build(superconductor.service.CLIENT_DIR)
 
 	client.get("/")

@@ -860,11 +860,22 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 	composition = FakeComposition()
 	told: list[tuple[str, typing.Any]] = []
 
+	# **Which thread paid, rather than whether it had paid yet** (#2600).  This
+	# asserted that nothing had been told the instant the beat returned, and on
+	# a loaded runner the link thread had sometimes already paid by then: CI
+	# read that as the clock loop paying inline, of correct code.  The thread
+	# that did the telling is the fact, and it cannot race.
+	payers: list[int] = []
+
+	def tell (name: str, value: typing.Any) -> None:
+		told.append((name, value))
+		payers.append(threading.get_ident())
+
 	settings = superconductor.subsequence_adapter.Params(
 		composition,
 		parameters=[superconductor.subsequence_adapter.Parameter("glide", "switch", default=False)],
 		data_key="moog", name="moog",
-		on_change=lambda name, value: told.append((name, value)))
+		on_change=tell)
 
 	composition.data["moog"] = {"glide": True}
 
@@ -886,15 +897,15 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 
 		link._on_beat(1)
 
-		# The beat itself must not have told the instrument anything.
-		assert told == [], f"the clock loop paid the burst inline: {told}"
-
 		deadline = time.monotonic() + 5.0
 
 		while not told and time.monotonic() < deadline:
 			time.sleep(0.01)
 
 		assert told == [("glide", True)], f"the link thread never paid it: {told}"
+		assert payers == [thread.ident], (
+			f"the burst was paid on thread {payers}, not the link thread {thread.ident}:"
+			f" the clock loop paid it inline")
 
 		# And once only, however many beats follow.
 		told.clear()

@@ -14,6 +14,7 @@ import time
 import typing
 
 import pytest
+import starlette.testclient
 import uvicorn
 import websockets.asyncio.client
 
@@ -730,6 +731,41 @@ class FakeApp:
 			time.sleep(0.02)
 
 		return frames
+
+
+_ENTERED: list[starlette.testclient.TestClient] = []
+"""Test clients `one_loop` has entered, left again when their test ends."""
+
+
+def one_loop (app: typing.Any) -> starlette.testclient.TestClient:
+	"""A test client whose sockets all share one event loop, as the service's do (#2600).
+
+	**Starlette's `TestClient` gives every socket a loop of its own** unless it
+	is entered as a context.  The service then hands a frame from the app's
+	socket to a panel's across two loops, waking the panel's waiter from the
+	wrong thread, and a panel already waiting for it is never woken.  On
+	nuc14 the frame nearly always got there first; on a loaded runner the
+	panel was waiting first and the test hung until `faulthandler_timeout`.
+	Reproduced on 2026-09-19 by delaying the hub's forwarding by 0.2 s.
+	Entered, the client makes one loop and every socket shares it, which is
+	how the real service runs.
+	"""
+
+	client = starlette.testclient.TestClient(app)
+	client.__enter__()
+	_ENTERED.append(client)
+
+	return client
+
+
+@pytest.fixture(autouse=True)
+def _one_loop_left () -> typing.Iterator[None]:
+	"""Leave every client `one_loop` entered, once its test is over."""
+
+	yield
+
+	while _ENTERED:
+		_ENTERED.pop().__exit__(None, None, None)
 
 
 @pytest.fixture(scope="session")

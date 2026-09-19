@@ -6,9 +6,9 @@ import tomllib
 import typing
 
 import pytest
-import starlette.testclient
 import starlette.websockets
 
+import conftest
 import superconductor
 import superconductor.config
 import superconductor.protocol
@@ -79,7 +79,7 @@ def test_a_panel_that_joins_before_an_app_declares_is_sent_a_second_manifest () 
 	`faulthandler` dump with nothing failing, and it cost a CI run on 2026-09-10.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
@@ -99,7 +99,7 @@ def test_a_panel_that_joins_before_an_app_declares_is_sent_a_second_manifest () 
 def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 	"""The full round trip, with the service holding both ends."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare(
@@ -136,7 +136,7 @@ def test_a_tap_reaches_the_app_and_its_answer_reaches_the_glass () -> None:
 def test_a_panel_that_arrives_before_any_app_is_told_so () -> None:
 	"""Starting the panel first is ordinary, and it must not look broken."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
@@ -147,7 +147,7 @@ def test_a_panel_that_arrives_before_any_app_is_told_so () -> None:
 def test_a_beat_reaches_the_glass_so_the_playhead_has_something_to_follow () -> None:
 	"""The events the sequencer reports are passed on unchanged."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
@@ -167,7 +167,7 @@ def test_a_beat_reaches_the_glass_so_the_playhead_has_something_to_follow () -> 
 def test_the_panel_is_answered_when_it_checks_the_service_is_alive () -> None:
 	"""The echoed timestamp is also how the playhead places the two clocks."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
@@ -179,7 +179,7 @@ def test_the_panel_is_answered_when_it_checks_the_service_is_alive () -> None:
 def test_the_page_is_served () -> None:
 	"""The page, its script and both sockets share one origin."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	assert client.get("/").status_code == 200
 	assert client.get("/client/app.js").status_code == 200
@@ -261,7 +261,7 @@ def test_everything_the_page_needs_is_named_in_the_package_data () -> None:
 def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
 	"""A control that will not move must say why, or the person is left guessing."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
@@ -286,7 +286,7 @@ def test_an_app_refusing_a_request_reaches_the_panel_that_asked () -> None:
 def test_a_refusal_for_a_panel_that_has_gone_troubles_nobody () -> None:
 	"""An app may answer after the panel that asked has closed its socket."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
@@ -301,7 +301,7 @@ def test_a_page_set_reaches_the_panel_with_the_app_that_owns_it () -> None:
 
 	pages = [{"id": "both", "title": "Both", "parts": ["grid"]}]
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare(
@@ -319,7 +319,7 @@ def test_an_app_that_declares_no_pages_says_so_rather_than_nothing () -> None:
 	"""Which is what keeps a panel written for pages working against a
 	composition that has never heard of them."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {}, 1))
@@ -336,7 +336,7 @@ def test_an_arrangement_is_carried_to_the_app_that_owns_the_page () -> None:
 	"""The service holds no page files and writes nothing (#2075): a page set
 	belongs to the composition that declared it, so the composition decides."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare(
@@ -360,7 +360,7 @@ def test_an_arrangement_for_an_app_that_is_gone_is_refused_with_a_reason () -> N
 	"""So the person is told their layout was not kept, rather than finding out
 	at the next reload."""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "both"))
@@ -384,7 +384,7 @@ def test_a_control_this_service_is_too_old_for_is_declared_as_such () -> None:
 
 	controls = {"mystery": {"type": "hologram", "shimmer": 3}, **CONTROLS}
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", controls, {}, 1))
@@ -415,7 +415,7 @@ def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
 	wakes every time the screen does.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
@@ -427,14 +427,22 @@ def test_a_panel_saying_hello_again_is_one_panel_not_two () -> None:
 
 			app.send_json(superconductor.protocol.event("subsequence", "beat", beat=7, interval=0.5))
 
+			# **The beat first, then the fence** (#2600).  The beat comes in on
+			# the app's socket and the ping on the panel's, and nothing orders
+			# the two: on a slow runner the service answered the ping before it
+			# had passed the beat on, the count stopped at the pong, and CI said
+			# the beat was delivered 0 times.  So wait for the one beat that must
+			# arrive, and only then fence what else came with it.
+			_read_until(panel, "event")
+
 			# **Fenced by a pong**, because the question is *how many* beats
 			# arrive and there is no other way to know when to stop reading. A
-			# broadcast goes to every registration; a pong is written to the one
-			# link that asked. So the pong is always last and always single, and
-			# whatever beats turn up before it are all of them.
+			# broadcast goes to every registration at once, all written before the
+			# first could be read; a pong is written to the one link that asked,
+			# after. So whatever beats turn up before it are all of them.
 			panel.send_json({"t": "ping", "ts": 99.0})
 
-			beats = 0
+			beats = 1
 
 			for _ in range(12):
 				frame = panel.receive_json()
@@ -460,7 +468,7 @@ def test_a_malformed_frame_does_not_take_the_socket_down_with_a_traceback () -> 
 	to die with a `ValueError` instead.
 	"""
 
-	client = starlette.testclient.TestClient(superconductor.service.build(superconductor.config.Config()))
+	client = conftest.one_loop(superconductor.service.build(superconductor.config.Config()))
 
 	with client.websocket_connect("/ws/app") as app:
 		app.send_json(superconductor.protocol.declare("subsequence", CONTROLS, {"grid": {}}, 1))
@@ -495,7 +503,7 @@ def test_a_panel_speaking_a_different_contract_is_said_out_loud (
 	`unsupported` and drawn saying so, rather than dropped.
 	"""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level("DEBUG", logger="superconductor.service"):
@@ -521,7 +529,7 @@ def test_an_app_speaking_a_different_contract_is_said_out_loud (caplog: typing.A
 	is the line that makes that log worth reading.
 	"""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level("DEBUG", logger="superconductor.service"):
@@ -548,7 +556,7 @@ def test_a_matching_contract_says_nothing_at_all (caplog: typing.Any) -> None:
 	often.
 	"""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level("DEBUG", logger="superconductor.service"):
@@ -577,7 +585,7 @@ def test_one_app_replacing_another_of_the_same_name_is_said_out_loud (
 	anywhere saying why, and the second half of that is what this removes.
 	"""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level("DEBUG", logger="superconductor.hub"):
@@ -612,7 +620,7 @@ def test_an_app_declaring_twice_on_one_socket_is_not_a_replacement (
 	being read, and this one has exactly one job.
 	"""
 
-	client = starlette.testclient.TestClient(
+	client = conftest.one_loop(
 		superconductor.service.build(superconductor.config.Config()))
 
 	with caplog.at_level("DEBUG", logger="superconductor.hub"):
@@ -634,7 +642,7 @@ def test_a_panel_the_service_gives_up_on_is_closed_so_it_reconnects () -> None:
 	the page reconnects and is sent everything afresh."""
 
 	service = superconductor.service.build(superconductor.config.Config())
-	client = starlette.testclient.TestClient(service)
+	client = conftest.one_loop(service)
 
 	with client.websocket_connect("/ws/panel") as panel:
 		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
