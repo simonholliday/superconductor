@@ -16,6 +16,16 @@ import superconductor.config
 import superconductor.service
 
 
+SHUTDOWN_GRACE = 5
+"""Seconds a stop waits for open connections before closing them anyway (#2876).
+
+uvicorn's graceful shutdown waits for every connection to finish, and one whose
+far end has gone never does: on 2026-09-18 a stopped service released its port
+and then held on for good, and needed SIGKILL.  The service keeps nothing a
+connection could lose, so a few seconds is all the grace one needs.
+"""
+
+
 def main (argv: list[str] | None = None) -> int:
 	"""Start the service, and report plainly if it cannot start."""
 
@@ -39,7 +49,8 @@ def main (argv: list[str] | None = None) -> int:
 	for address in _addresses(config.host):
 		print(f"Superconductor is serving the panel at http://{address}:{config.port}/")
 
-	uvicorn.run(superconductor.service.build(config), host=config.host, port=config.port, log_level="warning")
+	uvicorn.run(superconductor.service.build(config), host=config.host, port=config.port, log_level="warning",
+	            timeout_graceful_shutdown=SHUTDOWN_GRACE)
 
 	return 0
 

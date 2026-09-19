@@ -353,7 +353,8 @@ async def _serve_panel (
 				_note_contract("panel", str(frame.get("client", "panel")), frame)
 
 				panel = superconductor.hub.PanelLink(
-					client=str(frame.get("client", "panel")), send=_sender(websocket))
+					client=str(frame.get("client", "panel")), send=_sender(websocket),
+					close=_closer(websocket))
 
 				# Said before anything else, and said again on every hello, so a
 				# panel that reconnects to a restarted service learns at once
@@ -464,6 +465,22 @@ async def _serve_app (hub: superconductor.hub.Hub, websocket: starlette.websocke
 	finally:
 		if app is not None:
 			await hub.app_left(app)
+
+
+def _closer (websocket: starlette.websockets.WebSocket) -> superconductor.hub.Closer:
+	"""Give the hub one way to end this socket, for a panel it has given up on (#2876).
+
+	**1013, *try again later***, which says what happened: the service is fine
+	and this connection could not keep up.  The page reconnects on any close and
+	is sent everything again.
+	"""
+
+	async def close () -> None:
+		"""End the socket."""
+
+		await websocket.close(code=1013)
+
+	return close
 
 
 def _sender (websocket: starlette.websockets.WebSocket) -> superconductor.hub.Sender:

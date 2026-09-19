@@ -625,3 +625,29 @@ def test_an_app_declaring_twice_on_one_socket_is_not_a_replacement (
 				assert _manifest(panel)
 
 	assert [one.getMessage() for one in caplog.records if "replacing" in one.getMessage()] == []
+
+
+def test_a_panel_the_service_gives_up_on_is_closed_so_it_reconnects () -> None:
+	"""#2876: letting a panel go must end its socket, or a browser that was only
+	slow keeps a connection nothing writes to, answers its own pings, and goes
+	stale with nothing on the glass saying so.  **1013, try again later**, so
+	the page reconnects and is sent everything afresh."""
+
+	service = superconductor.service.build(superconductor.config.Config())
+	client = starlette.testclient.TestClient(service)
+
+	with client.websocket_connect("/ws/panel") as panel:
+		panel.send_json(superconductor.protocol.hello("panel-1", "grid"))
+		_read_until(panel, "manifest")
+
+		link = service.state.hub.panels[0]
+
+		assert link.close is not None, "the service gave the hub no way to end this panel's socket"
+
+		panel.portal.call(link.close)
+
+		with pytest.raises(starlette.websockets.WebSocketDisconnect) as ended:
+			for _ in range(12):
+				panel.receive_json()
+
+		assert ended.value.code == 1013

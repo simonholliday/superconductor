@@ -499,3 +499,134 @@ async def test_an_app_that_changed_nothing_still_answers_the_panel_that_asked ()
 	assert acks[0]["seq"] == 7
 
 	assert other.frames[before:] == [], "a panel that asked for nothing was told about it"
+
+
+class Stuck:
+	"""Stands in for a socket whose far end has gone: a write that never finishes.
+
+	**What a dead TCP peer looks like from here** (#2876).  Once the kernel's
+	buffer for it is full, a send does not fail, it waits, for as long as the
+	kernel goes on retrying, which is many minutes.  Closing it is recorded, as
+	the only thing the hub can still usefully do to it.
+	"""
+
+	def __init__ (self, after: int = 0) -> None:
+		"""Start with nothing tried and the socket open, taking *after* frames before it goes."""
+
+		self.tried: list[superconductor.protocol.Frame] = []
+		self.closed = False
+		self.after = after
+
+	async def send (self, frame: superconductor.protocol.Frame) -> None:
+		"""Take the frame, and never finish writing it once the peer has gone."""
+
+		self.tried.append(frame)
+
+		if len(self.tried) > self.after:
+			await asyncio.Event().wait()
+
+	async def close (self) -> None:
+		"""Record that the hub ended the connection."""
+
+		self.closed = True
+
+
+def _changed (value: bool) -> superconductor.protocol.Frame:
+	"""What an app reports after applying a tap, as it arrives from its socket."""
+
+	return {"t": "changed", "app": "subsequence", "path": "grid/kick/8", "v": value, "ver": 7}
+
+
+@_on_a_loop_of_its_own
+async def test_a_panel_that_stops_reading_holds_up_nobody_else () -> None:
+	"""Seen on the rig on 2026-09-18 (#2876): one browser's connection died, and
+	the service waited on it for every frame, so every other panel waited
+	behind it and the app's own socket went unread until its keepalive gave
+	up, redialled, and was counted as a second copy.
+
+	**The panel that cannot take a frame is let go** within the hub's patience,
+	and the panels that can are not kept waiting for it.  Guarded by a deadline
+	here, because the fault being tested is a wait that never ends.
+	"""
+
+	hub = superconductor.hub.Hub(page={"name": "grid"}, patience=0.2)
+	app = superconductor.hub.AppLink(
+		name="subsequence", send=Recorder().send, controls=CONTROLS, state={"grid": {"kick": {}}})
+	await hub.app_declared(app)
+
+	glass = Recorder()
+	gone = Stuck()
+
+	await hub.panel_joined(superconductor.hub.PanelLink(client="alive", send=glass.send))
+	await asyncio.wait_for(hub.panel_joined(
+		superconductor.hub.PanelLink(client="gone", send=gone.send, close=gone.close)), 3)
+
+	await asyncio.wait_for(hub.change_reported(app, _changed(True)), 3)
+
+	assert glass.of_kind("changed")[-1]["v"] is True, "the live panel never heard the change"
+	assert [panel.client for panel in hub.panels] == ["alive"], "the dead panel is still being written to"
+	assert len(gone.tried) == 1, "once let go, the dead panel was still handed frames to wait on"
+
+	# Its socket is ended in the background, so a browser that was only slow
+	# reconnects and is sent everything again, rather than sitting on a
+	# connection nothing writes to any more.
+	for _ in range(20):
+		if gone.closed:
+			break
+
+		await asyncio.sleep(0.01)
+
+	assert gone.closed, "the panel given up on was left connected, and would go stale unseen"
+
+
+@_on_a_loop_of_its_own
+async def test_a_panel_that_goes_while_joining_is_sent_nothing_more () -> None:
+	"""A panel greeted with the manifest and one app's state, then gone before
+	the second app's, is let go there and then: **each further app's state
+	would otherwise be one more wait for a panel already given up on**."""
+
+	hub = superconductor.hub.Hub(page={"name": "grid"}, patience=0.2)
+
+	for name in ("subsequence", "subsample"):
+		await hub.app_declared(superconductor.hub.AppLink(
+			name=name, send=Recorder().send, controls=CONTROLS, state={"grid": {"kick": {}}}))
+
+	gone = Stuck(after=1)
+
+	await asyncio.wait_for(hub.panel_joined(
+		superconductor.hub.PanelLink(client="gone", send=gone.send, close=gone.close)), 3)
+
+	assert [frame["t"] for frame in gone.tried] == ["manifest", "snapshot"]
+	assert hub.panels == []
+
+
+@_on_a_loop_of_its_own
+async def test_every_panel_is_sent_a_frame_at_once_rather_than_in_turn () -> None:
+	"""The other half of #2876: a panel that is slow but alive must not keep the
+	next one waiting either.  **Proved without a clock**: the first panel's
+	write can only finish once the second's has started, so written one after
+	the other the two never finish, and written together both do at once.
+	"""
+
+	hub = superconductor.hub.Hub(page={"name": "grid"}, patience=5.0)
+	started = asyncio.Event()
+	first = Recorder()
+	second = Recorder()
+
+	async def waits_for_the_other (frame: superconductor.protocol.Frame) -> None:
+		await started.wait()
+		first.frames.append(frame)
+
+	async def lets_the_other_go (frame: superconductor.protocol.Frame) -> None:
+		started.set()
+		second.frames.append(frame)
+
+	hub.panels.extend([
+		superconductor.hub.PanelLink(client="first", send=waits_for_the_other),
+		superconductor.hub.PanelLink(client="second", send=lets_the_other_go),
+	])
+
+	await asyncio.wait_for(hub.to_panels({"t": "beat", "app": "subsequence", "n": 1}), 2)
+
+	assert [one["t"] for one in first.frames + second.frames] == ["beat", "beat"]
+	assert len(hub.panels) == 2, "a panel that was only waiting its turn was dropped"

@@ -9,6 +9,7 @@ Nothing here is stored on disk.  The apps are the authority for their own state
 and re-declare it whenever they reconnect.
 """
 
+import asyncio
 import dataclasses
 import logging
 import time
@@ -22,6 +23,26 @@ LOG = logging.getLogger(__name__)
 
 Sender = typing.Callable[[superconductor.protocol.Frame], typing.Awaitable[None]]
 """How the hub writes one frame to one socket, whatever is on the other end."""
+
+Closer = typing.Callable[[], typing.Awaitable[None]]
+"""How the hub ends one socket it has given up on."""
+
+PANEL_PATIENCE = 2.0
+"""How long one frame may take to reach one panel before that panel is let go (#2876).
+
+**A dead panel does not fail, it waits.**  Once the kernel's buffer for a peer
+that has gone is full, a write neither completes nor raises for as long as the
+kernel goes on retrying, which is many minutes.  On 2026-09-18 one browser's
+connection died that way and every frame waited on it: every other panel waited
+behind it, the app's socket went unread, and the app's own keepalive gave up and
+redialled, which the glass counted as a second copy, then a third, then a fourth.
+
+Two seconds is far longer than a live panel ever takes on a LAN: a frame is
+handed to the kernel at once and only the last of it waits for the far end, and
+a browser reads its socket off the page's own thread.  It is also well inside
+the five seconds an app waits for an answer to its keepalive, so the app's
+socket is read again long before the app would give up on it.
+"""
 
 
 @dataclasses.dataclass(eq=False)
@@ -109,17 +130,32 @@ class PanelLink:
 
 	client: str
 	send: Sender
+	close: Closer | None = None
+	"""How to end this panel's connection when the hub gives up on it (#2876).
+
+	**Letting go is not enough on its own.**  A panel that was only slow, rather
+	than gone, would keep its socket and its own pings answered while nothing
+	wrote to it again, so it would go stale with nothing on the glass saying so.
+	Closed, it reconnects and is sent everything afresh.  `None` for a caller
+	with nothing to close, which is the tests.
+	"""
 
 
 class Hub:
 	"""The connected panels and apps, and the routing between them."""
 
-	def __init__ (self, page: dict[str, typing.Any]) -> None:
+	def __init__ (self, page: dict[str, typing.Any], patience: float = PANEL_PATIENCE) -> None:
 		"""Start with nothing connected and one page to serve."""
 
 		self.page = page
 		self.apps: dict[str, AppLink] = {}
 		self.panels: list[PanelLink] = []
+
+		self.patience = patience
+		"""`PANEL_PATIENCE` unless a test wants to wait less."""
+
+		self._closing: set[asyncio.Task[None]] = set()
+		"""Sockets being ended in the background, held so none is collected mid-close."""
 
 		self._sockets: dict[str, dict[typing.Any, AppLink]] = {}
 		"""Every open app socket, by the name it declared itself under (#2133).
@@ -149,11 +185,14 @@ class Hub:
 
 		self.panels.append(panel)
 
-		await panel.send(superconductor.protocol.manifest(
-			self._declarations(), self.page, self._pages(), self.duplicated()))
+		if not await self._deliver(panel, superconductor.protocol.manifest(
+				self._declarations(), self.page, self._pages(), self.duplicated())):
+			return
 
-		for app in self.apps.values():
-			await panel.send(superconductor.protocol.snapshot(app.name, app.state, app.version))
+		for app in list(self.apps.values()):
+			if not await self._deliver(
+					panel, superconductor.protocol.snapshot(app.name, app.state, app.version)):
+				return
 
 		LOG.info("panel %s joined; %d now connected", panel.client, len(self.panels))
 
@@ -367,20 +406,68 @@ class Hub:
 		        for page in app.pages]
 
 	async def to_panels (self, frame: superconductor.protocol.Frame) -> None:
-		"""Send one frame to every panel, surviving any that has gone quiet.
+		"""Send one frame to every panel at once, and let none of them hold up the rest.
 
-		A panel whose socket has already failed is dropped rather than allowed
-		to hold up the others: the grid on the remaining glass matters more than
-		a tidy shutdown of one that has gone.
+		**At once, not in turn** (#2876).  Written one after another, a panel
+		that took a second made every panel after it a second late, and one that
+		never finished kept them all waiting for good, and the app with them,
+		since its socket is only read between frames.  Together, the slowest
+		panel costs the others nothing, and each panel still gets its frames in
+		order, because this returns before the next frame is sent.
 		"""
 
-		for panel in list(self.panels):
-			try:
-				await panel.send(frame)
+		await asyncio.gather(*(self._deliver(panel, frame) for panel in list(self.panels)))
 
-			except Exception:
-				LOG.warning("panel %s could not be written to; dropping it", panel.client, exc_info=True)
-				self.panel_left(panel)
+	async def _deliver (self, panel: PanelLink, frame: superconductor.protocol.Frame) -> bool:
+		"""Write one frame to one panel, or give up on a panel that will not take it.
+
+		**Every write to a panel comes through here**, so there is one answer to
+		a panel that has gone: it is let go after `patience` (#2876), its socket
+		is ended in the background, and whatever was waiting on it carries on.
+		A failed write is let go the same way, without the wait.  Returns
+		whether the frame went.
+		"""
+
+		try:
+			await asyncio.wait_for(panel.send(frame), self.patience)
+
+		except TimeoutError:
+			LOG.warning("panel %s took no frame for %.1fs; dropping it (#2876)",
+			            panel.client, self.patience)
+
+		except Exception:
+			LOG.warning("panel %s could not be written to; dropping it", panel.client, exc_info=True)
+
+		else:
+			return True
+
+		self._let_go(panel)
+
+		return False
+
+	def _let_go (self, panel: PanelLink) -> None:
+		"""Stop writing to a panel, and end its socket without waiting for it."""
+
+		if panel not in self.panels:
+			return
+
+		self.panel_left(panel)
+
+		if panel.close is not None:
+			ending = asyncio.get_running_loop().create_task(self._end(panel))
+			self._closing.add(ending)
+			ending.add_done_callback(self._closing.discard)
+
+	async def _end (self, panel: PanelLink) -> None:
+		"""Close one panel's socket, giving it no longer than a frame gets."""
+
+		assert panel.close is not None
+
+		try:
+			await asyncio.wait_for(panel.close(), self.patience)
+
+		except Exception:
+			LOG.debug("panel %s did not close cleanly", panel.client, exc_info=True)
 
 	async def layout_requested (self, panel: PanelLink, frame: superconductor.protocol.Frame) -> None:
 		"""Pass a page's layout to the app that declared the page.
@@ -395,7 +482,7 @@ class Hub:
 		app = self.apps.get(name) if isinstance(name, str) else None
 
 		if app is None:
-			await panel.send(superconductor.protocol.nack(
+			await self._deliver(panel, superconductor.protocol.nack(
 				str(name), str(frame.get("page", "")), panel.client,
 				superconductor.protocol.whole(frame, "seq", 0), f"{name} is not connected"))
 			return
@@ -414,7 +501,7 @@ class Hub:
 		app = self.apps.get(name) if isinstance(name, str) else None
 
 		if app is None:
-			await panel.send(superconductor.protocol.nack(
+			await self._deliver(panel, superconductor.protocol.nack(
 				str(name), str(frame.get("path", "")), panel.client,
 				superconductor.protocol.whole(frame, "seq", -1), f"{name} is not connected"))
 			return
@@ -496,7 +583,7 @@ class Hub:
 
 		for panel in list(self.panels):
 			if panel.client == client:
-				await panel.send(frame)
+				await self._deliver(panel, frame)
 				return
 
 	async def event_reported (self, app: AppLink, frame: superconductor.protocol.Frame) -> None:

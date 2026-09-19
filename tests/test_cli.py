@@ -1,6 +1,7 @@
 """Starting the service from a terminal: what it reads and what it refuses."""
 
 import pathlib
+import typing
 
 import superconductor.cli
 import superconductor.config
@@ -61,3 +62,20 @@ def test_a_named_interface_is_printed_as_itself () -> None:
 	"""Nothing is guessed when the person has already said which one."""
 
 	assert superconductor.cli._addresses("127.0.0.1") == ["127.0.0.1"]
+
+
+def test_a_connection_that_will_not_close_cannot_hold_up_a_stop (monkeypatch: typing.Any) -> None:
+	"""Seen on 2026-09-18 (#2876): stopped with SIGTERM, the service closed its
+	listener and then waited, for good, on one panel whose far end had gone.
+	uvicorn's graceful shutdown waits for every connection to finish, and a
+	dead one never does, so it took SIGKILL.  **A stop now has a limit.**"""
+
+	started: dict[str, typing.Any] = {}
+
+	def run (app: typing.Any, **settings: typing.Any) -> None:
+		started.update(settings)
+
+	monkeypatch.setattr(superconductor.cli.uvicorn, "run", run)
+
+	assert superconductor.cli.main([]) == 0
+	assert 0 < started.get("timeout_graceful_shutdown", 0) <= 10, started
