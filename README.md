@@ -1,6 +1,6 @@
 # Superconductor
 
-**A touchscreen control surface for music software.**
+**A visual control surface for the author's other music and audio software.**
 
 A small service runs beside your music applications, serves one page to a
 touchscreen's browser, and holds a single WebSocket to it. Each application

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "superconductor"
-description = "A touchscreen control surface for music software — early, and so far only for Subsequence"
+description = "A visual control surface for the author's other music and audio software, so far only Subsequence"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{name = "Simon Holliday"}]
