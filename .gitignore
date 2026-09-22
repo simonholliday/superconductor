@@ -29,3 +29,8 @@ compositions/*
 # The agent brief. Kept out of the repository on purpose and held on backed-up
 # storage instead, as the sequencer project does with its own.
 CLAUDE.md
+
+# The checkout's own Claude Code settings, which hold this project's agent
+# credential for Subroutine (#3247).  The remote is public, and a personal
+# ignore file on one machine does not reach git on another, so the rule is here.
+.claude/settings.local.json
