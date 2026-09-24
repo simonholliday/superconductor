@@ -43,37 +43,33 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install the package and its dev dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
-      - name: Run everything that needs neither a browser nor the sequencer
-        # test_composition.py, test_ensemble.py, test_generators.py and
-        # test_length_sequencer.py import `subsequence`, and a runner cannot have it. It is a **rig
-        # arrangement** rather than a dependency — this package must never
-        # declare one on a particular app — so the venv beside the music apps
-        # carries it editable and nothing in pyproject.toml names it.
+      - name: Install ALSA's headers
+        # python-rtmidi, which Subsequence depends on, publishes no wheels past
+        # Python 3.12, so pip builds it on 3.13 and 3.14, and the build needs
+        # ALSA's headers. Nothing here opens a port: the tests that play through
+        # the sequencer fake its MIDI, and 0.7.0 opens no port until play().
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Install the package, its dev dependencies and Subsequence
+        # **Subsequence is installed here, and named nowhere in pyproject.toml.**
+        # It is a rig arrangement rather than a dependency, because this package
+        # must never declare one on a particular app (#1465). Four files measure
+        # this package against the sequencer an app runs: test_composition.py,
+        # test_ensemble.py, test_generators.py and test_length_sequencer.py.
+        # 0.7.0 is the first release carrying what the compositions use; PyPI's
+        # 0.6.6 failed at `module 'subsequence' has no attribute 'generators'`
+        # when this was tried on 2026-09-09.
         #
-        # Installing it from PyPI was tried and measured on 2026-09-09: the
-        # published 0.6.6 fails at `module 'subsequence' has no attribute
-        # 'generators'`, because the worked composition uses sequencer features
-        # that are not released yet. Pinning a git commit instead would tie this
-        # repository's CI to a branch in another one.
-        #
-        # So those tests stay where the sequencer actually is. They are exactly
-        # the four files that measure this package against the sequencer an
-        # app runs, which is a checkout that moves — a question a runner cannot
-        # ask. If another file starts importing it, this step fails loudly with
-        # ModuleNotFoundError rather than quietly skipping.
-        run: >
-          python -m pytest
-          --ignore=tests/test_page.py
-          --ignore=tests/test_composition.py
-          --ignore=tests/test_ensemble.py
-          --ignore=tests/test_generators.py
-          --ignore=tests/test_length_sequencer.py
+        # **Pinned to the rig's own pin, and moved with it** (#2446, #3562), so
+        # a runner asks the question the rig does.
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]" "subsequence==0.7.0"
+      - name: Run everything that needs no browser
+        run: python -m pytest --ignore=tests/test_page.py
       - name: Type-check
         # Configured at python_version = "3.11" over the package, the tests, the
         # tools and the compositions, so this is the same question on every row
-        # — but an install that only breaks on one version breaks it here.
+        # — but an install that only breaks on one version breaks it here. With
+        # Subsequence installed it also reads Subsequence's own annotations, which
+        # the venv's editable copy hides from it (#3562).
         run: python -m mypy
 
   page:

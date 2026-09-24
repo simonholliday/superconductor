@@ -73,6 +73,10 @@ Genuinely required:
   browser does.
 - **A network path** between the browser, the service and the applications.
   Loopback is fine if they share a machine.
+- **Subsequence 0.7.0 or newer**, to drive Subsequence. It is the first release
+  with the generator catalogue the stacks are built from and the
+  `set_length(steps=)` the examples below use, and an older one gives the
+  transport no pause.
 
 Everything else is a recommendation with a reason, not a requirement. The
 development rig is a Raspberry Pi 5 driving a 22-inch capacitive panel over
