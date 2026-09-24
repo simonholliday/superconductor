@@ -979,14 +979,17 @@ class _Length:
 	def _gap (self, pattern: typing.Any, start: int) -> int:
 		"""How many steps a re-sync's short cycle runs for, to the next bar line.
 
-		*start* is where this cycle begins, in steps from the first; a bar is as many
-		beats as the builder's time signature says, which is Subsequence's own count.
-		None left is a pattern already on the bar, where nothing audible changes — or
-		one that can never be.
+		*start* is where this cycle begins, in steps from the first.  **A bar is as many
+		quarter notes as the builder's ``bar_beats`` says**, which is Subsequence's own
+		count from 0.7.0: three in 6/8, whose six counts eighths (#3562).  A builder that
+		says none is taken at its time signature's word, as 0.6.6 counted.  None left is
+		a pattern already on the bar, where nothing audible changes — or one that can
+		never be.
 		"""
 
 		signature = getattr(pattern, "time_signature", None) or (4, 4)
-		bar = fractions.Fraction(int(signature[0])) / self._step
+		beats = getattr(pattern, "bar_beats", None)
+		bar = fractions.Fraction(beats if beats is not None else int(signature[0])) / self._step
 		gap = (-start) % bar
 
 		# **A step that does not divide the bar cannot land on it**, and a cycle of

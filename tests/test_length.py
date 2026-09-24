@@ -54,11 +54,20 @@ class Link:
 class Builder:
 	"""The little of a pattern builder `now` reads, and the lengths it is given."""
 
-	def __init__ (self, cycle: int, time_signature: tuple[int, int] = (4, 4)) -> None:
-		"""A build of this cycle, in this time."""
+	def __init__ (self, cycle: int, time_signature: tuple[int, int] = (4, 4),
+	              bar_beats: float | None = None) -> None:
+		"""A build of this cycle, in this time.
+
+		*bar_beats* is how many quarter notes a bar lasts, which Subsequence's builder
+		says from 0.7.0 on: three for 6/8.  Left out, this builder says nothing, as
+		0.6.6's did not.
+		"""
 
 		self.cycle = cycle
 		self.time_signature = time_signature
+
+		if bar_beats is not None:
+			self.bar_beats = bar_beats
 		self.lengths: list[int] = []
 		self.calls: list[tuple[str, dict[str, typing.Any]]] = []
 
@@ -453,7 +462,11 @@ def test_a_bar_line_that_falls_between_two_steps_is_said_rather_than_guessed () 
 
 
 def test_a_bar_counts_the_beats_its_time_signature_says () -> None:
-	"""Seven to a bar: a pattern starting on beat four is three beats, twelve steps, short of it."""
+	"""A builder that says no ``bar_beats`` is taken at its time signature's word.
+
+	Seven quarter notes to a bar of 7/8, as 0.6.6 counted them: a pattern starting on
+	beat four is three beats, twelve steps, short of it.
+	"""
 
 	grid, _ = _drums()
 
@@ -464,6 +477,26 @@ def test_a_bar_counts_the_beats_its_time_signature_says () -> None:
 	grid.now(builder)
 
 	assert builder.lengths == [12]
+
+
+def test_a_bar_is_as_many_quarter_notes_as_the_builder_says () -> None:
+	"""Six eighths to a bar are three quarter notes, as Subsequence counts them from 0.7.0.
+
+	A pattern starting on beat eight is one beat, four steps, short of the bar line at
+	nine.  Taking the time signature's six as quarter notes would put the line at twelve,
+	sixteen steps away (#3562).
+	"""
+
+	grid, _ = _drums()
+
+	grid.now(Builder(cycle=0))
+	grid.now(Builder(cycle=1))
+	grid.apply(["resync"], True)
+
+	builder = Builder(cycle=2, time_signature=(6, 8), bar_beats=3.0)
+	grid.now(builder)
+
+	assert builder.lengths == [4]
 
 
 # --- a length the sequencer refuses ----------------------------------------------------
