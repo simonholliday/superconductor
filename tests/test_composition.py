@@ -896,7 +896,7 @@ def _routed (rig: typing.Any, source: str, note_map: dict[str, int],
 	return sorted((note.position, note.pitch) for note in builder.placed())
 
 
-def _lengths (rig: typing.Any, source: str, note_map: dict[str, int], steps: int) -> list[tuple[int, int]]:
+def _lengths (rig: typing.Any, source: str, note_map: dict[str, int], steps: int) -> list[tuple[int, int | None]]:
 	"""The same, read back as each note's position and how long it sounds."""
 
 	pattern = subsequence.pattern.Pattern(channel=1, length=rig.BEATS * steps / rig.STEPS)

@@ -306,9 +306,11 @@ def test_the_key_block_offers_a_root_and_subsequence_s_own_scales (rig: typing.A
 	a root and a scale, Subsequence's names, opening at C major so that a degree set
 	made on the first morning plays at once.
 
-	Every scale Subsequence offers except the two it spells twice: ``ionian`` is
-	``major`` and ``aeolian`` is ``minor``, and a list offering both would be two
-	buttons for one scale.
+	**Every scale Subsequence offers, but a second name for one already offered**:
+	``ionian`` is ``major`` and ``aeolian`` is ``minor``, and a list offering both would
+	be two buttons for one scale.  **Compared by their notes** rather than against a
+	list of names (#3562), so a new spelling of a scale here passes by itself, and a
+	new scale fails until the Key block offers it.
 	"""
 
 	import subsequence.intervals
@@ -319,11 +321,17 @@ def test_the_key_block_offers_a_root_and_subsequence_s_own_scales (rig: typing.A
 	assert len(rig.ROOTS) == 12
 
 	offered = [one["value"] for one in fields["scale"]["options"]]
+	notes = {one: tuple(subsequence.intervals.scale_pitch_classes(0, one))
+	         for one in subsequence.intervals.SCALE_MODE_MAP}
 
-	assert set(offered) <= set(subsequence.intervals.SCALE_MODE_MAP)
-	assert set(subsequence.intervals.SCALE_MODE_MAP) - set(offered) == {"ionian", "aeolian"}
-	assert subsequence.intervals.scale_pitch_classes(0, "ionian") == subsequence.intervals.scale_pitch_classes(0, "major")
-	assert subsequence.intervals.scale_pitch_classes(0, "aeolian") == subsequence.intervals.scale_pitch_classes(0, "minor")
+	assert set(offered) <= set(notes)
+	assert len({notes[one] for one in offered}) == len(offered), "two buttons play the same scale"
+
+	held = {notes[one] for one in offered}
+	missing = [one for one in notes if one not in offered and notes[one] not in held]
+
+	assert not missing, f"Subsequence has scales the Key block does not offer: {missing}"
+	assert "ionian" not in offered and "aeolian" not in offered, "a mode is offered by its second name"
 
 	assert rig.composition.data[rig.KEY] == {"root": "C", "scale": "major"}
 	assert rig._key_now() == ("C major", [60, 62, 64, 65, 67, 69, 71])
@@ -383,7 +391,8 @@ def test_the_rig_offers_degree_sets_and_starts_with_none (rig: typing.Any) -> No
 		assert made.kind == "degree_set"
 		assert made.name == "degrees-abc"
 		assert made.declaration()["octaves"] == [-1, 0, 1]
-		assert made.declaration()["steps"] == 7
+		assert made.declaration()["steps"] == rig.MOST_STEPS == 12, \
+			"a row of degrees is not as long as chromatic, the longest scale on offer (#3562)"
 		assert made.title == "Degrees 1"
 
 	finally:
@@ -482,7 +491,7 @@ def test_a_made_line_is_every_note_with_no_instrument_and_every_stack_may_take_i
 		assert not stack.declaration().get("sources"), f"{key} still offers a line that has gone"
 
 
-def _landed (rig: typing.Any, source: str, into: str, steps: int) -> list[tuple[int, int, int]]:
+def _landed (rig: typing.Any, source: str, into: str, steps: int) -> list[tuple[int, int, int | None]]:
 	"""Play one source into a pattern like *into*'s, *steps* long, and read back each note.
 
 	Each note as its position, its pitch and how long it sounds, which is what a line
@@ -533,7 +542,10 @@ def test_a_line_sounds_its_own_notes_in_either_synth_and_stops_where_each_ends (
 
 		assert [(pitch) for _, pitch, _ in whole] == [36, 43, 40], f"the Minitaur heard {whole}"
 		assert [(pitch) for _, pitch, _ in short] == [36, 43], f"the Model D heard {short}"
-		assert short[1][2] < whole[1][2], "a note running past a twelve-step end was not cut"
+		cut, uncut = short[1][2], whole[1][2]
+
+		assert cut is not None and uncut is not None and cut < uncut, \
+			"a note running past a twelve-step end was not cut"
 		assert made.rows_now()["G2"][str(10 * per_step)]["length"] == 4 * per_step, \
 			"cutting the copy shortened the note on the line"
 

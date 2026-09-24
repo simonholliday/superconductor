@@ -656,7 +656,7 @@ def _grid_for (instrument: Instrument) -> typing.Any:
 	"""The grid this instrument is played from: voices for a drum machine, notes for the rest."""
 
 	rows = _rows(instrument)
-	shared = {
+	shared: dict[str, typing.Any] = {
 		"composition": composition, "rows": rows, "steps": STEPS, "beats": BEATS,
 		"data_key": instrument.key, "name": instrument.key, "pattern": instrument.key,
 		"title": instrument.title,
@@ -895,12 +895,23 @@ ROOTS = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 SCALES = ("major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian",
           "harmonic_minor", "melodic_minor", "major_pentatonic", "minor_pentatonic",
-          "hirajoshi", "in_sen", "iwato", "yo", "egyptian")
+          "blues_scale", "hirajoshi", "in_sen", "iwato", "yo", "egyptian",
+          "lydian_dominant", "superlocrian", "whole_tone", "augmented",
+          "phrygian_dominant", "hungarian_minor", "double_harmonic", "neapolitan_major",
+          "enigmatic", "chromatic")
 """Subsequence's scales, in the order a musician reaches for them.
 
-**All of `intervals.SCALE_MODE_MAP` but the two it spells twice**: ``ionian`` is
-``major`` and ``aeolian`` is ``minor``, and a list offering both is two buttons for
-one scale.  The names are Subsequence's, borrowed with their meaning (#2403).
+**All of `intervals.SCALE_MODE_MAP` but the names it gives a scale twice**: ``ionian``
+is ``major`` and ``aeolian`` is ``minor``, and 0.7.0 adds ``major_ionian``,
+``dorian_mode``, ``phrygian_mode``, ``natural_minor``, ``locrian_mode`` and
+``minor_blues``, each the notes of a scale already here.  A list offering both is two
+buttons for one scale.  The names are Subsequence's, borrowed with their meaning
+(#2403).
+
+**Some give notes and no chords**, the pentatonics among them, and 0.7.0's twelve new
+scales are all of that kind.  That is enough here, because nothing on this rig reads
+the key but a degree set, which needs notes.  ``chromatic`` makes the longest row of
+degrees twelve (#3562).
 """
 
 KEY = "key"

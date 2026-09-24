@@ -576,8 +576,9 @@ def _transposed (p: typing.Any, semitones: int) -> None:
 	(`Voice.plays_note`), and `_sounding` marks exactly those rows unreachable.
 	Before this, a tapped note there was dropped rather than sent — a guarantee
 	by construction where this is one by report.  Subsequence's `transpose`
-	clamps to 0-127 and has no way to drop a note, so asking it for one is
-	filed rather than reaching into the pattern's internals.
+	clamps to 0-127 unless it is given `within=`, which drops whatever falls
+	outside a range, and 0.7.0 publishes that.  Whether to drop a note past the
+	instrument's reach rather than send it is Simon's question, #3564.
 	"""
 
 	if semitones:
