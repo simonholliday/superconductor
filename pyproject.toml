@@ -69,15 +69,16 @@ dev = [
 	# because the Matriarch's arpeggiator controls have their bands from 0.1.1 on
 	# (#2203) and this rig draws all three.
 	#
-	# **0.1.2 on Simon's decision of 2026-09-14, and it is a claim about the
-	# corpus rather than about this code.**  Nothing here reads a `part` yet, so
-	# by the usual rule the floor would have stayed where it was; what 0.1.2
-	# carries is a corrected Streichfett and a Voce described as the three parts
-	# it is (#2542), and somebody arriving should get those rather than the
-	# readings they replaced.  The rule resumes when a part is read: raise it
-	# then because the code needs it, and say so here.
+	# **0.4.1 on Simon's decision of 2026-10-20, and like 0.1.2 before it
+	# (2026-09-14, #2542) it is a claim about the corpus rather than about this
+	# code.**  Nothing the compositions read from their seven definitions changed
+	# between 0.1.2 and 0.4.1, and the suite passes on both; what 0.4.1 carries is
+	# 172 models read again against their manuals, among them the Minitaur's
+	# velocity as received rather than gated.  Somebody arriving should get those
+	# readings rather than the ones they replaced.  When the code itself needs a
+	# newer release, raise the floor for that reason and say so here.
 	"pymididefs>=0.4",
-	"pymidiinstrumentdefs>=0.1.2",
+	"pymidiinstrumentdefs>=0.4.1",
 	# Drives the page in a real browser. The browser itself is a separate
 	# download ("playwright install firefox") and needs system libraries the
 	# page tests skip cleanly without.

@@ -280,9 +280,9 @@ band to sit in the middle of (#2081), which is why it skips the table above.
 BASS_VELOCITY = 100
 """What a note is when it is first placed: at a middling weight.
 
-Velocity reaches the Minitaur only through its two sensitivity parameters, which
-default to half — CC 89 for the filter and CC 90 for the amplifier (#2081).  A
-velocity lane that appears to do nothing is that, not this.
+Velocity reaches the Minitaur through its two sensitivity parameters, CC 89 for
+the filter and CC 90 for the amplifier, which set how much of it each one takes
+and default to half (#2081).  So at the manual's defaults this one is heard.
 """
 
 BASS_DIVISIONS = int(subsequence.constants.MIDI_QUARTER_NOTE * STEP_DURATION)
@@ -334,8 +334,8 @@ CHORD_NOTE_MAP = {row: midi_notes.name_to_note(row) for row in CHORD_RANGE}
 CHORD_VELOCITY = 100
 """What a note is when it is first placed.
 
-The Matriarch receives note-on velocity and does not gate it behind a
-sensitivity parameter the way the Minitaur does, so this one is heard.
+The Matriarch receives note-on velocity, as the Minitaur does, so this one is
+heard.
 """
 
 CHORD_LENGTH = 2
