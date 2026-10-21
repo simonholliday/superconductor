@@ -57,28 +57,14 @@ dev = [
 	"pytest-asyncio>=0.23",
 	"httpx>=0.27",
 	"types-PyYAML",
-	# The compositions are type-checked and tested along with the package, and
-	# they read instrument definitions. Neither is a dependency of the package —
-	# nothing under `superconductor/` imports them, and nothing may (#1465) — but
-	# mypy has needed them since `files` grew to cover `compositions/` and said so
-	# only by not being run without them.
-	#
-	# Two packages because they hold two kinds of fact (#2466): `pymididefs` is
-	# the specification — local control is CC 122 on every instrument ever built —
-	# and `pymidiinstrumentdefs` is what one model does.  0.1.1 rather than 0.1,
-	# because the Matriarch's arpeggiator controls have their bands from 0.1.1 on
-	# (#2203) and this rig draws all three.
-	#
-	# **0.4.1 on Simon's decision of 2026-10-20, and like 0.1.2 before it
-	# (2026-09-14, #2542) it is a claim about the corpus rather than about this
-	# code.**  Nothing the compositions read from their seven definitions changed
-	# between 0.1.2 and 0.4.1, and the suite passes on both; what 0.4.1 carries is
-	# 172 models read again against their manuals, among them the Minitaur's
-	# velocity as received rather than gated.  Somebody arriving should get those
-	# readings rather than the ones they replaced.  When the code itself needs a
-	# newer release, raise the floor for that reason and say so here.
+	# The examples are type-checked and tested along with the package, and they
+	# name General MIDI's controllers and drum notes from the specification's own
+	# constants.  Not a dependency of the package — nothing under `superconductor/`
+	# imports it, and nothing may (#1465) — but mypy and the examples' tests need
+	# it.  `pymidiinstrumentdefs`, what one model does, was here for the
+	# compositions, which stopped being in the repository on 2026-10-21; nothing
+	# tracked reads it now.
 	"pymididefs>=0.4",
-	"pymidiinstrumentdefs>=0.4.1",
 	# Drives the page in a real browser. The browser itself is a separate
 	# download ("playwright install firefox") and needs system libraries the
 	# page tests skip cleanly without.
@@ -149,7 +135,7 @@ disallow_untyped_defs = true
 # not, and the unchecked ones included both halves of the restart safety net —
 # `capture_state.py` and `restore_state.py`, whose whole justification is that
 # losing a pattern happens silently.  Settled on 2026-09-06 (#2140).
-files = ["superconductor", "tests", "tools", "compositions"]
+files = ["superconductor", "tests", "tools", "examples"]
 
 [[tool.mypy.overrides]]
 module = ["uvicorn.*"]

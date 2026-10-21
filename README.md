@@ -60,9 +60,9 @@ start, and that you had taken out, stays out - and the restore says which steps
 it took out.
 
 Those two tools live in the repository rather than in the installed package, as
-does `compositions/drm1_grid.py` below - the only worked example, and the only
-place the application-facing API is written down. Installing from a package
-index gets you the service and the page; the examples are worth the clone.
+do the two worked examples in `examples/`, described below. Installing from a
+package index gets you the service and the page; the examples are worth the
+clone.
 
 ## What it needs
 
@@ -240,7 +240,7 @@ notes while one sounded. It is counted by *extent* rather than by starting
 position, because a note beginning part-way through another is exactly the case
 the instrument would have to arbitrate.
 
-Rows are names, as they are everywhere here. `compositions/drm1_grid.py` builds
+Rows are names, as they are everywhere here. `examples/demo.py` builds
 them from note names and hands the same list to Subsequence as a note map, so
 what the panel calls `C2` and what the synthesiser plays cannot drift apart.
 
@@ -337,7 +337,7 @@ degrees = superconductor.subsequence_adapter.DegreeSet(
 Call `degrees.rekeyed()` whenever the key changes, so every panel is told the new
 notes. Where `key_now` returns `None` there is no key: the set says so on the
 glass, and a generator it feeds rests and says why rather than falling silent.
-`compositions/ensemble.py` offers a **Key** block, a root and one of Subsequence's
+`examples/blank.py` offers a **Key** block, a root and one of Subsequence's
 scales, and makes degree sets from a rack.
 
 ## Arranging a page
@@ -419,8 +419,8 @@ after your first edit the composition file is no longer the score: its opening
 pattern and opening values apply only where the store holds nothing.
 
 `beside(__file__)` keeps it next to the composition. Give a path instead to keep
-it anywhere else - the example rig keeps its own on the machine's own disk,
-because its compositions sit on a network share.
+it anywhere else, such as a machine's own disk when the composition sits on a
+network share.
 
 The bar says when the store last wrote - **KEPT · 15:32** - and says **STORE ·
 TROUBLE** if anything went wrong with it. Tap it for the details, and for
@@ -528,15 +528,15 @@ grid given no `min_steps` is exactly the grid it always was.
 In Subsequence, making a pattern a number of its steps long is
 `set_length(steps=…)`, as above. Given a length in beats instead, `set_length`
 keeps a pattern's count of steps, which spreads a generator's steps across the
-new length rather than dropping some of them. So `compositions/drm1_grid.py`
-offers a length only where `set_length` can be given a count of steps.
+new length rather than dropping some of them. So the examples make a pattern
+a number of its steps long, which needs Subsequence 0.7.0 or newer.
 
 **A pattern cannot be shorter than its `reschedule_lookahead`**, which is a beat
 unless the pattern says otherwise. Subsequence refuses the length: the build that
 asked for it is silent, and the pattern plays on at the length it had until it is
 given one it will take. So a sixteen-step grid rebuilt a beat ahead offers four
-steps at the fewest, as above. `compositions/drm1_grid.py` rebuilds its patterns
-a pulse ahead, and offers one.
+steps at the fewest, as above. The examples rebuild their patterns a pulse
+ahead, and offer one.
 
 ## Connecting an application
 
@@ -554,9 +554,21 @@ link = superconductor.subsequence_adapter.AppLink(
 link.start()
 ```
 
-`compositions/drm1_grid.py` is a complete example driving a Vermona DRM1: it is
-the file that holds the MIDI port, the channel and which drum voice sits on
-which row, and it is the file you would copy and change for your own rig.
+Two complete examples are in `examples/`, each driving a General MIDI drum kit
+on channel 10, a bass monosynth and a polysynth:
+
+- **`examples/blank.py`** starts from nothing: every pattern empty, with the
+  racks that make sets of pitches, sets of degrees and lines from the glass, and
+  a Key block. It is the file to copy and change for your own rig.
+- **`examples/demo.py`** shows the features working: a pattern already playing,
+  variants, a nine-step polyrhythm, grids with no instrument routed into others,
+  a set of pitches, and settings sent as control changes.
+
+The names at the top of each are the ones to change: the MIDI port, each
+instrument's channel, the drum notes, the notes each synth's grid is drawn over,
+how many notes the polysynth plays at once, and which control changes its
+settings send. A composition holds facts about your studio, so it is yours: keep
+your own copy wherever suits you, beside the store it writes.
 
 The adapter imports nothing from the application it serves - it is written
 against whatever object it is handed. That is deliberate, and it is what keeps
@@ -663,18 +675,17 @@ the files and reload the browser.
 | | |
 | --- | --- |
 | `superconductor/` | the package - the service, the protocol, the adapter and the page it serves |
-| `compositions/` | the worked example, and the only place the application-facing API is written down |
+| `examples/` | two worked examples, and the place the application-facing API is shown in full |
 | `tools/` | probes that stand in for a browser, a capture and a restore, and the theme separation check |
 | `tests/` | the suite, including the ones that drive a real Firefox |
 | `research/` | the probes and raw measurements the design was made from |
-| `reviews/` | the code reviews it has been through |
 | `licences/` | notices for the vendored faces and icons |
 
-`research/` and `reviews/` are provenance: they record what was true on the day
-they were written and are deliberately not kept up to date. They still say
-*Superintendent*, which is what this was called until September 2026, and they
-cite a tracker you cannot reach. They are here because the documents that cite
-them should be checkable, not because they describe the code as it stands.
+`research/` is provenance: it records what was true on the day it was written
+and is deliberately not kept up to date. It still says *Superintendent*, which is
+what this was called until September 2026, and it cites a tracker you cannot
+reach. It is here because the documents that cite it should be checkable, not
+because it describes the code as it stands.
 
 ## Licence
 

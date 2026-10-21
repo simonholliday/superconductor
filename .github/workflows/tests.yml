@@ -53,9 +53,9 @@ jobs:
         # **Subsequence is installed here, and named nowhere in pyproject.toml.**
         # It is a rig arrangement rather than a dependency, because this package
         # must never declare one on a particular app (#1465). Four files measure
-        # this package against the sequencer an app runs: test_composition.py,
-        # test_ensemble.py, test_generators.py and test_length_sequencer.py.
-        # 0.7.0 is the first release carrying what the compositions use; PyPI's
+        # this package against the sequencer an app runs: test_demo.py,
+        # test_blank.py, test_generators.py and test_length_sequencer.py.
+        # 0.7.0 is the first release carrying what the examples use; PyPI's
         # 0.6.6 failed at `module 'subsequence' has no attribute 'generators'`
         # when this was tried on 2026-09-09.
         #
@@ -66,7 +66,7 @@ jobs:
         run: python -m pytest --ignore=tests/test_page.py
       - name: Type-check
         # Configured at python_version = "3.11" over the package, the tests, the
-        # tools and the compositions, so this is the same question on every row
+        # tools and the examples, so this is the same question on every row
         # — but an install that only breaks on one version breaks it here. With
         # Subsequence installed it also reads Subsequence's own annotations, which
         # the venv's editable copy hides from it (#3562).

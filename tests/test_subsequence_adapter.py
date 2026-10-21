@@ -845,8 +845,7 @@ def test_a_beat_hands_the_settings_burst_over_rather_than_doing_it () -> None:
 
 	Measured before it was moved: the adapter's own cost in the burst is 0.012 ms
 	and free, and the cost is one `composition.trigger()` per setting — ten for
-	the Minitaur as `compositions/drm1_grid.py` declares it, thirty-six for a
-	Matriarch.  That is linear in a number this project is deliberately
+	a Minitaur's block on the development rig, thirty-six for a Matriarch's.  That is linear in a number this project is deliberately
 	increasing, on a callback with about 20 ms of headroom before it delays the
 	next pulse, and it was the one path on the timing loop with no measurement
 	behind it.

@@ -6,7 +6,7 @@ nowhere.  That is right for playing and wrong for diagnosing, and on 2026-09-04
 it cost an evening: the panel's settings appeared dead, and the sentence saying
 why was being written to a logger with no handler.
 
-    python tools/play_loudly.py compositions/drm1_grid.py
+    python tools/play_loudly.py examples/demo.py
 
 Identical to running the composition directly, except that it talks.
 """

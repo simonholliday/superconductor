@@ -67,7 +67,7 @@ and both look like a pattern.
 | `play_loudly.py` | Runs a composition with logging configured, so every `LOG.info` in the adapter — the link connecting, a setting asserted to an instrument, a refusal — is printed instead of going nowhere. |
 
 ```
-python tools/play_loudly.py compositions/drm1_grid.py
+python tools/play_loudly.py examples/demo.py
 ```
 
 Identical to running the composition directly, except that it talks. A

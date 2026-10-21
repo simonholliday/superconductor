@@ -2976,8 +2976,8 @@ class Params (Control):
 
 		**Measured, and moved off the clock for it.**  The adapter's own cost
 		here is 0.012 ms and free; the cost is one `composition.trigger()` per
-		setting, and there is one per setting — ten for the Minitaur as
-		`compositions/drm1_grid.py` declares it, thirty-six for a Matriarch.
+		setting, and there is one per setting — ten for a Minitaur's block on
+		the development rig, thirty-six for a Matriarch's.
 		That is linear in a number the project is deliberately increasing, on a
 		callback with about 20 ms of headroom before it delays the next pulse,
 		and it had no measurement behind it while every other path on the timing
