@@ -87,7 +87,8 @@ SEQUENCER_MODELS: dict[str, typing.Any] = {
 	                          {"name": "shortest", "label": "shortest", "unit": "beats", "kind": "number",
 	                           "min": 0.0625, "max": 1.0, "step": 0.0625, "required": False,
 	                           "default": 0.0625}],
-	             "inputs": [{"name": "trigger", "kind": "trigger"}, {"name": "pitch", "kind": "cv"}],
+	             "inputs": [{"name": "trigger", "kind": "trigger"}, {"name": "gate", "kind": "gate"},
+	                        {"name": "pitch", "kind": "cv"}],
 	             "outputs": [], "normals": [], "default_patch": []},
 }
 """Three models a sequencer holds, in the shapes the sequencers plugin describes them at c614221."""

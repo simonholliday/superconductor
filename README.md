@@ -356,17 +356,27 @@ last.
   opens its list when you lift your finger.
 - **The stage each module is playing is lit**, the whole column, from what the
   sequencer reported for each step of the cycle.
-- **The cords the code patched run from jack to jack.** A jack is a hexagon, an
-  output's sits on a filled plate, and a cord worth less or more than the whole
-  of its signal says how much (`×0.5`). A module's own wiring, which plays where
-  no cord is plugged in, is drawn faint and dashed while it plays.
+- **Cords run from jack to jack, inside the case and never out of it.** A jack
+  is a hexagon, an output's sits on a filled plate, and a cord worth less or more
+  than the whole of its signal says how much (`×0.5`). A module's own wiring,
+  which plays where no cord is plugged in, is drawn faint and dashed while it
+  plays.
+- **Patch a cord by dragging from either end.** From an output, every input in
+  the case lights; from an empty input, every output does. The nearest lit jack
+  takes the cord, and a tag above your finger says what letting go will do. A
+  cord dropped on an input that already has one joins it, and the input plays
+  their sum. Press a patched input to take its plug, and move it or let go over
+  nothing to pull it out; hold an output still for a moment before dragging to
+  move its newest cord instead of drawing another. Tap a jack to see every cord
+  on it, and pull one out from there.
 
 What you change on the glass is laid over what the code writes, one knob, stage
 or cord at a time, and the last change wins: save the file with a new value
 somewhere you had changed, and the code's value plays again and the bar says so.
 Two taps on a knob hand its value back to the code, a cell's list offers the
 same, and **back to the code** on the case's footer hands back everything at
-once, after asking. Patching cords by hand comes in a later version.
+once, after asking. A cord pulled out of a jack the code patched stays out
+until the code changes that cord.
 
 ```python
 import subsequence.plugins.sequencers as sequencers

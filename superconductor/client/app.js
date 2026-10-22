@@ -3631,24 +3631,90 @@ const HEX = Array.from({ length: 6 }, (_, side) => {
 /* One jack: a patch point on a module, with its name beside it (#5217).
  *
  * **An output sits on a filled plate** and an input does not, which says which end of
- * a cord each one is without a word. **Read, not pressed, in this build**: a jack is a
- * mark until cords can be patched by hand, so it carries no target's surface. */
-function Jack ({ module, jack, side, style }) {
+ * a cord each one is without a word. **The hex nut is the target**: a row across,
+ * raised as a control is, with its hole sunk, and a cord is taken from it or dropped
+ * on it (see `SequencerCase`). While a cord is in the hand, the jacks it may land on
+ * are lit and the one it would land on says so. */
+function Jack ({ module, jack, side, style, lit, over, lifting, gesture }) {
 	const words = jack.label || jack.name.replace(/_/g, " ");
+	const address = `${module}.${jack.name}`;
 
 	return html`
 		<span
-			class=${`jack ${side}`}
-			data-jack=${`${module}.${jack.name}`}
+			class=${["jack", side, lit ? "lit" : "", over ? "over" : "", lifting ? "lifting" : ""]
+				.filter(Boolean).join(" ")}
+			data-jack=${address}
 			data-side=${side}
 			data-kind=${jack.kind || ""}
 			title=${`${side === "out" ? "output" : "input"} ${words}${jack.kind ? `, ${jack.kind}` : ""}`}
 			style=${style}
 		>
-			<span class="plate"><svg class="hex" viewBox="-10 -10 20 20" aria-hidden="true">
-				<polygon points=${HEX} /><circle r="3.2" /></svg></span>
+			<span class="plate"><svg
+				class="hex" viewBox="-16 -16 32 32" role="button"
+				aria-label=${`${side === "out" ? "output" : "input"} ${words}`}
+				onPointerDown=${(event) => gesture.press(event, side, address)}
+				onPointerMove=${gesture.move}
+				onPointerUp=${gesture.release}
+				onPointerCancel=${gesture.cancel}
+			><polygon points=${HEX} /><circle r="3.2" /></svg></span>
 			${labelText(words)}
 		</span>`;
+}
+
+/* A jack's address as the glass says it: its module, and its own name tidied. */
+function jackWords (models, modules, address) {
+	const [module, name] = [address.slice(0, address.indexOf(".")), address.slice(address.indexOf(".") + 1)];
+	const placed = (modules || []).find((one) => one.name === module);
+	const model = (placed && models[placed.model]) || {};
+	const jack = [...(model.inputs || []), ...(model.outputs || [])].find((one) => one.name === name);
+
+	return { module, jack: (jack && jack.label) || name.replace(/_/g, " ") };
+}
+
+/* The cords that play, and which of them the glass holds an entry for (#5217).
+ *
+ * **What the app said at its last build, with the glass's entries laid over it**: an
+ * amount the glass set, a cord it patched, or one it pulled out with 0. Each cord
+ * keeps the place it first had, so the newest on a jack is the last of its list. */
+function cordsOf (state) {
+	const played = state.played && typeof state.played === "object" ? state.played : {};
+	const overlay = state.held && typeof state.held === "object" ? state.held : {};
+	const cords = new Map((played.patch || []).filter(Array.isArray)
+		.map((cord) => [`${cord[0]}>${cord[1]}`, cord]));
+	const playedAt = new Map(cords);
+	const held = new Set();
+
+	for (const cord of overlay.patch || []) {
+		if (!Array.isArray(cord)) continue;
+
+		cords.set(`${cord[0]}>${cord[1]}`, cord);
+		held.add(`${cord[0]}>${cord[1]}`);
+	}
+
+	const patched = [...cords.values()].filter((cord) => cord[2] !== 0);
+
+	/* **A cord the glass patched is a request until a build plays it** (#2046), as a
+	   cable in flight is: the app has taken it, and the next build is when it sounds. */
+	const asking = new Set(patched
+		.filter((cord) => {
+			const was = playedAt.get(`${cord[0]}>${cord[1]}`);
+
+			return !was || was[2] !== cord[2];
+		})
+		.map((cord) => `${cord[0]}>${cord[1]}`));
+
+	return { patched, held, asking };
+}
+
+/* A cord's curve from one jack to another, hanging as a lead does, and its lowest point. */
+function cordCurve (a, b) {
+	const span = Math.hypot(b.x - a.x, b.y - a.y);
+	const sag = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
+
+	return {
+		d: `M ${a.x} ${a.y} C ${a.x} ${a.y + sag} ${b.x} ${b.y + sag} ${b.x} ${b.y}`,
+		middle: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 + sag * 0.75 },
+	};
 }
 
 /* Where the stage each cursor is on is lit, a whole column (#5218).
@@ -3730,7 +3796,8 @@ function StageLights ({ module, reports, anchor, paused, first, top, bottom }) {
  * **The face is what plays, under whatever the glass holds**: the app's last build, and
  * over it each entry the glass has set, which the app confirms at once and the next
  * build plays. Nothing marks which is which (decision 2). */
-function Module ({ owner, one, played, overlay, reports, anchor, paused, pending, failed, onSet }) {
+function Module ({ owner, one, played, overlay, reports, anchor, paused, pending, failed,
+                  seeking, over, lifting, gesture, onSet }) {
 	const { name: module, model, layout } = one;
 	const settings = ((played.modules || {})[module] || {}).settings || {};
 	const mine = ((overlay.modules || {})[module] || {}).settings || {};
@@ -3819,12 +3886,18 @@ function Module ({ owner, one, played, overlay, reports, anchor, paused, pending
 
 			${layout.singles.map(({ one: field, row, col }) => single(field, row, col))}
 
-			${layout.inputs.map(({ one: jack, row, col }) => html`
-				<${Jack} key=${`in-${jack.name}`} module=${module} jack=${jack} side="in"
-					style=${at(row, col, JACK_CELLS)} />`)}
-			${layout.outputs.map(({ one: jack, row, col }) => html`
-				<${Jack} key=${`out-${jack.name}`} module=${module} jack=${jack} side="out"
-					style=${at(row, col, JACK_CELLS)} />`)}
+			${[["in", layout.inputs], ["out", layout.outputs]].map(([side, placed]) => placed.map(
+				({ one: jack, row, col }) => {
+					const address = `${module}.${jack.name}`;
+
+					return html`
+						<${Jack} key=${`${side}-${jack.name}`} module=${module} jack=${jack} side=${side}
+							style=${at(row, col, JACK_CELLS)}
+							lit=${seeking === side}
+							over=${Boolean(over && over.side === side && over.address === address)}
+							lifting=${side === "out" && lifting === address}
+							gesture=${gesture} />`;
+				}))}
 		</section>`;
 }
 
@@ -3847,7 +3920,7 @@ function StageSwitch ({ on, has, title, pending, failed, onSet }) {
 		></button>`;
 }
 
-/* The cords the code patched, and the normals that stand in where none is (#5217).
+/* The cords, the normals that stand in where none is, and the cord in the hand (#5217).
  *
  * **Drawn in the case's own layer and never outside it**, across the modules' faces, so a
  * cord reads as belonging to this pattern; and never in the way of a finger, which goes
@@ -3855,101 +3928,91 @@ function StageSwitch ({ on, has, title, pending, failed, onSet }) {
  * inside its own panel, drawn as the page draws a hard-wired connection, and only while
  * its switch is on and no cord is in its input, which is when the app plays it.
  *
- * **Measured from the jacks once they are drawn**, and again whenever the case changes
- * size, because a jack's place is the lattice's and the lattice is the person's. */
-function Cords ({ box, cords, normals, cell }) {
-	const [lines, setLines] = useState([]);
-	const said = JSON.stringify([cords, normals]);
+ * **Several cords on one jack show one plug and a count** (decision 3): an output feeds
+ * any number of inputs, and an input plays the sum of what reaches it. */
+function Cords ({ places, cords, normals, asking, hand, handPath }) {
+	const lines = [
+		...cords.map(([from, to, amount]) => ({ kind: "cord", from, to, amount })),
+		...normals.map(([from, to]) => ({ kind: "normal", from, to, amount: 1 })),
+	]
+		/* The cord being carried is drawn as the one in the hand, and not where it was. */
+		.filter((one) => !(hand && hand.cord && one.kind === "cord"
+			&& one.from === hand.cord[0] && one.to === hand.cord[1]))
+		.map((one) => ({ ...one, a: places[`out:${one.from}`], b: places[`in:${one.to}`] }))
+		.filter((one) => one.a && one.b);
 
-	useLayoutEffect(() => {
-		const root = box.current;
+	const stacked = {};
 
-		if (!root) return undefined;
+	for (const one of lines) {
+		if (one.kind !== "cord") continue;
 
-		const measure = () => {
-			const seen = root.getBoundingClientRect();
-			const scale = root.offsetWidth ? seen.width / root.offsetWidth : 1;
-
-			const centre = (side, address) => {
-				const hex = [...root.querySelectorAll(`.jack[data-side="${side}"]`)]
-					.find((one) => one.dataset.jack === address);
-				const face = hex && hex.querySelector(".hex");
-
-				if (!face) return null;
-
-				const shape = face.getBoundingClientRect();
-
-				return {
-					x: (shape.left + shape.width / 2 - seen.left) / scale,
-					y: (shape.top + shape.height / 2 - seen.top) / scale,
-					r: shape.width / 2 / scale,
-				};
-			};
-
-			const drawn = [
-				...cords.map(([from, to, amount]) => ({ kind: "cord", from, to, amount })),
-				...normals.map(([from, to]) => ({ kind: "normal", from, to, amount: 1 })),
-			].map((one) => ({ ...one, a: centre("out", one.from), b: centre("in", one.to) }))
-				.filter((one) => one.a && one.b);
-
-			setLines((was) => (JSON.stringify(was) === JSON.stringify(drawn) ? was : drawn));
-		};
-
-		measure();
-
-		const watching = new ResizeObserver(measure);
-
-		watching.observe(root);
-
-		return () => watching.disconnect();
-	}, [said, cell]);
+		for (const key of [`out:${one.from}`, `in:${one.to}`]) stacked[key] = (stacked[key] || 0) + 1;
+	}
 
 	return html`
 		<svg class="cords" aria-hidden="true">
 			${lines.map((one) => {
-				const span = Math.hypot(one.b.x - one.a.x, one.b.y - one.a.y);
-				const sag = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
-				const curve = `M ${one.a.x} ${one.a.y} C ${one.a.x} ${one.a.y + sag} ${one.b.x} ${one.b.y + sag} ${one.b.x} ${one.b.y}`;
-				const middle = { x: (one.a.x + one.b.x) / 2, y: (one.a.y + one.b.y) / 2 + sag * 0.75 };
+				const { d, middle } = cordCurve(one.a, one.b);
 
 				return html`
-					<g key=${`${one.kind}:${one.from}>${one.to}`} class=${one.kind}
+					<g key=${`${one.kind}:${one.from}>${one.to}`}
+						class=${[one.kind, asking.has(`${one.from}>${one.to}`) ? "asking" : ""].filter(Boolean).join(" ")}
 						data-cord=${`${one.from}>${one.to}`}>
-						<path d=${curve} />
+						<path d=${d} />
 						${one.kind === "cord" && html`
 							<polygon class="plug" points=${HEX}
-								transform=${`translate(${one.a.x} ${one.a.y}) scale(${one.a.r / 10})`} />
+								transform=${`translate(${one.a.x} ${one.a.y}) scale(${one.a.r / 8})`} />
 							<polygon class="plug" points=${HEX}
-								transform=${`translate(${one.b.x} ${one.b.y}) scale(${one.b.r / 10})`} />`}
+								transform=${`translate(${one.b.x} ${one.b.y}) scale(${one.b.r / 8})`} />`}
 						${/* **What a cord is worth, where it is not the whole of it**: the
-						     code's amount, read and not yet offered (#5217's tag). */ ""}
+						     code's amount, or the glass's (#5217's tag). */ ""}
 						${one.kind === "cord" && one.amount !== 1 && html`
 							<text class="amount" x=${middle.x} y=${middle.y}>${`×${one.amount}`}</text>`}
 					</g>`;
 			})}
+			${Object.entries(stacked).filter(([, count]) => count > 1).map(([key, count]) => html`
+				<text key=${`count-${key}`} class="count" data-count=${key}
+					x=${places[key].x + places[key].r * 1.2} y=${places[key].y - places[key].r * 1.2}
+				>${count}</text>`)}
+			${/* **The cord in the hand**, drawn from the jack it is still plugged into. Its
+			     curve is written by the gesture as the finger moves, never by a redraw of
+			     the case, which #2875 measured a page paying for. */ ""}
+			${hand && html`<path class="in-hand" ref=${handPath} />`}
 		</svg>`;
 }
 
+const CORD_HOLD = 400;
+/* How long an output is held still before a drag from it takes its newest plug, in ms.
+ *
+ * **From an output, a drag draws a new cord** (#5217), because one output feeding several
+ * inputs is the common case: one clock into three. Moving a cord's output end is the
+ * rarer wish, so it waits for a hold, which is VCV Rack's rule with a hold where VCV uses
+ * a modifier key. As long as two taps take, because both are a finger deciding. */
+
 /* The case: every module of one pattern's sequencer, and the cords between them.
+ *
+ * **Patched by hand from either end** (Simon, 2026-10-22, #5217): a drag from an output
+ * draws a new cord, and one from an empty input draws one back to an output; a press on
+ * a patched input takes its newest plug, and an output held still gives up its newest
+ * plug instead of drawing another. While a cord is in the hand the jacks it may land on
+ * are lit, **the nearest within a row's reach takes it**, and a tag above the finger says
+ * what letting go will do. Let go far from any jack and a new cord is never made, and a
+ * plug that was carried is pulled out. A tap opens the jack's sheet, on release.
+ *
+ * **Every cord is set through the sequencer's overlay**, one per pair of jacks, as the
+ * code's are (D3): a new one at the whole of its signal, a moved one as two sets, and a
+ * pulled one at 0, which is how the code's own cord is taken out too.
  *
  * Before the sequencer's first build there is nothing to say what it holds, and that
  * build declares again. */
-function SequencerCase ({ name, control, state, reports, anchor, paused, cell, pending, failed, onSet }) {
+function SequencerCase ({ name, control, state, reports, anchor, paused, cell, pending, failed, cording,
+                          onSet, onCording, onSheet }) {
 	const box = useRef(null);
-	const shape = caseShape(control.models || {}, state.modules || []);
+	const models = control.models || {};
+	const shape = caseShape(models, state.modules || []);
 	const overlay = state.held && typeof state.held === "object" ? state.held : {};
 	const played = state.played && typeof state.played === "object" ? state.played : {};
-
-	/* **The cords that play**, as the app said at its last build, with what the glass holds
-	   laid over them: an amount the glass set, or a cord it pulled out with 0 (#5217). */
-	const cords = new Map((played.patch || []).filter(Array.isArray)
-		.map((cord) => [`${cord[0]}>${cord[1]}`, cord]));
-
-	for (const cord of overlay.patch || []) {
-		if (Array.isArray(cord)) cords.set(`${cord[0]}>${cord[1]}`, cord);
-	}
-
-	const patched = [...cords.values()].filter((cord) => cord[2] !== 0);
+	const { patched, asking } = cordsOf(state);
 	const cabled = new Set(patched.map((cord) => cord[1]));
 
 	/* A normal plays where its input has no cord and its switch, if it names one, is on:
@@ -3968,18 +4031,328 @@ function SequencerCase ({ name, control, state, reports, anchor, paused, cell, p
 		}
 	}
 
+	/* **Where every jack is**, in the case's own pixels: measured once they are drawn,
+	   and again whenever the case changes size, because a jack's place is the lattice's
+	   and the lattice is the person's. A hex is a quarter of its jack's width across
+	   from its middle, and a jack is a row, which is the reach a dropped cord has. */
+	const [places, setPlaces] = useState({});
+
+	useLayoutEffect(() => {
+		const root = box.current;
+
+		if (!root) return undefined;
+
+		const measure = () => {
+			const seen = root.getBoundingClientRect();
+			const scale = root.offsetWidth ? seen.width / root.offsetWidth : 1;
+			const found = {};
+
+			for (const jack of root.querySelectorAll(".jack")) {
+				const face = jack.querySelector(".hex").getBoundingClientRect();
+
+				found[`${jack.dataset.side}:${jack.dataset.jack}`] = {
+					x: (face.left + face.width / 2 - seen.left) / scale,
+					y: (face.top + face.height / 2 - seen.top) / scale,
+					r: face.width / 4 / scale,
+					reach: face.width / scale,
+				};
+			}
+
+			setPlaces((was) => (JSON.stringify(was) === JSON.stringify(found) ? was : found));
+		};
+
+		measure();
+
+		const watching = new ResizeObserver(measure);
+
+		watching.observe(root);
+
+		return () => watching.disconnect();
+	}, [JSON.stringify(state.modules || []), JSON.stringify(Object.keys(models)), cell]);
+
+	/* **The gesture.** What is pressed, and the cord in the hand once the press has
+	   moved: held in refs as well as in state, because the pointer's own events read it
+	   between two draws. Only the jack it would land on is state, so the case is drawn
+	   again when that changes and never as the finger merely moves. */
+	const press = useRef(null);
+	const holding = useRef(null);
+	const pointer = useRef(null);
+	const handRef = useRef(null);
+	const handPath = useRef(null);
+	const tag = useRef(null);
+	const [hand, setHand] = useState(null);
+	const [lifting, setLifting] = useState(null);
+
+	const holdHand = (held) => {
+		handRef.current = held;
+		setHand(held);
+	};
+
+	const cordsAt = (side, address) => patched.filter((cord) => cord[side === "out" ? 0 : 1] === address);
+
+	const local = (event) => {
+		const seen = box.current.getBoundingClientRect();
+		const scale = box.current.offsetWidth ? seen.width / box.current.offsetWidth : 1;
+
+		return { x: (event.clientX - seen.left) / scale, y: (event.clientY - seen.top) / scale,
+		         clientX: event.clientX, clientY: event.clientY };
+	};
+
+	const nearest = (side, at) => {
+		let best = null;
+
+		for (const [key, place] of Object.entries(places)) {
+			if (!key.startsWith(`${side}:`)) continue;
+
+			const distance = Math.hypot(place.x - at.x, place.y - at.y);
+
+			if (distance <= place.reach && (!best || distance < best.distance)) {
+				best = { side, address: key.slice(side.length + 1), distance };
+			}
+		}
+
+		return best && { side: best.side, address: best.address };
+	};
+
+	/* The pair of jacks a cord in the hand would join, output first. */
+	const pairOf = (held) => (held.seeks === "in"
+		? [held.fixed.address, held.over.address] : [held.over.address, held.fixed.address]);
+
+	const aim = () => {
+		const held = handRef.current;
+		const at = pointer.current;
+
+		if (!held || !at) return;
+
+		const fixed = places[`${held.fixed.side}:${held.fixed.address}`];
+		const free = held.over ? places[`${held.over.side}:${held.over.address}`] : at;
+
+		if (handPath.current && fixed && free) {
+			const [a, b] = held.fixed.side === "out" ? [fixed, free] : [free, fixed];
+
+			handPath.current.setAttribute("d", cordCurve(a, b).d);
+		}
+
+		if (tag.current) {
+			tag.current.style.left = `${Math.round(at.clientX)}px`;
+			tag.current.style.top = `${Math.round(at.clientY)}px`;
+		}
+	};
+
+	useLayoutEffect(aim, [hand, places]);
+
+	const drop = (held) => {
+		const cordPath = (from, to) => `${name}/cords/${from}/${to}`;
+
+		if (!held.over) {
+			if (held.mode === "move") onSet(cordPath(held.cord[0], held.cord[1]), 0);
+			return;
+		}
+
+		const [from, to] = pairOf(held);
+
+		if (held.mode === "new") {
+			const amount = ((control.cables || {}).amount || {}).default;
+
+			if (!patched.some((cord) => cord[0] === from && cord[1] === to)) {
+				onSet(cordPath(from, to), typeof amount === "number" ? amount : 1);
+			}
+
+			return;
+		}
+
+		const [was, into, amount] = held.cord;
+
+		if (from === was && to === into) return;
+
+		onSet(cordPath(was, into), 0);
+		onSet(cordPath(from, to), amount);
+	};
+
+	const letGo = () => {
+		press.current = null;
+		clearTimeout(holding.current);
+		setLifting(null);
+
+		if (handRef.current) {
+			holdHand(null);
+			onCording(null);
+		}
+	};
+
+	const gesture = {
+		press: (event, side, address) => {
+			event.preventDefault();
+			event.currentTarget.setPointerCapture(event.pointerId);
+
+			const pressed = { pointer: event.pointerId, side, address,
+			                  x: event.clientX, y: event.clientY, held: false };
+
+			press.current = pressed;
+			pointer.current = local(event);
+			clearTimeout(holding.current);
+
+			if (side === "out" && cordsAt("out", address).length) {
+				holding.current = setTimeout(() => {
+					if (press.current !== pressed || handRef.current) return;
+
+					pressed.held = true;
+					setLifting(address);
+				}, CORD_HOLD);
+			}
+		},
+
+		move: (event) => {
+			const pressed = press.current;
+
+			if (!pressed || pressed.pointer !== event.pointerId) return;
+
+			pointer.current = local(event);
+
+			if (!handRef.current) {
+				if (Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) < DRAG_SLOP) return;
+
+				clearTimeout(holding.current);
+
+				const took = pressed.side === "in" || pressed.held
+					? cordsAt(pressed.side, pressed.address).at(-1) : null;
+
+				holdHand(took
+					? { mode: "move", cord: took, seeks: pressed.side, over: null,
+					    fixed: pressed.side === "in" ? { side: "out", address: took[0] } : { side: "in", address: took[1] } }
+					: { mode: "new", cord: null, seeks: pressed.side === "out" ? "in" : "out", over: null,
+					    fixed: { side: pressed.side, address: pressed.address } });
+				onCording(name);
+				return;
+			}
+
+			const over = nearest(handRef.current.seeks, pointer.current);
+			const was = handRef.current.over;
+
+			if ((over && over.address) !== (was && was.address)) holdHand({ ...handRef.current, over });
+
+			aim();
+		},
+
+		release: (event) => {
+			const pressed = press.current;
+
+			if (!pressed || pressed.pointer !== event.pointerId) return;
+
+			const held = handRef.current;
+
+			letGo();
+
+			/* A press that never moved is a tap, and a tap opens the jack's sheet: on
+			   the release, because it opens something (#2215). */
+			if (!held) {
+				onSheet({ control: name, side: pressed.side, address: pressed.address });
+				return;
+			}
+
+			drop(held);
+		},
+
+		cancel: (event) => {
+			if (press.current && press.current.pointer === event.pointerId) letGo();
+		},
+	};
+
+	/* What letting go will do, in words, above the finger (#5217). */
+	const words = (address) => jackWords(models, state.modules, address);
+	const tagText = (held) => {
+		if (!held.over) return held.mode === "move" ? "pull out" : "let go on a jack";
+
+		const [from, to] = pairOf(held);
+
+		if (held.mode === "move" && from === held.cord[0] && to === held.cord[1]) return "where it was";
+		if (held.mode === "new" && patched.some((cord) => cord[0] === from && cord[1] === to)) return "already patched";
+
+		const joined = cordsAt("in", to)
+			.filter((cord) => !(held.cord && cord[0] === held.cord[0] && cord[1] === held.cord[1])).length;
+
+		if (joined) return `joins ${words(from).jack} into ${words(to).jack}, ${joined + 1} cords`;
+
+		const landing = words(held.over.address);
+
+		return `${held.seeks === "in" ? "into" : "from"} ${landing.module} · ${landing.jack}`;
+	};
+
+	/* Shown in the top layer, above every block, as a menu is (see `useMenu`). */
+	const raisedTag = useCallback((element) => {
+		tag.current = element;
+
+		if (element && element.showPopover && !element.matches(":popover-open")) element.showPopover();
+	}, []);
+
 	if (!shape.modules.length) {
 		return html`<div class="sequencer waiting">waiting for the sequencer's first build</div>`;
 	}
 
 	return html`
-		<div class="sequencer" ref=${box}>
+		<div
+			class=${["sequencer", hand ? "cording" : "", cording && cording !== name ? "dimmed" : ""]
+				.filter(Boolean).join(" ")}
+			ref=${box}
+		>
 			${shape.modules.map((one) => html`
 				<${Module} key=${one.name} owner=${name} one=${one} played=${played} overlay=${overlay}
 					reports=${reports} anchor=${anchor} paused=${paused}
-					pending=${pending} failed=${failed} onSet=${onSet} />`)}
-			<${Cords} box=${box} cords=${patched} normals=${normals} cell=${cell} />
+					pending=${pending} failed=${failed}
+					seeking=${hand ? hand.seeks : null} over=${hand && hand.over} lifting=${lifting}
+					gesture=${gesture} onSet=${onSet} />`)}
+			<${Cords} places=${places} cords=${patched} normals=${normals} asking=${asking}
+				hand=${hand} handPath=${handPath} />
+			${hand && html`
+				<div class="cord-tag" popover="manual" ref=${raisedTag}>${tagText(hand)}</div>`}
 		</div>`;
+}
+
+/* One jack's sheet: what it is, and every cord on it, each with its far end (#5217).
+ *
+ * **The way that always works**, as "send to…" is beside an outlet: a cord can be pulled
+ * out here, and one the glass holds an entry for handed back to the code. A cord's level
+ * is the code's until the app publishes the range an amount may take (#5218, decision 5),
+ * so none is offered before then. */
+function JackSheet ({ name, control, state, side, address, onSet, onClose }) {
+	const models = control.models || {};
+	const words = (one) => jackWords(models, state.modules, one);
+	const here = words(address);
+	const placed = (state.modules || []).find((one) => one.name === here.module);
+	const model = (placed && models[placed.model]) || {};
+	const jack = ((side === "out" ? model.outputs : model.inputs) || [])
+		.find((one) => `${here.module}.${one.name}` === address) || {};
+	const { patched, held } = cordsOf(state);
+	const on = patched.filter((cord) => cord[side === "out" ? 0 : 1] === address);
+	const cordPath = (cord) => `${name}/cords/${cord[0]}/${cord[1]}`;
+
+	return html`
+		<${Sheet} title=${`${here.module} · ${here.jack}`} onClose=${onClose}>
+			<p class="ask">
+				<span>${`${side === "out" ? "An output" : "An input"}${jack.kind ? `, ${jack.kind}` : ""}. `}</span>
+				<span>${on.length
+					? `${on.length} ${on.length === 1 ? "cord" : "cords"} on it.`
+					: "Nothing is patched here: drag from it to patch a cord."}</span>
+			</p>
+			${on.map((cord) => {
+				const far = words(cord[side === "out" ? 1 : 0]);
+
+				return html`
+					<div class="answers cord-row" key=${`${cord[0]}>${cord[1]}`} data-cord=${`${cord[0]}>${cord[1]}`}>
+						<span class="far">${`${side === "out" ? "into" : "from"} ${far.module} · ${far.jack}`}${
+							cord[2] !== 1 ? html`<i>${` ×${cord[2]}`}</i>` : ""}</span>
+						${held.has(`${cord[0]}>${cord[1]}`) && html`
+							<button
+								class="back"
+								onPointerDown=${(event) => { event.preventDefault(); onSet(cordPath(cord), null); onClose(); }}
+							>back to the code</button>`}
+						<button
+							class="danger"
+							onPointerDown=${(event) => { event.preventDefault(); onSet(cordPath(cord), 0); onClose(); }}
+						>pull out</button>
+					</div>`;
+			})}
+		<//>`;
 }
 
 
@@ -6879,6 +7252,12 @@ function Panel () {
 	   held here for the reason `clearing` is. */
 	const [handingBack, setHandingBack] = useState(null);
 
+	/* **Which sequencer has a cord in the hand** (#5217), so every other case dims as a
+	   whole: a cord never leaves its own. And which jack's sheet is open, held here for
+	   the reason `clearing` is. */
+	const [cording, setCording] = useState(null);
+	const [jackSheet, setJackSheet] = useState(null);
+
 	/* Which variant each grid shows on this panel, by `app/grid` (#2485). */
 	const [viewing, setViewing] = useState(rememberedViewing);
 
@@ -9021,7 +9400,8 @@ function Panel () {
 								reports=${up ? playing[one.control] : null}
 								anchor=${anchor} paused=${transportFields.paused === true}
 								cell=${size.cell}
-								pending=${pending} failed=${failed} onSet=${request} />`
+								pending=${pending} failed=${failed} cording=${cording}
+								onSet=${request} onCording=${setCording} onSheet=${setJackSheet} />`
 						: kindOf(one.control) === "params"
 						? html`
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}
@@ -9345,6 +9725,12 @@ function Panel () {
 					</div>
 				<//>`;
 		})()}
+
+		${jackSheet && controls[jackSheet.control] && html`
+			<${JackSheet} name=${jackSheet.control} control=${controls[jackSheet.control]}
+				state=${(state[appName] || {})[jackSheet.control] || {}}
+				side=${jackSheet.side} address=${jackSheet.address}
+				onSet=${request} onClose=${() => setJackSheet(null)} />`}
 
 		${handingBack && controls[handingBack] && (() => {
 			const count = heldCount(((state[appName] || {})[handingBack] || {}).held);

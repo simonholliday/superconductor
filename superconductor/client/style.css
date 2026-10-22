@@ -4707,8 +4707,9 @@ html, body {
 
 /* **A jack: a hexagon, its name beside it** (#5217), so a patch point inside a case
    never reads as the page's round socket. An output sits on a filled plate and an
-   input does not, which says which end of a cord each is. Read, not pressed, until
-   cords can be patched by hand, so it carries no target's surface. */
+   input does not, which says which end of a cord each is. **The hex nut is the
+   target**: as large as its plate, a row across, with the nut's face its surface and
+   its rim its edge, and the hole sunk. */
 .sequencer .jack {
 	display: grid;
 	grid-template-columns: var(--cell) minmax(0, 1fr);
@@ -4741,21 +4742,33 @@ html, body {
 .sequencer .jack.out .plate { background: var(--edge-strong); }
 
 .sequencer .jack .hex {
-	width: 62%;
-	height: 62%;
-}
-
-.sequencer .jack .hex polygon {
+	width: 100%;
+	height: 100%;
 	fill: var(--panel);
 	stroke: var(--edge-strong);
 	stroke-width: 1.2;
+	touch-action: none;
+	cursor: grab;
 }
 
 .sequencer .jack .hex circle {
 	fill: var(--ground);
-	stroke: var(--edge-strong);
 	stroke-width: 1;
 }
+
+/* **While a cord is in the hand**, the jacks it may land on are lit in the ring's
+   colour and the one it would land on is filled with it; nothing outside the case
+   lights, and every other case dims as a whole (#5217). An output held long enough
+   to give up its newest plug says so before it moves. */
+.sequencer.cording .jack.lit .hex,
+.sequencer .jack.lifting .hex {
+	stroke: var(--ring);
+	stroke-width: 2.4;
+}
+
+.sequencer.cording .jack.over .hex { fill: var(--ring); }
+
+.sequencer.dimmed { opacity: 0.45; }
 
 /* **The cords, in the case's own layer**, over the modules' faces and never in a
    finger's way. A cord is drawn in ink until its own colour is measured across the
@@ -4780,6 +4793,31 @@ html, body {
 
 .sequencer .cords .cord .plug { fill: var(--ink); }
 
+/* **A cord the glass patched is a request until a build plays it** (#2046), in the
+   ring's colour as a cable in flight is; and the one in the hand is drawn thicker, as
+   a cable under a hand is. */
+.sequencer .cords .cord.asking path { stroke: var(--ring); }
+.sequencer .cords .cord.asking .plug { fill: var(--ring); }
+
+.sequencer .cords .in-hand {
+	fill: none;
+	stroke: var(--ring);
+	stroke-width: max(3px, calc(var(--cell) * 0.1));
+	stroke-linecap: round;
+}
+
+/* How many cords share one jack, beside its plug. */
+.sequencer .cords .count {
+	font-family: var(--face-figures);
+	font-size: var(--type-note);
+	fill: var(--ink);
+	text-anchor: middle;
+	dominant-baseline: middle;
+	paint-order: stroke;
+	stroke: var(--panel);
+	stroke-width: 3px;
+}
+
 .sequencer .cords .normal path {
 	fill: none;
 	stroke: var(--ink-quiet);
@@ -4796,6 +4834,47 @@ html, body {
 	paint-order: stroke;
 	stroke: var(--panel);
 	stroke-width: 3px;
+}
+
+/* **What letting go will do**, above the finger, in the top layer (see `raisedTag`):
+   the browser's own popover rule centres one in the viewport, and is undone here so
+   the gesture's `left` and `top` place it. Read, never pressed. */
+.cord-tag {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	z-index: 900;
+	transform: translate(-50%, calc(-100% - var(--row)));
+	padding: 0.3rem 0.6rem;
+	border-radius: 6px;
+	border: 1px solid var(--edge);
+	background: var(--ground);
+	color: var(--ink);
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* A jack's sheet: a row a cord, its far end first and what can be done with it after. */
+.sheet .cord-row {
+	align-items: center;
+	padding: 0.2rem 0.6rem;
+}
+
+.sheet .cord-row .far {
+	margin-right: auto;
+	color: var(--ink);
+	font-size: var(--type-chrome);
+}
+
+.sheet .cord-row .far i {
+	font-style: normal;
+	font-family: var(--face-figures);
+	color: var(--ink-quiet);
 }
 
 .sequencer.waiting {

@@ -5,6 +5,7 @@ only half of the system that had no tests, while the equivalent Python logic was
 covered and correct. Each test below is one of those bugs, or the shape of one.
 """
 
+import copy
 import re
 import time
 import types
@@ -12014,3 +12015,279 @@ def test_a_block_beside_or_below_a_case_keeps_its_lane (
 
 	assert lanes, "the case and the grid were not stacked, so nothing was measured"
 	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"the lane below the case was eaten: {lanes}"
+
+
+# --- Cords patched by hand, inside the case (#5210 step 4, #5217) -------------
+
+
+def _jack (side: str, address: str, part: str = LEAD) -> str:
+	"""One jack's hex nut, the target a cord is taken from and dropped on."""
+
+	return f'{part} .jack[data-side="{side}"][data-jack="{address}"] .hex'
+
+
+def _middle (panel: typing.Any, selector: str) -> tuple[float, float]:
+	"""The middle of what *selector* names, on the glass."""
+
+	box = panel.locator(selector).bounding_box()
+
+	return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+
+def _carry (panel: typing.Any, start: str, to: tuple[float, float], hold: int = 0) -> None:
+	"""Press *start*, hold it still for *hold* ms, and carry what it gives up to *to*, held there."""
+
+	x, y = _middle(panel, start)
+
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+
+	if hold:
+		panel.wait_for_timeout(hold)
+
+	panel.mouse.move(to[0], to[1], steps=10)
+
+
+def _cords_sent (fake_app: conftest.FakeApp, since: int, count: int = 1) -> list[tuple[str, typing.Any]]:
+	"""Every cord the panel asked for after *since*, once it has stopped asking."""
+
+	frames = fake_app.settled(lambda one: one.get("path", "").startswith("lead/cords/"), since=since)
+
+	return [(one["path"], one["v"]) for one in frames]
+
+
+def test_a_cord_carried_from_an_output_to_an_input_is_patched (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 3's gesture from its commonest end: the inputs light, the tag names where
+	the cord would land, and letting go patches it at the whole of its signal (#5217)."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "960.stage1"), _middle(panel, _jack("in", "midi.gate")))
+
+	lit = panel.eval_on_selector_all(f"{LEAD} .jack.lit", "all => all.map((one) => one.dataset.side)")
+
+	assert lit and set(lit) == {"in"}, f"a cord from an output lit {lit}, not every input"
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("into midi · gate", timeout=5_000)
+	assert panel.locator(f'{LEAD} .jack.over[data-jack="midi.gate"]').count() == 1
+
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.stage1/midi.gate", 1)]
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_count(0, timeout=5_000)
+	assert panel.locator(f"{LEAD} .jack.lit").count() == 0
+
+
+def test_the_nearest_jack_within_a_row_takes_a_cord_and_nothing_further_does (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A jack is small and a finger hides it, so a drop near one lands on it; a drop far
+	from every jack makes nothing (#5217)."""
+
+	_the_case(panel)
+
+	box = panel.locator(_jack("in", "midi.gate")).bounding_box()
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "960.stage1"),
+	       (box["x"] + box["width"] * 0.85, box["y"] + box["height"] * 0.8))
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.stage1/midi.gate", 1)], \
+		"a drop beside a jack did not land on it"
+
+	knob = panel.locator(f"{_stage('lane_a', 4)} .knob").bounding_box()
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "960.stage1"), (knob["x"] + knob["width"] / 2, knob["y"] + knob["height"] / 2))
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("let go on a jack", timeout=5_000)
+	panel.mouse.up()
+
+	assert fake_app.settled(lambda one: one.get("path", "").startswith("lead/cords/"),
+	                        since=since, limit=0.6) == [], "a cord let go far from any jack was patched"
+
+
+def test_a_cord_dropped_on_an_input_that_has_one_joins_it_and_says_so_first (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 3: an input plays the sum of what reaches it, so a second cord joins the
+	first rather than replacing it, and the tag says how many there will be."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "960.stage1"), _middle(panel, _jack("in", "midi.trigger")))
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text(
+		"joins stage1 into trigger, 2 cords", timeout=5_000)
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.stage1/midi.trigger", 1)], \
+		"a joining cord took the first one out"
+
+
+def test_a_cord_drawn_from_an_empty_input_ends_at_an_output (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Either end may start a cord (#5217): from an input the outputs light instead."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("in", "midi.gate"), _middle(panel, _jack("out", "960.stage1")))
+
+	assert set(panel.eval_on_selector_all(f"{LEAD} .jack.lit", "all => all.map((one) => one.dataset.side)")) \
+		== {"out"}
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("from 960 · stage1", timeout=5_000)
+
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.stage1/midi.gate", 1)]
+
+
+def test_pressing_a_patched_input_takes_its_plug_to_move_it_or_pull_it_out (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A cord moved is one cord, not two: the old pair is pulled out at 0, which is how the
+	code's own cord is taken out, and the new pair keeps its amount (#5217)."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("in", "midi.pitch"), _middle(panel, _jack("in", "midi.gate")))
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("into midi · gate", timeout=5_000)
+
+	# **The one in the hand is not also drawn where it was.**
+	assert panel.locator(f'{LEAD} .cords .cord[data-cord="960.lane_a>midi.pitch"]').count() == 0
+
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.lane_a/midi.pitch", 0),
+	                                        ("lead/cords/960.lane_a/midi.gate", 0.5)]
+
+	knob = panel.locator(f"{_stage('lane_a', 4)} .knob").bounding_box()
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("in", "960.shift"), (knob["x"] + knob["width"] / 2, knob["y"] + knob["height"] / 2))
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("pull out", timeout=5_000)
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/clock.out/960.shift", 0)]
+
+
+def test_an_output_held_still_gives_up_its_newest_plug_and_one_dragged_at_once_draws_a_new_cord (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""One output feeding several inputs is the common case, so a drag from one draws a new
+	cord; held still first, it gives up its newest plug, VCV Rack's rule (#5217)."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "clock.out"), _middle(panel, _jack("out", "960.stage1")), hold=600)
+
+	assert panel.locator(f'{LEAD} .cords .cord[data-cord="clock.out>midi.trigger"]').count() == 0, \
+		"the held output's newest cord was drawn where it was as well as in the hand"
+	playwright_api.expect(panel.locator(".cord-tag")).to_have_text("from 960 · stage1", timeout=5_000)
+
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/clock.out/midi.trigger", 0),
+	                                        ("lead/cords/960.stage1/midi.trigger", 1.0)]
+
+	since = len(fake_app.sets)
+	_carry(panel, _jack("out", "clock.out"), _middle(panel, _jack("in", "midi.gate")))
+	panel.mouse.up()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/clock.out/midi.gate", 1)], \
+		"a drag from an output at once did not draw a new cord"
+
+
+def test_a_tap_on_a_jack_opens_its_sheet_on_release (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The way that always works (#5217): the jack, every cord on it with its far end and
+	amount, pull out, and back to the code where the glass holds the cord."""
+
+	_the_case(panel)
+
+	x, y = _middle(panel, _jack("out", "960.lane_a"))
+
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+	panel.wait_for_timeout(150)
+
+	assert panel.locator(".sheet").count() == 0, "a jack's sheet opened on the press"
+
+	panel.mouse.up()
+	panel.wait_for_selector(".sheet .cord-row", timeout=5_000)
+
+	assert panel.locator(".sheet header b").inner_text().strip().lower() == "960 · lane a"
+	assert panel.locator(".sheet .cord-row .far").inner_text().strip().lower() == "into midi · pitch ×0.5"
+	assert panel.locator(".sheet .cord-row .back").count() == 0, \
+		"a cord only the code patched offered to go back to the code"
+
+	since = len(fake_app.sets)
+	panel.locator(".sheet .cord-row button.danger").click()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.lane_a/midi.pitch", 0)]
+	playwright_api.expect(panel.locator(".sheet")).to_have_count(0, timeout=5_000)
+
+	# **Held now**, so the sheet offers it back to the code.
+	fake_app.confirm("lead/cords/960.lane_a/midi.gate", 1.0, by="panel")
+	panel.wait_for_selector(f'{LEAD} .cords .cord[data-cord="960.lane_a>midi.gate"]', timeout=5_000)
+	panel.locator(_jack("in", "midi.gate")).click()
+	panel.wait_for_selector(".sheet .cord-row .back", timeout=5_000)
+
+	since = len(fake_app.sets)
+	panel.locator(".sheet .cord-row .back").click()
+
+	assert _cords_sent(fake_app, since) == [("lead/cords/960.lane_a/midi.gate", None)]
+
+
+def test_stacked_plugs_show_how_many_cords_share_the_jack (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The clock feeds both the 960 and the notes, so its output shows one plug and a 2."""
+
+	_the_case(panel)
+
+	count = f'{LEAD} .cords .count[data-count="out:clock.out"]'
+	panel.wait_for_selector(count, timeout=5_000)
+
+	assert panel.locator(count).text_content() == "2"
+	assert panel.locator(f'{LEAD} .cords .count[data-count="in:midi.pitch"]').count() == 0
+
+
+def test_a_cord_the_glass_patched_is_a_request_until_a_build_plays_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The app takes it at once and the next build is when it sounds, so until then it is
+	drawn in the ring's colour, as a cable in flight is (#2046)."""
+
+	_the_case(panel)
+
+	fake_app.confirm("lead/cords/960.stage1/midi.gate", 1.0, by="panel")
+
+	cord = f'{LEAD} .cords .cord[data-cord="960.stage1>midi.gate"]'
+	panel.wait_for_selector(f"{cord}.asking", timeout=5_000)
+
+	played = fake_app.state["lead"]["played"]
+	fake_app.confirm("lead/played", {**played, "patch": [*played["patch"], ["960.stage1", "midi.gate", 1.0]]},
+	                 by="app")
+	playwright_api.expect(panel.locator(f"{cord}.asking")).to_have_count(0, timeout=5_000)
+	assert panel.locator(cord).count() == 1
+
+
+def test_every_other_case_dims_while_a_cord_is_in_the_hand (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A cord never leaves its own case, so only its case stays lit (#5217)."""
+
+	fake_app.state["lead2"] = copy.deepcopy(fake_app.state["lead"])
+	fake_app.redeclare({**conftest.CONTROLS, "lead2": {**conftest.CONTROLS["lead"], "pattern": "lead2",
+	                                                     "title": "Second"}},
+	                   pages=[{"id": "two", "title": "Two", "parts": ["lead", "lead2"]}])
+	panel.wait_for_selector('.part[data-part="lead2"] .sequencer .module', timeout=5_000)
+	_settled(panel)
+
+	_carry(panel, _jack("out", "960.stage1"), _middle(panel, _jack("in", "midi.gate")))
+
+	assert panel.locator('.part[data-part="lead2"] .sequencer.dimmed').count() == 1, \
+		"the other case did not dim while a cord was in the hand"
+	assert panel.locator(f"{LEAD} .sequencer.dimmed").count() == 0
+	assert panel.locator('.part[data-part="lead2"] .jack.lit').count() == 0, "a jack lit in another case"
+
+	panel.mouse.up()
+	playwright_api.expect(panel.locator(".sequencer.dimmed")).to_have_count(0, timeout=5_000)
