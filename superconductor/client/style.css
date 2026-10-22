@@ -3324,7 +3324,9 @@ html, body {
 
 /* A number is a bar you push rather than a knob you turn: a rotary gesture on
    glass has no detent and no purchase, and a bar says its value by its length
-   as well as by its figure. */
+   as well as by its figure. **A sequencer's case is the one exception** (Simon,
+   2026-10-22, #5218): every number in it is a knob, as on the hardware, and it
+   turns by a drag up and down, never in a circle (`.sequencer .knob`). */
 .grid.params .dial,
 .step-controls .dial {
 	position: relative;
@@ -4502,33 +4504,300 @@ html, body {
  * clear of the rules that give every other button on a block its height and type. */
 /* --- A sequencer's case (#5210) ------------------------------------------
  *
- * Its modules side by side, as in a cabinet, each headed with its name as a
- * settings section is (#5218).  The knobs, the jacks and the cords come with the
- * next builds; this is the case they go into. */
+ * Its modules side by side, as in a cabinet (#5218): each a grid on the lattice,
+ * so a stage of one stands on the same columns as every other block's steps.
+ * Every number in it is a knob, a choice per stage is a cell that opens a list,
+ * and the cords run across the modules' faces in the case's own layer. */
 .sequencer {
+	position: relative;
 	display: flex;
+	align-items: flex-start;
 	gap: var(--gap);
 }
 
-.sequencer .module {
+/* A cell a row, as a grid's is: nothing in a module is taller than a control, and a
+   row that grew would put the module off the lattice the fit counted. */
+.sequencer .module.grid {
 	flex: none;
-	min-width: calc(var(--cell) * 4 + var(--gap) * 3);
-	padding: var(--pad);
-	border-right: 2px solid var(--edge);
+	position: relative;
+	grid-auto-rows: var(--row);
 }
 
-.sequencer .module:last-child { border-right: none; }
+/* A rule in the gap between two modules, as a cabinet's modules are each their own
+   panel. Drawn in the gap so it takes nothing from the lattice. */
+.sequencer .module + .module::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--gap) / -2 - 1px);
+	width: 2px;
+	background: var(--edge);
+}
 
 .sequencer .module h3 {
 	margin: 0;
+	align-self: center;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
 	font-family: var(--face-panel);
 	font-size: var(--type-note);
+	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.12em;
 	color: var(--ink);
 }
 
-.sequencer .module p,
+/* The number above each stage: printed on the panel, read and never pressed. */
+.sequencer .stage-number {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-family: var(--face-figures);
+	font-size: var(--type-note);
+	color: var(--ink-quiet);
+}
+
+/* **The stage playing now, a whole column**, in the playhead's own tint, so a stage
+   reads as a grid's playing step does (#5218). Over the knobs, as the playhead is
+   over the cells, and never in a finger's way. */
+.sequencer .stage-light[hidden] { display: none; }
+
+.sequencer .stage-light {
+	z-index: 2;
+	pointer-events: none;
+	border-radius: max(3px, calc(var(--cell) * 0.16));
+	background: var(--playhead);
+	border-left: var(--mark-hair) solid var(--playhead-edge);
+}
+
+.sequencer .stage {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 0;
+}
+
+/* **A knob, the panel's first** (Simon, 2026-10-22). A row across, raised as every
+   control is, its pointer turning through the sweep a pot's does. It is turned by a
+   drag up and down, which is what the cursor says on a desk. */
+.sequencer .knob {
+	position: relative;
+	flex: none;
+	box-sizing: border-box;
+	width: var(--row);
+	height: var(--row);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	border: 1px solid var(--edge);
+	background: var(--panel);
+	touch-action: none;
+	cursor: ns-resize;
+}
+
+.sequencer .knob > i {
+	position: absolute;
+	top: 14%;
+	left: calc(50% - max(1px, calc(var(--row) * 0.035)));
+	width: max(2px, calc(var(--row) * 0.07));
+	height: 36%;
+	border-radius: 1px;
+	background: var(--ink);
+	transform-origin: 50% 100%;
+}
+
+.sequencer .knob.held { border-color: var(--ring); }
+
+/* What a knob is at while it is held: exactly, where the pointer says roughly. */
+.sequencer .knob > .reading {
+	position: absolute;
+	bottom: calc(100% + var(--gap));
+	left: 50%;
+	z-index: 3;
+	transform: translateX(-50%);
+	padding: 0.15rem 0.35rem;
+	border-radius: 4px;
+	background: var(--sunk);
+	color: var(--readout);
+	font-family: var(--face-figures);
+	font-size: var(--type-body);
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* A module's own number, beside its knob, said all the time. */
+.sequencer .setting > .reading {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	font-family: var(--face-figures);
+	font-size: var(--type-body);
+	color: var(--ink);
+}
+
+/* A module's own choice keeps its options on one row, a cell each where there are
+   three, because a row that wrapped would draw over the row above it. */
+.sequencer .setting .choices {
+	flex-wrap: nowrap;
+	gap: var(--gap);
+	width: 100%;
+}
+
+.sequencer .setting .choices button {
+	flex: 1;
+	padding: 0;
+}
+
+.sequencer .stage > .menu {
+	display: flex;
+	width: 100%;
+}
+
+/* A choice per stage, one cell showing what it plays. The words are the app's and
+   a cell is narrow, so it gives up the lettering's air before it gives up a letter. */
+.sequencer .choice-cell {
+	position: relative;
+	width: 100%;
+	padding: 0 2px;
+	overflow: hidden;
+	white-space: nowrap;
+	letter-spacing: 0.02em;
+	color: var(--ink);
+}
+
+/* A switch per stage: a pad, lit while on, as a step grid's cell is. */
+.sequencer .stage-switch {
+	position: relative;
+	width: 100%;
+	padding: 0;
+}
+
+.sequencer .stage-switch.on {
+	background: var(--on);
+	border-color: var(--on-edge);
+}
+
+/* The ring is the request and the fade the refusal, as on a cell. */
+.sequencer .knob.pending::after,
+.sequencer .choice-cell.pending::after,
+.sequencer .stage-switch.pending::after {
+	content: "";
+	position: absolute;
+	inset: max(2px, calc(var(--cell) * 0.11));
+	border-radius: inherit;
+	border: max(2px, calc(var(--cell) * 0.07)) solid var(--ring);
+	pointer-events: none;
+}
+
+.sequencer .knob.failed::before,
+.sequencer .choice-cell.failed::before,
+.sequencer .stage-switch.failed::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--bad);
+	animation: fade-out 0.9s ease-out forwards;
+	pointer-events: none;
+}
+
+/* **A jack: a hexagon, its name beside it** (#5217), so a patch point inside a case
+   never reads as the page's round socket. An output sits on a filled plate and an
+   input does not, which says which end of a cord each is. Read, not pressed, until
+   cords can be patched by hand, so it carries no target's surface. */
+.sequencer .jack {
+	display: grid;
+	grid-template-columns: var(--cell) minmax(0, 1fr);
+	align-items: center;
+	gap: var(--gap);
+	min-width: 0;
+	color: var(--ink-quiet);
+	font-family: var(--face-panel);
+	font-size: var(--type-note);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+}
+
+.sequencer .jack .words {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sequencer .jack .plate {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: var(--row);
+	border-radius: 6px;
+}
+
+.sequencer .jack.out .plate { background: var(--edge-strong); }
+
+.sequencer .jack .hex {
+	width: 62%;
+	height: 62%;
+}
+
+.sequencer .jack .hex polygon {
+	fill: var(--panel);
+	stroke: var(--edge-strong);
+	stroke-width: 1.2;
+}
+
+.sequencer .jack .hex circle {
+	fill: var(--ground);
+	stroke: var(--edge-strong);
+	stroke-width: 1;
+}
+
+/* **The cords, in the case's own layer**, over the modules' faces and never in a
+   finger's way. A cord is drawn in ink until its own colour is measured across the
+   twelve themes (#5210's step 5); a normal is drawn as the page draws a hard-wired
+   connection, thin and quiet, because it is the module's own wire. */
+.sequencer .cords {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+	pointer-events: none;
+	z-index: 4;
+}
+
+.sequencer .cords .cord path {
+	fill: none;
+	stroke: var(--ink);
+	stroke-width: max(2px, calc(var(--cell) * 0.07));
+	stroke-linecap: round;
+}
+
+.sequencer .cords .cord .plug { fill: var(--ink); }
+
+.sequencer .cords .normal path {
+	fill: none;
+	stroke: var(--ink-quiet);
+	stroke-width: var(--mark-hair);
+	stroke-dasharray: 4 3;
+}
+
+.sequencer .cords .amount {
+	font-family: var(--face-figures);
+	font-size: var(--type-note);
+	fill: var(--ink);
+	text-anchor: middle;
+	dominant-baseline: middle;
+	paint-order: stroke;
+	stroke: var(--panel);
+	stroke-width: 3px;
+}
+
 .sequencer.waiting {
 	font-family: var(--face-panel);
 	font-size: var(--type-chrome-quiet);

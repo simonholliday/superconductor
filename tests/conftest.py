@@ -52,6 +52,47 @@ def pytest_configure (config: pytest.Config) -> None:
 		config.option.browser = ["firefox"]
 
 
+SEQUENCER_MODELS: dict[str, typing.Any] = {
+	"clock": {"name": "clock", "label": "clock", "stages": 0, "plays": False,
+	          "summary": "The pattern's own steps as a clock: the composition's clock, divided.",
+	          "controls": [{"name": "every", "label": "every", "unit": "steps", "kind": "number",
+	                        "min": 1, "max": 16, "step": 1, "required": False, "default": 1}],
+	          "inputs": [], "outputs": [{"name": "out", "kind": "trigger"}],
+	          "normals": [], "default_patch": []},
+	"moog_960": {"name": "moog_960", "label": "Moog 960", "stages": 8, "plays": False,
+	             "controls": [
+	                 {"name": "lane_a", "label": "lane a", "kind": "lane", "count": 8,
+	                  "of": {"kind": "number", "min": 0.0, "max": 1.0}, "required": False,
+	                  "default": [0.0] * 8},
+	                 {"name": "mode", "label": "mode", "kind": "lane", "count": 8,
+	                  "of": {"kind": "choice", "options": [{"value": "normal", "label": "normal"},
+	                                                       {"value": "skip", "label": "skip"},
+	                                                       {"value": "stop", "label": "stop"}]},
+	                  "required": False, "default": ["normal"] * 8},
+	                 {"name": "range_a", "label": "range a", "kind": "choice", "required": False,
+	                  "default": "x4", "options": [{"value": "x1", "label": "x1"},
+	                                               {"value": "x2", "label": "x2"},
+	                                               {"value": "x4", "label": "x4"}]},
+	                 {"name": "timing", "label": "timing", "kind": "switch", "required": False,
+	                  "default": False},
+	                 {"name": "longest", "label": "longest", "unit": "steps", "kind": "number",
+	                  "min": 1, "max": 16, "step": 1, "required": False, "default": 8}],
+	             "inputs": [{"name": "shift", "kind": "trigger"}, {"name": "timing", "kind": "cv"}],
+	             "outputs": [{"name": "lane_a", "kind": "cv"}, {"name": "stage1", "kind": "gate"}],
+	             "normals": [{"from": "lane_a", "to": "timing", "when": "timing"}],
+	             "default_patch": []},
+	"midi_out": {"name": "midi_out", "label": "notes", "stages": 0, "plays": True,
+	             "controls": [{"name": "lowest", "label": "lowest", "kind": "pitch", "required": False,
+	                           "default": 36},
+	                          {"name": "shortest", "label": "shortest", "unit": "beats", "kind": "number",
+	                           "min": 0.0625, "max": 1.0, "step": 0.0625, "required": False,
+	                           "default": 0.0625}],
+	             "inputs": [{"name": "trigger", "kind": "trigger"}, {"name": "pitch", "kind": "cv"}],
+	             "outputs": [], "normals": [], "default_patch": []},
+}
+"""Three models a sequencer holds, in the shapes the sequencers plugin describes them at c614221."""
+
+
 CONTROLS: dict[str, typing.Any] = {
 	"grid": {"type": "step_grid", "rows": ["kick", "snare"], "steps": 8, "beats": 2, "title": "Drums",
 	         "velocity_range": [1, 127], "default_velocity": 100,
@@ -288,6 +329,14 @@ CONTROLS: dict[str, typing.Any] = {
 
 	"transport": {"type": "transport", "fields": ["paused", "bpm"], "tempo_range": [40.0, 240.0]},
 
+	# **A pattern's sequencer** (#5210, #5218): a clock, a Moog 960 and a notes-out, in the
+	# shapes the sequencers plugin describes them at c614221, the 960 trimmed to two lanes
+	# and a few jacks.  A lane of numbers, a lane of choices, a choice, a switch, a number,
+	# a pitch, a normal and two cords: one of each thing the case draws.
+	"lead": {"type": "sequencer", "pattern": "lead", "title": "Lead",
+	         "models": SEQUENCER_MODELS, "cables": {"rule": "any output may feed any input",
+	                                                "kinds": ["trigger", "gate", "cv"]}},
+
 	# **Two grids with variants, and each draws the strip the other cannot** (#2485,
 	# #2488).  Three rows hold three variants, so this one gets the column down its
 	# right-hand edge — at the exact boundary, where one row fewer would not.  Five
@@ -337,7 +386,9 @@ PAGES: list[dict[str, typing.Any]] = [
 	# page hid that for a month. A settings block goes wherever the pattern it
 	# configures goes, exactly as a stack does (#2211).
 	{"id": "bass", "title": "Bass", "parts": ["bass", "fine"]},
-	{"id": "moog", "title": "Moog", "parts": ["moog"]},
+	# **And the sequencer beside them** (#5210), because seven pages is one more than
+	# `PAGE_BUTTONS` (see above), and a case is wide enough to want a page of its own.
+	{"id": "moog", "title": "Moog", "parts": ["moog", "lead"]},
 	# **The note set goes here rather than on a page of its own**, because seven
 	# pages is one more than `PAGE_BUTTONS` (see above) — and because this is the
 	# page with a stack on it, which is the only thing a note set can feed.
@@ -368,6 +419,21 @@ STATE: dict[str, typing.Any] = {
 	                "6": {"length": 2, "velocity": 100}},
 	         "end": 4, "resync": False},
 	"moog": {"glide": False, "rate": 24, "shape": "lcr"},
+	# What the 960 played at its last build, and one stage the glass holds over the code:
+	# lane a's third stage, which the code writes as 0.3 and the glass turned to 0.75.
+	"lead": {"modules": [{"name": "clock", "model": "clock"}, {"name": "midi", "model": "midi_out"},
+	                     {"name": "960", "model": "moog_960"}],
+	         "played": {"modules": {
+	             "clock": {"model": "clock", "settings": {"every": 1}},
+	             "midi": {"model": "midi_out", "settings": {"lowest": 36, "shortest": 0.25}},
+	             "960": {"model": "moog_960", "settings": {
+	                 "lane_a": [0.0, 0.1, 0.3, 0.5, 0.0, 0.2, 0.9, 1.0],
+	                 "mode": ["normal", "normal", "skip", "normal", "normal", "normal", "stop", "normal"],
+	                 "range_a": "x4", "timing": True, "longest": 8}}},
+	             "patch": [["clock.out", "960.shift", 1.0], ["clock.out", "midi.trigger", 1.0],
+	                       ["960.lane_a", "midi.pitch", 0.5]]},
+	         "held": {"modules": {"960": {"settings": {"lane_a": {"2": 0.75}}}}},
+	         "taken_back": [], "refused": [], "enabled": True},
 	"rack": {"made": []},
 	"notes": {"chosen": ["C4", "D#4"], "enabled": True},
 	# The root, the fifth, and a seventh flattened an octave up, in D dorian: what the

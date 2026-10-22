@@ -3912,7 +3912,7 @@ class Sequencer (Control):
 			return self._keep_enabled(value)
 
 		if not rest or rest[0] not in superconductor.protocol.SEQUENCER_SETS:
-			raise Refused("a sequencer is set at control/settings/… or control/cords/…, "
+			raise Refused("a sequencer is set at control/settings/…, control/cords/… or control/held, "
 			              "and the rest is its app's to report")
 
 		state = self._state or {}

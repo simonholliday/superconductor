@@ -2333,30 +2333,14 @@ function otherFormOnly (offered, params) {
 }
 
 
-function Setting ({ field, held, onSet }) {
-	const sliding = useRef(null);
-
-	/* **Two taps on a slider put it back to its default** (see `DOUBLE_TAP`), for
-	   a field that declares one. One surface rather than one per grip, because the
-	   ranged dial is two grips on a single one. */
-	const tapping = useDoubleTap();
-
-	const resets = (event) => tapping(
-		event, "default" in field && field.default !== null && field.default !== undefined);
-
-	/* **What this control goes back to**, which for a range is two ends on one
-	   number: a generator names a scalar default and both halves widen it the same
-	   way (contract 1.39.0). A default that is already a pair is used as it is. */
-	const goesBackTo = () => (field.kind !== "range" ? field.default
-		: Array.isArray(field.default) ? [field.default[0], field.default[1]]
-		: [field.default, field.default]);
-
-	/* Asked for whatever this parameter turns out to be, because a hook must
-	   be: only a long choice opens a menu, and the shape is not known here
-	   until after the hooks have run. */
+/* A menu hanging from a trigger: whether it is open, where, and how it is drawn.
+ *
+ * **Shared, because a second control needed it** (#5218): a sequencer's choice per
+ * stage is one cell that opens a list, and the list is this one. It lived inside
+ * `Setting`, where every long choice and every `choices` opens it. */
+function useMenu () {
 	const [open, setOpen] = useState(false);
 	const [where, setWhere] = useState(null);
-	const [sent, setSent] = useState(null);
 	const trigger = useRef(null);
 
 	/* A menu is placed against the viewport rather than against the button it
@@ -2427,6 +2411,33 @@ function Setting ({ field, held, onSet }) {
 			: { bottom: `${where.bottom}px` }),
 		...(onGlass || {}),
 	});
+
+	return { open, setOpen, where, trigger, show, raised, menuStyle };
+}
+
+function Setting ({ field, held, onSet }) {
+	const sliding = useRef(null);
+
+	/* **Two taps on a slider put it back to its default** (see `DOUBLE_TAP`), for
+	   a field that declares one. One surface rather than one per grip, because the
+	   ranged dial is two grips on a single one. */
+	const tapping = useDoubleTap();
+
+	const resets = (event) => tapping(
+		event, "default" in field && field.default !== null && field.default !== undefined);
+
+	/* **What this control goes back to**, which for a range is two ends on one
+	   number: a generator names a scalar default and both halves widen it the same
+	   way (contract 1.39.0). A default that is already a pair is used as it is. */
+	const goesBackTo = () => (field.kind !== "range" ? field.default
+		: Array.isArray(field.default) ? [field.default[0], field.default[1]]
+		: [field.default, field.default]);
+
+	/* Asked for whatever this parameter turns out to be, because a hook must
+	   be: only a long choice opens a menu, and the shape is not known here
+	   until after the hooks have run. */
+	const { open, setOpen, where, trigger, show, raised, menuStyle } = useMenu();
+	const [sent, setSent] = useState(null);
 
 	const bounded = field.min !== undefined && field.max !== undefined;
 
@@ -3240,9 +3251,15 @@ function Degrees ({ octaves, steps, chosen, keyWords, scale, onSet }) {
 /* A pattern's sequencer: one case holding every module, in signal order (#5210).
  *
  * **Simon's designs of 2026-10-22** (#5217, #5218): the modules stand side by side as
- * in a cabinet, and a cord runs only between jacks inside the case.  This is the
- * case and its modules by name; the knobs, the choice cells, the playhead and the
- * cords come with the next builds.
+ * in a cabinet, every number in the case is a knob, a choice per stage is a cell that
+ * opens a list, and a cord runs only between jacks inside the case. The stage each
+ * module is on is lit from the app's account of every step, and two taps on a knob
+ * hand its value back to the code.
+ *
+ * **What the app has not said yet is drawn as its stand-in** (#5218, decision 5): a
+ * module with no front panel lists its controls, then its inputs, then its outputs, as
+ * declared; a jack's name is its address tidied; a cord's amount is the code's, read
+ * and never offered. Patching by hand is #5217's gesture, and the next build.
  *
  * **Signal order is the app's order with the notes-out moved to the end.**  The app
  * puts its own clock first, and a model with no outputs plays, so it is where the
@@ -3253,27 +3270,715 @@ function playsLast (modules, models) {
 	return [...modules.filter((one) => !plays(one)), ...modules.filter(plays)];
 }
 
-function SequencerCase ({ control, held }) {
-	const models = control.models || {};
-	const modules = playsLast(held.modules || [], models);
+const LANE_LABEL_CELLS = 2;
+/* The words beside a lane of stages. Two cells where a grid's row takes three,
+   because a case holds several modules side by side and a lane's name is short. */
+const SLOT_CELLS = 5;
+/* One of a module's own controls, a row across: its name in two cells and the
+   control in three, which holds a knob and its reading, a rocker, or three options. */
+const JACK_CELLS = 2;
+/* One jack and its name beside it. */
 
-	/* Before the sequencer's first build there is nothing to say what it holds,
-	   and that build declares again. */
-	if (!modules.length) {
+/* Where everything in one module goes, in lattice cells, from its model alone.
+ *
+ * **Counted, never measured**, as every block is: the fit solves for a cell size from
+ * these numbers before anything is drawn, so a row they did not know about is a row
+ * that overflows the case. Row 1 is the module's name; then its stages, a row of
+ * numbers and a row per lane; then its own controls, two to a row where the stages
+ * leave room; then its inputs; then its outputs. */
+function moduleLayout (model) {
+	const controls = (model.controls || []).filter((one) => one && typeof one === "object");
+	const lanes = controls.filter((one) => one.kind === "lane");
+	const singles = controls.filter((one) => one.kind !== "lane");
+
+	/* **The columns come from the lanes** (#5218), never from a jack's name: on this
+	   version a stage's jacks carry no stage of their own, so they are ordinary jacks. */
+	const stages = lanes.length ? Math.max(1, ...lanes.map((one) => Number(one.count) || 0)) : 0;
+	const cols = Math.max(SLOT_CELLS, stages ? LANE_LABEL_CELLS + stages : 0);
+
+	let row = 2;
+
+	const numbers = row;
+	const laid = lanes.map((lane, index) => ({ lane, row: numbers + 1 + index }));
+
+	if (lanes.length) row += 1 + lanes.length;
+
+	const flow = (list, across, width) => {
+		const placed = list.map((one, index) => ({
+			one, row: row + Math.floor(index / across), col: 1 + (index % across) * width }));
+
+		row += Math.ceil(list.length / across);
+
+		return placed;
+	};
+
+	const slots = Math.max(1, Math.floor(cols / SLOT_CELLS));
+	const jacks = Math.max(1, Math.floor(cols / JACK_CELLS));
+
+	const placedSingles = flow(singles, slots, SLOT_CELLS);
+	const inputs = flow((model.inputs || []).filter((one) => one && one.name), jacks, JACK_CELLS);
+	const outputs = flow((model.outputs || []).filter((one) => one && one.name), jacks, JACK_CELLS);
+
+	return { cols, rows: row - 1, stages, numbers, lanes: laid, singles: placedSingles, inputs, outputs };
+}
+
+/* The whole case: its modules in signal order, and how many cells it takes each way.
+ *
+ * **The modules stand edge to edge on the lattice**, a gap between each, so the case is
+ * exactly as wide as its modules' cells and every stage of one sits on the lattice with
+ * every other block's steps. */
+function caseShape (models, modules) {
+	const laid = playsLast(modules, models).map((one) => ({
+		...one, model: models[one.model] || {}, layout: moduleLayout(models[one.model] || {}) }));
+
+	return {
+		modules: laid,
+		cols: laid.reduce((sum, one) => sum + one.layout.cols, 0),
+		rows: Math.max(1, ...laid.map((one) => one.layout.rows)),
+	};
+}
+
+/* What the glass holds with one entry set or handed back, as a new document: the client's
+ * copy of `protocol.sequencer_hold`, so a `changed` frame moves a face at once rather than
+ * a build later. **The two must agree**, and an emptied mapping or list goes with its
+ * entry in both, because unset is an absent key (#2518). */
+function sequencerHeld (held, rest, value) {
+	const document = JSON.parse(JSON.stringify(held && typeof held === "object" ? held : {}));
+
+	if (rest[0] === "held") return {};
+
+	if (rest[0] === "settings") {
+		const [, module, name, stage] = rest;
+		const modules = document.modules || {};
+		const entry = modules[module] || {};
+		const settings = entry.settings || {};
+
+		if (stage !== undefined) {
+			const lane = settings[name] && typeof settings[name] === "object" ? settings[name] : {};
+
+			if (value === null) delete lane[stage];
+			else lane[stage] = value;
+
+			if (Object.keys(lane).length) settings[name] = lane;
+			else delete settings[name];
+
+		} else if (value === null) {
+			delete settings[name];
+
+		} else {
+			settings[name] = value;
+		}
+
+		if (Object.keys(settings).length) entry.settings = settings;
+		else delete entry.settings;
+
+		if (Object.keys(entry).length) modules[module] = entry;
+		else delete modules[module];
+
+		if (Object.keys(modules).length) document.modules = modules;
+		else delete document.modules;
+
+		return document;
+	}
+
+	const [, from, to] = rest;
+	const patch = [];
+	let placed = false;
+
+	for (const cord of document.patch || []) {
+		if (Array.isArray(cord) && cord[0] === from && cord[1] === to) {
+			if (value !== null && !placed) {
+				patch.push([from, to, value]);
+				placed = true;
+			}
+
+			continue;
+		}
+
+		patch.push(cord);
+	}
+
+	if (value !== null && !placed) patch.push([from, to, value]);
+
+	if (patch.length) document.patch = patch;
+	else delete document.patch;
+
+	return document;
+}
+
+/* How many entries the glass holds over the code: a setting, a stage or a cord each. */
+function heldCount (held) {
+	let count = ((held && held.patch) || []).length;
+
+	for (const entry of Object.values((held && held.modules) || {})) {
+		for (const value of Object.values(entry.settings || {})) {
+			count += value && typeof value === "object" ? Object.keys(value).length : 1;
+		}
+	}
+
+	return count;
+}
+
+/* What the app said it took back or refused, in a sentence (#5218).
+ *
+ * **No mark says which values are the glass's** (Simon, 2026-10-22, decision 2), so a
+ * knob the code has just moved would move with nothing on the glass saying why. These
+ * are the words that say it, passing like a refusal's, from the newest notice in the
+ * app's list: `taken_back` when the file changed something the glass held, `refused`
+ * when the sequencer could not take what the glass set, in the app's own reason. */
+function sequencerNotice (declared, field, notices) {
+	const newest = Array.isArray(notices) ? notices[0] : null;
+
+	if (!newest || typeof newest !== "object") return null;
+
+	const entries = newest.entries || {};
+	const models = (declared && declared.models) || {};
+	const named = [];
+
+	const labelOf = (module, name) => {
+		for (const model of Object.values(models)) {
+			const control = (model.controls || []).find((one) => one.name === name);
+
+			if (control) return control.label || name.replace(/_/g, " ");
+		}
+
+		return name.replace(/_/g, " ");
+	};
+
+	for (const [module, entry] of Object.entries(entries.modules || {})) {
+		for (const [name, value] of Object.entries((entry && entry.settings) || {})) {
+			if (value && typeof value === "object") {
+				for (const stage of Object.keys(value)) {
+					named.push(`${module} ${labelOf(module, name)}, stage ${Number(stage) + 1}`);
+				}
+			} else {
+				named.push(`${module} ${labelOf(module, name)}`);
+			}
+		}
+	}
+
+	for (const cord of entries.patch || []) {
+		if (Array.isArray(cord)) named.push(`the cord from ${cord[0]} to ${cord[1]}`);
+	}
+
+	const what = named.join(" and ") || "a setting";
+
+	return field === "taken_back"
+		? `the code changed ${what}`
+		: `${what} was refused: ${newest.reason || "the sequencer could not take it"}`;
+}
+
+const KNOB_TRAVEL = 6;
+/* How far a finger moves to turn a knob from one end to the other, in cells.
+ *
+ * **A share of the knob's range per cell**, so a knob turns the same way at every size
+ * a person chose, and six is the width of a settings slider: the same hand movement
+ * crosses either. */
+const KNOB_SWEEP = 270;
+/* The degrees a knob's pointer turns through end to end, as a hardware pot's does. */
+
+/* A knob: every number in a sequencer's case (Simon, 2026-10-22, #5218 decision 1).
+ *
+ * **Turned by a vertical drag, up for more, from wherever the press began**, never in
+ * a circle, which works badly with one finger, and never jumping to where the finger
+ * landed, which would move the music on the press. **A cell across at least**, because
+ * it is a target (#2107), and its value shown while it is held, since a pointer at an
+ * angle says roughly and the reading says exactly.
+ *
+ * **Two taps hand it back to the code** (decision 3): the glass's entry goes, and the
+ * value the composition writes plays again, so a later edit to the file moves it. Only
+ * where the glass holds an entry, since otherwise there is nothing to hand back.
+ *
+ * The face is the app's, as every face is: the pointer follows what the app confirmed,
+ * and a press that is asking wears the ring until it does (#2046). */
+function Knob ({ field, value, has, title, shows, pending, failed, onSet }) {
+	const turning = useRef(null);
+	const [held, setHeld] = useState(false);
+	const tapping = useDoubleTap();
+
+	const low = typeof field.min === "number" ? field.min : 0;
+	const high = typeof field.max === "number" ? field.max : 127;
+	const share = typeof value === "number" && high > low
+		? Math.min(1, Math.max(0, (value - low) / (high - low))) : 0;
+
+	const turn = (event) => {
+		const taken = turning.current;
+
+		if (!taken || taken.pointer !== event.pointerId) return;
+
+		const step = stepOf(field);
+		const moved = (taken.y - event.clientY) / taken.travel;
+		const wanted = tidy(Math.min(high, Math.max(low,
+			Math.round((taken.from + moved * (high - low)) / step) * step)));
+
+		if (wanted === taken.sent) return;
+
+		taken.sent = wanted;
+		onSet(wanted);
+	};
+
+	const letGo = () => {
+		turning.current = null;
+		setHeld(false);
+	};
+
+	return html`
+		<div
+			class=${["knob", held ? "held" : "", pending ? "pending" : "", failed ? "failed" : ""]
+				.filter(Boolean).join(" ")}
+			role="slider"
+			aria-label=${title}
+			aria-valuemin=${low}
+			aria-valuemax=${high}
+			aria-valuenow=${typeof value === "number" ? value : ""}
+			title=${title}
+			onPointerDown=${(event) => {
+				event.preventDefault();
+
+				if (tapping(event, has)) {
+					letGo();
+					onSet(null);
+					return;
+				}
+
+				event.currentTarget.setPointerCapture(event.pointerId);
+
+				turning.current = {
+					pointer: event.pointerId,
+					y: event.clientY,
+					from: typeof value === "number" ? value : low,
+					sent: value,
+					travel: Math.max(1, event.currentTarget.getBoundingClientRect().height * KNOB_TRAVEL),
+				};
+
+				setHeld(true);
+			}}
+			onPointerMove=${turn}
+			onPointerUp=${letGo}
+			onPointerCancel=${letGo}
+		>
+			<i style=${{ transform: `rotate(${(share - 0.5) * KNOB_SWEEP}deg)` }}></i>
+			${held && shows && html`<span class="reading">${shows(value)}</span>`}
+		</div>`;
+}
+
+/* A number as a knob says it: rounded to as many places as the field's own step has, at
+   most four, with no zeros after the last that counts, and with its unit (#2435). */
+function knobReading (field) {
+	const places = Math.min(4, (String(tidy(stepOf(field))).split(".")[1] || "").length);
+
+	return (value) => (typeof value === "number"
+		? `${tidy(Number(value.toFixed(places)))}${field.unit ? ` ${field.unit}` : ""}` : "");
+}
+
+/* One stage of a lane of choices: a cell showing what it plays, opening the list on
+ * release (#5194, #5218).
+ *
+ * **On release, because it opens a list** (#2215): a list opened on the press is under
+ * the finger when the tap ends. **Handing back is in the list**, where the glass holds
+ * one, because a second tap on this cell closes what the first opened. */
+function ChoiceCell ({ options, value, has, title, pending, failed, onSet }) {
+	const { open, setOpen, where, trigger, show, raised, menuStyle } = useMenu();
+	const chosen = options.find((one) => one.value === value);
+
+	return html`
+		<div class="menu">
+			<button
+				ref=${trigger}
+				type="button"
+				class=${["choice-cell", open ? "open" : "", pending ? "pending" : "", failed ? "failed" : ""]
+					.filter(Boolean).join(" ")}
+				title=${title}
+				onClick=${(event) => {
+					event.preventDefault();
+					open ? setOpen(false) : show();
+				}}
+			>${chosen ? chosen.label || chosen.value : ""}</button>
+
+			${open && where && html`
+				<div role="group" class="options" popover="manual" ref=${raised} style=${menuStyle()}>
+					${options.map((option) => html`
+						<button
+							key=${option.value}
+							class=${option.value === value ? "here" : ""}
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onSet(option.value);
+								setOpen(false);
+							}}
+						>${option.label || option.value}</button>`)}
+					${has && html`
+						<button
+							class="back"
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								onSet(null);
+								setOpen(false);
+							}}
+						>back to the code</button>`}
+				</div>`}
+		</div>`;
+}
+
+const HEX = Array.from({ length: 6 }, (_, side) => {
+	const angle = Math.PI / 6 + (side * Math.PI) / 3;
+
+	return `${(8 * Math.cos(angle)).toFixed(3)},${(8 * Math.sin(angle)).toFixed(3)}`;
+}).join(" ");
+/* A jack's face: a hexagon, as a screwed-in jack's nut is (Simon, 2026-10-22, #5217),
+   so a patch point inside a case never reads as the page's round socket. */
+
+/* One jack: a patch point on a module, with its name beside it (#5217).
+ *
+ * **An output sits on a filled plate** and an input does not, which says which end of
+ * a cord each one is without a word. **Read, not pressed, in this build**: a jack is a
+ * mark until cords can be patched by hand, so it carries no target's surface. */
+function Jack ({ module, jack, side, style }) {
+	const words = jack.label || jack.name.replace(/_/g, " ");
+
+	return html`
+		<span
+			class=${`jack ${side}`}
+			data-jack=${`${module}.${jack.name}`}
+			data-side=${side}
+			data-kind=${jack.kind || ""}
+			title=${`${side === "out" ? "output" : "input"} ${words}${jack.kind ? `, ${jack.kind}` : ""}`}
+			style=${style}
+		>
+			<span class="plate"><svg class="hex" viewBox="-10 -10 20 20" aria-hidden="true">
+				<polygon points=${HEX} /><circle r="3.2" /></svg></span>
+			${labelText(words)}
+		</span>`;
+}
+
+/* Where the stage each cursor is on is lit, a whole column (#5218).
+ *
+ * **From the app's account of every step** (`playing`, #5199), which arrives as each
+ * cycle is built, before it plays: so the newest report whose cycle has begun is the
+ * one sounding, and a new one waits until the beat reaches its start. The step inside
+ * it is arithmetic on the cycle's start and its step's length, and that step's stage is
+ * the app's to say. A stage of null, before the first or on a stopped sequencer, lights
+ * nothing.
+ *
+ * **Moved at a step's edge and nowhere else**, by a column on the lattice, from an
+ * animation frame that writes only when the stage changes: the case is never drawn
+ * again to move it, which is what #2875 measured a page paying for. */
+function StageLights ({ module, reports, anchor, paused, first, top, bottom }) {
+	const lights = useRef({});
+	const seen = useRef(reports);
+
+	useEffect(() => { seen.current = reports; }, [reports]);
+
+	const beatNow = useBeatClock(anchor, paused);
+
+	/* Which cursors to draw, from the newest report: `stage` alone on this version, and a
+	   model with two (the 1601's) lights two columns once the app says so. */
+	const newest = (reports || [])[(reports || []).length - 1];
+	const cursors = Object.keys(((((newest || {}).modules || {})[module]) || {}).positions || {});
+
+	useEffect(() => {
+		let frame;
+
+		const move = () => {
+			const beat = beatNow();
+			const begun = (seen.current || []).filter((one) => beat !== null
+				&& one.cycle.start_beat <= beat + 1e-6);
+			const report = begun[begun.length - 1];
+
+			for (const [cursor, light] of Object.entries(lights.current)) {
+				if (!light) continue;
+
+				let stage = null;
+
+				if (report && report.cycle.step_beats > 0) {
+					const step = Math.floor((beat - report.cycle.start_beat) / report.cycle.step_beats + 1e-9);
+					const positions = ((((report.modules || {})[module]) || {}).positions || {})[cursor];
+
+					if (Array.isArray(positions) && step >= 0 && step < positions.length) stage = positions[step];
+				}
+
+				const now = typeof stage === "number" ? String(stage) : "";
+
+				if (light.dataset.stage === now) continue;
+
+				light.dataset.stage = now;
+				light.hidden = now === "";
+
+				if (now) light.style.gridColumn = `${first + stage}`;
+			}
+
+			frame = requestAnimationFrame(move);
+		};
+
+		move();
+		return () => cancelAnimationFrame(frame);
+	}, [module, first]);
+
+	return cursors.map((cursor) => html`
+		<div
+			key=${`light-${cursor}`}
+			class="stage-light"
+			data-cursor=${cursor}
+			hidden
+			ref=${(element) => { lights.current[cursor] = element; }}
+			style=${{ gridRow: `${top} / ${bottom + 1}` }}
+		></div>`);
+}
+
+/* One module of the case: its name, its stages, its own controls and its jacks.
+ *
+ * **The face is what plays, under whatever the glass holds**: the app's last build, and
+ * over it each entry the glass has set, which the app confirms at once and the next
+ * build plays. Nothing marks which is which (decision 2). */
+function Module ({ owner, one, played, overlay, reports, anchor, paused, pending, failed, onSet }) {
+	const { name: module, model, layout } = one;
+	const settings = ((played.modules || {})[module] || {}).settings || {};
+	const mine = ((overlay.modules || {})[module] || {}).settings || {};
+
+	const at = (row, col, span = 1) => ({ gridRow: `${row}`, gridColumn: `${col} / span ${span}` });
+	const path = (...parts) => [owner, "settings", module, ...parts].join("/");
+	const asking = (where) => ({ pending: pending.has(where), failed: failed.has(where) });
+
+	const valueOf = (name) => (name in mine ? mine[name] : settings[name]);
+	const laneHolds = (name, stage) => Boolean(mine[name] && typeof mine[name] === "object"
+		&& String(stage) in mine[name]);
+	const stageOf = (name, stage) => (laneHolds(name, stage)
+		? mine[name][String(stage)]
+		: (Array.isArray(settings[name]) ? settings[name][stage] : undefined));
+
+	const named = (field) => field.label || field.name.replace(/_/g, " ");
+	const first = LANE_LABEL_CELLS + 1;
+
+	const stageCell = (lane, stage, row) => {
+		const of = lane.of || {};
+		const where = path(lane.name, String(stage));
+		const value = stageOf(lane.name, stage);
+		const has = laneHolds(lane.name, stage);
+		const title = `${named(lane)}, stage ${stage + 1}`;
+		const set = (wanted) => onSet(where, wanted);
+
+		return html`
+			<div key=${`${lane.name}-${stage}`} class="stage" data-lane=${lane.name} data-stage=${stage}
+				style=${at(row, first + stage)}>
+				${of.kind === "choice"
+					? html`<${ChoiceCell} options=${of.options || []} value=${value} has=${has}
+						title=${title} ...${asking(where)} onSet=${set} />`
+					: of.kind === "switch"
+					? html`<${StageSwitch} on=${value === true} has=${has} title=${title}
+						...${asking(where)} onSet=${set} />`
+					: html`<${Knob} field=${of} value=${value} has=${has} title=${title}
+						shows=${knobReading(of)} ...${asking(where)} onSet=${set} />`}
+			</div>`;
+	};
+
+	const single = (field, row, col) => {
+		const where = path(field.name);
+		const value = valueOf(field.name);
+		const set = (wanted) => onSet(where, wanted);
+
+		/* A pitch is a note number, and the panel names no notes (#2144), so it is a knob
+		   over all of MIDI showing the number until the composition says what to call one. */
+		const knobbed = field.kind === "number" || field.kind === "pitch";
+		const turned = field.kind === "pitch" ? { ...field, min: 0, max: 127, step: 1 } : field;
+
+		return [
+			html`<div key=${`label-${field.name}`} class="row-label" style=${at(row, col, LANE_LABEL_CELLS)}>
+				${labelText(named(field))}</div>`,
+			html`
+				<div key=${field.name} class="setting" data-field=${field.name}
+					style=${at(row, col + LANE_LABEL_CELLS, SLOT_CELLS - LANE_LABEL_CELLS)}>
+					${knobbed
+						? html`
+							<${Knob} field=${turned} value=${value} has=${field.name in mine}
+								title=${named(field)} ...${asking(where)} onSet=${set} />
+							<span class="reading">${knobReading(turned)(value)}</span>`
+						: html`<${Setting} field=${field} held=${value} onSet=${set} />`}
+				</div>`,
+		];
+	};
+
+	return html`
+		${/* **A settings grid**, so a module's own controls are drawn exactly as an
+		     instrument's settings are, from the same rules. */ ""}
+		<section class="module grid params" data-module=${module}
+			style=${{ gridTemplateColumns: `repeat(${layout.cols}, var(--cell))` }}>
+			<h3 style=${at(1, 1, layout.cols)} title=${model.summary || ""}>${labelText(model.label || module)}</h3>
+
+			${layout.stages > 0 && html`
+				${Array.from({ length: layout.stages }, (_, stage) => html`
+					<span key=${`number-${stage}`} class="stage-number" style=${at(layout.numbers, first + stage)}
+					>${stage + 1}</span>`)}
+				<${StageLights} module=${module} reports=${reports} anchor=${anchor} paused=${paused}
+					first=${first} top=${layout.numbers}
+					bottom=${layout.numbers + layout.lanes.length} />
+				${layout.lanes.map(({ lane, row }) => [
+					html`<div key=${`label-${lane.name}`} class="row-label" style=${at(row, 1, LANE_LABEL_CELLS)}>
+						${labelText(named(lane))}</div>`,
+					...Array.from({ length: Number(lane.count) || 0 }, (_, stage) => stageCell(lane, stage, row)),
+				])}`}
+
+			${layout.singles.map(({ one: field, row, col }) => single(field, row, col))}
+
+			${layout.inputs.map(({ one: jack, row, col }) => html`
+				<${Jack} key=${`in-${jack.name}`} module=${module} jack=${jack} side="in"
+					style=${at(row, col, JACK_CELLS)} />`)}
+			${layout.outputs.map(({ one: jack, row, col }) => html`
+				<${Jack} key=${`out-${jack.name}`} module=${module} jack=${jack} side="out"
+					style=${at(row, col, JACK_CELLS)} />`)}
+		</section>`;
+}
+
+/* One stage of a lane of switches: a pad, lit while on, as a step grid's cell is.
+ * Played, so it acts on the press; two taps hand it back, as a knob's do. */
+function StageSwitch ({ on, has, title, pending, failed, onSet }) {
+	const tapping = useDoubleTap();
+
+	return html`
+		<button
+			type="button"
+			class=${["stage-switch", on ? "on" : "", pending ? "pending" : "", failed ? "failed" : ""]
+				.filter(Boolean).join(" ")}
+			aria-pressed=${on ? "true" : "false"}
+			title=${title}
+			onPointerDown=${(event) => {
+				event.preventDefault();
+				onSet(tapping(event, has) ? null : !on);
+			}}
+		></button>`;
+}
+
+/* The cords the code patched, and the normals that stand in where none is (#5217).
+ *
+ * **Drawn in the case's own layer and never outside it**, across the modules' faces, so a
+ * cord reads as belonging to this pattern; and never in the way of a finger, which goes
+ * through it to the knob beneath. **A normal is the wire a module makes for itself**
+ * inside its own panel, drawn as the page draws a hard-wired connection, and only while
+ * its switch is on and no cord is in its input, which is when the app plays it.
+ *
+ * **Measured from the jacks once they are drawn**, and again whenever the case changes
+ * size, because a jack's place is the lattice's and the lattice is the person's. */
+function Cords ({ box, cords, normals, cell }) {
+	const [lines, setLines] = useState([]);
+	const said = JSON.stringify([cords, normals]);
+
+	useLayoutEffect(() => {
+		const root = box.current;
+
+		if (!root) return undefined;
+
+		const measure = () => {
+			const seen = root.getBoundingClientRect();
+			const scale = root.offsetWidth ? seen.width / root.offsetWidth : 1;
+
+			const centre = (side, address) => {
+				const hex = [...root.querySelectorAll(`.jack[data-side="${side}"]`)]
+					.find((one) => one.dataset.jack === address);
+				const face = hex && hex.querySelector(".hex");
+
+				if (!face) return null;
+
+				const shape = face.getBoundingClientRect();
+
+				return {
+					x: (shape.left + shape.width / 2 - seen.left) / scale,
+					y: (shape.top + shape.height / 2 - seen.top) / scale,
+					r: shape.width / 2 / scale,
+				};
+			};
+
+			const drawn = [
+				...cords.map(([from, to, amount]) => ({ kind: "cord", from, to, amount })),
+				...normals.map(([from, to]) => ({ kind: "normal", from, to, amount: 1 })),
+			].map((one) => ({ ...one, a: centre("out", one.from), b: centre("in", one.to) }))
+				.filter((one) => one.a && one.b);
+
+			setLines((was) => (JSON.stringify(was) === JSON.stringify(drawn) ? was : drawn));
+		};
+
+		measure();
+
+		const watching = new ResizeObserver(measure);
+
+		watching.observe(root);
+
+		return () => watching.disconnect();
+	}, [said, cell]);
+
+	return html`
+		<svg class="cords" aria-hidden="true">
+			${lines.map((one) => {
+				const span = Math.hypot(one.b.x - one.a.x, one.b.y - one.a.y);
+				const sag = Math.min(SAG_CEILING, Math.max(SAG_FLOOR, span * SAG_SHARE));
+				const curve = `M ${one.a.x} ${one.a.y} C ${one.a.x} ${one.a.y + sag} ${one.b.x} ${one.b.y + sag} ${one.b.x} ${one.b.y}`;
+				const middle = { x: (one.a.x + one.b.x) / 2, y: (one.a.y + one.b.y) / 2 + sag * 0.75 };
+
+				return html`
+					<g key=${`${one.kind}:${one.from}>${one.to}`} class=${one.kind}
+						data-cord=${`${one.from}>${one.to}`}>
+						<path d=${curve} />
+						${one.kind === "cord" && html`
+							<polygon class="plug" points=${HEX}
+								transform=${`translate(${one.a.x} ${one.a.y}) scale(${one.a.r / 10})`} />
+							<polygon class="plug" points=${HEX}
+								transform=${`translate(${one.b.x} ${one.b.y}) scale(${one.b.r / 10})`} />`}
+						${/* **What a cord is worth, where it is not the whole of it**: the
+						     code's amount, read and not yet offered (#5217's tag). */ ""}
+						${one.kind === "cord" && one.amount !== 1 && html`
+							<text class="amount" x=${middle.x} y=${middle.y}>${`×${one.amount}`}</text>`}
+					</g>`;
+			})}
+		</svg>`;
+}
+
+/* The case: every module of one pattern's sequencer, and the cords between them.
+ *
+ * Before the sequencer's first build there is nothing to say what it holds, and that
+ * build declares again. */
+function SequencerCase ({ name, control, state, reports, anchor, paused, cell, pending, failed, onSet }) {
+	const box = useRef(null);
+	const shape = caseShape(control.models || {}, state.modules || []);
+	const overlay = state.held && typeof state.held === "object" ? state.held : {};
+	const played = state.played && typeof state.played === "object" ? state.played : {};
+
+	/* **The cords that play**, as the app said at its last build, with what the glass holds
+	   laid over them: an amount the glass set, or a cord it pulled out with 0 (#5217). */
+	const cords = new Map((played.patch || []).filter(Array.isArray)
+		.map((cord) => [`${cord[0]}>${cord[1]}`, cord]));
+
+	for (const cord of overlay.patch || []) {
+		if (Array.isArray(cord)) cords.set(`${cord[0]}>${cord[1]}`, cord);
+	}
+
+	const patched = [...cords.values()].filter((cord) => cord[2] !== 0);
+	const cabled = new Set(patched.map((cord) => cord[1]));
+
+	/* A normal plays where its input has no cord and its switch, if it names one, is on:
+	   the app's own rule, read from what played. */
+	const normals = [];
+
+	for (const one of shape.modules) {
+		const settings = (((played.modules || {})[one.name]) || {}).settings || {};
+
+		for (const normal of one.model.normals || []) {
+			const to = `${one.name}.${normal.to}`;
+
+			if (cabled.has(to) || (normal.when && !settings[normal.when])) continue;
+
+			normals.push([`${one.name}.${normal.from}`, to]);
+		}
+	}
+
+	if (!shape.modules.length) {
 		return html`<div class="sequencer waiting">waiting for the sequencer's first build</div>`;
 	}
 
 	return html`
-		<div class="sequencer">
-			${modules.map((one) => {
-				const model = models[one.model] || {};
-
-				return html`
-					<section class="module" key=${one.name} data-module=${one.name}>
-						<h3>${labelText(model.label || one.name)}</h3>
-						<p>${model.summary || ""}</p>
-					</section>`;
-			})}
+		<div class="sequencer" ref=${box}>
+			${shape.modules.map((one) => html`
+				<${Module} key=${one.name} owner=${name} one=${one} played=${played} overlay=${overlay}
+					reports=${reports} anchor=${anchor} paused=${paused}
+					pending=${pending} failed=${failed} onSet=${onSet} />`)}
+			<${Cords} box=${box} cords=${patched} normals=${normals} cell=${cell} />
 		</div>`;
 }
 
@@ -3641,7 +4346,7 @@ function Sheet ({ title, onClose, asks, children }) {
  * The title bar is the handle and has to stay one, so this is the place where
  * a pattern's own actions accrue — Simon's words, and clear is already the
  * second of them. */
-function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onLockStream,
+function Footer ({ onAdd, adds, onSend, onClear, onHandBack, live, onLive, streamLocked, onLockStream,
                    onReroll, outlet, onSettings, settingsOpen }) {
 	/* **A reroll's flash is state, and a hook may not sit after a return.** The
 	   guard below leaves early for a block with nothing in its footer, so this is
@@ -3654,7 +4359,7 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onL
 	   the footer was a button — so the first block whose only footer content was
 	   the fitting got no footer at all, and a note set had nothing to pull a
 	   cable out of. A grid never showed it because a grid can also be cleared. */
-	if (!onAdd && !onSend && !onClear && onLive === undefined && !onSettings && !outlet
+	if (!onAdd && !onSend && !onClear && !onHandBack && onLive === undefined && !onSettings && !outlet
 		&& !onLockStream) {
 		return null;
 	}
@@ -3823,6 +4528,14 @@ function Footer ({ onAdd, adds, onSend, onClear, live, onLive, streamLocked, onL
 					class="clear"
 					onClick=${(event) => { event.preventDefault(); onClear(event); }}
 				>clear</button>`}
+			${/* **Everything the glass holds over a sequencer, handed back at once**
+			     (#5218), asked first as a clear is. Offered only while the glass holds
+			     something, and opening a sheet, so on release. */ ""}
+			${onHandBack && html`
+				<button
+					class="clear hand-back"
+					onClick=${(event) => { event.preventDefault(); onHandBack(event); }}
+				>back to the code</button>`}
 		</footer>`;
 }
 
@@ -4787,21 +5500,12 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 }
 
 
-/* The highlight tracking what is sounding.
+/* Where the music is now, in beats, read between two of the app's beats.
  *
- * The sequencer reports beats, not steps: between two of them the position is
- * worked out here, so the highlight moves smoothly instead of hopping four
- * times a bar. It is moved by transform alone, which keeps it off the layout
- * path — the grid itself is never re-laid-out to animate it. */
-function Playhead ({ anchor, cycles, steps, beats, paused }) {
-	const bar = useRef(null);
-
-	/* Where this pattern's own cycles start, held rather than depended on for the
-	   reason the anchor is (#2548). */
-	const began = useRef(cycles);
-
-	useEffect(() => { began.current = cycles; }, [cycles]);
-
+ * **Shared by everything that follows the music on the glass**: a grid's playhead,
+ * and since #5218 the stage a sequencer is on. Returns a function, read inside an
+ * animation frame, which says null until the first beat has arrived. */
+function useBeatClock (anchor, paused) {
 	/* The latest beat, held rather than depended on. Listing the anchor among
 	   the effect's dependencies cancelled the animation and started another
 	   twice a second, which was harmless with one playhead on a page and is
@@ -4838,6 +5542,35 @@ function Playhead ({ anchor, cycles, steps, beats, paused }) {
 	   was being carried to correct for a hold has just been made irrelevant. */
 	useEffect(() => { held.current = 0; }, [anchor]);
 
+	return useCallback(() => {
+		const anchor = from.current;
+
+		if (!anchor || !anchor.interval) return null;
+
+		const reading = heldSince.current === null ? performance.now() : heldSince.current;
+		const elapsed = Math.max(0, reading - anchor.at - held.current) / 1000;
+
+		return anchor.beat + Math.min(elapsed / anchor.interval, 1);
+	}, []);
+}
+
+/* The highlight tracking what is sounding.
+ *
+ * The sequencer reports beats, not steps: between two of them the position is
+ * worked out here, so the highlight moves smoothly instead of hopping four
+ * times a bar. It is moved by transform alone, which keeps it off the layout
+ * path — the grid itself is never re-laid-out to animate it. */
+function Playhead ({ anchor, cycles, steps, beats, paused }) {
+	const bar = useRef(null);
+
+	/* Where this pattern's own cycles start, held rather than depended on for the
+	   reason the anchor is (#2548). */
+	const began = useRef(cycles);
+
+	useEffect(() => { began.current = cycles; }, [cycles]);
+
+	const beatNow = useBeatClock(anchor, paused);
+
 	useEffect(() => {
 		if (!bar.current) return;
 
@@ -4845,25 +5578,21 @@ function Playhead ({ anchor, cycles, steps, beats, paused }) {
 		const grid = bar.current.parentElement.querySelector(".grid");
 
 		const move = () => {
-			const anchor = from.current;
 			const first = grid && grid.children[1];
 			const second = grid && grid.children[2];
+			const beat = first ? beatNow() : null;
 
-			if (first && anchor && anchor.interval) {
-				const reading = heldSince.current === null ? performance.now() : heldSince.current;
-				const elapsed = Math.max(0, reading - anchor.at - held.current) / 1000;
-				const beatNow = anchor.beat + Math.min(elapsed / anchor.interval, 1);
-
+			if (beat !== null) {
 				/* **From where this pattern's cycle began, where the app has said**
 				   (#2548). The newest cycle that has begun wins — the app reports one a
 				   pulse before it starts — and with none the page's beat count is the
 				   answer it always was, which is exact for a pattern whose length has
 				   never changed. */
-				const begun = (began.current || []).filter((one) => one.at <= beatNow + 1e-6);
+				const begun = (began.current || []).filter((one) => one.at <= beat + 1e-6);
 				const cycle = begun[begun.length - 1];
 				const step = cycle && cycle.end > 0
-					? (cycle.from + (beatNow - cycle.at) * (steps / beats)) % cycle.end
-					: (beatNow * (steps / beats)) % steps;
+					? (cycle.from + (beat - cycle.at) * (steps / beats)) % cycle.end
+					: (beat * (steps / beats)) % steps;
 
 				/* Both numbers are read off the grid rather than assumed. The
 				   pitch is the distance between two cells, which is a cell and
@@ -6146,6 +6875,10 @@ function Panel () {
 	   inside whatever the bar is drawn inside. */
 	const [startingAgain, setStartingAgain] = useState(false);
 
+	/* Which sequencer's sheet is asking to hand everything back to the code (#5218),
+	   held here for the reason `clearing` is. */
+	const [handingBack, setHandingBack] = useState(null);
+
 	/* Which variant each grid shows on this panel, by `app/grid` (#2485). */
 	const [viewing, setViewing] = useState(rememberedViewing);
 
@@ -6166,6 +6899,11 @@ function Panel () {
 	   begins and until then the one before is what is sounding. A report about the
 	   music, held apart from every control's state as `realised` is. */
 	const [cycles, setCycles] = useState({});
+
+	/* **Where each sequencer's modules were at each step of a cycle** (#5218), by control:
+	   the last two the app reported, for the reason `cycles` keeps two. The app builds a
+	   cycle before it plays, so the one before is sounding until the new one begins. */
+	const [playing, setPlaying] = useState({});
 
 	/* Which layers did not run last cycle, by stack, and the app's own words for
 	   why (#2368). Held apart from every control's state for the same reason
@@ -6361,7 +7099,16 @@ function Panel () {
 					setState((was) => {
 						const app = { ...(was[frame.app] || {}) };
 
-						if (declared && GRIDS.includes(declared.type)
+						if (declared && declared.type === "sequencer"
+							&& (rest[0] === "settings" || rest[0] === "cords")) {
+							/* **One entry the glass holds, set or handed back** (#5218), by
+							   the rule the service keeps its copy by, so the face moves now
+							   rather than at the next build. */
+							const held = { ...(app[control] || {}) };
+
+							held.held = sequencerHeld(held.held, rest, frame.v);
+							app[control] = held;
+						} else if (declared && GRIDS.includes(declared.type)
 							&& Array.isArray(declared.variants) && rest[0] === "variants") {
 							/* **A variant's cells, one level further down** (#2485):
 							   `variants/B/rows`, then exactly the address a grid
@@ -6458,6 +7205,19 @@ function Panel () {
 
 						return { ...was, [frame.app]: app };
 					});
+
+					/* **A sequencer's notices, said as a refusal is** (#5218): there is no
+					   mark for what the glass holds, so a knob the code moved by itself is
+					   explained here, in the bar, and passes. */
+					if (declared && declared.type === "sequencer" && rest.length === 1
+						&& (rest[0] === "taken_back" || rest[0] === "refused")) {
+						const words = sequencerNotice(declared, rest[0], frame.v);
+
+						if (words) {
+							setNotice(words);
+							setTimeout(() => setNotice(null), 4000);
+						}
+					}
 
 					/* **A dot means "an algorithm put this here *this cycle*",
 					 * and a held clock has no cycle.**
@@ -6613,6 +7373,16 @@ function Panel () {
 						const one = { at: frame.at, from: Number(frame.from) || 0, end: frame.end };
 
 						together(() => setCycles((was) => ({
+							...was, [frame.control]: [...(was[frame.control] || []).slice(-1), one] })));
+					}
+
+					/* **Where a sequencer's modules were at each step** (#5218, #5199), once a
+					   cycle as it is built. Kept nowhere, as every event is (#1965). */
+					if (frame.name === "playing" && typeof frame.control === "string"
+						&& frame.cycle && typeof frame.cycle.start_beat === "number") {
+						const one = { cycle: frame.cycle, modules: frame.modules || {} };
+
+						together(() => setPlaying((was) => ({
 							...was, [frame.control]: [...(was[frame.control] || []).slice(-1), one] })));
 					}
 
@@ -6877,6 +7647,23 @@ function Panel () {
 				live: ((state[appName] || {})[name] || {}).enabled !== false,
 				rows: 2 + Math.max(1, (controls[name].octaves || []).length),
 				steps: Math.max(PARAM_CELLS, 1 + 2 * Math.max(1, controls[name].steps || 1)),
+			});
+			continue;
+		}
+
+		/* **A sequencer is one case, as wide and as tall as its modules** (#5218), and its
+		   footer carries its mute and the way to hand everything back to the code. */
+		if (kindOf(name) === "sequencer") {
+			const held = (state[appName] || {})[name] || {};
+			const shape = caseShape(controls[name].models || {}, held.modules || []);
+
+			windows.push({
+				key: name, control: name, title: named(name),
+				about: controls[name].about || [],
+				live: held.enabled !== false,
+				handsBack: heldCount(held.held) > 0,
+				rows: (shape.modules.length ? shape.rows : 1) + 1,
+				steps: Math.max(PARAM_CELLS, shape.cols - LABEL_CELLS),
 			});
 			continue;
 		}
@@ -7333,10 +8120,17 @@ function Panel () {
 	 * arrangement that shuffled itself as the glass changed would be a layout
 	 * nobody chose and nobody could rely on. It wraps at whatever a panel this
 	 * wide would hold at the tested cell size, which is a fixed number for a
-	 * given panel and so cannot chase its own answer. */
+	 * given panel and so cannot chase its own answer.
+	 *
+	 * **And again when a block's count changes**, which the app decides and the glass
+	 * does not (#5218). A sequencer's case is as large as its modules, and the
+	 * panel learns them from the app's state, a frame after its declaration, and
+	 * again whenever the code adds one: placed once, the case was counted as the
+	 * block that waits for its first build and grew over the block beside it. Only
+	 * the blocks nobody has placed move; an arrangement kept or dragged wins. */
 	const defaults = useMemo(
 		() => autoPlace(blocks, acrossAtTestedSize(), frameInCells()),
-		[pageId, blocks.map((block) => block.name).join(",")]);
+		[pageId, blocks.map((block) => `${block.name}:${block.steps}x${block.rows}`).join(",")]);
 
 	/* Three layers, in order of authority. Where the panel would put a part
 	   that nobody has placed; then the arrangement the composition is keeping,
@@ -8097,6 +8891,7 @@ function Panel () {
 								: "add generator"}
 							onSend=${one.sends ? () => setSending(one.control) : null}
 							onClear=${one.clear ? () => setClearing({ control: one.control }) : null}
+							onHandBack=${one.handsBack ? () => setHandingBack(one.control) : null}
 							onSettings=${settingsFor[one.control]
 								? () => setShowing((was) => {
 									const now = new Set(was);
@@ -8221,8 +9016,12 @@ function Panel () {
 								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
 						: kindOf(one.control) === "sequencer"
 						? html`
-							<${SequencerCase} control=${controls[one.control]}
-								held=${(state[appName] || {})[one.control] || {}} />`
+							<${SequencerCase} name=${one.control} control=${controls[one.control]}
+								state=${(state[appName] || {})[one.control] || {}}
+								reports=${up ? playing[one.control] : null}
+								anchor=${anchor} paused=${transportFields.paused === true}
+								cell=${size.cell}
+								pending=${pending} failed=${failed} onSet=${request} />`
 						: kindOf(one.control) === "params"
 						? html`
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}
@@ -8543,6 +9342,32 @@ function Panel () {
 								setClearing(null);
 							}}
 						>clear</button>
+					</div>
+				<//>`;
+		})()}
+
+		${handingBack && controls[handingBack] && (() => {
+			const count = heldCount(((state[appName] || {})[handingBack] || {}).held);
+
+			return html`
+				<${Sheet} asks title="back to the code" onClose=${() => setHandingBack(null)}>
+					<p class="ask">
+						<span>${`${count} ${count === 1 ? "setting or cord" : "settings and cords"} the glass holds on `}</span>
+						<b>${controls[handingBack].title || handingBack}</b>
+						<span> will play as the code writes them again. There is no undo.</span>
+					</p>
+					<div class="answers">
+						<button
+							onPointerDown=${(event) => { event.preventDefault(); setHandingBack(null); }}
+						>cancel</button>
+						<button
+							class="danger"
+							onPointerDown=${(event) => {
+								event.preventDefault();
+								request(`${handingBack}/held`, {});
+								setHandingBack(null);
+							}}
+						>back to the code</button>
 					</div>
 				<//>`;
 		})()}

@@ -311,6 +311,68 @@ def test_both_languages_agree_about_what_a_contract_gap_is () -> None:
 	assert odd == [superconductor.protocol.contract_gap(one) for one in (None, None, 5)]
 
 
+def test_both_languages_hold_a_sequencer_s_entries_the_same_way () -> None:
+	"""Two implementations of one rule, run over the same steps and compared after each.
+
+	The client places a confirmed setting, stage or cord into what the glass holds, so a
+	knob's face moves at once rather than a build later (#5218); the service keeps its copy
+	by `protocol.sequencer_hold`, and so does the app.  A panel that reloads is sent the
+	service's copy, so a client that held an entry differently would draw one thing before
+	a reload and another after it.
+	"""
+
+	node = _node()
+
+	if node is None:
+		pytest.skip("no JavaScript engine on this machine")
+
+	source = (superconductor.service.CLIENT_DIR / "app.js").read_text(encoding="utf-8")
+
+	# Sliced, as `contractGap` is, and checked for its whole body for the same reason.
+	start = source.index("function sequencerHeld (held, rest, value) {")
+	end = source.index("\n}\n", start)
+	sliced = source[start:end + 3]
+
+	assert sliced.count("return") >= 3, f"the slice did not catch the whole function: {sliced!r}"
+
+	steps: list[tuple[list[str], typing.Any]] = [
+		(["settings", "960", "lane_a", "2"], 0.4),
+		(["settings", "960", "lane_a", "5"], 0.9),
+		(["settings", "960", "range_a"], "x2"),
+		(["cords", "clock.out", "960.shift"], 0),
+		(["cords", "960.lane_a", "midi.pitch"], 0.5),
+		(["cords", "clock.out", "960.shift"], 0.25),
+		(["settings", "960", "lane_a", "2"], None),
+		(["settings", "960", "range_a"], None),
+		(["cords", "clock.out", "960.shift"], None),
+		(["settings", "midi", "lowest"], 40),
+		(["held"], {}),
+		(["settings", "960", "lane_a", "5"], None),
+		(["cords", "960.lane_a", "midi.pitch"], None),
+	]
+
+	driver = (f"{sliced}\n"
+	          f"const steps = {json.dumps(steps)};\n"
+	          "let held = {};\n"
+	          "const seen = [];\n"
+	          "for (const [rest, value] of steps) { held = sequencerHeld(held, rest, value); seen.push(held); }\n"
+	          "console.log(JSON.stringify(seen));\n")
+
+	run = subprocess.run([str(node), "--input-type=module", "-"], input=driver,
+	                     capture_output=True, text=True, timeout=30)
+
+	assert run.returncode == 0, f"the client's own function would not run: {run.stderr}"
+
+	expected = []
+	held: dict[str, typing.Any] = {}
+
+	for rest, value in steps:
+		held = superconductor.protocol.sequencer_hold(held, rest, value)
+		expected.append(held)
+
+	assert json.loads(run.stdout) == expected, f"the two languages disagree: JavaScript said {run.stdout}"
+
+
 def test_both_languages_name_the_same_kinds_of_control () -> None:
 	"""One vocabulary, three places that have to agree about it (#2420).
 

@@ -206,6 +206,28 @@ def test_what_a_panel_may_not_set_is_refused_in_words (
 	assert why is not None and words in why, why
 
 
+def test_everything_the_glass_holds_is_handed_back_in_one_set () -> None:
+	""""Back to the code" (#5218): ``held`` emptied, and only emptied, so a dozen entries
+	wake the clock once and the rest is still set an entry at a time (D3)."""
+
+	assert protocol.sequencer_refusal(DECLARATION, MODULES, ["held"], {}) is None
+
+	others: list[typing.Any] = [None, {"patch": []}, {"modules": {"960": {"settings": {"longest": 4}}}}]
+
+	for value in others:
+		why = protocol.sequencer_refusal(DECLARATION, MODULES, ["held"], value)
+
+		assert why is not None and "sets the rest an entry at a time" in why, (value, why)
+
+	assert "the rest is the app's to report" in (
+		protocol.sequencer_refusal(DECLARATION, MODULES, ["held", "patch"], {}) or "")
+
+	held = protocol.sequencer_hold({}, ["settings", "960", "lane_a", "2"], 0.4)
+	held = protocol.sequencer_hold(held, ["cords", "960.lane_a", "960.timing"], 0.5)
+
+	assert protocol.sequencer_hold(held, ["held"], {}) == {}
+
+
 def test_a_null_must_still_name_something_that_exists () -> None:
 	"""A hand-back is checked as an address, so a stage that is not there cannot be handed back."""
 
@@ -292,6 +314,17 @@ def test_the_service_keeps_what_only_the_app_writes_whole () -> None:
 	notice[0]["revision"] = 99
 
 	assert state["lead"]["taken_back"][0]["revision"] == 4
+
+
+def test_the_service_takes_everything_handed_back_as_the_app_reports_it () -> None:
+	"""The app confirms ``held`` emptied at the path the panel set, and the copy follows."""
+
+	state, declared = _service()
+
+	controls.apply_change(state, declared, "lead/settings/960/lane_a/2", 0.4)
+	controls.apply_change(state, declared, "lead/held", {})
+
+	assert state["lead"]["held"] == {}
 
 
 @pytest.mark.parametrize(("path", "value", "words"), [
@@ -414,6 +447,23 @@ def test_handing_everything_back_sends_an_empty_overlay () -> None:
 	assert composition.tweaks[-1] == ("lead", {"sequencer": {"revision": 3}})
 
 	assert not sequencer.apply(["settings", "960", "lane_a", "2"], None)
+
+
+def test_back_to_the_code_hands_the_pattern_an_empty_overlay_once () -> None:
+	"""One tweak for everything, with the revision, and nothing more when nothing is held."""
+
+	sequencer, composition, watch, _ = _sequencer()
+	watch.callbacks[0]("lead", _state(3), None)
+	sequencer.apply(["settings", "960", "lane_a", "2"], 0.4)
+	sequencer.apply(["cords", "960.lane_a", "960.timing"], 0.5)
+	told = len(composition.tweaks)
+
+	assert sequencer.apply(["held"], {})
+	assert composition.tweaks[told:] == [("lead", {"sequencer": {"revision": 3}})]
+	assert sequencer.snapshot()["held"] == {}
+
+	assert not sequencer.apply(["held"], {})
+	assert len(composition.tweaks) == told + 1
 
 
 def test_a_refused_change_is_said_in_the_rule_s_own_words () -> None:

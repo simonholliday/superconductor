@@ -483,7 +483,8 @@ the app publishes them.
 ``<control>/settings/<module>/<control>`` for a control that is not a lane,
 ``<control>/settings/<module>/<lane>/<stage>`` for one stage of a lane, and
 ``<control>/cords/<from>/<to>`` for a cord's amount, where 0 pulls out a cord the
-code patched.  **A lane is set a stage at a time** (Simon, 2026-10-20: each stage is a
+code patched.  ``<control>/held`` set to ``{}`` hands everything back at once, and is
+the one whole value a panel may send.  **A lane is set a stage at a time** (Simon, 2026-10-20: each stage is a
 knob of its own), so a code change to one stage takes back that stage alone.  The app
 reports each at the same path, and reports the whole of ``modules``, ``played``,
 ``held``, ``taken_back`` and ``refused`` whenever a build changes them.
@@ -785,8 +786,9 @@ def degrees_refusal (
 	return None
 
 
-SEQUENCER_SETS = ("settings", "cords")
-"""What a panel may set on a sequencer: its modules' settings, and the cords between their jacks.
+SEQUENCER_SETS = ("settings", "cords", "held")
+"""What a panel may set on a sequencer: its modules' settings, the cords between their jacks,
+and everything the glass holds at once, which it may only empty.
 
 Everything else in a sequencer's state is the app's to report (#5218).
 """
@@ -937,6 +939,12 @@ def sequencer_refusal (
 
 		return None
 
+	# **Everything handed back at once** ("back to the code", #5218): one set rather than
+	# one per entry, so a dozen entries wake the clock once.  Only emptied: anything the
+	# glass holds is set an entry at a time, so the last change wins per entry (D3).
+	if rest == ["held"]:
+		return None if value == {} else "the glass hands back everything it holds with {}, and sets the rest an entry at a time"
+
 	return "a panel sets a sequencer's settings and its cords; the rest is the app's to report"
 
 
@@ -949,6 +957,9 @@ def sequencer_hold (held: typing.Any, rest: list[str], value: typing.Any) -> dic
 	is an absent key, never an empty one (#2518).  A cord set again keeps its place in the
 	list, so the order the cords were patched in survives a change of amount.
 	"""
+
+	if rest == ["held"]:
+		return {}
 
 	document = copy.deepcopy(held) if isinstance(held, dict) else {}
 

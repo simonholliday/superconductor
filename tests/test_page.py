@@ -8148,6 +8148,16 @@ def _in_every_state (panel: typing.Any, fake_app: typing.Any, look: typing.Any) 
 	panel.wait_for_selector(f"{PHRASE} .variants .start-from", timeout=5_000)
 	note("a variant shown that is not playing")
 
+	# **A sequencer's case** (#5218), whose knobs, cells of choices and pads are targets
+	# nothing else on the panel draws, and the list a cell of choices opens.
+	_the_case(panel)
+	note("the moog page, with a sequencer")
+
+	panel.locator(f"{_stage('mode', 0)} .choice-cell").click()
+	panel.wait_for_selector(f"{_stage('mode', 0)} .options button", timeout=5_000)
+	note("a sequencer's list open")
+	panel.locator(f"{_stage('mode', 0)} .choice-cell").click()
+
 	return sorted(set(found))
 
 
@@ -11499,3 +11509,508 @@ def test_a_block_placed_below_a_transposable_grid_keeps_its_lane (
 
 	assert lanes, "the bass and the fine grid were not stacked, so nothing was measured"
 	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"a lane between blocks was eaten: {lanes}"
+
+
+# --- A pattern's sequencer, drawn as one case (#5210, #5218) ------------------
+
+
+LEAD = '.part[data-part="lead"]'
+
+
+def _the_case (panel: typing.Any) -> None:
+	"""Go to the page carrying the sequencer, and wait for its modules."""
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(f"{LEAD} .sequencer .module", timeout=5_000)
+	_settled(panel)
+
+
+def _stage (lane: str, stage: int, module: str = "960") -> str:
+	"""One stage of one lane of one module."""
+
+	return f'{LEAD} .module[data-module="{module}"] .stage[data-lane="{lane}"][data-stage="{stage}"]'
+
+
+def _single (field: str, module: str) -> str:
+	"""One of a module's own controls."""
+
+	return f'{LEAD} .module[data-module="{module}"] .setting[data-field="{field}"]'
+
+
+def _asks (fake_app: conftest.FakeApp, path: str, value: typing.Any, since: int) -> None:
+	"""Wait for the panel to ask for *value* at *path*, and fail unless the last it asked was that.
+
+	`_asked` waits and never fails, as `settled` never does, so a wrong value would pass.
+	"""
+
+	_asked(fake_app, path, value, since)
+
+	sent = [one.get("v") for one in fake_app.sets[since:] if one.get("path") == path]
+
+	assert sent and sent[-1] == value, f"{path} asked for {sent}, not {value!r}"
+
+
+def _playing (fake_app: conftest.FakeApp, start: float, stages: list[typing.Any],
+              step_beats: float = 0.25) -> None:
+	"""Say where the 960 was at each step of a cycle starting at *start*, as the app does (#5199)."""
+
+	fake_app.send(superconductor.protocol.event(
+		"subsequence", "playing", control="lead",
+		cycle={"start_beat": start, "steps": len(stages), "step_beats": step_beats},
+		modules={"960": {"positions": {"stage": stages}}}))
+
+
+def test_a_sequencer_is_one_case_holding_its_modules_in_signal_order (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Simon's design (#5218): the modules side by side as in a cabinet, the clock first
+	and the notes-out last, whatever order the code added them in."""
+
+	_the_case(panel)
+
+	order = panel.eval_on_selector_all(f"{LEAD} .module", "all => all.map((one) => one.dataset.module)")
+
+	assert order == ["clock", "960", "midi"], f"the modules are not in signal order: {order}"
+	assert panel.locator(f'{LEAD} .module[data-module="960"] h3').inner_text().strip().lower() == "moog 960"
+	assert panel.eval_on_selector_all(
+		f'{LEAD} .module[data-module="960"] .stage-number', "all => all.map((one) => one.textContent)") == [
+		str(stage) for stage in range(1, 9)]
+
+
+def test_a_case_is_as_large_as_its_modules_and_no_larger (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A block is counted before it is drawn, so a row or a column the count did not know
+	about is one that overflows the case, or a lane of nothing below it (#5218)."""
+
+	_the_case(panel)
+
+	seen = panel.evaluate("""(part) => {
+		const block = document.querySelector(part);
+		const body = block.querySelector(".part-body");
+		const shell = block.querySelector(".sequencer").getBoundingClientRect();
+		const foot = block.querySelector(".part-foot").getBoundingClientRect();
+		const stages = [...block.querySelectorAll('.module[data-module="960"] .stage[data-lane="lane_a"]')]
+			.map((one) => one.getBoundingClientRect());
+
+		/* **Nothing in a module stands on anything else**: a row the count left out puts
+		   two rows of controls in one, which neither overflows nor leaves air. The light
+		   is the one thing drawn over its column on purpose. */
+		const overlaps = [];
+
+		for (const module of block.querySelectorAll(".module")) {
+			const items = [...module.children].filter((one) => !one.classList.contains("stage-light"))
+				.map((one) => [one, one.getBoundingClientRect()]);
+
+			items.forEach(([one, a], index) => items.slice(index + 1).forEach(([other, b]) => {
+				const across = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+				const down = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+
+				if (across > 1 && down > 1) overlaps.push(`${one.className} over ${other.className}`);
+			}));
+		}
+
+		return {
+			overlaps,
+			cell: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cell")),
+			gap: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--gap")),
+			clipped: [body.scrollWidth - body.clientWidth, body.scrollHeight - body.clientHeight],
+			air: foot.top - shell.bottom,
+			widths: stages.map((one) => one.width),
+			pitches: stages.slice(1).map((one, index) => one.left - stages[index].left),
+		};
+	}""", LEAD)
+
+	assert seen["overlaps"] == [], f"two things in a module stand on each other: {seen['overlaps']}"
+	assert seen["clipped"][0] <= 1 and seen["clipped"][1] <= 1, f"the case overflows its block: {seen}"
+	assert seen["air"] < seen["cell"], f"the block is a row taller than its case: {seen}"
+	assert all(abs(width - seen["cell"]) < 1 for width in seen["widths"]), \
+		f"a stage is not a cell wide: {seen['widths']} against {seen['cell']}"
+	assert all(abs(pitch - seen["cell"] - seen["gap"]) < 1 for pitch in seen["pitches"]), \
+		f"the stages are not on the lattice: {seen['pitches']}"
+
+
+def test_a_knob_turns_by_a_drag_up_and_down_and_asks_for_its_stage (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 1: up for more, from wherever the press began, never by where the finger
+	landed, so the press itself moves nothing (#5218)."""
+
+	_the_case(panel)
+
+	knob = panel.locator(f"{_stage('lane_a', 3)} .knob")
+	box = knob.bounding_box()
+	x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+	since = len(fake_app.sets)
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+	panel.wait_for_timeout(100)
+
+	assert fake_app.settled("lead/settings/960/lane_a/3", since=since, limit=0.5) == [], \
+		"pressing a knob asked for a value before it was turned"
+
+	# Up by two knobs: a third of the travel, so a third of the range above 0.5.
+	panel.mouse.move(x, y - box["height"] * 2, steps=8)
+	panel.mouse.up()
+
+	sent = [one["v"] for one in fake_app.settled("lead/settings/960/lane_a/3", since=since)]
+
+	assert sent, "turning a knob asked for nothing"
+	assert sent == sorted(sent), f"a knob turned up asked for less on the way: {sent}"
+	assert abs(sent[-1] - (0.5 + 1 / 3)) < 0.03, f"two knobs up is not a third of the range: {sent}"
+
+	since = len(fake_app.sets)
+	panel.mouse.move(x, y)
+	panel.mouse.down()
+	panel.mouse.move(x, y + box["height"] * 2, steps=8)
+	panel.mouse.up()
+
+	down = [one["v"] for one in fake_app.settled("lead/settings/960/lane_a/3", since=since)]
+
+	assert down and down[-1] < 0.5, f"a knob turned down did not ask for less: {down}"
+
+
+def test_a_knob_says_its_value_while_it_is_held (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A pointer at an angle says roughly, and the reading says exactly, while the knob is
+	in the hand and not otherwise (#5218)."""
+
+	_the_case(panel)
+
+	knob = panel.locator(f"{_stage('lane_a', 1)} .knob")
+
+	assert knob.locator(".reading").count() == 0, "a knob nobody holds shows a reading"
+
+	box = knob.bounding_box()
+
+	panel.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	playwright_api.expect(knob.locator(".reading")).to_have_text("0.1", timeout=5_000)
+	panel.mouse.up()
+	playwright_api.expect(knob.locator(".reading")).to_have_count(0, timeout=5_000)
+
+
+def test_the_face_is_what_the_glass_holds_over_what_played (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The code writes 0.3 on stage 3 and the glass holds 0.75 there, so the knob says 0.75;
+	handed back, it says the code's 0.3 again (#5218, decisions 2 and 3)."""
+
+	_the_case(panel)
+
+	knob = panel.locator(f"{_stage('lane_a', 2)} .knob")
+
+	assert knob.get_attribute("aria-valuenow") == "0.75"
+	assert panel.locator(f"{_stage('lane_a', 1)} .knob").get_attribute("aria-valuenow") == "0.1"
+
+	fake_app.confirm("lead/settings/960/lane_a/2", None, by="panel")
+	playwright_api.expect(knob).to_have_attribute("aria-valuenow", "0.3", timeout=5_000)
+
+
+def test_two_taps_on_a_knob_hand_its_value_back_to_the_code (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 3: the glass's entry goes, so the composition's value plays again; and on a
+	knob the glass does not hold there is nothing to hand back."""
+
+	_the_case(panel)
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_stage('lane_a', 2)} .knob").click()
+	panel.locator(f"{_stage('lane_a', 2)} .knob").click()
+	_asks(fake_app, "lead/settings/960/lane_a/2", None, since)
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_stage('lane_a', 0)} .knob").click()
+	panel.locator(f"{_stage('lane_a', 0)} .knob").click()
+
+	assert fake_app.settled("lead/settings/960/lane_a/0", since=since, limit=0.6) == [], \
+		"two taps on a knob the glass does not hold asked for something"
+
+
+def test_a_choice_per_stage_opens_its_list_on_release_and_asks_for_one (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A cell that opens a list acts on release (#2215), and what it plays is the app's
+	word, one stage at a time (#5194)."""
+
+	_the_case(panel)
+
+	cell = panel.locator(f"{_stage('mode', 3)} .choice-cell")
+
+	assert cell.inner_text().strip().lower() == "normal"
+
+	box = cell.bounding_box()
+	panel.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+	panel.mouse.down()
+	panel.wait_for_timeout(150)
+
+	assert panel.locator(f"{_stage('mode', 3)} .options").count() == 0, "the list opened on the press"
+
+	panel.mouse.up()
+	panel.wait_for_selector(f"{_stage('mode', 3)} .options button", timeout=5_000)
+
+	assert panel.locator(f"{_stage('mode', 3)} .options .back").count() == 0, \
+		"a stage the glass does not hold offered to hand itself back"
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_stage('mode', 3)} .options button", has_text="stop").click()
+	_asks(fake_app, "lead/settings/960/mode/3", "stop", since)
+
+	# **Held now, so the list offers the way back**, there being no second tap to make.
+	fake_app.confirm("lead/settings/960/mode/3", "stop", by="panel")
+	playwright_api.expect(cell).to_have_text(re.compile("stop", re.I), timeout=5_000)
+
+	cell.click()
+	panel.wait_for_selector(f"{_stage('mode', 3)} .options .back", timeout=5_000)
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_stage('mode', 3)} .options .back").click()
+	_asks(fake_app, "lead/settings/960/mode/3", None, since)
+
+
+def test_a_modules_own_controls_are_its_knobs_choices_and_switches (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 1a: every number in the case is a knob, a pitch among them until the panel
+	can name notes; a choice and a switch are the panel's own (#5218)."""
+
+	_the_case(panel)
+
+	assert panel.locator(f"{_single('longest', '960')} .knob").count() == 1
+	assert panel.locator(f"{_single('longest', '960')} .reading").inner_text().strip() == "8 steps"
+	assert panel.locator(f"{_single('lowest', 'midi')} .reading").inner_text().strip() == "36"
+	assert panel.locator(f"{_single('shortest', 'midi')} .reading").inner_text().strip() == "0.25 beats"
+	assert panel.locator(f"{_single('timing', '960')} .switch").get_attribute("data-on") == "true"
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_single('range_a', '960')} .choices button", has_text="x1").click()
+	_asks(fake_app, "lead/settings/960/range_a", "x1", since)
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_single('timing', '960')} .switch .end.no").click()
+	_asks(fake_app, "lead/settings/960/timing", False, since)
+
+
+def test_the_stage_playing_is_lit_from_what_the_app_said_of_each_step (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The app reports a cycle as it builds it, before it plays, so a new report waits
+	until the beat reaches its start; until then the cycle before is the one sounding
+	(#5199, #5218)."""
+
+	_the_case(panel)
+
+	light = f'{LEAD} .module[data-module="960"] .stage-light[data-cursor="stage"]'
+
+	def lit () -> str | None:
+		return panel.evaluate("""(light) => {
+			const one = document.querySelector(light);
+			return one && !one.hidden ? one.dataset.stage : null;
+		}""", light)
+
+	# A cycle of sixteen steps a beat long each, so the stage holds across the whole of a
+	# beat however late a frame is drawn.
+	_playing(fake_app, 4.0, [1] * 16, step_beats=1.0)
+	fake_app.beat(4, interval=10.0)
+	panel.wait_for_function(f"() => document.querySelector('{light}')?.dataset.stage === '1'",
+	                        timeout=5_000, polling=50)
+
+	# Built ahead of its start: heard from beat 20, so stage 1 is still the one playing.
+	_playing(fake_app, 20.0, [5] * 16, step_beats=1.0)
+	fake_app.beat(5, interval=10.0)
+	panel.wait_for_timeout(300)
+
+	assert lit() == "1", "a cycle that has not begun was lit before it played"
+
+	fake_app.beat(20, interval=10.0)
+	panel.wait_for_function(f"() => document.querySelector('{light}')?.dataset.stage === '5'",
+	                        timeout=5_000, polling=50)
+
+	# **The column is the stage's own**, read off the lattice rather than assumed.
+	columns = panel.evaluate("""([light, stage]) => [
+		document.querySelector(light).getBoundingClientRect().left,
+		document.querySelector(stage).getBoundingClientRect().left,
+	]""", [light, _stage("lane_a", 5)])
+
+	assert abs(columns[0] - columns[1]) < 1, f"the light is not over its stage: {columns}"
+
+	# A stage of null lights nothing: before the first stage, or a stopped 960.
+	_playing(fake_app, 40.0, [None] * 16, step_beats=1.0)
+	fake_app.beat(40, interval=10.0)
+	panel.wait_for_function(f"() => document.querySelector('{light}')?.hidden === true",
+	                        timeout=5_000, polling=50)
+
+
+def test_the_cords_the_code_patched_run_between_their_jacks (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Each cord the last build played, from an output jack to an input jack, stacked where
+	two leave one output, and its amount said where it is not the whole (#5217)."""
+
+	_the_case(panel)
+
+	cords = f"{LEAD} .cords"
+	panel.wait_for_selector(f"{cords} .cord", timeout=5_000)
+
+	drawn = panel.eval_on_selector_all(f"{cords} .cord", "all => all.map((one) => one.dataset.cord)")
+
+	assert sorted(drawn) == sorted(["clock.out>960.shift", "clock.out>midi.trigger",
+	                                "960.lane_a>midi.pitch"]), f"the cords drawn are not the code's: {drawn}"
+	assert panel.locator(f'{cords} [data-cord="960.lane_a>midi.pitch"] .amount').text_content() == "×0.5"
+	assert panel.locator(f'{cords} [data-cord="clock.out>960.shift"] .amount').count() == 0
+
+	# **Each end at the middle of its jack**, measured rather than trusted.
+	ends = panel.evaluate("""(part) => {
+		const block = document.querySelector(part);
+		const path = block.querySelector('.cords [data-cord="clock.out>960.shift"] path');
+		const length = path.getTotalLength();
+		const shown = block.querySelector(".cords").getBoundingClientRect();
+		const at = (point) => ({ x: shown.left + point.x, y: shown.top + point.y });
+		const middle = (selector) => {
+			const box = block.querySelector(selector).getBoundingClientRect();
+			return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+		};
+
+		return {
+			from: at(path.getPointAtLength(0)), to: at(path.getPointAtLength(length)),
+			out: middle('.jack[data-side="out"][data-jack="clock.out"] .hex'),
+			in: middle('.jack[data-side="in"][data-jack="960.shift"] .hex'),
+		};
+	}""", LEAD)
+
+	for end, jack in (("from", "out"), ("to", "in")):
+		assert abs(ends[end]["x"] - ends[jack]["x"]) < 2 and abs(ends[end]["y"] - ends[jack]["y"]) < 2, \
+			f"a cord's end is not at its jack: {ends}"
+
+	# **A cord the glass pulled out with 0 is gone** (#5217), though the code patched it.
+	fake_app.confirm("lead/cords/clock.out/960.shift", 0, by="panel")
+	playwright_api.expect(panel.locator(f'{cords} [data-cord="clock.out>960.shift"]')).to_have_count(
+		0, timeout=5_000)
+
+
+def test_a_normal_is_drawn_only_while_the_app_would_play_it (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""The 960 wires lane a to its own timing input while timing is on and no cord is in
+	it, which is the app's own rule, so the glass draws that wire then and only then."""
+
+	_the_case(panel)
+
+	normal = f'{LEAD} .cords .normal[data-cord="960.lane_a>960.timing"]'
+	panel.wait_for_selector(normal, timeout=5_000)
+
+	played = fake_app.state["lead"]["played"]
+	fake_app.confirm("lead/played", {**played, "modules": {**played["modules"], "960": {
+		**played["modules"]["960"], "settings": {**played["modules"]["960"]["settings"], "timing": False}}}},
+		by="app")
+	playwright_api.expect(panel.locator(normal)).to_have_count(0, timeout=5_000)
+
+	fake_app.confirm("lead/played", played, by="app")
+	panel.wait_for_selector(normal, timeout=5_000)
+
+	fake_app.confirm("lead/cords/clock.out/960.timing", 1.0, by="panel")
+	playwright_api.expect(panel.locator(normal)).to_have_count(0, timeout=5_000)
+	panel.wait_for_selector(f'{LEAD} .cords .cord[data-cord="clock.out>960.timing"]', timeout=5_000)
+
+
+def test_what_the_code_took_back_or_refused_is_said_in_words (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Decision 2: nothing marks the glass's values, so a knob the code moved is explained
+	in words, as a refusal is, and passes (#5218)."""
+
+	_the_case(panel)
+
+	fake_app.confirm("lead/taken_back", [{"revision": 4, "entries": {
+		"modules": {"960": {"settings": {"lane_a": {"2": True}}}}}}], by="app")
+	playwright_api.expect(panel.locator(".bar .warn")).to_have_text(
+		"the code changed 960 lane a, stage 3", timeout=5_000)
+
+	fake_app.confirm("lead/refused", [{"revision": 5, "reason": "no model called moog_961",
+	                                   "entries": {"modules": {"960": {"settings": {"longest": True}}}}}],
+	                 by="app")
+	playwright_api.expect(panel.locator(".bar .warn")).to_have_text(
+		"960 longest was refused: no model called moog_961", timeout=5_000)
+
+
+def test_back_to_the_code_asks_first_and_hands_everything_back_at_once (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""One set rather than one per entry, asked as a clear is, and offered only while the
+	glass holds something (#5218)."""
+
+	_the_case(panel)
+
+	button = panel.locator(f"{LEAD} .part-foot .hand-back")
+	button.click()
+	panel.wait_for_selector(".sheet .answers", timeout=5_000)
+
+	assert "1 setting or cord" in panel.locator(".sheet .ask").inner_text()
+
+	since = len(fake_app.sets)
+	panel.locator(".sheet .answers button", has_text="cancel").click()
+
+	assert fake_app.settled("lead/held", since=since, limit=0.6) == [], "cancel handed something back"
+
+	button.click()
+	since = len(fake_app.sets)
+	panel.locator(".sheet .answers button.danger").click()
+	_asks(fake_app, "lead/held", {}, since)
+
+	fake_app.confirm("lead/held", {}, by="panel")
+	playwright_api.expect(button).to_have_count(0, timeout=5_000)
+	playwright_api.expect(panel.locator(f"{_stage('lane_a', 2)} .knob")).to_have_attribute(
+		"aria-valuenow", "0.3", timeout=5_000)
+
+
+def test_a_lane_of_switches_is_a_row_of_pads (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""No model in Subsequence's first batch has one, and a lane may be of switches, so the
+	case draws it as a step grid's row is drawn: lit while on, played on the press."""
+
+	models = {**conftest.SEQUENCER_MODELS, "moog_960": {**conftest.SEQUENCER_MODELS["moog_960"], "controls": [
+		*conftest.SEQUENCER_MODELS["moog_960"]["controls"],
+		{"name": "gates", "label": "gates", "kind": "lane", "count": 8, "of": {"kind": "switch"},
+		 "required": False, "default": [False] * 8}]}}
+	played = fake_app.state["lead"]["played"]
+	fake_app.state["lead"] = {**fake_app.state["lead"], "played": {**played, "modules": {
+		**played["modules"], "960": {**played["modules"]["960"], "settings": {
+			**played["modules"]["960"]["settings"], "gates": [True, False] * 4}}}}}
+	fake_app.redeclare({**conftest.CONTROLS, "lead": {**conftest.CONTROLS["lead"], "models": models}})
+
+	_the_case(panel)
+
+	pads = f"{LEAD} .stage[data-lane=\"gates\"] .stage-switch"
+	panel.wait_for_selector(pads, timeout=5_000)
+
+	assert panel.eval_on_selector_all(pads, "all => all.map((one) => one.classList.contains('on'))") == [
+		True, False] * 4
+
+	since = len(fake_app.sets)
+	panel.locator(f"{_stage('gates', 1)} .stage-switch").click()
+	_asks(fake_app, "lead/settings/960/gates/1", True, since)
+
+
+def test_a_block_beside_or_below_a_case_keeps_its_lane (
+	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
+	"""A case is counted before it is drawn, and a row or a column the count left out is
+	not clipped but pushed into the lane beside it or below it (#5218), as a grid's is."""
+
+	# **With a grid the app declared after it**, so the case is placed first: a page lays
+	# its blocks out in the app's order, and the one measured must be beside and above.
+	fake_app.redeclare(conftest.CONTROLS, pages=[{"id": "case", "title": "Case", "parts": ["lead", "tiny"]}])
+
+	page.set_viewport_size({"width": 1900, "height": 900})
+	page.goto(service_url)
+	page.wait_for_selector(f"{LEAD} .sequencer .module", timeout=10_000)
+	_settled(page)
+
+	beside = page.evaluate("""() => {
+		const lead = document.querySelector('.part[data-part="lead"]').getBoundingClientRect();
+		const tiny = document.querySelector('.part[data-part="tiny"]').getBoundingClientRect();
+		return { air: tiny.left - lead.right, level: Math.abs(tiny.top - lead.top),
+		         cell: parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) };
+	}""")
+
+	assert beside["level"] < 1, f"the two blocks were not placed side by side: {beside}"
+	assert beside["air"] >= beside["cell"] - 1, f"the lane beside the case was eaten: {beside}"
+
+	page.set_viewport_size({"width": 520, "height": 1400})
+	page.goto(service_url)
+	page.wait_for_selector(f"{LEAD} .sequencer .module", timeout=10_000)
+	_settled(page)
+
+	lanes = _lanes(page, ["lead", "tiny"])
+
+	assert lanes, "the case and the grid were not stacked, so nothing was measured"
+	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"the lane below the case was eaten: {lanes}"

@@ -35,7 +35,8 @@ coming.
 What runs today: as many pages as an application declares, holding step grids,
 pitched note grids with sub-step timing, an instrument's own settings, stacks of
 generators and transforms that contribute to a pattern, a set of notes chosen on
-a keyboard, and a transport with a bar-beat-step counter. Blocks are arranged by
+a keyboard, a pattern's step sequencer drawn as a case of knobs, and a transport
+with a bar-beat-step counter. Blocks are arranged by
 dragging, and the arrangement - and, if the application asks, everything made
 on the glass - is kept by the application. A generator is wired to
 the pattern it builds; a grid that belongs to no instrument, or a set of notes,
@@ -339,6 +340,55 @@ notes. Where `key_now` returns `None` there is no key: the set says so on the
 glass, and a generator it feeds rests and says why rather than falling silent.
 `examples/blank.py` offers a **Key** block, a root and one of Subsequence's
 scales, and makes degree sets from a rack.
+
+## A step sequencer
+
+Subsequence can play a pattern through models of hardware step sequencers, such
+as a Moog 960 with its rows of knobs, patched to a clock and to the notes it
+plays. Superconductor draws that pattern's sequencer as one **case**, with its
+**modules** side by side in the order the signal runs: the clock first, the notes
+last.
+
+- **Every number is a knob.** Drag up for more and down for less, from wherever
+  you pressed, and the knob shows its value while you hold it. A lane of stages
+  is a row of knobs, one under each stage's number.
+- **A choice for each stage is one cell.** It shows what that stage plays, and
+  opens its list when you lift your finger.
+- **The stage each module is playing is lit**, the whole column, from what the
+  sequencer reported for each step of the cycle.
+- **The cords the code patched run from jack to jack.** A jack is a hexagon, an
+  output's sits on a filled plate, and a cord worth less or more than the whole
+  of its signal says how much (`×0.5`). A module's own wiring, which plays where
+  no cord is plugged in, is drawn faint and dashed while it plays.
+
+What you change on the glass is laid over what the code writes, one knob, stage
+or cord at a time, and the last change wins: save the file with a new value
+somewhere you had changed, and the code's value plays again and the bar says so.
+Two taps on a knob hand its value back to the code, a cell's list offers the
+same, and **back to the code** on the case's footer hands back everything at
+once, after asking. Patching cords by hand comes in a later version.
+
+```python
+import subsequence.plugins.sequencers as sequencers
+
+@sequencers.pattern(composition, channel=1, steps=16, reschedule_lookahead=1 / 24)
+def lead (seq):
+    seq.add(sequencers.moog_960, "960", lane_a=[0.0, 0.2, 0.1, 0.05, 0.0, 0.17, 0.25, 0.08])
+    seq.patch("clock.out", "960.shift")
+    seq.patch("clock.out", "midi.trigger")
+    seq.patch("960.lane_a", "midi.pitch")
+
+lead_case = superconductor.subsequence_adapter.Sequencer(
+    composition,
+    pattern="lead",                 # the pattern the sequencer plays in
+    watch=sequencers.on_build,      # how the adapter hears each build
+)
+```
+
+Give `lead_case` to the link with your other controls. A change on the glass is
+heard from the pattern's next build, which `reschedule_lookahead=1 / 24` makes a
+pulse away rather than a beat. The `sequencers` plugin is on Subsequence's main
+branch and is not yet in a release.
 
 ## Arranging a page
 
