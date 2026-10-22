@@ -214,6 +214,14 @@ WILL_NOT_RUN = {
 	"bresenham_poly": "parts", "broken_chord": "chord_obj",
 	"lsystem": "pitch_map", "markov": "transitions",
 	"melody": "state", "motif": "m", "phrase": "value",
+
+	# **And the first four transforms, from Subsequence 0.7.2 on** (#3651), the
+	# same case from the other side of the catalogue: each is listed `partial`
+	# because it needs a thing rather than a number — a groove template, a factor
+	# per step, a tuning, a function — and the glass greys it as it greys the
+	# seven above.  Seven became eleven, every one of them partial.
+	"groove": "template", "scale_velocities": "factors",
+	"apply_tuning": "tuning", "every": "fn",
 }
 """Every layer that is offered on the glass and cannot run, and why.
 
@@ -263,12 +271,12 @@ def _sweep (caplog: typing.Any) -> dict[str, str]:
 # `cellular_2d` because this package supplies one to every layer that will take
 # it, and at the default `initial_state="center"` that seed does nothing — which
 # is worth one line in a rig's log the first time somebody adds the layer, and is
-# noise in a sweep whose whole job is to call all forty-six.  Named exactly, so
+# noise in a sweep whose whole job is to call all fifty.  Named exactly, so
 # any other warning still counts: a clean run here is two, both third-party.
 @pytest.mark.filterwarnings("ignore:cellular_2d:UserWarning")
 def test_the_layers_that_cannot_run_are_the_ones_already_written_down (
 	caplog: typing.Any) -> None:
-	"""Seven of the forty-six offered here are added and then skipped every cycle.
+	"""Eleven of the fifty offered here are added and then skipped every cycle.
 
 	The sweep #2214 asks for, run as a test rather than by hand.  It fails in both
 	directions and both are worth knowing:
