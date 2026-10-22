@@ -10784,9 +10784,13 @@ def test_a_scene_cues_its_letter_on_every_grid_the_page_carries (
 	fake_app.confirm("tiny/playing", "B", by="app")
 	fake_app.confirm("tiny/cue", None, by="app")
 
+	# Wait for the end state rather than reading it once: between those two frames
+	# the scene is rightly both playing and cued, and a panel that draws in the gap
+	# would fail a single read (#5214).
 	playwright_api.expect(panel.locator(_scene("B"))).to_have_class(
 		re.compile(r"\bplaying\b"), timeout=5_000)
-	assert "cued" not in (panel.locator(_scene("B")).get_attribute("class") or "")
+	playwright_api.expect(panel.locator(_scene("B"))).not_to_have_class(
+		re.compile(r"\bcued\b"), timeout=5_000)
 
 
 def test_a_page_with_nothing_to_share_offers_no_scene (panel: typing.Any) -> None:
