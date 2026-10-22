@@ -4500,6 +4500,41 @@ html, body {
  * line, because a control holding two lines is an option and this is not one.
  * Its size is its own and its lettering is its children's, which is how a key keeps
  * clear of the rules that give every other button on a block its height and type. */
+/* --- A sequencer's case (#5210) ------------------------------------------
+ *
+ * Its modules side by side, as in a cabinet, each headed with its name as a
+ * settings section is (#5218).  The knobs, the jacks and the cords come with the
+ * next builds; this is the case they go into. */
+.sequencer {
+	display: flex;
+	gap: var(--gap);
+}
+
+.sequencer .module {
+	flex: none;
+	min-width: calc(var(--cell) * 4 + var(--gap) * 3);
+	padding: var(--pad);
+	border-right: 2px solid var(--edge);
+}
+
+.sequencer .module:last-child { border-right: none; }
+
+.sequencer .module h3 {
+	margin: 0;
+	font-family: var(--face-panel);
+	font-size: var(--type-note);
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink);
+}
+
+.sequencer .module p,
+.sequencer.waiting {
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	color: var(--ink-quiet);
+}
+
 .degrees {
 	display: flex;
 	flex-direction: column;

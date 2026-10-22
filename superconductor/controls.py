@@ -12,6 +12,7 @@ that kind of control needs to identify one of its parts — ``grid/kick/4`` for 
 cell, ``transport/bpm`` for a field.
 """
 
+import copy
 import typing
 
 import superconductor.protocol
@@ -161,6 +162,19 @@ the app checks it, and two fields only the app writes: ``key``, in the app's wor
 and ``scale``, what each step makes.  It resolves nothing and knows no key.
 """
 
+SEQUENCER = "sequencer"
+"""A pattern's step sequencer: modules patched with cords, played inside the pattern (#5210).
+
+The service keeps what the app reports, the modules, what played and what the glass
+holds over the code, and places a panel's change to a setting or a cord into the held
+document by `protocol.sequencer_hold`, after `protocol.sequencer_refusal` has checked it
+exactly as the app does.  It knows no model: what a 960 is, and what any of its
+controls do, is the app's to describe and the composition's to play.
+"""
+
+SEQUENCER_REPORTS = ("modules", "played", "held", "taken_back", "refused")
+"""What only the app writes, each reported whole whenever a build changes it."""
+
 PITCH_SET = "pitch_set"
 """A set of pitches somebody chose, held as a control in its own right.
 
@@ -279,6 +293,9 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 
 	elif kind == DEGREE_SET:
 		_apply_degree_set(state.setdefault(control, {}), declaration, rest, value, path)
+
+	elif kind == SEQUENCER:
+		_apply_sequencer(state.setdefault(control, {}), declaration, rest, value, path)
 
 	else:
 		raise ControlError(f"{control!r} is a {kind!r}, which this version does not know")
@@ -900,6 +917,54 @@ def _apply_degree_set (
 		return
 
 	raise ControlError(f"{path!r} does not name a degree set as control/chosen")
+
+
+def _apply_sequencer (
+	held: dict[str, typing.Any],
+	declaration: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+) -> None:
+	"""Keep what a sequencer's app reports, or place one setting or cord into what the glass holds (#5218).
+
+	**What only the app writes is kept whole and checked for its shape alone**: what
+	played, which modules there are, and the app's notices.  A panel's setting or cord is
+	checked by the rule the app checks it by, and lands in ``held``, which is where the
+	app keeps it too.
+	"""
+
+	if rest == ["enabled"]:
+		held["enabled"] = bool(value)
+		return
+
+	if len(rest) == 1 and rest[0] in SEQUENCER_REPORTS:
+		field = rest[0]
+		shape = list if field in ("modules", "taken_back", "refused") else dict
+
+		if not isinstance(value, shape):
+			raise ControlError(f"{path!r} takes a {shape.__name__}, not {value!r}")
+
+		if field == "modules" and not all(
+				isinstance(one, dict) and isinstance(one.get("name"), str) and isinstance(one.get("model"), str)
+				for one in value):
+			raise ControlError(f"{path!r} takes each module as its name and its model")
+
+		# Copied, for the reason a range is: a later edit to the caller's own value
+		# must not reach the copy a late panel is sent.
+		held[field] = copy.deepcopy(value)
+		return
+
+	if rest[:1] and rest[0] in superconductor.protocol.SEQUENCER_SETS:
+		why = superconductor.protocol.sequencer_refusal(declaration, held.get("modules"), rest, value)
+
+		if why is not None:
+			raise ControlError(why)
+
+		held["held"] = superconductor.protocol.sequencer_hold(held.get("held"), rest, value)
+		return
+
+	raise ControlError(f"{path!r} does not name a sequencer's settings, its cords or a field its app reports")
 
 
 def _patched (value: typing.Any) -> bool:

@@ -52,9 +52,10 @@ jobs:
       - name: Install the package, its dev dependencies and Subsequence
         # **Subsequence is installed here, and named nowhere in pyproject.toml.**
         # It is a rig arrangement rather than a dependency, because this package
-        # must never declare one on a particular app (#1465). Four files measure
+        # must never declare one on a particular app (#1465). Five files measure
         # this package against the sequencer an app runs: test_demo.py,
-        # test_blank.py, test_generators.py and test_length_sequencer.py.
+        # test_blank.py, test_generators.py, test_length_sequencer.py and
+        # test_sequencer_plays.py.
         # 0.7.0 is the first release carrying what the examples use; PyPI's
         # 0.6.6 failed at `module 'subsequence' has no attribute 'generators'`
         # when this was tried on 2026-09-09.

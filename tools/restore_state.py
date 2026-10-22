@@ -106,6 +106,9 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 			asks.extend((app, f"{control}/{field}", held[field])
 			            for field in ("chosen", "enabled") if field in held)
 
+		elif said.get("type") == "sequencer":
+			asks.extend(_sequencer_sets(app, control, held))
+
 		elif said.get("type") in GRIDS:
 			asks.append((app, f"{control}/rows",
 			             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))
@@ -114,6 +117,44 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 
 		else:
 			asks.extend(_walked(app, control, held))
+
+	return asks
+
+
+def _sequencer_sets (app: str, control: str, held: dict) -> list[tuple[str, str, object]]:
+	"""A sequencer put back: what the glass held, a stage, a setting and a cord at a time, and its mute (#5218).
+
+	**Never what played**, which the code makes again, nor the app's notices: a set
+	of either would be refused, because only the app writes them.  A lane's stages
+	go back one by one, as a panel sets them, so each is taken back on its own if the
+	code has since changed it.
+	"""
+
+	asks: list[tuple[str, str, object]] = []
+	found = held.get("held")
+	document: dict = found if isinstance(found, dict) else {}
+	listed = document.get("modules")
+	modules: dict = listed if isinstance(listed, dict) else {}
+
+	for module, entry in modules.items():
+		settings = entry.get("settings") if isinstance(entry, dict) else None
+
+		for name, value in (settings or {}).items():
+			if isinstance(value, dict):
+				asks.extend((app, f"{control}/settings/{module}/{name}/{stage}", one)
+				            for stage, one in value.items())
+
+			else:
+				asks.append((app, f"{control}/settings/{module}/{name}", value))
+
+	patch = document.get("patch")
+
+	for cord in patch if isinstance(patch, list) else []:
+		if isinstance(cord, list) and len(cord) == 3:
+			asks.append((app, f"{control}/cords/{cord[0]}/{cord[1]}", cord[2]))
+
+	if "enabled" in held:
+		asks.append((app, f"{control}/enabled", held["enabled"]))
 
 	return asks
 

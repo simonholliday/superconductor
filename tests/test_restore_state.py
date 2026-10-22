@@ -103,6 +103,27 @@ def test_a_degree_set_goes_back_as_what_was_chosen_and_nothing_its_key_made () -
 	]
 
 
+def test_a_sequencer_goes_back_as_what_the_glass_held_a_stage_at_a_time () -> None:
+	"""**What played is the code's to make again** (#5218), and the notices are the app's:
+	replayed, either would be refused.  What the glass held goes back as a panel set it,
+	a stage, a setting and a cord at a time, so the code can take back each on its own."""
+
+	state = {"lead": {
+		"modules": [{"name": "960", "model": "moog_960"}],
+		"played": {"modules": {"960": {"model": "moog_960", "settings": {"range_a": "x4"}}}, "patch": []},
+		"held": {"modules": {"960": {"settings": {"lane_a": {"2": 0.4, "5": 0.1}, "range_a": "x2"}}},
+		         "patch": [["960.lane_a", "960.timing", 0.5]]},
+		"taken_back": [{"revision": 3, "entries": {}}], "refused": [], "enabled": False}}
+
+	assert _tool()._sets("app", state, {"lead": {"type": "sequencer"}}) == [
+		("app", "lead/settings/960/lane_a/2", 0.4),
+		("app", "lead/settings/960/lane_a/5", 0.1),
+		("app", "lead/settings/960/range_a", "x2"),
+		("app", "lead/cords/960.lane_a/960.timing", 0.5),
+		("app", "lead/enabled", False),
+	]
+
+
 def test_a_rack_goes_back_before_anything_that_could_route_from_its_grids () -> None:
 	"""The grids a rack made exist only once it has made them, and a stack
 	refuses a route to a grid that does not exist."""

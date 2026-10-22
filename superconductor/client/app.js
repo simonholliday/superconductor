@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.43.0";
+const CONTRACT = "1.44.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -456,7 +456,7 @@ const GRIDS = ["step_grid", "note_grid"];
    kind added in Python and not here is a control the panel quietly stops
    drawing (#2420). */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set", "degree_set"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set", "degree_set", "sequencer"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -3233,6 +3233,47 @@ function Degrees ({ octaves, steps, chosen, keyWords, scale, onSet }) {
 					? held.map((one) => `${signOf(one.chroma)}${one.step}${one.octave ? ` (${octaveOf(one.octave)})` : ""}`).join(" · ")
 					: "no degrees — patched generators will rest"}</span>
 			</div>
+		</div>`;
+}
+
+
+/* A pattern's sequencer: one case holding every module, in signal order (#5210).
+ *
+ * **Simon's designs of 2026-10-22** (#5217, #5218): the modules stand side by side as
+ * in a cabinet, and a cord runs only between jacks inside the case.  This is the
+ * case and its modules by name; the knobs, the choice cells, the playhead and the
+ * cords come with the next builds.
+ *
+ * **Signal order is the app's order with the notes-out moved to the end.**  The app
+ * puts its own clock first, and a model with no outputs plays, so it is where the
+ * signal leaves: that is the one fact here that reorders anything. */
+function playsLast (modules, models) {
+	const plays = (one) => Boolean((models[one.model] || {}).plays);
+
+	return [...modules.filter((one) => !plays(one)), ...modules.filter(plays)];
+}
+
+function SequencerCase ({ control, held }) {
+	const models = control.models || {};
+	const modules = playsLast(held.modules || [], models);
+
+	/* Before the sequencer's first build there is nothing to say what it holds,
+	   and that build declares again. */
+	if (!modules.length) {
+		return html`<div class="sequencer waiting">waiting for the sequencer's first build</div>`;
+	}
+
+	return html`
+		<div class="sequencer">
+			${modules.map((one) => {
+				const model = models[one.model] || {};
+
+				return html`
+					<section class="module" key=${one.name} data-module=${one.name}>
+						<h3>${labelText(model.label || one.name)}</h3>
+						<p>${model.summary || ""}</p>
+					</section>`;
+			})}
 		</div>`;
 }
 
@@ -8178,6 +8219,10 @@ function Panel () {
 								keyWords=${((state[appName] || {})[one.control] || {}).key}
 								scale=${((state[appName] || {})[one.control] || {}).scale || []}
 								onSet=${(value) => request(`${one.control}/chosen`, value)} />`
+						: kindOf(one.control) === "sequencer"
+						? html`
+							<${SequencerCase} control=${controls[one.control]}
+								held=${(state[appName] || {})[one.control] || {}} />`
 						: kindOf(one.control) === "params"
 						? html`
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}

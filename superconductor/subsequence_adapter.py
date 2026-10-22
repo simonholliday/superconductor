@@ -23,6 +23,7 @@ import asyncio
 import collections
 import collections.abc
 import contextlib
+import copy
 import datetime
 import fractions
 import inspect
@@ -3750,6 +3751,269 @@ class DegreeSet (Control):
 		self._said = heard
 		self.link.report(f"{self.name}/key", heard[0])
 		self.link.report(f"{self.name}/scale", heard[1])
+
+
+SEQUENCER_TWEAK = "sequencer"
+"""The tweak a Subsequence sequencer reads the glass's settings from, `sequencers.TWEAK`.
+
+Written here rather than imported, because this module imports no sequencer (#1465).
+It is Subsequence's word, and this is the file that knows Subsequence's words.
+"""
+
+
+def _modules_of (played: dict[str, typing.Any]) -> list[dict[str, typing.Any]]:
+	"""The modules a sequencer played, as name and model, in the order it holds them.
+
+	**A list, because a mapping cannot carry the order to the glass**: a module called
+	``960`` is an integer-like key, and JavaScript puts those first.
+	"""
+
+	modules = played.get("modules")
+
+	if not isinstance(modules, dict):
+		return []
+
+	return [{"name": name, "model": module.get("model")}
+	        for name, module in modules.items() if isinstance(module, dict)]
+
+
+class Sequencer (Control):
+	"""A pattern's step sequencer, from Subsequence's sequencers plugin, drawn as one case (#5210).
+
+	**Simon's designs of 2026-10-22, #5217 and #5218.**  A pattern holds one sequencer, a
+	small modular system: models such as the Moog 960 placed on it as modules, patched
+	from output jacks to input jacks with cords, and played on the pattern's channel.
+	The glass draws every module in one case, and a cord never leaves it.
+
+	**Nothing here imports the plugin** (#1465).  The composition hands over *watch*,
+	which is `sequencers.on_build`, and this registers one callback with it.  Every
+	successful build of the pattern then hands over what the sequencer is, its
+	``state()`` (or ``None``, where nothing in it moved since this callback last took
+	it), and where each module was at each step, ``playing``.
+
+	**The code declares and the glass lays its settings over it** (Subsequence's D3).
+	The glass sets one entry per control, per stage of a lane and per cord, which this
+	hands to the pattern as its ``sequencer`` tweak, and the last change wins: when the
+	code changes something the glass holds, the sequencer takes the glass's entry back
+	and says so, and what it still holds returns with the next build.  A null from the
+	glass hands an entry back on purpose (Simon, 2026-10-22).
+	"""
+
+	kind = "sequencer"
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		pattern: str,
+		watch: collections.abc.Callable[[typing.Any, collections.abc.Callable[..., None]], typing.Any],
+		name: str | None = None,
+		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+	) -> None:
+		"""Draw the sequencer that *pattern* plays, learning what it is from each build through *watch*."""
+
+		self.composition = composition
+		self.pattern = pattern
+		self.name = name or pattern
+		self.title = title
+		self.about = list(about)
+		self.link: "AppLink | None" = None
+
+		self._state: dict[str, typing.Any] | None = None
+		"""What the sequencer said it was at the last build that moved it, or None before the first.
+
+		**Replaced whole and never changed in place**, so the link thread may read it while
+		a build on the clock loop replaces it."""
+
+		self._held: dict[str, typing.Any] = {}
+		"""What the glass holds over the code, in the shape the sequencer reads, replaced whole as the state is."""
+
+		self._tweak_owed = False
+		"""Whether what the glass holds has still to reach the pattern, which cannot be told until it runs."""
+
+		watch(composition, self._built)
+
+	def _rule (self) -> dict[str, typing.Any]:
+		"""What `protocol.sequencer_refusal` reads of the declaration, without copying it."""
+
+		state = self._state or {}
+
+		return {"models": state.get("models"), "cables": state.get("cables")}
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""The pattern it plays in, its models and its rule for cords, all as the sequencer describes them.
+
+		**Empty until the first build**, which is when the sequencer first says what it is,
+		and that build declares again.
+		"""
+
+		state = self._state or {}
+
+		return {"type": self.kind, "pattern": self.pattern,
+		        "models": copy.deepcopy(state.get("models") or {}),
+		        "cables": copy.deepcopy(state.get("cables") or {}),
+		        **self.said()}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""Its modules in order, what played, what the glass holds, the sequencer's notices, and the mute."""
+
+		state = self._state or {}
+		played = state.get("played") or {}
+
+		return {"modules": _modules_of(played), "played": copy.deepcopy(played),
+		        "held": copy.deepcopy(self._held),
+		        "taken_back": copy.deepcopy(state.get("taken_back") or []),
+		        "refused": copy.deepcopy(state.get("refused") or []),
+		        "enabled": self.enabled}
+
+	def kept (self) -> dict[str, typing.Any]:
+		"""What the glass holds over the code, and the mute: what a person made of this sequencer.
+
+		**Never what played**, which the code makes again on every start (#1965).  The held
+		document is replaced whole and never edited in place, so copying it here, off the
+		clock loop, reads one document from start to end.
+		"""
+
+		return {"held": copy.deepcopy(self._held), "enabled": self.enabled}
+
+	def restore (self, kept: typing.Any) -> list[str]:
+		"""Put back what the glass held, owing it to the pattern until the pattern runs.
+
+		**Checked by the sequencer, not here**: a store read before the first build knows
+		no model yet, and the sequencer refuses, with its reason, whatever it cannot take.
+		"""
+
+		if not isinstance(kept, dict) or not isinstance(kept.get("held", {}), dict):
+			return [f"{self.name} was kept as something other than a sequencer's settings"]
+
+		self._held = copy.deepcopy(kept.get("held") or {})
+		self._tweak_owed = bool(self._held)
+
+		return self._restore_enabled(kept.get("enabled", True))
+
+	def attach (self, link: "AppLink") -> None:
+		"""Keep the link, so a build can say what it changed."""
+
+		self.link = link
+
+	def started (self) -> None:
+		"""Put the mute back, and hand the pattern what the glass held before it ran."""
+
+		super().started()
+
+		if self._tweak_owed:
+			self._tweak_owed = False
+			self._tell()
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Set or hand back one setting, one stage of a lane or one cord, or switch the pattern off."""
+
+		if rest == ["enabled"]:
+			return self._keep_enabled(value)
+
+		if not rest or rest[0] not in superconductor.protocol.SEQUENCER_SETS:
+			raise Refused("a sequencer is set at control/settings/… or control/cords/…, "
+			              "and the rest is its app's to report")
+
+		state = self._state or {}
+		why = superconductor.protocol.sequencer_refusal(
+			self._rule(), _modules_of(state.get("played") or {}), rest, value)
+
+		if why is not None:
+			raise Refused(why)
+
+		wanted = superconductor.protocol.sequencer_hold(self._held, rest, value)
+
+		if wanted == self._held:
+			return False
+
+		self._held = wanted
+		self._tell()
+
+		return True
+
+	def _tell (self) -> None:
+		"""Hand the pattern everything the glass holds, with the revision it was made from.
+
+		**The whole document every time**, as the sequencer reads it.  **The revision keeps a
+		taken-back entry out**: a document made before the sequencer took an entry back cannot
+		put it back, so a panel that has not yet heard of a take-back cannot undo it.
+
+		On the clock loop, where Subsequence makes a tweak at once, so the next build reads it.
+		"""
+
+		document = copy.deepcopy(self._held)
+		revision = (self._state or {}).get("revision")
+
+		if isinstance(revision, int) and not isinstance(revision, bool):
+			document["revision"] = revision
+
+		try:
+			self.composition.tweak(self.pattern, **{SEQUENCER_TWEAK: document})
+
+		# Subsequence refuses a tweak for a pattern that is not running yet, which is
+		# what a store read before `play()` meets: it is owed until `started`.
+		except ValueError:
+			self._tweak_owed = True
+
+	def _built (self, pattern_name: str, state: dict[str, typing.Any] | None,
+	            playing: dict[str, typing.Any] | None) -> None:
+		"""Take what a build of the pattern says, and hand on what changed.
+
+		**On the clock's loop and inside the build**, so this costs a comparison and a frame
+		put in line, and the frames are sent from the link thread (#2516).  A ``state`` comes
+		only when the sequencer moved, from the A-list's plugin on, and with every build at
+		``c614221``, and both read the same here.  Where each module was is an event, kept
+		nowhere (#1965).
+		"""
+
+		if pattern_name != self.pattern:
+			return
+
+		if state is not None:
+			self._take(state)
+
+		# **Owed is tried again at every build**, not only when the patterns start: the
+		# pattern is not among the running ones until its first build has finished, so a
+		# change made during that build is refused like one made before `play()`, and
+		# `started` may already have been and gone.
+		if self._tweak_owed:
+			self._tweak_owed = False
+			self._tell()
+
+		if playing is not None and self.link is not None:
+			self.link.happened("playing", control=self.name,
+			                   cycle=playing.get("cycle"), modules=playing.get("modules"))
+
+	def _take (self, state: dict[str, typing.Any]) -> None:
+		"""Keep a build's state, and report what it changed: whole, or as a new declaration.
+
+		**What the glass holds is the sequencer's account of it**, after it took back what the
+		code changed and refused what it could not take, so the next change is made on that.
+		A change of models or of the rule for cords is a new declaration (#2226), which carries
+		everything else.
+		"""
+
+		before = self._state
+		self._state = state
+		self._held = state.get("held") or {}
+
+		if self.link is None:
+			return
+
+		if (before is None or before.get("models") != state.get("models")
+				or before.get("cables") != state.get("cables")):
+			self.link.redeclare()
+			return
+
+		was, now = before.get("played") or {}, state.get("played") or {}
+
+		if _modules_of(was) != _modules_of(now):
+			self.link.report(f"{self.name}/modules", _modules_of(now))
+
+		for field, empty in (("played", {}), ("held", {}), ("taken_back", []), ("refused", [])):
+			if before.get(field) != state.get(field):
+				self.link.report(f"{self.name}/{field}", state.get(field) or empty)
 
 
 class Recipe (Control):

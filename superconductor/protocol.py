@@ -10,12 +10,13 @@ this build does not use — ``fire``, ``telemetry`` and the page frames — are
 absent rather than stubbed, so nothing claims to work that has never run.
 """
 
+import copy
 import json
 import math
 import typing
 
 
-CONTRACT_VERSION = "1.43.0"
+CONTRACT_VERSION = "1.44.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -449,6 +450,49 @@ no music theory** (#2144), so those words are what it draws.
 naming both.  The service keeps a cable from a degree set as it keeps one from a
 pitch set, and never resolves it: the app resolves degrees against its key at every
 build.  **Additive**: an app that declares no degree set changes nothing.
+
+1.44.0 adds ``sequencer``: a pattern's step sequencer, a case of modules patched
+together with cords and played inside the pattern (#5210, to the designs Simon agreed
+on 2026-10-22, #5217 and #5218).  The words are the app's: a module is an instance of
+a model, a jack is a patch point on one, and a cord runs from an output jack to an
+input jack of the same sequencer, never out of it.
+
+**Declared** with the ``pattern`` it plays in; ``models``, each model it holds by its
+name, as the app describes it (its ``stages``, ``controls``, ``inputs``, ``outputs``,
+``normals`` and whatever else it says); and ``cables``, the app's rule for what an
+output reads as at each kind of input, with the bounds of a cord's ``amount`` where
+the app publishes them.
+
+**Its state**:
+
+* ``modules``: each module as ``{name, model}``, **in the app's order**, which a
+  mapping cannot carry: a module called ``960`` is an integer-like key, and
+  JavaScript orders those first.
+* ``played``: what the last build played: ``{"modules": {name: {"model", "settings"}},
+  "patch": [[from, to, amount], ...]}``, a lane as a list with one value per stage
+  and each end of a cord written ``module.jack``.
+* ``held``: what the glass holds over the code, in the same shape, a lane's stages
+  keyed by their index from ``"0"`` and only those set.  The last change wins, per
+  control, per stage and per cord: when the code changes one, the app takes the
+  glass's entry back and says so.
+* ``taken_back`` and ``refused``: the app's notices, newest first, each with the
+  ``revision`` it came at and the ``entries`` it names, and a refusal its ``reason``.
+* ``enabled``, the mute every control has.
+
+**A panel sets two things, and null hands either back to the code**:
+``<control>/settings/<module>/<control>`` for a control that is not a lane,
+``<control>/settings/<module>/<lane>/<stage>`` for one stage of a lane, and
+``<control>/cords/<from>/<to>`` for a cord's amount, where 0 pulls out a cord the
+code patched.  **A lane is set a stage at a time** (Simon, 2026-10-20: each stage is a
+knob of its own), so a code change to one stage takes back that stage alone.  The app
+reports each at the same path, and reports the whole of ``modules``, ``played``,
+``held``, ``taken_back`` and ``refused`` whenever a build changes them.
+
+**Where each module was, step by step, is an event**, ``playing``, sent once a cycle
+and kept nowhere (#1965): ``cycle`` (``start_beat``, ``steps``, ``step_beats``) and
+``modules``, each with a ``positions`` list per cursor (a stage index from 0, or null)
+and, where it has displays, a ``shows`` list per display.  **Additive**: an app that
+declares no sequencer changes nothing.
 """
 
 UNIT = "unit"
@@ -555,7 +599,7 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 
 
 CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
-                 "transport", "rack", "pitch_set", "degree_set", "store")
+                 "transport", "rack", "pitch_set", "degree_set", "store", "sequencer")
 """Every kind of control there is, in the words the wire uses.
 
 **It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to
@@ -739,6 +783,238 @@ def degrees_refusal (
 		taken.add(place)
 
 	return None
+
+
+SEQUENCER_SETS = ("settings", "cords")
+"""What a panel may set on a sequencer: its modules' settings, and the cords between their jacks.
+
+Everything else in a sequencer's state is the app's to report (#5218).
+"""
+
+
+def _one_value_refusal (described: typing.Any, value: typing.Any, what: str) -> str | None:
+	"""Why *value* cannot be one value of the control *described*, or ``None`` if it can.
+
+	A lane hands in what it is a lane *of*, so a stage is checked as one value of that.
+	**A number out of bounds is refused, not clamped**, as a setting's is, although the
+	sequencer would clamp it: a panel drew those bounds, and a value outside them is a
+	panel that disagrees with what it was told.
+	"""
+
+	if not isinstance(described, dict):
+		return f"{what} is described as nothing this version can set"
+
+	kind = described.get("kind")
+
+	if kind == "switch":
+		return None if isinstance(value, bool) else f"{what} is a switch and takes true or false, not {value!r}"
+
+	if kind in ("number", "pitch"):
+		if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+			return f"{what} is a number, and {value!r} is not one"
+
+		# A pitch is a note number, 0 to 127, which is what the app means by its word.
+		# This checks the shape of one and knows nothing of which notes a rig plays.
+		if kind == "pitch" and value != int(value):
+			return f"{what} is a note, a whole number, and {value!r} is not one"
+
+		low, high = (0, 127) if kind == "pitch" else (described.get("min"), described.get("max"))
+
+		if low is not None and value < low:
+			return f"{what} is not below {low}, and {value!r} is"
+
+		if high is not None and value > high:
+			return f"{what} is not above {high}, and {value!r} is"
+
+		return None
+
+	if kind == "choice":
+		offered = [one.get("value") for one in described.get("options", []) if isinstance(one, dict)]
+
+		return None if value in offered else f"{what} has no option called {value!r}"
+
+	return f"{what} is a {kind!r}, which this version cannot set"
+
+
+def sequencer_refusal (
+	declaration: typing.Any,
+	modules: typing.Any,
+	rest: list[str],
+	value: typing.Any,
+) -> str | None:
+	"""Why a panel could not set *rest* to *value* on a sequencer, or ``None`` if it could (#5218).
+
+	*declaration* is the sequencer's own, for its ``models`` and ``cables``, and *modules*
+	its state's list of them.  **One rule, read by both halves**, as `degrees_refusal` is:
+	the app refuses with `Refused` and the service with `ControlError`, and both say this.
+
+	**Null is taken wherever a panel may set something**, because it sets nothing: it
+	hands the glass's entry back to the code.  The address is still checked, so a hand-back
+	names something that exists.
+	"""
+
+	described = declaration.get("models") if isinstance(declaration, dict) else None
+	models = described if isinstance(described, dict) else {}
+	placed = ({one.get("name"): models.get(one.get("model")) for one in modules if isinstance(one, dict)}
+	          if isinstance(modules, list) else {})
+
+	def model_of (module: str) -> tuple[dict[str, typing.Any] | None, str | None]:
+		"""The model a module is an instance of, or why there is none."""
+
+		if module not in placed:
+			return None, f"there is no module called {module!r} on this sequencer"
+
+		model = placed[module]
+
+		if not isinstance(model, dict):
+			return None, f"{module} is an instance of a model this sequencer did not describe"
+
+		return model, None
+
+	if rest[:1] == ["settings"]:
+		if len(rest) not in (3, 4):
+			return ("a setting is addressed as control/settings/module/control, "
+			        "and a stage of a lane as control/settings/module/lane/stage")
+
+		module, name = rest[1], rest[2]
+		model, why = model_of(module)
+
+		if model is None:
+			return why
+
+		control = next((one for one in model.get("controls", [])
+		                if isinstance(one, dict) and one.get("name") == name), None)
+
+		if control is None:
+			return f"{module} has no control called {name!r}"
+
+		lane = control.get("kind") == "lane"
+
+		if lane and len(rest) == 3:
+			return f"{module}.{name} is a lane, and is set a stage at a time"
+
+		if not lane and len(rest) == 4:
+			return f"{module}.{name} is one value, not a lane of stages"
+
+		if not lane:
+			return None if value is None else _one_value_refusal(control, value, f"{module}.{name}")
+
+		count, stage = control.get("count"), rest[3]
+
+		# Written as the app writes it, so "02" and "2" cannot be two entries for one stage.
+		if not stage.isdigit() or stage != str(int(stage)) or not isinstance(count, int) or int(stage) >= count:
+			return f"{module}.{name} has {count} stages, numbered from 0, and no stage {stage!r}"
+
+		return None if value is None else _one_value_refusal(control.get("of"), value, f"{module}.{name}")
+
+	if rest[:1] == ["cords"]:
+		if len(rest) != 3:
+			return "a cord is addressed as control/cords/from/to, each end written module.jack"
+
+		for end, side, word in ((rest[1], "outputs", "output"), (rest[2], "inputs", "input")):
+			module, _, jack = end.partition(".")
+			model, why = model_of(module)
+
+			if model is None:
+				return why
+
+			if jack not in [one.get("name") for one in model.get(side, []) if isinstance(one, dict)]:
+				return f"{module} has no {word} called {jack!r}"
+
+		if value is None:
+			return None
+
+		if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+			return f"a cord's amount is a number, and {value!r} is not one"
+
+		cables = declaration.get("cables") if isinstance(declaration, dict) else None
+		bounds = cables.get("amount") if isinstance(cables, dict) else None
+
+		# **Bounds only where the app published them**: the sequencers plugin at
+		# c614221 publishes none, and a range invented here would refuse what it takes.
+		if isinstance(bounds, dict):
+			return _one_value_refusal({"kind": "number", **bounds}, value, "a cord's amount")
+
+		return None
+
+	return "a panel sets a sequencer's settings and its cords; the rest is the app's to report"
+
+
+def sequencer_hold (held: typing.Any, rest: list[str], value: typing.Any) -> dict[str, typing.Any]:
+	"""*held* with one entry set, or handed back where *value* is null, as a new document.
+
+	Called with a path `sequencer_refusal` has let through, by both halves, so the app's
+	overlay and the service's copy of it come out the same shape.  **A mapping or a list a
+	hand-back empties goes with it**, because the app's own document leaves it out: unset
+	is an absent key, never an empty one (#2518).  A cord set again keeps its place in the
+	list, so the order the cords were patched in survives a change of amount.
+	"""
+
+	document = copy.deepcopy(held) if isinstance(held, dict) else {}
+
+	if rest[0] == "settings":
+		module, name = rest[1], rest[2]
+		modules = document.setdefault("modules", {})
+		entry = modules.setdefault(module, {})
+		settings = entry.setdefault("settings", {})
+
+		if len(rest) == 4:
+			lane = settings.get(name)
+			lane = lane if isinstance(lane, dict) else {}
+
+			if value is None:
+				lane.pop(rest[3], None)
+
+			else:
+				lane[rest[3]] = value
+
+			if lane:
+				settings[name] = lane
+
+			else:
+				settings.pop(name, None)
+
+		elif value is None:
+			settings.pop(name, None)
+
+		else:
+			settings[name] = value
+
+		if not settings:
+			entry.pop("settings", None)
+
+		if not entry:
+			modules.pop(module, None)
+
+		if not modules:
+			document.pop("modules", None)
+
+		return document
+
+	source, destination = rest[1], rest[2]
+	patch: list[typing.Any] = []
+	placed = False
+
+	for cord in document.get("patch", []):
+		if isinstance(cord, list) and cord[:2] == [source, destination]:
+			if value is not None and not placed:
+				patch.append([source, destination, value])
+				placed = True
+
+			continue
+
+		patch.append(cord)
+
+	if value is not None and not placed:
+		patch.append([source, destination, value])
+
+	if patch:
+		document["patch"] = patch
+
+	else:
+		document.pop("patch", None)
+
+	return document
 
 
 Frame = dict[str, typing.Any]
