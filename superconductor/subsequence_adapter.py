@@ -96,6 +96,12 @@ KEEP_ON_STOP_WITHIN = 5.0
 A save stuck on a disk that has stopped answering must not hold the composition
 open for ever; the last save that did finish is still on disk."""
 
+GOODBYE_WITHIN = 2.0
+"""How long a clean stop waits for the link to close its socket (#5225).
+
+A service that is answering closes in milliseconds; one that is not must not hold
+the composition's exit, and the composition stops either way."""
+
 
 class Refused (Exception):
 	"""A request the app will not carry out, carrying why so a panel can say so.
@@ -6706,6 +6712,7 @@ class AppLink:
 
 		self._clock_loop: asyncio.AbstractEventLoop | None = None
 		self._link_loop: asyncio.AbstractEventLoop | None = None
+		self._dialling: asyncio.Task[None] | None = None
 		self._socket: typing.Any = None
 
 		self._outbound: collections.OrderedDict[
@@ -6769,7 +6776,7 @@ class AppLink:
 		LOG.info("Superconductor link started; dialling %s", self.url)
 
 	def stop (self) -> None:
-		"""Keep what is not kept yet, stop dialling, and let the link thread finish.
+		"""Keep what is not kept yet, stop dialling, and wait a moment for the link to close.
 
 		A composition calls this once `play()` returns, which it does on Ctrl-C and
 		on a polite kill alike — Subsequence stops cleanly on both.  Whatever a
@@ -6781,8 +6788,21 @@ class AppLink:
 
 		self._stopping.set()
 
-		if self._link_loop is not None:
-			self._link_loop.call_soon_threadsafe(self._link_loop.stop)
+		# **Cancelled, never stopped from outside** (#5225).  A loop stopped while
+		# `run_until_complete` waits raises on the link's thread, and the socket was
+		# never closed: the service saw the app vanish rather than leave, and the
+		# rig's log ended in a traceback cut off by the interpreter's exit.  A
+		# cancelled dial leaves its `async with`, which closes the socket.
+		loop, dialling = self._link_loop, self._dialling
+
+		if loop is not None and dialling is not None:
+			with contextlib.suppress(RuntimeError):
+				loop.call_soon_threadsafe(dialling.cancel)
+
+		# And waited for, a moment, because the composition exits next and a
+		# daemon thread dies with it, goodbye unsaid.
+		if self._thread is not None:
+			self._thread.join(timeout=GOODBYE_WITHIN)
 
 	def _take_back (self) -> None:
 		"""Put back what the store kept, before anything is declared (#2487).
@@ -7492,9 +7512,14 @@ class AppLink:
 
 		self._link_loop = asyncio.new_event_loop()
 		asyncio.set_event_loop(self._link_loop)
+		self._dialling = self._link_loop.create_task(self._dial_forever())
 
 		try:
-			self._link_loop.run_until_complete(self._dial_forever())
+			self._link_loop.run_until_complete(self._dialling)
+
+		# How `stop` ends a link, and so not a fault (#5225).
+		except asyncio.CancelledError:
+			LOG.debug("Superconductor link stopped")
 
 		finally:
 			self._link_loop.close()

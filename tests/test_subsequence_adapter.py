@@ -6,6 +6,7 @@ import time
 import typing
 
 import pytest
+import websockets.sync.client
 
 import superconductor.protocol
 import superconductor.subsequence_adapter
@@ -1172,3 +1173,55 @@ def test_a_change_before_the_link_thread_exists_is_made_where_it_stands () -> No
 	link.alter(lambda: ran.append(threading.current_thread().name))
 
 	assert ran == [threading.current_thread().name], "a change was deferred to nowhere"
+
+
+# --- Stopping (#5225) ----------------------------------------------------------
+
+def _until (panel: typing.Any, wanted: typing.Callable[[superconductor.protocol.Frame], bool],
+            within: float) -> superconductor.protocol.Frame:
+	"""The first frame the panel is sent that *wanted* accepts, or a failure once *within* has passed."""
+
+	deadline = time.monotonic() + within
+
+	while (left := deadline - time.monotonic()) > 0:
+		try:
+			frame = superconductor.protocol.decode(panel.recv(timeout=left))
+
+		except TimeoutError:
+			break
+
+		if wanted(frame):
+			return frame
+
+	pytest.fail(f"nothing the panel was sent in {within}s was what it waited for")
+
+
+def test_a_link_stopped_closes_its_socket_and_raises_nothing (
+	service_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+	"""**A composition that stops says goodbye** (#5225): the service sees the app leave
+	at once, and nothing is raised on the link's thread.
+
+	`stop` stopped the link's event loop from outside, so `run_until_complete` raised on
+	that thread and the socket was never closed.  The service saw the app only when the
+	process died, and the rig's log ended in a traceback the interpreter's exit cut off.
+	"""
+
+	raised: list[typing.Any] = []
+	monkeypatch.setattr(threading, "excepthook", raised.append)
+
+	link = superconductor.subsequence_adapter.AppLink(
+		FakeComposition(), controls=[], app_name="stopping",
+		url=service_url.replace("http://", "ws://") + "/ws/app")
+
+	with websockets.sync.client.connect(service_url.replace("http://", "ws://") + "/ws/panel") as panel:
+		panel.send(superconductor.protocol.encode(superconductor.protocol.hello("watching", None)))
+		link.start()
+
+		_until(panel, lambda frame: frame["t"] == "manifest" and "stopping" in frame["apps"], within=10)
+
+		link.stop()
+
+		_until(panel, lambda frame: frame["t"] == "manifest" and "stopping" not in frame["apps"], within=1)
+
+	assert raised == [], f"the link's thread raised as it stopped: {raised}"
+	assert link._thread is not None and not link._thread.is_alive(), "stop returned with the link still running"
