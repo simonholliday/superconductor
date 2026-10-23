@@ -139,7 +139,7 @@ def test_the_settings_are_general_midi_s_sound_controllers (rig: typing.Any) -> 
 		("cutoff", pymididefs.cc.FILTER_CUTOFF), ("resonance", pymididefs.cc.FILTER_RESONANCE),
 		("attack", pymididefs.cc.ATTACK_TIME), ("release", pymididefs.cc.RELEASE_TIME)]
 
-	fields = rig.SETTINGS["bass"].declaration()["fields"]
+	fields = rig.INSTRUMENT_CONTROLS["bass"].declaration()["fields"]
 
 	assert [one["name"] for one in fields] == ["cutoff", "resonance", "attack", "release"]
 	assert all(one["kind"] == "number" and one["min"] == 0 and one["max"] == 127
@@ -167,14 +167,29 @@ def test_a_setting_is_sent_on_its_instrument_s_channel_at_once (rig: typing.Any)
 	assert sent == [{"channel": rig.POLY_CHANNEL, "beats": 1 / 24, "quantize": 0}]
 
 
-def test_an_instrument_with_no_settings_gets_no_settings_block (rig: typing.Any) -> None:
-	"""**The panel loses a control rather than drawing a broken one**, so the kit
-	gets a pattern and no block, and a block of no rows is worse than no block."""
+def test_every_instrument_is_one_on_the_glass_with_its_settings_on_it (rig: typing.Any) -> None:
+	"""The kit included, with nothing to set, because it is what a pattern plays (#5219);
+	the synths carry their settings, which they take back from the blocks they were."""
 
-	assert rig.SETTINGS["drums"] is None, "the kit was given a settings block with nothing in it"
+	for one in rig.INSTRUMENTS:
+		declared = rig.INSTRUMENT_CONTROLS[one.key].declaration()
 
-	for key in ("bass", "poly"):
-		assert rig.SETTINGS[key] is not None, f"{key} has settings and was given no block"
+		assert declared["type"] == "instrument", one.key
+		assert declared["title"] == one.model, one.key
+		assert len(declared["fields"]) == len(one.settings), one.key
+		assert rig.INSTRUMENT_CONTROLS[one.key].formerly == (f"{one.key}_settings",)
+
+
+def test_each_pattern_plays_its_own_instrument (rig: typing.Any) -> None:
+	"""Named by the pattern its grid and its stack already play in, and offered on the link,
+	or the glass draws no instrument at all."""
+
+	for one in rig.INSTRUMENTS:
+		pattern = rig.PATTERNS[one.key]
+
+		assert rig.link.controls.get(pattern.name) is pattern, f"the link does not offer {one.key}'s pattern"
+		assert pattern.pattern == rig.GRIDS[one.key].pattern == rig.STACKS[one.key].builds, one.key
+		assert pattern.snapshot() == {"plays": [rig.INSTRUMENT_CONTROLS[one.key].name]}, one.key
 
 
 # --- Sets of pitches, made from the glass --------------------------------------
@@ -492,14 +507,13 @@ def test_every_instrument_is_on_the_first_page (rig: typing.Any) -> None:
 		rig.KEY, rig.KEYBOARDS, rig.DEGREES, rig.LINES]
 
 
-def test_a_settings_block_needs_no_page_of_its_own (rig: typing.Any) -> None:
-	"""One that names the pattern it configures is drawn wherever that pattern is
-	and put away behind its latch, so the pages name patterns and nothing else."""
+def test_an_instrument_needs_no_page_of_its_own (rig: typing.Any) -> None:
+	"""It is drawn wherever a pattern playing it is, so the pages name patterns and nothing else."""
 
 	named = {part for page in rig.link.pages for part in page.declaration()["parts"]}
-	settings = {f"{one.key}_settings" for one in rig.INSTRUMENTS}
+	instruments = {one.name for one in rig.INSTRUMENT_CONTROLS.values()}
 
-	assert not (named & settings), f"a page named a settings block: {named & settings}"
+	assert not (named & instruments), f"a page named an instrument: {named & instruments}"
 
 
 def test_what_is_made_is_kept_beside_the_example (rig: typing.Any) -> None:

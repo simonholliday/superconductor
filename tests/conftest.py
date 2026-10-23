@@ -576,12 +576,15 @@ class FakeApp:
 		shared: what one panel arranged, every panel sees.
 		"""
 
-		pages = [{**page, **({"layout": self.arrangements[page["id"]]}
-		                     if page["id"] in self.arrangements else {})}
-		         for page in PAGES]
-
 		return superconductor.protocol.declare(
-			"subsequence", CONTROLS, self.state, self.version, pages)
+			"subsequence", CONTROLS, self.state, self.version, self._pages())
+
+	def _pages (self) -> list[dict[str, typing.Any]]:
+		"""The page set, each page carrying the arrangement kept for it, if one was."""
+
+		return [{**page, **({"layout": self.arrangements[page["id"]]}
+		                    if page["id"] in self.arrangements else {})}
+		        for page in PAGES]
 
 	def redeclare (self, controls: dict[str, typing.Any],
 	               pages: list[dict[str, typing.Any]] | None = None) -> None:
@@ -591,13 +594,17 @@ class FakeApp:
 		an arrangement does it, and adding a generator does it — so this is the
 		ordinary way to put a differently-shaped control in front of the panel
 		without reshaping the fixture for every test that shares it.
+
+		**The pages carry what was kept of their arrangements**, as an adapter's
+		redeclaration does.  They went without it once, so an arrangement a test set
+		before redeclaring was never drawn, and the test passed on the flow (#5219).
 		"""
 
 		self.version += 1
 
 		self.send(superconductor.protocol.declare(
 			"subsequence", controls, self.state, self.version,
-			PAGES if pages is None else pages))
+			self._pages() if pages is None else pages))
 
 	def send (self, frame: superconductor.protocol.Frame) -> None:
 		"""Put one frame on the wire from the app's side."""

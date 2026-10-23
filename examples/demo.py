@@ -17,7 +17,8 @@ of steps:
   on whatever they are routed into, and a line of notes either synth can take;
 - **generators**: a stack on every pattern, adding notes to what was tapped;
 - **a set of pitches**, patched into any generator that wants notes;
-- **settings**: control changes sent to each synth from a block beside it.
+- **instruments**: the kit and each synth on the glass, a cable from every
+  pattern that plays it, and its settings on it, sent as control changes.
 
 `blank.py` beside this one is the same three instruments with nothing playing,
 and is the better file to start your own from.  **Everything about your studio
@@ -287,7 +288,7 @@ composition.data["drums"] = {"A": {"rows": {
 	for row in ROWS}}}
 
 
-# --- Sending settings -----------------------------------------------------
+# --- The instruments, and their settings ------------------------------------
 
 def _parameter (name: str, number: int, label: str, opens_at: typing.Any,
                 group: str | None) -> adapter.Parameter:
@@ -302,7 +303,7 @@ def _parameter (name: str, number: int, label: str, opens_at: typing.Any,
 
 def _sender (channel: int, table: list[tuple[str, int, str, typing.Any, str | None]],
              ) -> collections.abc.Callable[[str, typing.Any], None]:
-	"""How one instrument's settings block sends a setting, on that instrument's channel.
+	"""How one instrument sends one of its settings, on its own channel.
 
 	Sent at the next pulse rather than at the next bar, so a change is heard at
 	once.  ``trigger`` is also the safe way into the sequencer's clock from another
@@ -329,17 +330,28 @@ def _sender (channel: int, table: list[tuple[str, int, str, typing.Any, str | No
 	return send
 
 
-def _settings (key: str, title: str, channel: int,
-               table: list[tuple[str, int, str, typing.Any, str | None]]) -> adapter.Params:
-	"""A synth's settings block, drawn wherever the synth's pattern is."""
+def _instrument (key: str, title: str, channel: int,
+                 table: list[tuple[str, int, str, typing.Any, str | None]]) -> adapter.Instrument:
+	"""An instrument on the glass, drawn wherever a pattern playing it is, with its settings on it.
 
-	return adapter.Params(
+	Its settings were a block of their own called ``…_settings``, so it takes back what
+	was kept under that name.
+	"""
+
+	return adapter.Instrument(
 		composition,
+		name=f"{key}_instrument",
 		parameters=[_parameter(*setting) for setting in table],
-		data_key=f"{key}_settings", name=f"{key}_settings", title=f"{title} — settings",
+		data_key=f"{key}_settings", title=title,
 		about=[("ch", channel)],
-		configures=key,
-		on_change=_sender(channel, table))
+		on_change=_sender(channel, table) if table else None,
+		formerly=[f"{key}_settings"])
+
+
+kit = _instrument("kit", "General MIDI kit", DRUM_CHANNEL, [])
+bass_synth = _instrument("bass", "Monosynth", BASS_CHANNEL, BASS_SETTINGS)
+poly_synth = _instrument("poly", "Polysynth", POLY_CHANNEL, POLY_SETTINGS)
+"""What the patterns play.  The kit has nothing to set, and is still what two of them play."""
 
 
 # --- The patterns ------------------------------------------------------------
@@ -617,21 +629,19 @@ that could choose any sound would make the lane a kit again.
 drum_grid = adapter.StepGrid(
 	composition, rows=ROWS, steps=STEPS, beats=BEATS,
 	data_key="drums", name="drums", title="Drums",
-	about=[("ch", DRUM_CHANNEL), ("", "General MIDI kit")],
 	pattern="drums", variants=VARIANTS, lands_every=LANDS_EVERY,
 	default_velocity=VELOCITY, min_steps=MIN_STEPS, resize=_resize)
 
 nine_grid = adapter.StepGrid(
 	composition, rows=ROWS, steps=NINE_STEPS, beats=NINE_BEATS,
 	data_key="nine", name="nine", title="Drums — nine",
-	about=[("ch", DRUM_CHANNEL), ("", "2.25 beats")],
+	about=[("", "2.25 beats")],
 	pattern="nine", default_velocity=VELOCITY, min_steps=MIN_STEPS, resize=_resize)
 """The nine-step pattern, drawn narrower than its neighbours because its cycle is."""
 
 bass_grid = adapter.NoteGrid(
 	composition, rows=BASS_ROWS, steps=STEPS, beats=BEATS,
 	data_key="bass", name="bass", title="Bass",
-	about=[("ch", BASS_CHANNEL), ("", "monosynth")],
 	pattern="bass", relabel=_relabel(BASS_NOTE_MAP), voices=BASS_VOICES,
 	divisions=BASS_DIVISIONS, default_length=BASS_LENGTH, default_velocity=BASS_VELOCITY,
 	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY,
@@ -640,7 +650,6 @@ bass_grid = adapter.NoteGrid(
 poly_grid = adapter.NoteGrid(
 	composition, rows=POLY_ROWS, steps=STEPS, beats=BEATS,
 	data_key="poly", name="poly", title="Poly",
-	about=[("ch", POLY_CHANNEL), ("", "polysynth")],
 	pattern="poly", relabel=_relabel(POLY_NOTE_MAP), voices=POLY_VOICES,
 	default_length=POLY_LENGTH, default_velocity=POLY_VELOCITY,
 	visible_rows=12, variants=VARIANTS, lands_every=LANDS_EVERY,
@@ -683,6 +692,21 @@ notes = adapter.PitchSet(
 
 **It plays nothing on its own.**  Patch an arpeggio on the bass and another on the
 poly to it, and both play its notes, each in its own register.
+"""
+
+
+# --- What each pattern plays ------------------------------------------------------
+
+PATTERNS = [
+	adapter.Pattern(composition, "drums", plays=[kit], title="Drums"),
+	adapter.Pattern(composition, "nine", plays=[kit], title="Drums — nine"),
+	adapter.Pattern(composition, "bass", plays=[bass_synth], title="Bass"),
+	adapter.Pattern(composition, "poly", plays=[poly_synth], title="Poly"),
+]
+"""Each pattern above, and the instrument it plays, so the glass can draw a cable to it.
+
+**Two patterns play the kit**, as two Subsequence patterns may share a channel.  The
+grids with no instrument play no pattern of their own, and are in none of these.
 """
 
 
@@ -759,8 +783,10 @@ link = adapter.AppLink(
 		nine_grid,
 		bass_grid,
 		poly_grid,
-		_settings("bass", "Bass", BASS_CHANNEL, BASS_SETTINGS),
-		_settings("poly", "Poly", POLY_CHANNEL, POLY_SETTINGS),
+		kit,
+		bass_synth,
+		poly_synth,
+		*PATTERNS,
 		drum_recipe,
 		bass_recipe,
 		poly_recipe,
@@ -792,8 +818,8 @@ link = adapter.AppLink(
 			                "made_grids"],
 			title="Drums"),
 
-		adapter.Page("bass", parts=["bass", "bass_recipe", "bass_settings"], title="Bass"),
-		adapter.Page("poly", parts=["poly", "poly_recipe", "poly_settings"], title="Poly"),
+		adapter.Page("bass", parts=["bass", "bass_recipe"], title="Bass"),
+		adapter.Page("poly", parts=["poly", "poly_recipe"], title="Poly"),
 	],
 	page_store=PAGE_STORE,
 	pattern_store=PATTERN_STORE,

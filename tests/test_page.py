@@ -12291,3 +12291,202 @@ def test_every_other_case_dims_while_a_cord_is_in_the_hand (
 
 	panel.mouse.up()
 	playwright_api.expect(panel.locator(".sequencer.dimmed")).to_have_count(0, timeout=5_000)
+
+
+# --- Instruments, and the patterns that play them (#5219) ----------------------
+
+SYNTH = '.part[data-part="synth"]'
+
+
+def _instruments (fake_app: conftest.FakeApp, pages: list[dict[str, typing.Any]] | None = None,
+                  bass_plays: tuple[str, ...] = ("synth",)) -> None:
+	"""Declare an instrument that the bass grid's pattern and the 960's both play, and one nothing plays.
+
+	As a composition does since contract 1.45.0: the instrument holds its own settings,
+	and a pattern names the app's pattern, which its grid and its sequencer already name.
+	*bass_plays* is what the bass grid's pattern plays, so the kit can be played as well.
+	"""
+
+	fake_app.state.update({
+		"synth": {"glide": False, "rate": 24},
+		"kit": {},
+		"bass_pattern": {"plays": list(bass_plays)},
+		"lead_pattern": {"plays": ["synth"]},
+	})
+
+	fake_app.redeclare({
+		**conftest.CONTROLS,
+		"bass": {**conftest.CONTROLS["bass"], "pattern": "bass"},
+		"synth": {"type": "instrument", "title": "Synth", "about": [{"label": "ch", "value": "2"}],
+		          "fields": [
+		              {"name": "glide", "kind": "switch", "label": "Glide", "group": "Glide"},
+		              {"name": "rate", "kind": "number", "label": "Rate", "min": 0, "max": 127,
+		               "step": 1, "group": "Glide"}]},
+		"kit": {"type": "instrument", "title": "Kit", "fields": []},
+		"bass_pattern": {"type": "pattern", "pattern": "bass", "title": "Bassline"},
+		"lead_pattern": {"type": "pattern", "pattern": "lead", "title": "Lead line"},
+	}, pages)
+
+
+def test_an_instrument_is_drawn_wherever_a_pattern_that_plays_it_is (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""Simon's decision 4 on #5219: no page names it, and every page carrying a pattern that
+	plays it draws it, saying which patterns those are.  One nothing plays is drawn nowhere."""
+
+	_instruments(fake_app)
+	_open_the_bass(panel)
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+
+	assert panel.locator('.part[data-part="kit"]').count() == 0, "an instrument nothing plays was drawn"
+	assert panel.locator(f"{SYNTH} [data-played-by]").text_content() == "Bassline · Lead line"
+	assert panel.locator(f'{SYNTH} .setting[data-field="glide"]').count() == 1, \
+		"the instrument's settings are not on the instrument"
+
+	# The 960's page names the sequencer and a settings block, and no instrument.
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+
+	# And the page that carries neither pattern does not draw it.
+	panel.locator(".pages button", has_text="Drums").click()
+	panel.wait_for_selector('.part[data-part="phrase"]', timeout=5_000)
+	_settled(panel)
+
+	assert panel.locator(SYNTH).count() == 0, "an instrument was drawn where nothing plays it"
+
+
+def test_a_pattern_s_out_runs_from_what_plays_in_it_to_each_instrument_it_plays (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""From its grid, or from its sequencer's case, into the instrument: a cable heavier than
+	a note cable, and not one a hand can take yet (#5221)."""
+
+	# Kept well below the grid, so the cable is long enough to carry a grip if an out
+	# were allowed one: where the flow puts it, the cable is too short to show.
+	fake_app.arrangements["bass"] = [{"name": "synth", "x": 0, "y": 20}]
+
+	_instruments(fake_app)
+	_open_the_bass(panel)
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+	_joins_settled(panel)
+
+	line = panel.locator('.joins.under [data-join="bass>synth#"]')
+
+	assert line.count() == 1, "the bass grid's pattern has no cable to what it plays"
+
+	kinds = (line.get_attribute("class") or "").split()
+
+	assert "out" in kinds and "patched" in kinds, kinds
+	assert "holdable" not in kinds, "an out offered a gesture that is not there yet"
+
+	assert panel.locator('.joins.over [data-join="bass>synth#"] circle.socket').count() == 1, \
+		"the out does not say where it lands"
+
+	panel.locator(".pages button", has_text="Moog").click()
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+	_joins_settled(panel)
+
+	assert panel.locator('.joins.under [data-join="lead>synth#"]').count() == 1, \
+		"the sequencer's pattern has no cable to what it plays"
+
+
+def test_an_instrument_s_settings_are_set_on_the_instrument (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""At the instrument's own address, as a settings block's are."""
+
+	_instruments(fake_app)
+	_open_the_bass(panel)
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+
+	since = len(fake_app.sets)
+	panel.locator(f'{SYNTH} .setting[data-field="glide"] .end.yes').click()
+
+	_asks(fake_app, "synth/glide", True, since)
+
+
+def _overlapping (panel: typing.Any) -> list[tuple[str, str]]:
+	"""Every pair of blocks on the page whose boxes overlap, by more than a pixel."""
+
+	boxes = panel.eval_on_selector_all(".part", """all => all.map((one) => {
+		const box = one.getBoundingClientRect();
+		return [one.dataset.part, box.left, box.top, box.right, box.bottom];
+	})""")
+
+	return [(one[0], two[0]) for at, one in enumerate(boxes) for two in boxes[at + 1:]
+	        if min(one[3], two[3]) - max(one[1], two[1]) > 1 and min(one[4], two[4]) - max(one[2], two[2]) > 1]
+
+
+@pytest.mark.parametrize("kept", [False, True])
+def test_an_instrument_nobody_has_placed_lands_clear_of_every_block (
+	panel: typing.Any, fake_app: conftest.FakeApp, kept: bool) -> None:
+	"""Beside what plays it where there is room, and never over a block somebody placed (#5219).
+
+	The rig's Bass page was arranged before there were instruments, and the Minitaur
+	came up under the Key block, because a block nobody had placed was put where the
+	flow would have put it on an empty page.
+	"""
+
+	if kept:
+		# The bass grid moved down to (0, 13), which is where the flow puts the instrument
+		# on this page, and the other grid into its place above: so there is room beside
+		# the bass grid, and a free spot before it that is not beside it.
+		fake_app.arrangements["bass"] = [{"name": "fine", "x": 0, "y": 0},
+		                                 {"name": "bass", "x": 0, "y": 13}]
+
+	_instruments(fake_app)
+	_open_the_bass(panel)
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+	_settled(panel)
+
+	assert _overlapping(panel) == [], "an instrument was put over a block"
+
+	grid = panel.locator('.part[data-part="bass"]').bounding_box()
+	synth = panel.locator(SYNTH).bounding_box()
+
+	assert grid is not None and synth is not None
+
+	if kept:
+		assert synth["x"] >= grid["x"] + grid["width"] and \
+			grid["y"] <= synth["y"] < grid["y"] + grid["height"], (
+			f"the instrument was not put beside the pattern that plays it: {synth} against {grid}")
+
+	else:
+		# This page has no room beside the grid, so it goes in the first free spot.
+		assert synth["x"] >= grid["x"] + grid["width"] or synth["y"] >= grid["y"] + grid["height"], (
+			"the instrument was put before the pattern that plays it")
+
+
+def test_a_block_placed_below_an_instrument_keeps_its_lane (
+	page: typing.Any, service_url: str, fake_app: conftest.FakeApp) -> None:
+	"""An instrument is placed by counting its rows, the one naming its patterns included,
+	and a row the count leaves out is a row the next block is laid against or over.
+
+	The block is as tall as what it holds whatever is counted, so the count shows only
+	in what is placed after it: here a second instrument, on a page narrow enough that
+	it goes underneath.
+	"""
+
+	_narrow_page(page, service_url)
+	_instruments(fake_app, bass_plays=("synth", "kit"))
+	_open_the_bass(page)
+	page.wait_for_selector('.part[data-part="kit"]', timeout=5_000)
+	_settled(page)
+
+	lanes = _lanes(page, ["synth", "kit"])
+
+	assert lanes, "the two instruments were not stacked, so nothing was measured"
+	assert all(air >= cell - 1 for _, _, air, cell in lanes), f"the lane below the instrument was eaten: {lanes}"
+
+
+def test_a_page_naming_a_pattern_draws_what_plays_in_it_and_no_block_of_the_pattern_s (
+	panel: typing.Any, fake_app: conftest.FakeApp) -> None:
+	"""A pattern has no block of its own yet (#5219), so a page that names one, as a
+	composition may, still draws, with the pattern's instrument and nothing for the pattern."""
+
+	pages = [{**page, "parts": [*page["parts"], "bass_pattern"]} if page["id"] == "bass" else page
+	         for page in conftest.PAGES]
+
+	_instruments(fake_app, pages)
+	_open_the_bass(panel)
+	panel.wait_for_selector(SYNTH, timeout=5_000)
+
+	assert panel.locator('.part[data-part="bass_pattern"]').count() == 0, "a pattern was drawn as a block"
+	assert panel.locator('.part[data-part="bass"]').count() == 1

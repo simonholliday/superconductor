@@ -155,6 +155,16 @@ class Control:
 	"""The composition this control reads and writes.  Declared here because the
 	mute below needs it and every control has one."""
 
+	formerly: tuple[str, ...] = ()
+	"""Names this control was kept under before, newest first.
+
+	**A store is keyed by a control's name** (`PatternStore`), so renaming a control
+	used to cost what had been kept under the old name, and the bar said STORE · TROUBLE
+	for the whole run about it.  A control that lists its old names takes what was kept
+	under the first of them the store holds, and the next write keeps it under the new
+	one (#5219, where a settings block became an instrument).
+	"""
+
 	pattern: str | None = None
 	"""Which of the composition's patterns this control drives, if any.  A grid
 	belonging to no instrument drives none and is silenced by contributing
@@ -196,6 +206,17 @@ class Control:
 		"""What a panel needs in order to draw this."""
 
 		raise NotImplementedError
+
+	def _plays_in (self) -> dict[str, typing.Any]:
+		"""The pattern this control plays in, for a declaration, where it plays in one.
+
+		**Declared, so a panel can tell what makes up a pattern** (#5219): a grid, a
+		stack's ``builds`` and a sequencer all name it, and a `Pattern` names the
+		instruments it plays.  A grid kept this to itself until contract 1.45.0, so
+		the glass could not draw an instrument beside the grid that plays it.
+		"""
+
+		return {"pattern": self.pattern} if self.pattern is not None else {}
 
 	def snapshot (self) -> typing.Any:
 		"""What this control holds at the moment."""
@@ -1273,6 +1294,7 @@ class StepGrid (_Length, _Window, _Variants, Control):
 			# in a package that carries no MIDI (#2140).
 			"velocity_range": list(VELOCITY_RANGE),
 			"default_velocity": self.default_velocity,
+			**self._plays_in(),
 			**self._variant_fields(),
 			**self._length_fields()}
 
@@ -1933,6 +1955,7 @@ class NoteGrid (_Length, _Window, _Variants, Control):
 			"transpose_range": list(self.transpose_range),
 			"default_length": self.default_length, "default_velocity": self.default_velocity,
 			"max_length": self.positions, "velocity_range": list(VELOCITY_RANGE),
+			**self._plays_in(),
 			**self._variant_fields(),
 			**self._length_fields()}
 
@@ -3071,6 +3094,107 @@ class Params (Control):
 		"""
 
 		return checked_value(parameter, value)
+
+
+class Instrument (Params):
+	"""An instrument the composition's patterns play: its name, what it is, and its settings.
+
+	**What a pattern plays, drawn as a panel of its own** (#5219, Simon's design of
+	2026-10-22).  A grid used to stand in for the instrument it fed, so its settings
+	opened beside the grid, where the physical instrument has them on its own panel and
+	has no grid at all.  A `Pattern` says which instruments it plays, and a panel draws
+	a cable from the pattern to each.
+
+	**Its settings are a settings block's in every respect**: the same parameters, kept
+	in ``composition.data`` and handed to ``on_change``, which sends them on the
+	instrument's own channel and through no pattern.  Nothing in this package learns a
+	channel or a control-change number, so **say the channel and the model in
+	``about``**, where a studio's facts are written on the glass (#1465).  An instrument
+	with nothing to set is a name and an input, as a drum machine with no settings worth
+	glass is.
+	"""
+
+	kind = "instrument"
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		name: str,
+		parameters: collections.abc.Sequence[Parameter] = (),
+		data_key: str | None = None,
+		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+		on_change: collections.abc.Callable[[str, typing.Any], None] | None = None,
+		formerly: collections.abc.Sequence[str] = (),
+	) -> None:
+		"""Describe the instrument and the settings it offers, if it offers any.
+
+		``data_key`` is where its settings are held in ``composition.data``, and is the
+		instrument's name unless said.  ``formerly`` names what its settings were kept
+		as before, so a settings block that becomes an instrument keeps what was set on
+		it (`Control.formerly`).
+		"""
+
+		super().__init__(composition, parameters, data_key=data_key or name, name=name,
+		                 title=title, about=about, on_change=on_change)
+
+		self.formerly = tuple(formerly)
+
+
+class Pattern (Control):
+	"""One of the composition's patterns, and the instruments it plays (#5219).
+
+	**Subsequence's own unit, drawn as what it is.**  A pattern is one builder,
+	rebuilt every cycle, playing on a MIDI channel.  Whatever puts notes in it, a
+	grid, a stack of generators and transforms or a sequencer, already names it as
+	``pattern`` or ``builds``.  This names the instruments it plays, so a panel can
+	draw a cable from the pattern to each (Simon, 2026-10-22).
+
+	``plays`` is each `Instrument` it plays, or its name.  **Several patterns may play
+	one instrument**, as several Subsequence patterns may share a channel.  **Saying
+	so moves nothing**: the composition plays the pattern on its channel, and this
+	tells the glass where that is.  A panel that asks to move it is refused, with the
+	reason, until a pattern can be moved while it plays (#5221).
+	"""
+
+	kind = "pattern"
+
+	def __init__ (
+		self,
+		composition: typing.Any,
+		pattern: str,
+		plays: collections.abc.Sequence[Instrument | str],
+		name: str | None = None,
+		title: str | None = None,
+		about: collections.abc.Sequence[tuple[str, typing.Any]] = (),
+	) -> None:
+		"""Name the pattern, the instruments it plays, and what to call it on the glass.
+
+		``name`` is the pattern's own with ``_pattern`` after it unless said, because the
+		grid that plays a pattern is often called by the pattern's name already.
+		"""
+
+		self.composition = composition
+		self.pattern = pattern
+		self.name = name or f"{pattern}_pattern"
+		self.title = title
+		self.about = list(about)
+		self.plays = [one if isinstance(one, str) else one.name for one in plays]
+
+	def declaration (self) -> dict[str, typing.Any]:
+		"""The pattern this is, by the name everything playing in it uses."""
+
+		return {"type": self.kind, "pattern": self.pattern, **self.said()}
+
+	def snapshot (self) -> dict[str, typing.Any]:
+		"""The instruments it plays, by their control names, in the composition's order."""
+
+		return {"plays": list(self.plays)}
+
+	def apply (self, rest: list[str], value: typing.Any) -> bool:
+		"""Refuse to move a pattern: the composition says where it plays, for now (#5221)."""
+
+		raise Refused("which instruments a pattern plays is set in the composition, for now")
 
 
 VELOCITY_RANGE = (1, 127)
@@ -6529,6 +6653,17 @@ class AppLink:
 
 		self.composition = composition
 		self.controls = {control.name: control for control in controls}
+
+		# **A cable to nothing is said here, at the composition's first line**, rather than
+		# drawn on the glass as a pattern playing nowhere (#5219).
+		for control in self.controls.values():
+			if isinstance(control, Pattern):
+				for one in control.plays:
+					if not isinstance(self.controls.get(one), Instrument):
+						raise ValueError(
+							f"the pattern {control.pattern!r} plays {one!r}, which is not an "
+							f"instrument this link offers")
+
 		self.app_name = app_name
 		self.url = url
 		self.pages = list(pages or [])
@@ -6715,6 +6850,7 @@ class AppLink:
 		"""
 
 		refused: list[str] = []
+		kept = self._renamed(kept)
 		racks = [name for name, control in self.controls.items() if isinstance(control, Rack)]
 
 		for name in racks:
@@ -6730,6 +6866,28 @@ class AppLink:
 		               if name not in self.controls)
 
 		return refused
+
+	def _renamed (self, kept: dict[str, typing.Any]) -> dict[str, typing.Any]:
+		"""What was kept, under each control's name now, where it was kept under a former one.
+
+		A former name is taken only where nothing was kept under the new name and no
+		control still goes by the old one, so a rename can never take what belongs to a
+		control that is still here.
+		"""
+
+		now = dict(kept)
+
+		for name, control in self.controls.items():
+			if name in now:
+				continue
+
+			for former in control.formerly:
+				if former in now and former not in self.controls:
+					now[name] = now.pop(former)
+					LOG.info("putting back %r from what was kept as %r", name, former)
+					break
+
+		return now
 
 	def _restore_one (self, name: str, kept: typing.Any) -> list[str]:
 		"""One control's restore, which may refuse and may not stop the piece starting.

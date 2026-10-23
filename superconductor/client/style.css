@@ -4088,6 +4088,19 @@ html, body {
 	stroke-opacity: 1;
 }
 
+/* **A pattern's out, into the instrument it plays** (#5219): heavier than a note cable
+   and in ink, because it carries the whole pattern to what sounds it where a note cable
+   carries a value into one generator, and two kinds of connection must not look alike
+   (#2119).  Ink on the ground is the panel's own text contrast in every theme, so it
+   needs no pairing of its own. */
+.join.out .cable {
+	stroke: var(--ink);
+	stroke-width: max(4px, calc(var(--cell) * 0.09));
+}
+
+.join.live.out .cable { stroke-width: max(5px, calc(var(--cell) * 0.11)); }
+.join.out .plug { fill: var(--ink); }
+
 /* **Live is thicker rather than brighter**, because both kinds now rest at full
    strength and there is no headroom left in opacity.  A cable under a finger
    getting fatter is the same sentence a brighter one said. */
@@ -5017,3 +5030,22 @@ html, body {
 }
 
 .patched-from b { color: var(--on); font-weight: 600; }
+
+/* Which patterns play an instrument (#5219): read and never pressed, so sunk as every
+   readout is (#2872), and in the readout's own colour. */
+.instrument .played-by {
+	align-items: center;
+	display: flex;
+	justify-content: center;
+	min-width: 0;
+	overflow: hidden;
+	padding: 0 0.5rem;
+	border-radius: 4px;
+	background: var(--sunk);
+	box-shadow: inset 0 2px 5px var(--sunk-shadow);
+	color: var(--readout);
+	font-family: var(--face-panel);
+	font-size: var(--type-chrome-quiet);
+	line-height: 1;
+	white-space: nowrap;
+}

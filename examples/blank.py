@@ -97,10 +97,13 @@ and then it has no settings block at all.
 
 @dataclasses.dataclass (frozen=True)
 class Instrument:
-	"""One instrument: what the glass calls it, where it listens, and what its grid holds.
+	"""One instrument, and the pattern this file starts it with: what each is called, where it listens, and what its grid holds.
 
 	``key`` is what the glass addresses and what the store keeps the instrument's
-	patterns under, so choose it once: renaming one leaves whatever it held behind.
+	pattern under, so choose it once: renaming one leaves whatever it held behind.
+
+	``title`` is what the glass calls the pattern, and ``model`` what it calls the
+	instrument the pattern plays.
 
 	``low`` and ``high`` are the notes a synth's grid is drawn over, both included.
 	A drum kit has neither: its rows are ``DRUM_NOTES``.
@@ -114,6 +117,7 @@ class Instrument:
 
 	key: str
 	title: str
+	model: str
 	channel: int
 	low: str | None = None
 	high: str | None = None
@@ -128,10 +132,10 @@ class Instrument:
 
 
 INSTRUMENTS = (
-	Instrument(key="drums", title="Drums", channel=DRUM_CHANNEL),
-	Instrument(key="bass", title="Bass", channel=BASS_CHANNEL,
+	Instrument(key="drums", title="Drums", model="General MIDI kit", channel=DRUM_CHANNEL),
+	Instrument(key="bass", title="Bass", model="Monosynth", channel=BASS_CHANNEL,
 	           low="C1", high="C3", voices=1, settings=SYNTH_SETTINGS),
-	Instrument(key="poly", title="Poly", channel=POLY_CHANNEL,
+	Instrument(key="poly", title="Poly", model="Polysynth", channel=POLY_CHANNEL,
 	           low="C3", high="C5", voices=4, settings=SYNTH_SETTINGS),
 )
 """What this file plays, in the order the first page draws it.
@@ -320,7 +324,7 @@ def _grid_for (instrument: Instrument) -> typing.Any:
 	shared: dict[str, typing.Any] = {
 		"composition": composition, "rows": _rows(instrument), "steps": STEPS, "beats": BEATS,
 		"data_key": instrument.key, "name": instrument.key, "pattern": instrument.key,
-		"title": instrument.title, "about": [("ch", instrument.channel)],
+		"title": instrument.title,
 		"variants": VARIANTS, "lands_every": LANDS_EVERY,
 		"default_velocity": VELOCITY, "min_steps": MIN_STEPS, "resize": _resize,
 	}
@@ -337,7 +341,7 @@ STACKS = {one.key: _stack_for(one) for one in INSTRUMENTS}
 
 
 def _send (instrument: Instrument) -> collections.abc.Callable[[str, typing.Any], None]:
-	"""How an instrument's settings block sends one setting.
+	"""How an instrument sends one of its settings.
 
 	Sent at the next pulse rather than at the next bar, so a change is heard at
 	once.  ``trigger`` is also the safe way into the sequencer's clock from
@@ -360,31 +364,40 @@ def _send (instrument: Instrument) -> collections.abc.Callable[[str, typing.Any]
 	return send
 
 
-def _settings_for (instrument: Instrument) -> typing.Any | None:
-	"""An instrument's settings block, or None where it has no settings.
+def _instrument_for (instrument: Instrument) -> adapter.Instrument:
+	"""The instrument on the glass: what it is, its channel, and its settings, if it has any.
 
-	A block of no rows is worse than no block, so an instrument given no settings
-	gets a pattern and nothing else.
+	**Every instrument has one**, the kit with no settings included, because it is what
+	a pattern plays: a cable runs from each pattern to the instrument it plays.  Its
+	settings were a block of their own called ``…_settings``, so it takes back whatever
+	was kept under that name.
 	"""
 
-	if not instrument.settings:
-		return None
-
-	return adapter.Params(
+	return adapter.Instrument(
 		composition,
+		name=f"{instrument.key}_instrument",
 		parameters=[
 			adapter.Parameter(name, "number", label=label, default=opens_at,
 			                  minimum=0, maximum=127)
 			for name, _, label, opens_at in instrument.settings],
 		data_key=f"{instrument.key}_settings",
-		name=f"{instrument.key}_settings",
-		title=f"{instrument.title} — settings",
+		title=instrument.model,
 		about=[("ch", instrument.channel)],
-		configures=instrument.key,
-		on_change=_send(instrument))
+		on_change=_send(instrument) if instrument.settings else None,
+		formerly=[f"{instrument.key}_settings"])
 
 
-SETTINGS = {one.key: _settings_for(one) for one in INSTRUMENTS}
+INSTRUMENT_CONTROLS = {one.key: _instrument_for(one) for one in INSTRUMENTS}
+
+PATTERNS = {
+	one.key: adapter.Pattern(composition, one.key, plays=[INSTRUMENT_CONTROLS[one.key]],
+	                         title=one.title)
+	for one in INSTRUMENTS}
+"""Each pattern, and the instrument it plays: one each here, as written below.
+
+**A pattern is Subsequence's**, and what plays in it, its grid and its stack, names it
+already.  This tells the glass which instrument it plays, so a cable can be drawn.
+"""
 
 
 def _register_pattern (instrument: Instrument) -> None:
@@ -732,7 +745,8 @@ link = adapter.AppLink(
 	controls=[
 		*GRIDS.values(),
 		*STACKS.values(),
-		*(one for one in SETTINGS.values() if one is not None),
+		*INSTRUMENT_CONTROLS.values(),
+		*PATTERNS.values(),
 		key_block,
 		keyboards,
 		degrees,
@@ -753,9 +767,9 @@ link = adapter.AppLink(
 """Four pages, and where what is made on them is kept.
 
 **Band is everything, and the other three are where the work happens**: see the
-whole of it, then take one instrument somewhere quieter.  A settings block and a
-stack need no place on a page: each is drawn wherever the pattern it belongs to
-is.
+whole of it, then take one instrument somewhere quieter.  An instrument and a
+stack need no place on a page: an instrument is drawn wherever a pattern playing it
+is, and a stack wherever its pattern is.
 
 **After your first edit on the glass, this file is not the score.**  Every
 pattern, stack, setting and mute is put back from the store each time this

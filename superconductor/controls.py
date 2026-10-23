@@ -195,6 +195,26 @@ Matriarch that starts there cannot both play the literal same notes.
 """
 
 
+INSTRUMENT = "instrument"
+"""What a pattern plays: an instrument's name, what it is, and its settings (#5219).
+
+**Kept exactly as a settings block is**, its ``fields`` the same parameters and its
+state a value per field, because the settings *are* the instrument's (Simon, 2026-10-22:
+the physical instrument has these on its panel, and no grid).  Nothing here knows its
+channel or its model: the app says both in ``about``, as it says everything else about
+a studio (#1465).
+"""
+
+PATTERN = "pattern"
+"""One of the app's patterns, and the instruments it plays (#5219).
+
+**A declaration and a list**: ``pattern`` names the app's pattern, the word a grid, a
+stack's ``builds`` and a sequencer already name it by, and the state is ``plays``, the
+instruments by their control names.  The service keeps what the app reports there and
+moves nothing itself, which is the same division as everywhere else here.
+"""
+
+
 STORE = "store"
 """Where an app keeps what a person made on the glass, and whether that is going well.
 
@@ -276,8 +296,11 @@ def apply_change (state: dict[str, typing.Any], controls: dict[str, typing.Any],
 	elif kind == NOTE_GRID:
 		_apply_note(state.setdefault(control, {}), declaration, rest, value, path)
 
-	elif kind == PARAMS:
+	elif kind in (PARAMS, INSTRUMENT):
 		_apply_parameter(state.setdefault(control, {}), declaration, rest, value, path, controls)
+
+	elif kind == PATTERN:
+		_apply_pattern(state.setdefault(control, {}), rest, value, path, controls)
 
 	elif kind == RECIPE:
 		_apply_recipe(state.setdefault(control, {}), declaration, rest, value, path, controls)
@@ -1009,6 +1032,36 @@ def _readable_patch (
 		raise ControlError(why)
 
 	return {PATCHED: "control", "id": named}
+
+
+def _apply_pattern (
+	pattern: dict[str, typing.Any],
+	rest: list[str],
+	value: typing.Any,
+	path: str,
+	controls: dict[str, typing.Any],
+) -> None:
+	"""Keep which instruments a pattern plays, as the app reported them (#5219).
+
+	**Each is an instrument the app declared**, named by its control, and none twice: a
+	pattern playing one instrument twice would sound every note twice, and a name that
+	is no instrument is a cable to nothing.  The order is the app's, so it is kept.
+	"""
+
+	if rest != ["plays"]:
+		raise ControlError(f"{path!r} names no part of a pattern; it takes control/plays")
+
+	if not isinstance(value, list) or not all(isinstance(one, str) for one in value):
+		raise ControlError(f"{path!r} takes a list of the instruments a pattern plays")
+
+	if len(set(value)) != len(value):
+		raise ControlError(f"{path!r} names one instrument twice")
+
+	for one in value:
+		if (controls.get(one) or {}).get("type") != INSTRUMENT:
+			raise ControlError(f"{path!r} names {one!r}, which is no instrument this app declared")
+
+	pattern["plays"] = list(value)
 
 
 def _apply_rack (

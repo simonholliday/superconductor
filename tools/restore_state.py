@@ -109,6 +109,11 @@ def _sets (app: str, state: dict, declared: dict) -> list[tuple[str, str, object
 		elif said.get("type") == "sequencer":
 			asks.extend(_sequencer_sets(app, control, held))
 
+		elif said.get("type") == "pattern":
+			# **Which instruments a pattern plays is the composition's to say** (#5219):
+			# a panel cannot move a pattern yet (#5221), so replayed it is refused.
+			continue
+
 		elif said.get("type") in GRIDS:
 			asks.append((app, f"{control}/rows",
 			             {row: value for row, value in held.items() if row not in BESIDE_THE_ROWS}))

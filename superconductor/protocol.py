@@ -16,7 +16,7 @@ import math
 import typing
 
 
-CONTRACT_VERSION = "1.44.0"
+CONTRACT_VERSION = "1.45.0"
 """Bumped when a frame changes shape.  Both ends send it and neither guesses.
 
 1.1.0 adds ``service``, which an older panel ignores as it ignores any frame it
@@ -494,6 +494,26 @@ and kept nowhere (#1965): ``cycle`` (``start_beat``, ``steps``, ``step_beats``) 
 ``modules``, each with a ``positions`` list per cursor (a stage index from 0, or null)
 and, where it has displays, a ``shows`` list per display.  **Additive**: an app that
 declares no sequencer changes nothing.
+
+1.45.0 adds ``instrument`` and ``pattern`` (#5219, Simon's design of 2026-10-22), so
+the glass can draw what a pattern is and what it plays rather than letting a grid stand
+in for the instrument it feeds.
+
+**An instrument** is declared as a settings block is, ``fields`` each a parameter in
+the same shapes and grouped by ``group``, and its state is the same: a value per field,
+set at ``<control>/<field>``.  It is what patterns play, and it has no notes of its
+own.  **Its channel and its model are the app's to say, in ``about``**, because this
+package may know neither (#1465).
+
+**A pattern** names the app's pattern in ``pattern``, the word a sequencer and a
+stack's ``builds`` already use for it, so what makes up a pattern is whatever names it.
+**A step grid and a note grid now declare their ``pattern`` too**, where they play in
+one, which they kept to themselves until now.  **Its state is ``plays``**: the instruments it plays, by their control names,
+which the app reports at ``<control>/plays`` whenever it moves them.  The panel draws a
+cable from the pattern to each.  **An app may refuse a panel's ``plays``**, as this
+package's adapter does until a pattern can be moved while it plays (#5221).
+**Additive**: an app that declares neither changes nothing, and a settings block that
+``configures`` a pattern is drawn as it always was.
 """
 
 UNIT = "unit"
@@ -600,7 +620,8 @@ def may_be_unset (field: dict[str, typing.Any]) -> bool:
 
 
 CONTROL_KINDS = ("step_grid", "note_grid", "params", "recipe",
-                 "transport", "rack", "pitch_set", "degree_set", "store", "sequencer")
+                 "transport", "rack", "pitch_set", "degree_set", "store", "sequencer",
+                 "instrument", "pattern")
 """Every kind of control there is, in the words the wire uses.
 
 **It lives here for the reason `PARAMETER_KINDS` does**, and it took longer to

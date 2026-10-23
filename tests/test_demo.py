@@ -99,7 +99,7 @@ def test_a_setting_opening_at_true_or_false_is_a_switch_and_the_rest_are_numbers
 	rig: typing.Any) -> None:
 	"""The demo's two shapes of setting, told apart by what each opens at."""
 
-	fields = {one["name"]: one for one in rig.link.controls["bass_settings"].declaration()["fields"]}
+	fields = {one["name"]: one for one in rig.link.controls["bass_instrument"].declaration()["fields"]}
 
 	assert fields["glide"]["kind"] == "switch" and fields["glide"]["default"] is False
 	assert fields["glide_time"]["kind"] == "number"
@@ -109,8 +109,8 @@ def test_a_setting_opening_at_true_or_false_is_a_switch_and_the_rest_are_numbers
 def test_the_poly_s_settings_are_in_sections_and_the_bass_s_are_not (rig: typing.Any) -> None:
 	"""A section is a heading above its settings, and a short list reads without one."""
 
-	poly = rig.link.controls["poly_settings"].declaration()["fields"]
-	bass = rig.link.controls["bass_settings"].declaration()["fields"]
+	poly = rig.link.controls["poly_instrument"].declaration()["fields"]
+	bass = rig.link.controls["bass_instrument"].declaration()["fields"]
 
 	assert [one.get("group") for one in poly] == [
 		"Filter", "Filter", "Envelope", "Envelope", "Effects", "Effects"]
@@ -244,15 +244,26 @@ def test_every_control_this_composition_declares_reaches_a_page (rig: typing.Any
 	"""A control declared and put on no page is invisible, and nothing says so.
 
 	The transport and the store are not parts: they are drawn on the bar whatever
-	page is open, which is why this asks for them by type rather than by name.
+	page is open, which is why this asks for them by type rather than by name.  **Nor
+	is a pattern or an instrument** (#5219): a pattern is drawn through what plays in
+	it, and an instrument wherever a pattern playing it is.
 	"""
 
+	adapter = superconductor.subsequence_adapter
 	drawn = {name for name, control in rig.link.controls.items()
-	         if not isinstance(control, (superconductor.subsequence_adapter.Transport,
-	                                     superconductor.subsequence_adapter.StoreStatus))}
+	         if not isinstance(control, (adapter.Transport, adapter.StoreStatus))}
 	placed = {part for page in rig.link.pages for part in page.parts}
 
-	assert drawn - placed == set(), f"declared and on no page: {sorted(drawn - placed)}"
+	playing_here = {rig.link.controls[name].pattern for name in placed
+	                if rig.link.controls[name].pattern is not None}
+	reached = set(placed)
+
+	for name, control in rig.link.controls.items():
+		if isinstance(control, adapter.Pattern) and control.pattern in playing_here:
+			reached.add(name)
+			reached.update(control.plays)
+
+	assert drawn - reached == set(), f"declared and on no page: {sorted(drawn - reached)}"
 	assert placed - drawn == set(), f"on a page and never declared: {sorted(placed - drawn)}"
 
 

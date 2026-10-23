@@ -124,6 +124,30 @@ def test_a_sequencer_goes_back_as_what_the_glass_held_a_stage_at_a_time () -> No
 	]
 
 
+def test_an_instrument_goes_back_as_its_settings_and_a_pattern_is_left_to_the_composition () -> None:
+	"""**Which instruments a pattern plays is the composition's to say** (#5219): a panel
+	cannot move a pattern yet, so replayed it would be refused.  An instrument's
+	settings go back as a settings block's do.  Through real controls, so a refusal
+	would raise."""
+
+	composition = types.SimpleNamespace(data={})
+	synth = adapter.Instrument(composition, "synth", parameters=[
+		adapter.Parameter("rate", "number", default=24, minimum=0, maximum=127)])
+	pattern = adapter.Pattern(composition, "bass", plays=[synth])
+	controls = {"synth": synth, "bass_pattern": pattern}
+
+	captured = {"synth": {"rate": 90}, "bass_pattern": pattern.snapshot()}
+	asks = _tool()._sets("app", captured, {name: one.declaration() for name, one in controls.items()})
+
+	assert asks == [("app", "synth/rate", 90)]
+
+	for _, path, value in asks:
+		control, *rest = path.split("/")
+		controls[control].apply(rest, value)
+
+	assert composition.data["synth"] == {"rate": 90}
+
+
 def test_a_rack_goes_back_before_anything_that_could_route_from_its_grids () -> None:
 	"""The grids a rack made exist only once it has made them, and a stack
 	refuses a route to a grid that does not exist."""

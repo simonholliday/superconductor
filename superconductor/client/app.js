@@ -20,7 +20,7 @@ const TRIPS_KEPT = 60;
    which is long enough for a bad moment to still be on the readout when you
    look up from playing. */
 const STALE_AFTER = 6000;
-const CONTRACT = "1.44.0";
+const CONTRACT = "1.45.0";
 /* The protocol version this client speaks, in one place.
  *
  * It cannot be shared with Python, so a test asserts the two agree — but it can
@@ -456,7 +456,7 @@ const GRIDS = ["step_grid", "note_grid"];
    kind added in Python and not here is a control the panel quietly stops
    drawing (#2420). */
 
-const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set", "degree_set", "sequencer"];
+const DRAWN = ["step_grid", "note_grid", "params", "recipe", "rack", "pitch_set", "degree_set", "sequencer", "instrument", "pattern"];
 /* The kinds a page draws as blocks of their own. A transport is not among them:
    it belongs in the header, with what is constant across pages (#2075). */
 
@@ -2862,6 +2862,24 @@ function headed (fields) {
 	return out;
 }
 
+function paramRows (name, fields, values, onSet) {
+	return headed(fields).map((one) => one.heading
+		? html`
+			<div class="group" key=${`group-${one.heading}`}>${one.heading}</div>`
+		: [
+			html`
+				<div class="row-label" key=${`label-${one.field.name}`}>
+					${labelText(one.field.label || one.field.name)}
+				</div>`,
+			html`
+				<div class="setting" key=${one.field.name} data-field=${one.field.name}
+					style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+					<${Setting} field=${one.field} held=${values[one.field.name]}
+						onSet=${(value) => onSet(`${name}/${one.field.name}`, value)} />
+				</div>`,
+		]).flat();
+}
+
 function Params ({ name, fields, values, cell, onSet }) {
 	const style = {
 		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
@@ -2869,21 +2887,30 @@ function Params ({ name, fields, values, cell, onSet }) {
 
 	return html`
 		<div class="grid params" style=${style}>
-			${headed(fields).map((one) => one.heading
-				? html`
-					<div class="group" key=${`group-${one.heading}`}>${one.heading}</div>`
-				: [
-					html`
-						<div class="row-label" key=${`label-${one.field.name}`}>
-							${labelText(one.field.label || one.field.name)}
-						</div>`,
-					html`
-						<div class="setting" key=${one.field.name} data-field=${one.field.name}
-							style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
-							<${Setting} field=${one.field} held=${values[one.field.name]}
-								onSet=${(value) => onSet(`${name}/${one.field.name}`, value)} />
-						</div>`,
-				]).flat()}
+			${paramRows(name, fields, values, onSet)}
+		</div>`;
+}
+
+/* An instrument: which patterns play it, and its settings (#5219).
+ *
+ * **Its settings are its own, as they are on the hardware** (Simon, 2026-10-22: the
+ * physical instrument has them on its panel, and has no grid).  The row above them is
+ * read and never pressed, so it is sunk as every readout is (#2872), and it names each
+ * pattern a cable arrives from, so two instruments on one page say which plays which
+ * without anybody following a line. */
+function Instrument ({ name, fields, values, playedBy, onSet }) {
+	const style = {
+		gridTemplateColumns: `var(--label) repeat(${PARAM_CELLS}, var(--cell))`,
+	};
+
+	return html`
+		<div class="grid params instrument" style=${style}>
+			<div class="row-label" key="played-by-label">${labelText("played by")}</div>
+			<div class="played-by" key="played-by" data-played-by
+				style=${{ gridColumn: `span ${PARAM_CELLS}` }}>
+				${labelText(playedBy.length ? playedBy.join(" · ") : "nothing yet")}
+			</div>
+			${paramRows(name, fields, values, onSet)}
 		</div>`;
 }
 
@@ -5760,7 +5787,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				   commoner act and it was there first; the fittings go back to
 				   being marks until there is room, and shrink visibly, so the
 				   change is something seen rather than discovered by pressing. */
-				const holdable = !line.wired && !line.crowded
+				const holdable = !line.wired && !line.out && !line.crowded
 					&& span >= controlRow(cell) * 3.2;
 				const fitting = holdable ? grip : jack;
 
@@ -5779,6 +5806,7 @@ function Connections ({ box, joins, touched, cell, when, patching, onFlip, patch
 				return html`
 					<g key=${address}
 						class=${`join ${line.wired ? "wired" : "patched"} `
+							+ `${line.out ? "out " : ""}`
 							+ `${holdable ? "holdable " : ""}`
 							+ `${live ? "live" : ""} ${line.off ? "off" : ""}`
 							+ `${flip ? " switchable" : ""}`}
@@ -6505,6 +6533,50 @@ function autoPlace (blocks, across, frame) {
 	}
 
 	return placed;
+}
+
+/* Where an instrument nobody has placed should go: clear of every block, beside what plays it (#5219).
+ *
+ * **To the right of the pattern whose out reaches it, where there is room**, because
+ * the chain reads left to right, values into patterns into instruments (Simon's
+ * decision 4).  Where there is none, the first free place on the page, read from the
+ * top as the flow is: a page somebody has arranged has no gap kept for a block that
+ * did not exist, and a new block laid over an old one hides both.  Counted in the
+ * cells `autoPlace` counts in, so the two agree about what "clear" is. */
+function besideIt (layout, blocks, from, name, across, frame) {
+	const footprint = (block) => ({
+		wide: LABEL_CELLS + block.steps + (block.aside || 0) + frame + SEPARATION,
+		high: 1 + block.rows + frame + SEPARATION,
+	});
+
+	const sized = Object.fromEntries(blocks.map((block) => [block.name, footprint(block)]));
+	const source = layout[from];
+
+	if (!source || !sized[from] || !sized[name]) return null;
+
+	const { wide, high } = sized[name];
+	const others = blocks
+		.filter((block) => block.name !== name && layout[block.name])
+		.map((block) => ({ x: layout[block.name].x, y: layout[block.name].y, ...sized[block.name] }));
+
+	const clear = (x, y) => others.every((one) => x + wide <= one.x || one.x + one.wide <= x
+		|| y + high <= one.y || one.y + one.high <= y);
+
+	for (let y = source.y; y < source.y + sized[from].high; y += 1) {
+		for (let x = source.x + sized[from].wide; x + wide <= across; x += 1) {
+			if (clear(x, y)) return { x, y };
+		}
+	}
+
+	const lowest = Math.max(0, ...others.map((one) => one.y + one.high));
+
+	for (let y = 0; y <= lowest; y += 1) {
+		for (let x = 0; x + wide <= Math.max(across, wide); x += 1) {
+			if (clear(x, y)) return { x, y };
+		}
+	}
+
+	return null;
 }
 
 /* How many cells across a panel this wide would hold at the tested size.
@@ -7883,6 +7955,37 @@ function Panel () {
 	 * generators everywhere. */
 	const listed = page ? (page.parts || []) : declaredGrids;
 
+	/* **Which instruments a pattern plays, read from the pattern's own state** (#5219).
+	 *
+	 * A pattern is declared once and named by everything that plays in it, a grid's
+	 * and a sequencer's `pattern` and a stack's `builds`, so the pattern a block
+	 * belongs to is a word it already carries, and this is where that word meets the
+	 * instruments.  Only names the app declared as instruments count, so a cable never
+	 * leads to nothing. */
+	const patternOf = {};
+
+	for (const name of Object.keys(controls)) {
+		if (kindOf(name) === "pattern" && controls[name].pattern) {
+			patternOf[controls[name].pattern] = name;
+		}
+	}
+
+	const playsOf = (pattern) => {
+		const control = patternOf[pattern];
+		const held = control ? ((state[appName] || {})[control] || {}).plays : null;
+
+		return Array.isArray(held)
+			? held.filter((one) => controls[one] && kindOf(one) === "instrument")
+			: [];
+	};
+
+	/* **An instrument is drawn on any page showing a pattern that plays it** (#5219,
+	   Simon's decision 4), so the chain on a page is always whole: a page holding the
+	   Minitaur's patterns holds the Minitaur. */
+	const playedHere = new Set(listed
+		.filter((name) => controls[name] && controls[name].pattern)
+		.flatMap((name) => playsOf(controls[name].pattern)));
+
 	/* In the order the app declared them, which is the order every other block
 	   list here is in — where a block actually sits is the arrangement's, and a
 	   stack that arrives this way is placed by the same rule as any other. */
@@ -7902,7 +8005,8 @@ function Panel () {
 	 * instrument anybody tested it on. */
 	const gridNames = declaredGrids.filter((name) => listed.includes(name)
 		|| (kindOf(name) === "recipe" && listed.includes(controls[name].builds))
-		|| (kindOf(name) === "params" && listed.includes(controls[name].configures)));
+		|| (kindOf(name) === "params" && listed.includes(controls[name].configures))
+		|| (kindOf(name) === "instrument" && playedHere.has(name)));
 
 	/* Every set of notes this app declares, whatever page it is drawn on.
 	 *
@@ -8222,6 +8326,22 @@ function Panel () {
 			continue;
 		}
 
+		/* **A pattern has no block of its own yet** (#5219): what plays in it is drawn,
+		   and a cable from that to each instrument says where it plays. */
+		if (kindOf(name) === "pattern") continue;
+
+		/* **An instrument is a settings block that patterns arrive at** (#5219): a row
+		   saying which patterns play it, and its settings beneath, counted as a
+		   settings block's are. */
+		if (kindOf(name) === "instrument") {
+			windows.push({ key: name, control: name, title: named(name),
+			               about: controls[name].about || [],
+			               instrument: true,
+			               rows: 1 + headed(controls[name].fields || []).length,
+			               steps: PARAM_CELLS });
+			continue;
+		}
+
 		if (kindOf(name) === "params") {
 			/* Headings take a row each, so the fit has to count them: a block
 			   solved for its fields alone comes out short by one row per
@@ -8325,7 +8445,13 @@ function Panel () {
 		});
 	}
 
-	const drawn = [...windows, ...contributions];
+	/* **Instruments last**, so a page laid out by the flow reads left to right as the
+	   chain does: what plays, then what it plays (#5219). */
+	const drawn = [
+		...windows.filter((one) => !one.instrument),
+		...contributions,
+		...windows.filter((one) => one.instrument),
+	];
 
 	/* Which blocks are actually on this page, so a line cannot be drawn to one
 	   that is not — a settings block may be shown while the pattern it
@@ -8335,6 +8461,36 @@ function Panel () {
 
 	const blocks = drawn.map(
 		(one) => ({ name: one.key, rows: Math.max(1, one.rows), steps: one.steps }));
+
+	/* **A pattern's out, into each instrument it plays** (#5219).
+	 *
+	 * From the first block on the page that plays in the pattern, its grid or its
+	 * sequencer's case, because a pattern has no block of its own yet, and once per
+	 * pattern however many of its parts are drawn.  **Heavier than a note cable and in
+	 * ink**: a note cable carries a value into a generator, this carries the pattern to
+	 * what sounds it, and two kinds of connection must not look alike (#2119).  Its
+	 * fittings are marks until a pattern can be moved while it plays (#5221). */
+	const outs = [];
+	const leaving = new Set();
+
+	for (const one of windows) {
+		const pattern = controls[one.control] && controls[one.control].pattern;
+
+		if (!pattern || one.key !== one.control || leaving.has(pattern)) continue;
+
+		if (!GRIDS.includes(kindOf(one.control)) && kindOf(one.control) !== "sequencer") continue;
+
+		leaving.add(pattern);
+
+		for (const to of playsOf(pattern)) {
+			if (shown.has(to)) outs.push({ from: one.key, to, row: null, wired: false, out: true });
+		}
+	}
+
+	/* Which patterns play an instrument, by the names the glass gives them. */
+	const playedBy = (instrument) => Object.keys(patternOf)
+		.filter((pattern) => playsOf(pattern).includes(instrument))
+		.map((pattern) => named(patternOf[pattern]));
 
 	/* Which windows are joined, and which way round. A contribution feeds a
 	   pattern, so the head of the line is at the pattern; the ordering is the
@@ -8349,6 +8505,8 @@ function Panel () {
 	 * how to tell an in from an out a question about something real (#2108). */
 	const joins = [
 		...routes,
+
+		...outs,
 
 		/* **A note set feeding one input of one generator** (#2374), which is
 		 * the third kind of line on this page and the first whose destination
@@ -8533,6 +8691,20 @@ function Panel () {
 		[...new Set([...Object.keys(defaults), ...Object.keys(keptPlaces), ...Object.keys(placedHere)])]
 			.map((name) => [name,
 				{ ...defaults[name], ...keptPlaces[name], ...placedHere[name] }]));
+
+	/* An instrument nobody has placed is put beside what plays it, clear of every block
+	   (see `besideIt`).  Only an instrument: every other block keeps the flow it has
+	   always had, and one kept or dragged is where it was put. */
+	for (const one of drawn) {
+		if (!one.instrument || keptPlaces[one.key] || placedHere[one.key]) continue;
+
+		const source = outs.find((line) => line.to === one.key);
+		const spot = source
+			? besideIt(layout, blocks, source.from, one.key, acrossAtTestedSize(), frameInCells())
+			: null;
+
+		if (spot) layout[one.key] = { ...layout[one.key], ...spot };
+	}
 
 	/* Drawn back to front. A name that has been moved sits after every name
 	   that has not, and later moves sit after earlier ones.
@@ -9402,6 +9574,13 @@ function Panel () {
 								cell=${size.cell}
 								pending=${pending} failed=${failed} cording=${cording}
 								onSet=${request} onCording=${setCording} onSheet=${setJackSheet} />`
+						: kindOf(one.control) === "instrument"
+						? html`
+							<${Instrument} name=${one.control}
+								fields=${controls[one.control].fields || []}
+								values=${(state[appName] || {})[one.control] || {}}
+								playedBy=${playedBy(one.control)}
+								onSet=${request} />`
 						: kindOf(one.control) === "params"
 						? html`
 							<${Params} name=${one.control} fields=${controls[one.control].fields || []}

@@ -33,7 +33,8 @@ The service will start, serve its page, and wait for an application that is not
 coming.
 
 What runs today: as many pages as an application declares, holding step grids,
-pitched note grids with sub-step timing, an instrument's own settings, stacks of
+pitched note grids with sub-step timing, instruments holding their own settings
+with a cable from each pattern that plays them, stacks of
 generators and transforms that contribute to a pattern, a set of notes chosen on
 a keyboard, a pattern's step sequencer drawn as a case of knobs, and a transport
 with a bar-beat-step counter. Blocks are arranged by
@@ -245,21 +246,36 @@ Rows are names, as they are everywhere here. `examples/demo.py` builds
 them from note names and hands the same list to Subsequence as a note map, so
 what the panel calls `C2` and what the synthesiser plays cannot drift apart.
 
-## An instrument's own settings
+## Instruments, and the patterns that play them
 
-A **params** control is a block of an instrument's settings, in the three shapes
-they come in: a **switch**, a **number** you drag, and a **choice** of named
-options. Between them those cover every control-change message a Moog Minitaur
-answers to, and probably most other instruments.
+An **instrument** is what a pattern plays: a synthesiser, a drum machine,
+anything listening on a MIDI channel. On the glass it is a panel of its own,
+beside the patterns that play it, with a row naming them and a cable running
+into it from each one. A bass synth played by two patterns, one a grid of notes
+and the other a step sequencer, shows both cables, so what you hear has a line
+you can follow to where it comes from. The instrument is drawn on every page showing a pattern that
+plays it. It first appears to the right of that pattern, or wherever the page
+has room, and moves like any other block.
 
-Nothing in this package knows that a switch is a MIDI control change. A
-composition declares what shape each setting is and what it may hold, and is
-given a function to call when one moves - which is where a message gets sent,
-if that is what the setting stands for:
+The panel holds the instrument's settings, in the three shapes they come in: a
+**switch**, a **number** you drag, and a **choice** of named options. Between
+them those cover every control-change message a Moog Minitaur answers to, and
+probably most other instruments. An instrument with nothing worth setting, such
+as a drum machine with every knob on its own front panel, is a name and the
+patterns that play it.
+
+Nothing in this package knows that a switch is a MIDI control change, or which
+channel your synth is on. A composition declares what shape each setting is and
+what it may hold, says what it wants written on the panel, and is given a
+function to call when a setting moves - which is where a message gets sent, if
+that is what the setting stands for:
 
 ```python
-superconductor.subsequence_adapter.Params(
+bass_synth = superconductor.subsequence_adapter.Instrument(
     composition,
+    name="bass_synth",
+    title="Moog Minitaur",
+    about=[("ch", 6)],              # written on the panel, and nothing more
     parameters=[
         superconductor.subsequence_adapter.Parameter("glide", "switch", label="Glide"),
         superconductor.subsequence_adapter.Parameter("rate", "number", default=24),
@@ -273,6 +289,32 @@ superconductor.subsequence_adapter.Params(
 The settings worth putting on glass are usually the ones an instrument has no
 knob for at all - reachable otherwise only through editor software. On the
 Minitaur that is most of them.
+
+A **pattern** control says which instruments one of the composition's patterns
+plays. Its grid, its stack of generators and its sequencer each name the pattern
+already, so this one line joins all of them to the instrument:
+
+```python
+bass = superconductor.subsequence_adapter.Pattern(
+    composition, "bass", plays=[bass_synth], title="Bass")
+```
+
+Several patterns may play one instrument, as several Subsequence patterns may
+share a channel. Saying so moves nothing: the composition plays each pattern on
+the channel it gives it, and this tells the glass where that is, so keep the two
+in step. For now a cable is drawn from what the composition says, and cannot be
+moved from the glass.
+
+A block of settings that belongs to no instrument, such as the key of the piece
+in `examples/blank.py`, is a **params** control, `Params`, which takes the same
+parameters. A composition that kept an instrument's settings in one of those
+before, and declares an instrument now, keeps what was set on them by naming the
+old block in `formerly`:
+
+```python
+superconductor.subsequence_adapter.Instrument(
+    composition, name="bass_synth", parameters=[...], formerly=["bass_settings"])
+```
 
 ## A set of notes
 
@@ -395,7 +437,9 @@ lead_case = superconductor.subsequence_adapter.Sequencer(
 )
 ```
 
-Give `lead_case` to the link with your other controls. A change on the glass is
+Give `lead_case` to the link with your other controls, and a `Pattern` naming
+`lead` and the instrument it plays, so a cable runs from the case to that
+instrument. A change on the glass is
 heard from the pattern's next build, which `reschedule_lookahead=1 / 24` makes a
 pulse away rather than a beat. The `sequencers` plugin is on Subsequence's main
 branch and is not yet in a release.
